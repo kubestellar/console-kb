@@ -337,6 +337,103 @@ function cleanText(text) {
     .trim()
 }
 
+/** Strip PR template boilerplate and return useful content only */
+function stripPRTemplate(text) {
+  if (!text) return ''
+  let cleaned = text
+  // Remove HTML comments
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '')
+  // Remove PR template sections
+  const templateHeaders = [
+    /#{1,4}\s*What type of PR[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*What this PR does[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*Which issue.*?fixes[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*Special notes for.*?reviewer[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*If applicable[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*Release note[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /#{1,4}\s*Does this PR introduce a user-facing[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
+    /```release-note[\s\S]*?```/gi,
+  ]
+  for (const re of templateHeaders) {
+    cleaned = cleaned.replace(re, '')
+  }
+  // Remove checkbox lines
+  cleaned = cleaned.replace(/^\s*-\s*\[[ x]\]\s*.*/gm, '')
+  // Remove "Closes #N" / "Fixes #N" lines
+  cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?)\s+#\d+.*$/gim, '')
+  // Remove Signed-off-by
+  cleaned = cleaned.replace(/^\s*Signed-off-by:.*$/gm, '')
+  // Remove /kind /lgtm /approve bot commands
+  cleaned = cleaned.replace(/^\s*\/\w+.*$/gm, '')
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
+  return cleaned
+}
+
+/** Check if a mission has enough quality to be useful */
+function passesQualityGate(resolution, issue) {
+  // Must have a real problem description (not just template junk)
+  const desc = stripPRTemplate(resolution.problem || issue.body || '')
+  if (desc.length < 50) return false
+
+  // Must have either: real steps, a meaningful solution, or code snippets
+  const hasSteps = resolution.steps.length >= 2
+  const hasSolution = (resolution.solution || '').length > 100
+  const hasCode = resolution.yamlSnippets.length > 0
+
+  if (!hasSteps && !hasSolution && !hasCode) return false
+
+  return true
+}
+
+/** Generate actionable steps from issue content */
+function generateSteps(issue, resolution, linkedPR) {
+  const steps = []
+
+  // Step 1: Always start with understanding the problem
+  const problemSummary = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 200)
+  if (problemSummary) {
+    steps.push({
+      title: 'Understand the problem',
+      description: problemSummary,
+    })
+  }
+
+  // Step 2: Add extracted numbered steps from the solution
+  if (resolution.steps.length > 0) {
+    for (const s of resolution.steps.slice(0, 5)) {
+      steps.push({
+        title: s.length > 80 ? s.slice(0, 77) + '...' : s,
+        description: s,
+      })
+    }
+  }
+
+  // Step 3: Add code/YAML application steps
+  if (resolution.yamlSnippets.length > 0) {
+    steps.push({
+      title: 'Apply the configuration',
+      description: `Apply the following configuration to your cluster:\n\`\`\`yaml\n${resolution.yamlSnippets[0].slice(0, 500)}\n\`\`\``,
+    })
+  }
+
+  // Step 4: If linked PR, add a review step
+  if (linkedPR) {
+    steps.push({
+      title: 'Review the fix',
+      description: `The fix was implemented in ${linkedPR.html_url || 'the linked pull request'}. Review the changes to understand the solution.`,
+    })
+  }
+
+  // Step 5: Verification
+  steps.push({
+    title: 'Verify the fix',
+    description: 'Confirm that the issue is resolved in your environment by testing the affected functionality.',
+  })
+
+  return steps
+}
+
 function slugify(text) {
   return text
     .toLowerCase()
@@ -413,7 +510,16 @@ function estimateDifficulty(issue) {
   return 'expert'
 }
 
-function generateMission(project, issue, resolution) {
+function generateMission(project, issue, resolution, linkedPR) {
+  // Quality gate — skip missions with no useful content
+  if (!passesQualityGate(resolution, issue)) {
+    return null
+  }
+
+  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '')
+  const cleanSolution = stripPRTemplate(resolution.solution || '')
+  const steps = generateSteps(issue, resolution, linkedPR)
+
   const mission = {
     format: 'kc-mission-v1',
     exportedAt: new Date().toISOString(),
@@ -421,14 +527,15 @@ function generateMission(project, issue, resolution) {
     consoleVersion: 'auto-generated',
     mission: {
       title: `${project.name}: ${issue.title}`,
-      description: resolution.problem || issue.body?.slice(0, 500) || issue.title,
+      description: cleanDesc.slice(0, 500) || issue.title,
       type: detectMissionType(issue),
       status: 'completed',
+      steps,
       resolution: {
-        summary: resolution.solution || 'See linked PR for details.',
+        summary: cleanSolution.slice(0, 1500) || 'See linked PR for implementation details.',
         steps: resolution.steps.length > 0
           ? resolution.steps
-          : ['Review the issue discussion for context', 'Apply the fix from the linked pull request'],
+          : steps.map(s => s.title),
       },
     },
     metadata: {
@@ -582,14 +689,22 @@ async function main() {
               }
 
               const resolution = extractResolutionFromIssue(details.issue, details.comments, details.linkedPR)
-              const mission = generateMission(project, details.issue, resolution)
+              const mission = generateMission(project, details.issue, resolution, details.linkedPR)
+
+              if (!mission) {
+                console.log(`  Skipped #${issue.number} (quality gate: insufficient actionable content)`)
+                report.skipped++
+                newIds.push(canonicalId) // Mark as processed so we don't retry
+                continue
+              }
+
               const filePath = join(projectDir, `${slug}.json`)
 
               if (DRY_RUN) {
                 console.log(`  [DRY RUN] Would write: ${filePath}`)
               } else {
                 writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
-                console.log(`  Written: ${slug}.json`)
+                console.log(`  Written: ${slug}.json (${mission.mission.steps.length} steps)`)
               }
 
               newIds.push(canonicalId)
