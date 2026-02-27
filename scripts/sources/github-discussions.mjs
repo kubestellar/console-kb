@@ -91,6 +91,7 @@ export class GitHubDiscussionsSource extends BaseSource {
             query,
             variables: { owner, repo, cursor },
           }),
+          signal: AbortSignal.timeout(30000),
         })
 
         if (!response.ok) {
@@ -190,6 +191,7 @@ export class GitHubDiscussionsSource extends BaseSource {
           }`,
           variables: { owner, repo },
         }),
+        signal: AbortSignal.timeout(15000),
       })
       if (!response.ok) return false
       const result = await response.json()

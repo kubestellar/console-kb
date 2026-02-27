@@ -44,7 +44,7 @@ export class StackOverflowSource extends BaseSource {
 
     try {
       await this.throttle()
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
 
       if (!response.ok) {
         console.warn(`  SO: ${response.status} for ${project.name}, skipping`)
@@ -89,7 +89,7 @@ export class StackOverflowSource extends BaseSource {
           `&filter=withbody` +
           `&pagesize=15`
 
-        const response = await fetch(textUrl)
+        const response = await fetch(textUrl, { signal: AbortSignal.timeout(15000) })
         if (response.ok) {
           const data = await response.json()
           const existingIds = new Set(items.map(i => i.question_id))
@@ -153,7 +153,7 @@ export class StackOverflowSource extends BaseSource {
       await this.throttle()
       const url = `https://api.stackexchange.com/2.3/questions/${questionId}/answers?` +
         `order=desc&sort=votes&site=stackoverflow&filter=withbody`
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
       if (!response.ok) return null
 
       const data = await response.json()

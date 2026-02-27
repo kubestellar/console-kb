@@ -2,11 +2,15 @@
  * Reddit knowledge source — searches Reddit's public JSON API for
  * high-quality posts related to CNCF projects.
  *
- * No API key required. Uses https://www.reddit.com/search.json
- * Rate limit: ~60 req/min for unauthenticated requests.
+ * Uses old.reddit.com JSON endpoints which are more permissive from
+ * cloud/CI environments. Requires a compliant User-Agent per Reddit API rules.
  */
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
+
+// Reddit requires descriptive User-Agent: platform:appid:version (by contact)
+const REDDIT_USER_AGENT = 'linux:cncf-mission-generator:v1.0.0 (by /u/kubestellar-bot; github.com/kubestellar/console-kb)'
+const REDDIT_BASE = 'https://old.reddit.com'
 
 export class RedditSource extends BaseSource {
   constructor(config) {
@@ -27,13 +31,17 @@ export class RedditSource extends BaseSource {
     for (const subreddit of projectSubs) {
       if (items.length >= this.maxPerProject) break
 
-      const query = encodeURIComponent(`${project.name} site:reddit.com/r/${subreddit}`)
-      const url = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(project.name)}&sort=top&t=year&restrict_sr=1&limit=25`
+      const url = `${REDDIT_BASE}/r/${subreddit}/search.json?q=${encodeURIComponent(project.name)}&sort=top&t=year&restrict_sr=1&limit=25`
 
       try {
         await this.throttle()
         const response = await fetch(url, {
-          headers: { 'User-Agent': 'cncf-mission-generator/1.0' },
+          headers: {
+            'User-Agent': REDDIT_USER_AGENT,
+            'Accept': 'application/json',
+          },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(15000),
         })
 
         if (!response.ok) {
@@ -115,9 +123,14 @@ export class RedditSource extends BaseSource {
   async fetchTopComments(permalink) {
     try {
       await this.throttle()
-      const url = `https://www.reddit.com${permalink}.json?sort=top&limit=5`
+      const url = `${REDDIT_BASE}${permalink}.json?sort=top&limit=5`
       const response = await fetch(url, {
-        headers: { 'User-Agent': 'cncf-mission-generator/1.0' },
+        headers: {
+          'User-Agent': REDDIT_USER_AGENT,
+          'Accept': 'application/json',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(15000),
       })
       if (!response.ok) return null
 
