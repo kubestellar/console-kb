@@ -1,0 +1,24 @@
+name: Validate Mission Schema
+on:
+  pull_request:
+    branches: [main]
+    paths: ['solutions/**']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm ci
+      - name: Find changed files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+      - name: Validate schema
+        if: steps.changed.outputs.files != ''
+        run: node scripts/validate-schema.mjs ${{ steps.changed.outputs.files }}

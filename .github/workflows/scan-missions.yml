@@ -1,0 +1,44 @@
+name: Scan Mission Files
+on:
+  pull_request:
+    branches: [main]
+    paths: ['solutions/**']
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm ci
+      - name: Find changed mission files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+          echo "count=$(echo $FILES | wc -w | tr -d ' ')" >> $GITHUB_OUTPUT
+      - name: Scan missions
+        if: steps.changed.outputs.count != '0'
+        run: node scripts/scan-pr.mjs ${{ steps.changed.outputs.files }}
+      - name: Post results
+        if: always() && steps.changed.outputs.count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('scan-results.md')) {
+              const body = fs.readFileSync('scan-results.md', 'utf8');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
