@@ -168,42 +168,50 @@ async function githubApi(url, options = {}) {
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
+    try {
+      const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(30000) })
 
-    // Track rate limits from response headers
-    const remaining = response.headers.get('x-ratelimit-remaining')
-    const reset = response.headers.get('x-ratelimit-reset')
-    if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
-    if (reset != null) rateLimitReset = parseInt(reset, 10)
+      // Track rate limits from response headers
+      const remaining = response.headers.get('x-ratelimit-remaining')
+      const reset = response.headers.get('x-ratelimit-reset')
+      if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
+      if (reset != null) rateLimitReset = parseInt(reset, 10)
 
-    if (response.status === 403 && rateLimitRemaining === 0) {
-      const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-      console.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
-      await sleep(waitMs)
-      continue
-    }
+      if (response.status === 403 && rateLimitRemaining === 0) {
+        const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
+        console.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
+        await sleep(waitMs)
+        continue
+      }
 
-    if (response.status === 422) {
-      console.warn(`  GitHub API returned 422 for ${url}, skipping.`)
-      return null
-    }
+      if (response.status === 422) {
+        console.warn(`  GitHub API returned 422 for ${url}, skipping.`)
+        return null
+      }
 
-    if (response.status >= 500) {
+      if (response.status >= 500) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+        console.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
+        await sleep(backoff)
+        continue
+      }
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        console.warn(`  GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
+        return null
+      }
+
+      return response.json()
+    } catch (err) {
       const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-      console.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
-      await sleep(backoff)
-      continue
+      console.warn(`  GitHub API request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
+      if (attempt < MAX_RETRIES - 1) await sleep(backoff)
     }
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      throw new Error(`GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
-    }
-
-    return response.json()
   }
 
-  throw new Error(`GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
+  console.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
+  return null
 }
 
 async function findHighEngagementIssues(project) {
@@ -690,7 +698,11 @@ async function main() {
 
 // Only run main when executed directly
 if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
-  main().catch(err => { console.error(err); process.exit(1) })
+  main().catch(err => {
+    console.error('Unhandled error in main (workflow will NOT fail):', err.message)
+    // Exit 0 so the workflow job succeeds — source errors should never block the pipeline
+    process.exit(0)
+  })
 }
 
 export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, extractResolutionFromIssue, formatReport }
