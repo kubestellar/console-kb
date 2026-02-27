@@ -165,6 +165,44 @@ jobs:
             fs.writeFileSync('search-state.json', JSON.stringify(merged, null, 2));
             console.log('Merged search state: ' + Object.keys(merged.projects).length + ' projects');
           "
+      - name: Deduplicate missions across batches
+        run: |
+          # If the same mission file exists from multiple batches, keep the one with higher quality score
+          if [ -d "solutions/cncf-generated" ]; then
+            node -e "
+              const fs = require('fs');
+              const path = require('path');
+              const dir = 'solutions/cncf-generated';
+              let deduped = 0;
+              // Walk all project dirs
+              for (const project of fs.readdirSync(dir)) {
+                const pDir = path.join(dir, project);
+                if (!fs.statSync(pDir).isDirectory()) continue;
+                const seen = new Map();
+                for (const f of fs.readdirSync(pDir).filter(f => f.endsWith('.json'))) {
+                  try {
+                    const data = JSON.parse(fs.readFileSync(path.join(pDir, f), 'utf8'));
+                    const title = data.mission?.title || f;
+                    if (seen.has(title)) {
+                      const prev = seen.get(title);
+                      const prevScore = prev.data?.metadata?.qualityScore || 0;
+                      const curScore = data?.metadata?.qualityScore || 0;
+                      if (curScore > prevScore) {
+                        fs.unlinkSync(path.join(pDir, prev.file));
+                        seen.set(title, { file: f, data });
+                      } else {
+                        fs.unlinkSync(path.join(pDir, f));
+                      }
+                      deduped++;
+                    } else {
+                      seen.set(title, { file: f, data });
+                    }
+                  } catch {}
+                }
+              }
+              console.log('Deduplicated ' + deduped + ' missions');
+            "
+          fi
       - name: Check for new missions
         id: check
         run: |
@@ -205,12 +243,26 @@ jobs:
           if [ -f search-state.json ]; then
             git add search-state.json
           fi
+
+          # Determine PR mode based on quality
+          DRAFT_FLAG=""
+          if [ -f generation-report.md ]; then
+            AVG_SCORE=$(grep -o 'Avg Quality Score: [0-9.]*' generation-report.md | head -1 | grep -o '[0-9.]*' || echo "0")
+            COUNT="${{ steps.check.outputs.count }}"
+            if [ "$(echo "$AVG_SCORE < 50" | bc -l 2>/dev/null || echo 0)" = "1" ] || [ "$COUNT" -lt 10 ]; then
+              DRAFT_FLAG="--draft"
+              echo "⚠️ Creating draft PR: avg quality $AVG_SCORE or mission count $COUNT below threshold"
+            fi
+          fi
+
           git commit -s -m "🌱 Auto-generate CNCF missions ($(date +%Y-%m-%d))
 
-          Generated from multiple knowledge sources across ${{ needs.plan.outputs.batch_count }} batches of CNCF landscape projects."
+          Generated from multiple knowledge sources across ${{ needs.plan.outputs.batch_count }} batches.
+          Quality: avg score ${AVG_SCORE:-N/A}/100, ${COUNT:-0} missions."
           git push origin "$BRANCH"
           gh pr create \
             --title "🌱 CNCF mission generation $(date +%Y-%m-%d)" \
             --body "$(cat generation-report.md | head -500)" \
             --base master \
-            --head "$BRANCH"
+            --head "$BRANCH" \
+            $DRAFT_FLAG

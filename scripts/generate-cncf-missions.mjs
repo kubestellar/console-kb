@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './cncf-projects.mjs'
 import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
 import { slugify as baseSlugify } from './sources/base-source.mjs'
+import { validateMissionExport } from './scanner.mjs'
 import { RedditSource } from './sources/reddit.mjs'
 import { StackOverflowSource } from './sources/stackoverflow.mjs'
 import { GitHubDiscussionsSource } from './sources/github-discussions.mjs'
@@ -218,6 +219,18 @@ async function githubApi(url, options = {}) {
 
 async function findHighEngagementIssues(project) {
   const [owner, repo] = project.repo.split('/')
+
+  // Maturity-weighted thresholds: graduated projects have more content,
+  // so we can be less selective. Sandbox projects need higher bar.
+  const maturityMultiplier = {
+    graduated: 0.5,    // minReactions * 0.5 (lower threshold = more content)
+    incubating: 1.0,   // default threshold
+    sandbox: 2.0,      // higher threshold = only the best
+  }
+  const effectiveMinReactions = Math.max(3, Math.round(
+    MIN_REACTIONS * (maturityMultiplier[project.maturity] || 1.0)
+  ))
+
   const query = encodeURIComponent(
     `repo:${project.repo} is:issue is:closed linked:pr sort:reactions-+1`
   )
@@ -229,7 +242,7 @@ async function findHighEngagementIssues(project) {
   return data.items.filter(issue => {
     const reactions = issue.reactions?.total_count || 0
     const comments = issue.comments || 0
-    return reactions >= MIN_REACTIONS || comments >= 10
+    return reactions >= effectiveMinReactions || comments >= 10
   })
 }
 
@@ -800,6 +813,15 @@ async function main() {
 
               const filePath = join(projectDir, `${slug}.json`)
 
+              // Schema validation before writing
+              const schemaResult = validateMissionExport(mission)
+              if (!schemaResult.valid) {
+                console.warn(`  ⚠️ Schema validation failed for ${slug}: ${schemaResult.errors.join(', ')}`)
+                report.skipped++
+                projectReport.skipped++
+                continue
+              }
+
               if (DRY_RUN) {
                 console.log(`  [DRY RUN] Would write: ${filePath} (score: ${qualityResult.score})`)
               } else {
@@ -864,6 +886,15 @@ async function main() {
 
                 if (!qualityResult.pass) {
                   console.log(`  [${source.id}] Skipped ${canonicalId} (quality score: ${qualityResult.score}/100)`)
+                  report.skipped++
+                  newIds.push(canonicalId)
+                  continue
+                }
+
+                // Schema validation before writing
+                const schemaResult = validateMissionExport(mission)
+                if (!schemaResult.valid) {
+                  console.warn(`  [${source.id}] ⚠️ Schema invalid for ${slug}: ${schemaResult.errors.join(', ')}`)
                   report.skipped++
                   newIds.push(canonicalId)
                   continue
