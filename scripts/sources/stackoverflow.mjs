@@ -131,7 +131,7 @@ export class StackOverflowSource extends BaseSource {
     const resourceKinds = extractResourceKinds(allText)
     const difficulty = item.score > 50 ? 'advanced' : item.score > 20 ? 'intermediate' : 'beginner'
 
-    return buildMission({
+    return await buildMission({
       title: `${project.name}: ${cleanHtmlEntities(title)}`,
       description: problem,
       problem,

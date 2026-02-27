@@ -90,6 +90,7 @@ jobs:
           BATCH_SIZE: ${{ inputs.batch_size || '20' }}
           ENABLED_SOURCES: ${{ inputs.sources || '' }}
           FORCE_RESCAN: ${{ inputs.force_rescan || 'false' }}
+          LLM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/generate-cncf-missions.mjs
       - name: Upload generated missions
         uses: actions/upload-artifact@v4
@@ -131,6 +132,39 @@ jobs:
           if [ ! -f generation-report-0.md ] && [ -f generation-report.md ]; then
             echo "Single report mode"
           fi
+      - name: Merge search state files
+        run: |
+          # Deep merge search-state.json files from each batch by project key
+          node -e "
+            const fs = require('fs');
+            const glob = require('path');
+            const merged = { version: 1, lastUpdated: new Date().toISOString(), projects: {} };
+            // Load existing state if present
+            if (fs.existsSync('search-state.json')) {
+              try { Object.assign(merged, JSON.parse(fs.readFileSync('search-state.json', 'utf8'))); } catch {}
+            }
+            // Merge any batch-specific states (uploaded as artifacts)
+            const batchStates = fs.readdirSync('.').filter(f => f.match(/search-state-\d+\.json/));
+            for (const f of batchStates) {
+              try {
+                const batch = JSON.parse(fs.readFileSync(f, 'utf8'));
+                for (const [repo, sources] of Object.entries(batch.projects || {})) {
+                  if (!merged.projects[repo]) merged.projects[repo] = {};
+                  for (const [srcId, srcData] of Object.entries(sources)) {
+                    const existing = merged.projects[repo][srcId] || { processedIds: [] };
+                    existing.lastSearched = srcData.lastSearched || existing.lastSearched;
+                    existing.cursor = srcData.cursor || existing.cursor;
+                    const ids = new Set([...(existing.processedIds || []), ...(srcData.processedIds || [])]);
+                    existing.processedIds = [...ids];
+                    merged.projects[repo][srcId] = existing;
+                  }
+                }
+              } catch (e) { console.warn('Error merging ' + f + ': ' + e.message); }
+            }
+            merged.lastUpdated = new Date().toISOString();
+            fs.writeFileSync('search-state.json', JSON.stringify(merged, null, 2));
+            console.log('Merged search state: ' + Object.keys(merged.projects).length + ' projects');
+          "
       - name: Check for new missions
         id: check
         run: |
@@ -141,6 +175,22 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
           echo "Found $COUNT mission files"
+      - name: Write workflow summary
+        run: |
+          echo "## 🌱 CNCF Mission Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total missions | ${{ steps.check.outputs.count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Batches | ${{ needs.plan.outputs.batch_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f generation-report.md ]; then
+            # Extract quality stats from report
+            AVG_SCORE=$(grep -o 'Avg Quality Score: [0-9.]*' generation-report.md | head -1 | grep -o '[0-9.]*' || echo "N/A")
+            echo "| Avg Quality Score | $AVG_SCORE/100 |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See the full report in the PR body." >> $GITHUB_STEP_SUMMARY
       - name: Create PR
         if: steps.check.outputs.count != '0'
         env:

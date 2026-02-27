@@ -103,7 +103,7 @@ export class RedditSource extends BaseSource {
     const resourceKinds = extractResourceKinds(allText)
     const difficulty = body.length > 1000 ? 'advanced' : 'intermediate'
 
-    return buildMission({
+    return await buildMission({
       title: `${project.name}: ${cleanTitle(title)}`,
       description: problem,
       problem,

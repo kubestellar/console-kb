@@ -16,6 +16,8 @@ import { slugify as baseSlugify } from './sources/base-source.mjs'
 import { RedditSource } from './sources/reddit.mjs'
 import { StackOverflowSource } from './sources/stackoverflow.mjs'
 import { GitHubDiscussionsSource } from './sources/github-discussions.mjs'
+import { synthesizeMission } from './sources/llm-synthesizer.mjs'
+import { scoreMission } from './quality-scorer.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -263,6 +265,36 @@ async function getIssueDetails(owner, repo, issueNumber) {
   return { issue, comments: comments || [], linkedPR }
 }
 
+/**
+ * Fetch a summary of PR changes (file names + key diff lines).
+ * Returns a compact string suitable for LLM context.
+ */
+async function fetchPRDiffSummary(owner, repo, prNumber) {
+  try {
+    const filesUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=10`
+    const files = await githubApi(filesUrl)
+    if (!files || !Array.isArray(files)) return null
+
+    const lines = files.map(f => {
+      let summary = `${f.status}: ${f.filename} (+${f.additions}/-${f.deletions})`
+      // Include a snippet of the patch for key files
+      if (f.patch && (f.filename.endsWith('.yaml') || f.filename.endsWith('.yml') ||
+          f.filename.endsWith('.go') || f.filename.endsWith('.py') ||
+          f.filename.endsWith('.ts') || f.filename.endsWith('.js'))) {
+        const patchLines = f.patch.split('\n').filter(l => l.startsWith('+')).slice(0, 10)
+        if (patchLines.length > 0) {
+          summary += '\n' + patchLines.join('\n')
+        }
+      }
+      return summary
+    })
+
+    return lines.join('\n\n')
+  } catch {
+    return null
+  }
+}
+
 function extractResolutionFromIssue(issue, comments, linkedPR) {
   const resolution = {
     problem: '',
@@ -271,9 +303,9 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
     steps: [],
   }
 
-  // Extract problem from issue body
+  // Extract problem from issue body using flexible header matching
   const body = issue.body || ''
-  const problemMatch = body.match(/## (?:Problem|Description|Bug Report|Issue)\s*\n([\s\S]*?)(?=\n## |\n---|\Z)/i)
+  const problemMatch = body.match(/#{1,4}\s*(?:problem|description|bug\s*report|issue|context|summary|background)\s*\n([\s\S]*?)(?=\n#{1,4}\s|\n---|\Z)/i)
   resolution.problem = problemMatch
     ? cleanText(problemMatch[1]).slice(0, 1000)
     : cleanText(body).slice(0, 1000)
@@ -281,27 +313,41 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
   // Extract solution from linked PR body first, then fallback to comments
   if (linkedPR?.body) {
     const prBody = linkedPR.body
-    const solutionMatch = prBody.match(/## (?:Solution|Fix|Changes|Description)\s*\n([\s\S]*?)(?=\n## |\n---|\Z)/i)
+    const solutionMatch = prBody.match(/#{1,4}\s*(?:solution|fix|changes|description|approach|implementation|what\s+this\s+pr\s+does)\s*\n([\s\S]*?)(?=\n#{1,4}\s|\n---|\Z)/i)
     resolution.solution = solutionMatch
       ? cleanText(solutionMatch[1]).slice(0, 1500)
       : cleanText(prBody).slice(0, 1500)
   }
 
-  // If no PR-based solution, look for resolution in comments (from maintainers or closing comments)
+  // If no PR-based solution, score comments and pick the best resolution
   if (!resolution.solution && comments.length > 0) {
-    const resolutionComment = comments.find(c =>
-      c.author_association === 'MEMBER' ||
-      c.author_association === 'COLLABORATOR' ||
-      c.author_association === 'OWNER' ||
-      c.body?.toLowerCase().includes('fixed in') ||
-      c.body?.toLowerCase().includes('resolved by') ||
-      c.body?.toLowerCase().includes('the fix')
-    )
-    if (resolutionComment) {
-      resolution.solution = cleanText(resolutionComment.body).slice(0, 1500)
-    } else {
-      // Use last comment as fallback
-      resolution.solution = cleanText(comments[0].body || '').slice(0, 1500)
+    const scoredComments = comments
+      .filter(c => c.body && c.body.length > 20)
+      .map(c => {
+        let score = 0
+        const bodyLower = (c.body || '').toLowerCase()
+        // Author authority
+        if (c.author_association === 'OWNER') score += 10
+        else if (c.author_association === 'MEMBER') score += 8
+        else if (c.author_association === 'COLLABORATOR') score += 6
+        else if (c.author_association === 'CONTRIBUTOR') score += 3
+        // Resolution keywords
+        if (bodyLower.includes('fixed in')) score += 5
+        if (bodyLower.includes('resolved by')) score += 5
+        if (bodyLower.includes('the fix')) score += 4
+        if (bodyLower.includes('solution')) score += 3
+        if (bodyLower.includes('workaround')) score += 3
+        // Contains code = more actionable
+        if (c.body.includes('```')) score += 4
+        // Length bonus (more detail = better)
+        if (c.body.length > 200) score += 2
+        if (c.body.length > 500) score += 2
+        return { comment: c, score }
+      })
+      .sort((a, b) => b.score - a.score)
+
+    if (scoredComments.length > 0 && scoredComments[0].score > 0) {
+      resolution.solution = cleanText(scoredComments[0].comment.body).slice(0, 1500)
     }
   }
 
@@ -510,15 +556,42 @@ function estimateDifficulty(issue) {
   return 'expert'
 }
 
-function generateMission(project, issue, resolution, linkedPR) {
-  // Quality gate — skip missions with no useful content
-  if (!passesQualityGate(resolution, issue)) {
-    return null
-  }
+async function generateMission(project, issue, resolution, linkedPR) {
+  // Try LLM synthesis first for highest quality
+  const llmResult = await synthesizeMission({
+    projectName: project.name,
+    issueTitle: issue.title,
+    issueBody: stripPRTemplate(issue.body || ''),
+    labels: (issue.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean),
+    solution: stripPRTemplate(resolution.solution || ''),
+    codeSnippets: resolution.yamlSnippets,
+    prUrl: linkedPR?.html_url || null,
+    prDiff: resolution.prDiffSummary || null,
+    sourceUrl: issue.html_url,
+  })
 
-  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '')
-  const cleanSolution = stripPRTemplate(resolution.solution || '')
-  const steps = generateSteps(issue, resolution, linkedPR)
+  let missionSteps, missionDesc, missionResolution, missionDifficulty, missionType
+
+  if (llmResult) {
+    // LLM synthesis succeeded — use its output
+    missionDesc = llmResult.description
+    missionSteps = llmResult.steps
+    missionResolution = llmResult.resolution
+    missionDifficulty = llmResult.difficulty
+    missionType = llmResult.type
+    console.log(`    [LLM] Synthesized: ${missionSteps.length} steps, ${missionDifficulty}`)
+  } else {
+    // Fallback to regex extraction + quality gate
+    if (!passesQualityGate(resolution, issue)) {
+      return null
+    }
+    missionDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 500) || issue.title
+    missionSteps = generateSteps(issue, resolution, linkedPR)
+    missionResolution = stripPRTemplate(resolution.solution || '').slice(0, 1500) || 'See linked PR for implementation details.'
+    missionDifficulty = estimateDifficulty(issue)
+    missionType = detectMissionType(issue)
+    console.log(`    [regex fallback] ${missionSteps.length} steps`)
+  }
 
   const mission = {
     format: 'kc-mission-v1',
@@ -527,15 +600,13 @@ function generateMission(project, issue, resolution, linkedPR) {
     consoleVersion: 'auto-generated',
     mission: {
       title: `${project.name}: ${issue.title}`,
-      description: cleanDesc.slice(0, 500) || issue.title,
-      type: detectMissionType(issue),
+      description: missionDesc,
+      type: missionType,
       status: 'completed',
-      steps,
+      steps: missionSteps,
       resolution: {
-        summary: cleanSolution.slice(0, 1500) || 'See linked PR for implementation details.',
-        steps: resolution.steps.length > 0
-          ? resolution.steps
-          : steps.map(s => s.title),
+        summary: missionResolution,
+        steps: missionSteps.map(s => s.title),
       },
     },
     metadata: {
@@ -548,15 +619,16 @@ function generateMission(project, issue, resolution, linkedPR) {
       category: CATEGORY_TO_DIR[project.category] || 'troubleshooting',
       cncfProjects: [project.name],
       targetResourceKinds: extractResourceKinds(issue),
-      difficulty: estimateDifficulty(issue),
+      difficulty: missionDifficulty,
       sourceIssue: issue.html_url,
       sourceRepo: project.repo,
       reactions: issue.reactions?.total_count || 0,
       comments: issue.comments || 0,
+      synthesizedBy: llmResult ? 'llm' : 'regex',
     },
     security: {
       scannedAt: new Date().toISOString(),
-      scannerVersion: 'cncf-gen-1.0.0',
+      scannerVersion: 'cncf-gen-2.0.0',
       sanitized: true,
       findings: [],
     },
@@ -577,13 +649,21 @@ function deduplicateAgainstExisting(slug, projectDir) {
 }
 
 function formatReport(report) {
+  // Calculate quality stats
+  const scores = (report.missions || []).map(m => m.qualityScore).filter(s => s != null)
+  const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A'
+  const llmCount = (report.missions || []).filter(m => m.synthesizedBy === 'llm').length
+  const regexCount = (report.missions || []).filter(m => m.synthesizedBy === 'regex').length
+
   const lines = [
     '# CNCF Mission Generation Report',
     '',
     `**Date:** ${new Date().toISOString()}`,
     `**Total generated:** ${report.generated}`,
-    `**Skipped (duplicates/processed):** ${report.skipped}`,
+    `**Skipped:** ${report.skipped}`,
     `**Errors:** ${report.errors}`,
+    `**Avg Quality Score:** ${avgScore}/100`,
+    `**LLM synthesized:** ${llmCount} | **Regex fallback:** ${regexCount}`,
     '',
     '## Projects Processed',
     '',
@@ -599,8 +679,11 @@ function formatReport(report) {
 
   if (report.generated > 0) {
     lines.push('', '## Generated Missions', '')
+    lines.push('| Mission | Difficulty | Quality | Source |')
+    lines.push('|---------|-----------|---------|--------|')
     for (const m of report.missions || []) {
-      lines.push(`- **${m.title}** (${m.difficulty}) — [source](${m.sourceIssue})`)
+      const scoreStr = m.qualityScore != null ? `${m.qualityScore}/100` : 'N/A'
+      lines.push(`| ${m.title} | ${m.difficulty} | ${scoreStr} | [link](${m.sourceIssue}) |`)
     }
   }
 
@@ -689,7 +772,13 @@ async function main() {
               }
 
               const resolution = extractResolutionFromIssue(details.issue, details.comments, details.linkedPR)
-              const mission = generateMission(project, details.issue, resolution, details.linkedPR)
+
+              // Fetch PR diff summary for richer LLM context
+              if (details.linkedPR?.number) {
+                resolution.prDiffSummary = await fetchPRDiffSummary(owner, repo, details.linkedPR.number)
+              }
+
+              const mission = await generateMission(project, details.issue, resolution, details.linkedPR)
 
               if (!mission) {
                 console.log(`  Skipped #${issue.number} (quality gate: insufficient actionable content)`)
@@ -698,13 +787,24 @@ async function main() {
                 continue
               }
 
+              // Quality scoring — reject missions below threshold
+              const qualityResult = scoreMission(mission)
+              mission.metadata.qualityScore = qualityResult.score
+
+              if (!qualityResult.pass) {
+                console.log(`  Skipped #${issue.number} (quality score: ${qualityResult.score}/100 — below threshold)`)
+                report.skipped++
+                newIds.push(canonicalId)
+                continue
+              }
+
               const filePath = join(projectDir, `${slug}.json`)
 
               if (DRY_RUN) {
-                console.log(`  [DRY RUN] Would write: ${filePath}`)
+                console.log(`  [DRY RUN] Would write: ${filePath} (score: ${qualityResult.score})`)
               } else {
                 writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
-                console.log(`  Written: ${slug}.json (${mission.mission.steps.length} steps)`)
+                console.log(`  Written: ${slug}.json (${mission.mission.steps.length} steps, score: ${qualityResult.score})`)
               }
 
               newIds.push(canonicalId)
@@ -714,6 +814,8 @@ async function main() {
                 title: mission.mission.title,
                 difficulty: mission.metadata.difficulty,
                 sourceIssue: mission.metadata.sourceIssue,
+                qualityScore: qualityResult.score,
+                synthesizedBy: mission.metadata.synthesizedBy,
               })
               await sleep(200)
             } catch (err) {
@@ -756,11 +858,22 @@ async function main() {
                   continue
                 }
 
+                // Quality scoring for external sources
+                const qualityResult = scoreMission(mission)
+                if (mission.metadata) mission.metadata.qualityScore = qualityResult.score
+
+                if (!qualityResult.pass) {
+                  console.log(`  [${source.id}] Skipped ${canonicalId} (quality score: ${qualityResult.score}/100)`)
+                  report.skipped++
+                  newIds.push(canonicalId)
+                  continue
+                }
+
                 if (DRY_RUN) {
-                  console.log(`  [DRY RUN] Would write: ${filePath}`)
+                  console.log(`  [DRY RUN] Would write: ${filePath} (score: ${qualityResult.score})`)
                 } else {
                   writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
-                  console.log(`  [${source.id}] Written: ${slug}.json`)
+                  console.log(`  [${source.id}] Written: ${slug}.json (score: ${qualityResult.score})`)
                 }
 
                 newIds.push(canonicalId)
@@ -809,14 +922,20 @@ async function main() {
   writeFileSync(reportPath, formatReport(report))
   console.log(`\nReport written to: ${reportPath}`)
   console.log(`Done: ${report.generated} generated, ${report.skipped} skipped, ${report.errors} errors`)
+
+  // Exit with error if error rate is too high (>30% of total attempted)
+  const totalAttempted = report.generated + report.skipped + report.errors
+  if (totalAttempted > 0 && report.errors / totalAttempted > 0.3) {
+    console.error(`Error rate ${(report.errors / totalAttempted * 100).toFixed(1)}% exceeds 30% threshold`)
+    process.exit(1)
+  }
 }
 
 // Only run main when executed directly
 if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   main().catch(err => {
-    console.error('Unhandled error in main (workflow will NOT fail):', err.message)
-    // Exit 0 so the workflow job succeeds — source errors should never block the pipeline
-    process.exit(0)
+    console.error('Unhandled error in main:', err.message)
+    process.exit(1)
   })
 }
 

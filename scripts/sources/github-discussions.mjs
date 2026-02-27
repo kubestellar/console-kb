@@ -156,7 +156,7 @@ export class GitHubDiscussionsSource extends BaseSource {
     const difficulty = item.upvoteCount > 20 ? 'advanced' : 'intermediate'
     const type = item.category?.slug === 'q-a' ? 'troubleshooting' : detectType(allText)
 
-    return buildMission({
+    return await buildMission({
       title: `${project.name}: ${title.slice(0, 120)}`,
       description: problem,
       problem,
