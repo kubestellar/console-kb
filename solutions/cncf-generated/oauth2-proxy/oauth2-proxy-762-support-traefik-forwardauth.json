@@ -1,0 +1,45 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:49:45.872Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "oauth2-proxy: Support traefik forwardAuth",
+    "description": "Add support for traefiks X-Forwarded headers:\r\n- X-Forwarded-Proto\r\n- X-Forwarded-Host\r\n- X-Forwarded-Uri\r\nUse them to construct a redirect uri, when X-Auth-Request-Redirect\r\nis not present or valid.\r\n\r\nUse one endpoint for auth and sign_in, which is the way\r\nthomseddon/traefik-forward-auth works.\r\nThis also allows to skip the auth provider button.\r\n\r\nFixes #46\r\n\r\n<!--- Provide a general summary of your changes in the Title above -->\r\n\r\n## Description\r\n\r\n<!--- Describe your changes in detail -->",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Reverse proxies like Traefik currently don't have a dynamic way to manipulate headers, thus handling redirects is not easy.\n\nOn Traefik v1, you could set the `rd` query string _per frontend_, thus allowing more customi",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "http:\r\n  routers:\r\n    a-service:\r\n      rule: \"Host(`a-service.example.com`)\"\r\n      service: a-service-backend\r\n      middlewares:\r\n        - oauth-errors\r\n        - oauth-auth\r\n      tls:\r\n        certResolver: default\r\n        domains:\r\n          - main: \"example.com\"\r\n            sans:\r\n              - \"*.example.com\"\r\n    oauth:\r\n      rule: \"Host(`a-service.example.com`, `oauth.example.com`) && PathPrefix(`/oauth2/`)\"\r\n      middlewares:\r\n        - auth-headers\r\n      service: oauth-backend\r\n      tls:\r\n        certResolver: default\r\n        domains:\r\n          - main: \"example.com\"\r\n            sans:\r\n              - \"*.example.com\"\r\n\r\n  services:\r\n    a-service-backend:\r\n      loadBalancer:\r\n        servers:\r\n          - url: http://172.16.0.2:7555\r\n    oauth-backend:\r\n      loadBalancer:\r\n        servers:\r\n          - url: http://172.16.0.1:4180\r\n\r\n  middlewares:\r\n    auth-headers:\r\n      headers:\r\n        sslRedirect: true\r\n        stsSeconds: 315360000\r\n        browserXssFilter: true\r\n        contentTypeNosniff: true\r\n        forceSTSHeader: true\r\n        sslHost: example.com\r\n        stsIncludeSubdomains: true\r\n        stsPreload: true\r\n        frameDeny: true\r\n    oauth-auth:\r\n      forwardAuth:\r\n        address: https://oauth.example.com/oauth2/auth\r\n        trustForwardHeader: true\r\n    oauth-errors:\r\n      errors:\r\n        status:\r\n          - \"401-403\"\r\n        service: oauth-backend\r\n        query: \"/oauth2/sign_in\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "oauth2-proxy",
+      "sandbox",
+      "app-definition"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "oauth2-proxy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/oauth2-proxy/oauth2-proxy/pull/762",
+    "sourceRepo": "oauth2-proxy/oauth2-proxy",
+    "reactions": 5,
+    "comments": 15
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:49:45.872Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

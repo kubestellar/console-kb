@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:21.584Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "contour: wait for cache sync and DAG build before starting xDS server",
+    "description": "Closes #5550.\nCloses #1280.\n\nI've removed the `x.mgr.GetCache().WaitForCacheSync()` call as it's implicitly handled in the `mgr.Start()` flow.\n\nAs a TLDR, the PR prevents starting the XDS server and building the DAG until the cache is synced with the initial list of k8s objects.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "I have one more observation, but otherwise the change looks good to me :+1:\n\nAssume we have a lot of resources that require status update, let's say 2000 `HTTPProxies` with status marked as `invalid`, and the status now needs to be updated `valid` at once, because the error condition was fixed during Contour was down. \n\nThere seems to be a chance now, that Contour will NOT start XDS server before the statuses have been pushed to Kubernetes. It happens like following:\n\n_Sometimes_ Contour manages to acquire lease before client-go sync has finalised. `StatusUpdateHandler` will get started and processing status updates is enabled:\n\n```\ntime=\"2023-08-25T14:16:15+03:00\" level=info msg=\"attempting to acquire leader lease projectcontour/leader-elect...\\n\" caller=\"leaderelection.go:245\" context=kubernetes\ntime=\"2023-08-25T14:16:15+03:00\" level=info msg=\"successfully acquired lease projectcontour/leader-elect\\n\" caller=\"leaderelection.go:255\" context=kubernetes\ntime=\"2023-08-25T14:16:15+03:00\" level=info msg=\"started status update handler\" context=StatusUpdateHandler\ntime=\"2023-08-25T14:16:15+03:00\" level=info msg=\"received a new address for status.loadBalancer\" context=loadBalancerStatusWriter loadbalancer-address=\ntime=\"2023-08-25T14:16:15+03:00\" level=info msg=\"performing delayed update\" context=contourEventHandler last_update=239.3048ms outstanding=3984\n```\n\nIn this case the processing of status updates happens within `rebuildDAG()` before we have set `e.initialDagBuilt = true`. D",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "| [Files](https://app.codecov.io/gh/projectcontour/contour/pull/5672?src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=projectcontour) | Coverage Δ | |\n|---|---|---|\n| [internal/featuretests/v3/featuretests.go](https://app.codecov.io/gh/projectcontour/contour/pull/5672?src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=projectcontour#diff-aW50ZXJuYWwvZmVhdHVyZXRlc3RzL3YzL2ZlYXR1cmV0ZXN0cy5nbw==) | `86.60% <100.00%> (-0.05%)` | :arrow_down: |\n| [internal/contour/handler.go](https://app.codecov.io/gh/projectcontour/contour/pull/5672?src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=projectcontour#diff-aW50ZXJuYWwvY29udG91ci9oYW5kbGVyLmdv) | `82.16% <61.29%> (-6.07%)` | :arrow_down: |\n| [cmd/contour/serve.go](https://app.codecov.io/gh/projectcontour/contour/pull/5672?src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=projectcontour#diff-Y21kL2NvbnRvdXIvc2VydmUuZ28=) | `19.82% <0.00%> (-0.31%)` | :arrow_down: |\n\n... and [1 file with indirect coverage changes](https://app.codecov.io/gh/projectcontour/contour/pull/5672/indirect-changes?src=pr&el=tree-more&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=projectcontour)\n\n</details>\nThere's actually a better way to implement this. The server should only wait for the first DAG build. The handler itself then would ensure the first DAG build is done after the cache sync.\r\n\r\nI'll push a commit to implement this.\n> Nice work @therealak12!\r\n> \r\n> So, my understanding from this is that `WaitForCacheSync()` might have worked - if we did NOT process the events asynchronously. Since client-go will be unaware of our background processing it returns while we still process our own queue. For this kind of situations, client-go offers utility [`SingleFileTracker`](https://github.com/kubernetes/client-go/blob/e8815ff156658df0fd9284683c5fdcda51a681dc/tools/cache/synctrack/synctrack.go#L80), where user signals their async processing by using `Start()` and `Finished()` call-pair per resource in initial list, and `HasSynced()` which additionally covers the initial queue inside client.go. Is that correct?\r\n> \r\n> I added some small questions inline as well.\r\n> \r\n> The change makes sense to me and seems to work on my machine as well 🙂 👍\r\n> \r\n> Would you add a changelog entry as well?\r\n\r\nThanks for your review and comments. I try to explain what happens exactly:\r\n\r\n- The manager's `WaitForCacheSync` waits until the initial list of Kubernetes objects is delivered to the informers.\r\n- We register our handlers to these informers and ignore the returned `HasSynced` methods.\r\n- Although the full list of initial objects exists in the informers, they're not necessarily handled by the contour handler and thus they don't necessarily exist in the contour's internal cache.\r\n- The DAG rebuild goroutine starts rebuilding DAG and updating Ingress objects *based on its own cache*\r\n\r\nThis PR waits until all of the `HasSynced` methods that are received when registering handlers, return true, and then starts the DAG rebuild process.\r\n\r\nThose `HasSynced` methods would return true when `OnAdd` method of the handler is called for all of the objects in the initial list. If we only rely on these `HasSynced` methods, we may start DAG rebuild process before putting the last object in the cache! (The last object because we use an unbuffered channel and thus OnAdd is blocked until the current object is read by the goroutine.)\r\n\r\nThis is why I've used the `SingleFileTracker`. It's decremented each time the `OnAdd` is called for an object of the initial list and incremented when its handling is done. So if syncTracker.HasSynced returns true, it means we are not processing any objects at that moment.\nI have one more observation, but otherwise the change looks good to me :+1:\r\n\r\nAssume we have a lot of resources that require status update, let's say 2000 `HTTPProxies` with status marked as `invalid`, and the status now needs to be updated `valid` at once, because the error condition was fixed during Contour was down. \r\n\r\nThere seems to be a chance now, that Contour will NOT start XDS server before the statuses have been pushed to Kubernetes. It happens like following:\r\n\r\n_Sometimes_ Contour manages to acquire lease before client-go sync has finalised. `StatusUpdateHandler` will get started and processing status updates is enabled:",
+        "In this case the processing of status updates happens within `rebuildDAG()` before we have set `e.initialDagBuilt = true`. Due to the default client rate limits (adjustable by `--kubernetes-client-qps` and `--kubernetes-client-burst`) the XDS server will be down for quite a while, depending on how many statuses there are to update. \r\n\r\nIn my test it took 7 minutes to update 2000 `HTTPProxies` until I got this:",
+        "Since the XDS server does not depend on statuses, I think it would make sense to set `initialDagBuilt = True` to start XDS server **before** looping and sending the status updates: https://github.com/projectcontour/contour/blob/68bafab3d1bcc6fd1436b579e11ae357f966d7bd/internal/contour/handler.go#L243-L250\r\n\r\nCc @sunjayBhatia, @skriss \n> I have one more observation, but otherwise the change looks good to me 👍\r\n> \r\n> Assume we have a lot of resources that require status update, let's say 2000 `HTTPProxies` with status marked as `invalid`, and the status now needs to be updated `valid` at once, because the error condition was fixed during Contour was down.\r\n> \r\n> There seems to be a chance now, that Contour will NOT start XDS server before the statuses have been pushed to Kubernetes. It happens like following:\r\n> \r\n> _Sometimes_ Contour manages to acquire lease before client-go sync has finalised. `StatusUpdateHandler` will get started and processing status updates is enabled:\r\n> \r\n>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "contour",
+      "incubating",
+      "networking",
+      "release-note-minor"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "contour"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/projectcontour/contour/pull/5672",
+    "sourceRepo": "projectcontour/contour",
+    "reactions": 8,
+    "comments": 12
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:21.584Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

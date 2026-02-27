@@ -1,0 +1,49 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:47:53.135Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "atlantis: Add support for stages of plans",
+    "description": "Hello!\n\nThis is an initial implementation for #972 , to allow atlantis to only plan / apply projects when their dependencies have already been applied (or not modified).\n\nThis is useful for terragrunt or when having a monorepo with projects referencing others via remote state. If using with terragrunt, the follow tool is useful for automatically creating the dependency tree (but will need updating to support the new config) https://github.com/transcend-io/terragrunt-atlantis-config.\n\n# Planning\n\nProjects are grouped by dependencies (optionally: unmodified transient dependencies can be included) and planned by group. If all projects in a group come back with a clean plan (terraform outputs `no infrastructure changes...`), the next group is automatically planned. If any projects in a group have a plan that needs applying, subsequent groups of projects have their `ProjectPlanStatus` set to `PendingDependencyAppliedStatus`\n\n# Applying\n\nApplying is done as normal. If a project has a plan, i",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "This implements:\nhttps://github.com/runatlantis/atlantis/issues/1259\n\nfeat(1259): atlantis destroy order\n\nWhile creating the directed acyclic graph, it checks if the\nterragrunt.hcl file of the stacks contains our destroy flag:\n`# ATLANTIS_PLEASE_DESTROY_STACK`\n\nIf this flag is found, the corresponding edge will be reverted, i.e.\ninstead of u -> v, we will get v -> u.\n\nfeat(1259): topological sort: fix and debugging\n\n* this will output the dependency graph in *.dot format\n* it will make the plan fail if the TopSort() fails for whatever reason\n* sorting is not necessary when there is just one project\n* dynamic folder/file generation\n* remove some unnecessary else branches\n* add a test for FindProjectNo()\n* and most important: fix FindProjectNo() so that the sorting is correct\n\nNew dependency\n\n- https://github.com/yourbasic/graph",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "- autoplan:\r\n    enabled: true\r\n    when_modified:\r\n    - '*.hcl'\r\n    - '*.tf*'\r\n    - ../../account.hcl\r\n    - ../env.hcl\r\n    - ../../region.hcl\r\n  dir: terraform/uat/ap-southeast-1/uat/network\r\n  workflow: uat\r\n  workspace: terraform_uat_ap-southeast-1_uat_network\r\n\r\n- autoplan:\r\n    enabled: true\r\n    when_modified:\r\n    - '*.hcl'\r\n    - '*.tf*'\r\n    - ../../account.hcl\r\n    - ../env.hcl\r\n    - ../network/terragrunt.hcl\r\n    - ../../region.hcl\r\n  dir: terraform/uat/ap-southeast-1/uat/ecs_cluster\r\n  workflow: uat\r\n  workspace: terraform_uat_ap-southeast-1_uat_ecs_cluster\r\n  depends_on:\r\n    - terraform/uat/ap-southeast-1/uat/network\r\n\r\n- autoplan:\r\n    enabled: true\r\n    when_modified:\r\n    - '*.hcl'\r\n    - '*.tf*'\r\n    - ../../account.hcl\r\n    - ../env.hcl\r\n    - ../ecs_cluster/terragrunt.hcl\r\n    - ../network/terragrunt.hcl\r\n    - ../../region.hcl\r\n    - ../service_ecs_task_definition/terragrunt.hcl\r\n    - ../network/terragrunt.hcl\r\n    - ../service_registry/terragrunt.hcl\r\n  dir: terraform/uat/ap-southeast-1/uat/service_ecs_service\r\n  workflow: uat\r\n  workspace: terraform_uat_ap-southeast-1_uat_service_ecs_service\r\n  depends_on:\r\n    - terraform/uat/ap-southeast-1/uat/network\r\n    - terraform/uat/ap-southeast-1/uat/ecs_cluster\r\n    - terraform/uat/ap-southeast-1/uat/service_ecs_task_definition\r\n\r\n- autoplan:\r\n    enabled: true\r\n    when_modified:\r\n    - '*.hcl'\r\n    - '*.tf*'\r\n    - ../../account.hcl\r\n    - ../env.hcl\r\n    - ../../region.hcl\r\n  dir: terraform/uat/ap-southeast-1/uat/service_ecs_task_definition\r\n  workflow: uat\r\n  workspace: terraform_uat_ap-southeast-1_uat_service_ecs_task_definition\r\n  depends_on:\r\n    - terraform/uat/ap-southeast-1/uat/network\r\n    - terraform/uat/ap-southeast-1/uat/ecs_cluster"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "atlantis",
+      "sandbox",
+      "app-definition",
+      "feature",
+      "waiting-on-response"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "atlantis"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/runatlantis/atlantis/pull/2055",
+    "sourceRepo": "runatlantis/atlantis",
+    "reactions": 9,
+    "comments": 13
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:47:53.135Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

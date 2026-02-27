@@ -1,0 +1,51 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:45:40.729Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "crossplane: feat/configurable ports",
+    "description": "### Description of your changes\n\nWhen running crossplane (and providers/functions) in the host network the need to configure ports arises.\n\nThis MR has two parts:\n\n1. Make crossplane ports (service/webhook, health probe, metrics) configurable\n2. Allow `DeploymentRuntimeConfig` to override the default ports (`metrics`, `webhook`, `grpc`) in both `Deployment` and `Service`.\n\nAdditional merge requests would be necessary to\n\n- Adjust the documentation\n- Adjust the provider and function templates (to introduce configuration options for their ports)\n- Providers / Functions (to introduce configuration options for their ports)\n\nPutting this on draft to gather your feedback. Please let me know what you think about it and how to proceed with the follow ups.\n\nContributes to #5520\n\n#### Crossplane Ports\n\nThe following configuration options (flags / environment variables) where added, with their defaults set to the current values:\n\n- `--webhook-port=9443`\n- `--metrics-bind-address=:8080`\n- `--healt",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "### Description of your changes\n\nAs outlined in the issue below, when running Crossplane in certain environments (like EKS using Calico CNI), where the control plane resides outside the workload network it is necessary to run webhooks in the host network. This calls for the need to make the port configurable to avoid conflicts.\n\nI opened [crossplane/crossplane!5540](https://github.com/crossplane/crossplane/pull/5540) to allow a `DeploymentRuntimeConfig` to overwrite the ports of the crossplane managed services created for each provider / function.\n\nFixes #208\n\nI have:\n\n- [x] Read and followed Crossplane's [contribution process].\n- [x] Run `make reviewable test` to ensure this PR is ready for review.\n\n### How has this code been tested\n\nI deployed my fork of this and crossplane in our test cluster running EKS and Calico. With this I was able to run both Crossplane and provider-kubernetes inside the host network with custom ports.\n\nThis change only makes sense if my other PR gets accepted.\n\n[contribution process]: https://git.io/fj2m9",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "# K8s provider\r\napiVersion: pkg.crossplane.io/v1\r\nkind: Provider\r\nmetadata:\r\n  name: provider-kubernetes\r\nspec:\r\n  package: \"index.docker.io/crossplanecontrib/provider-kubernetes:v0.15.0\"\r\n  runtimeConfigRef:\r\n    name: provider-kubernetes\r\n---\r\napiVersion: pkg.crossplane.io/v1beta1\r\nkind: DeploymentRuntimeConfig\r\nmetadata:\r\n  name: provider-kubernetes\r\nspec:\r\n  deploymentTemplate:\r\n    spec:\r\n      selector: { }\r\n      template:\r\n        spec:\r\n          hostNetwork: true\r\n          nodeSelector:\r\n            kubernetes.io/os: linux\r\n          imagePullSecrets:\r\n            - name: crossplane-workaround\r\n          containers:\r\n            - name: package-runtime\r\n              args:\r\n                - --webhook-port=9610\r\n  serviceTemplate:\r\n    spec:\r\n      ports:\r\n        - name: webhook\r\n          port: 9200 # doesn't matter\r\n          targetPort: 9610\r\n          protocol: TCP",
+        "apiVersion: pkg.crossplane.io/v1beta1\r\nkind: Function\r\nmetadata:\r\n  name: function-patch-and-transform\r\nspec:\r\n  package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.7.0\r\n  runtimeConfigRef:\r\n    name: function-patch-and-transform\r\n---\r\napiVersion: pkg.crossplane.io/v1beta1\r\nkind: DeploymentRuntimeConfig\r\nmetadata:\r\n  name: function-patch-and-transform\r\nspec:\r\n  deploymentTemplate:\r\n    spec:\r\n      selector: { }\r\n      template:\r\n        spec:\r\n          hostNetwork: true\r\n          containers:\r\n            - name: package-runtime\r\n              args:\r\n                - --address=:9612\r\n  serviceTemplate:\r\n    spec:\r\n      ports:\r\n        - name: webhook\r\n          port: 9200 # doesn't matter\r\n          targetPort: 9612\r\n          protocol: TCP",
+        "hostNetwork: true\r\ndnsPolicy: \"ClusterFirstWithHostNet\"\r\nwebhooks:\r\n  port: 9600\r\nmetrics:\r\n  enabled: true\r\n  port: 9601\r\nreadiness:\r\n  port: 9602"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/crossplane/crossplane/pull/5540",
+    "sourceRepo": "crossplane/crossplane",
+    "reactions": 11,
+    "comments": 28
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:45:40.729Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

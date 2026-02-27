@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:47:37.313Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "atlantis: fix: GitHub mergeability bypassing apply",
+    "description": "## what\n\nFirst of all, this PR is only concerned with how Atlantis determines if it should proceed with apply when the `--gh-allow-mergeable-bypass-apply` is used on a GitHub PR that is in the `blocked` state because Atlantis apply is a required check.\n\nThe following changes to its behaviour are made:\n\n- Distinguish between required and non-required statuses\n- Determine if a check is required by a rulesets and/or branch protection\n  - Previously only branch protection was considered\n- Prevent apply if there are required checks in pending or queued state\n  - Solution to this issue https://github.com/runatlantis/atlantis/issues/3811\n- Identify all required checks set by branch protections and rulesets and all required workflows set by rulesets\n  - Solution to this issue https://github.com/runatlantis/atlantis/issues/4272\n\nThis is all accomplished by using the GraphQL API instead of the REST API, because the former conveniently provides the current state of all statuses and checks on the ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "## what\n\nCurrently when the apply condition is set to mergeable along with `--gh-allow-mergeable-bypass-apply` flag, Atlantis considers non required status checks as well to decide whether the PR is mergeable or not (to allow apply or not). This is a deviation from standard github mergeable status.\n\nThis PR changes that and includes only required status checks while evaluating mergeable status.\n\n## why\n\nAtlantis uses mergeable status from github API to check if a PR is mergeable if `--gh-allow-mergeable-bypass-apply` is not set.  That is if the status is `unstable`, the PR is considered mergeable.\n\n```\nunstable: Failing/pending commit status that is not part of the required\n\t//           status checks. Merging is allowed (yellow box).\n```\n\nIf `--gh-allow-mergeable-bypass-apply` enabled, github uses some additional checks to see if the PR is mergeable without considering `atlantis apply`. But in these additional checks, Atlantis looks at all statuses irrespective of if they are required or not.  So, if there is a status check that is failing Atlantis will consider it non mergeable even if its not a required status check and thus will block Apply.\n\nIn this change, while checking if the state is `success`, it will also check if the particular status is one of the required checks.  Hence Atlantis will report non mergeable only if the failing status check is a required one.\n\n## tests\n\n- [x] I have adjusted the test data to include scenarios where there could be failing non require",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "unstable: Failing/pending commit status that is not part of the required\r\n\t//           status checks. Merging is allowed (yellow box).",
+        "\"msg\":\"unable to get pull request status: fetching mergeability status for repo: <redacted>, and pull number: 395: getting pull request status: fetching rulesets, branch protections and status checks from GraphQL: Resource not accessible by integration. Continuing with mergeable and approved assumed false\","
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "atlantis",
+      "sandbox",
+      "app-definition",
+      "go",
+      "needs-discussion",
+      "waiting-on-review",
+      "provider-github"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "atlantis"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/runatlantis/atlantis/pull/4193",
+    "sourceRepo": "runatlantis/atlantis",
+    "reactions": 21,
+    "comments": 14
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:47:37.313Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

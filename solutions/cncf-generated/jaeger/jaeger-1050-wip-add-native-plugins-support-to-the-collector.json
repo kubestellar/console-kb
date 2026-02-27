@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:26.025Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "jaeger: WIP: Add native plugins support to the Collector",
+    "description": "## Which problem is this PR solving?\nThis PR provides the foundation to support plugins in Jaeger using native Go plugins (`pkg/plugin`). Resolves #422 \n\nSupported plugins:\n- Storage (`spanstore` + `dependencystore`)\n- Span Processor (`Sanitizer`, `PreProcessor`, `PreSave`, `SpanFilter`)\n\n## Short description of the changes\nThe current PR is working and this comment https://github.com/jaegertracing/jaeger/pull/1050#issuecomment-456126756 includes an example of a storage plugin that seems to work so far.\n\n## What is missing\n- Configuration file to order the plugins\n- Unit/Integration tests\n- More examples\n- Documentation\n- Support for that in the Dockerfile\n\n## How to run it\n1. Compile the plugins\n```\ncd examples/collector/plugins/\ngo build  -buildmode=plugin sanitizer_logger.go\ngo build  -buildmode=plugin pre_processor_logger.go\ngo build  -buildmode=plugin pre_save_logger.go\ngo build  -buildmode=plugin span_filter_logger.go\n```\n2. Run the collector with the proper flag\n```\nSPAN_STORAGE",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Great! Looks very promising. \n\nSide note: I didn't even know we had presave postsave... Whatever for?\n\nA few comments on the design:\n- I think this should be generic capability, not collector specific. That means, besides going into pkg/plugins module, a global cli flag for plugins dir, similar to metrics/logging. Btw, you mentioned env var: that should come auto from viper, as long as you have a flag. However, ultimately we will need this to behave similar to span-storage-type env var, because I can envision some plugins needing access to cli flags.\n- perhaps plugin factory can be something like `Get(name string, type reflect.Type) ([]interface{}, error)`, ie factory initially loads all plugin libs and allows to search for symbols of specific name and type, returning all found. This way we don't hardcode specific interfaces inside the factory. The caller is responsible for chaining or whatever is appropriate. The callers may also deal with things that implement Initializable/[Configurable](https://github.com/jaegertracing/jaeger/blob/96ce340848f17699ced8f71fcd8129689ea0b7ed/plugin/configurable.go#L25), already introduced in `storage.Factory`.\n- one important consideration for things like filters/sanitizers is the order. Not sure how to enforce it; one option is instead of walking a directory we take a file that lists plugin files in user-defined order and we respect it. That seems cleaner and more explicit than the other approaches I can think of, yet does not address the ca",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "cd examples/collector/plugins/\r\ngo build  -buildmode=plugin sanitizer_logger.go\r\ngo build  -buildmode=plugin pre_processor_logger.go\r\ngo build  -buildmode=plugin pre_save_logger.go\r\ngo build  -buildmode=plugin span_filter_logger.go",
+        "SPAN_STORAGE_TYPE=memory LOG_LEVEL=debug PLUGINS_DIRECTORY=`pwd`/examples/collector/plugins/ go run cmd/collector/main.go",
+        "PreProcessSpans...  4 spans\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=ef9dbde43426f82f OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=ef9dbde43426f82f OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=7c8453653cab6cbf OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=7c8453653cab6cbf OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=8de1edfd89f8e32e OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=8de1edfd89f8e32e OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=66333d0d4a3452c OperationName=truncated\r\nSpanFilter... TraceID=66333d0d4a3452c SpanID=66333d0d4a3452c OperationName=truncated\r\nSanitizer... TraceID=66333d0d4a3452c SpanID=ef9dbde43426f82f OperationName=truncated\r\nSanitizer... TraceID=66333d0d4a3452c SpanID=7c8453653cab6cbf OperationName=truncated\r\nSanitizer... TraceID=66333d0d4a3452c SpanID=66333d0d4a3452c OperationName=truncated\r\nSanitizer... TraceID=66333d0d4a3452c SpanID=8de1edfd89f8e32e OperationName=truncated\r\nPreSave... TraceID=66333d0d4a3452c SpanID=66333d0d4a3452c OperationName=truncated\r\nPreSave... TraceID=66333d0d4a3452c SpanID=8de1edfd89f8e32e OperationName=truncated\r\nPreSave... TraceID=66333d0d4a3452c SpanID=ef9dbde43426f82f OperationName=truncated\r\nPreSave... TraceID=66333d0d4a3452c SpanID=7c8453653cab6cbf OperationName=truncated"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "jaeger",
+      "graduated",
+      "observability"
+    ],
+    "category": "observability",
+    "cncfProjects": [
+      "jaeger"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/jaegertracing/jaeger/pull/1050",
+    "sourceRepo": "jaegertracing/jaeger",
+    "reactions": 1,
+    "comments": 17
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:26.025Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:44:20.803Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cilium: Introduce --force-device-detection option",
+    "description": "- Introduce --enforce-device-detection option\n- Helm chart: enforceDeviceDetection option\n- Add tests for EnforceDeviceDetection option\n\nPlease ensure your pull request adheres to the following guidelines:\n\n- [x] For first time contributors, read [Submitting a pull request](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#submitting-a-pull-request)\n- [x] All code is covered by unit and/or runtime tests where feasible.\n- [x] All commits contain a well written commit description including a title,\n      description and a `Fixes: #XXX` line if the commit addresses a particular\n      GitHub issue.\n- [x] If your commit description contains a `Fixes: <commit-id>` tag, then\n      please add the commit author[s] as reviewer[s] to this issue.\n- [x] All commits are signed off. See the section [Developer’s Certificate of Origin](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#dev-coo)\n- [x] Provide a title or release-note blurb suitable f",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "- Introduce --enforce-device-detection option\n- Helm chart: enforceDeviceDetection option\n- Add tests for EnforceDeviceDetection option\n\nPlease ensure your pull request adheres to the following guidelines:\n\n- [x] For first time contributors, read [Submitting a pull request](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#submitting-a-pull-request)\n- [x] All code is covered by unit and/or runtime tests where feasible.\n- [x] All commits contain a well written commit description including a title,\n      description and a `Fixes: #XXX` line if the commit addresses a particular\n      GitHub issue.\n- [x] If your commit description contains a `Fixes: <commit-id>` tag, then\n      please add the commit author[s] as reviewer[s] to this issue.\n- [x] All commits are signed off. See the section [Developer’s Certificate of Origin](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#dev-coo)\n- [x] Provide a title or release-note blurb suitable for the release notes.\n- [x] Are you a user of Cilium? Added https://github.com/cilium/cilium/pull/32738\n- [x] Thanks for contributing!\n\nFixes: https://github.com/cilium/cilium/issues/32721\n\n```release-note\nIntroduce --enforce-device-detection option to enable the auto-detection even if specific devices are explicitly listed\n```",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "- Introduce --enforce-device-detection option\r\n- Helm chart: enforceDeviceDetection option\r\n- Add tests for EnforceDeviceDetection option\r\n\r\nPlease ensure your pull request adheres to the following guidelines:\r\n\r\n- [x] For first time contributors, read [Submitting a pull request](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#submitting-a-pull-request)\r\n- [x] All code is covered by unit and/or runtime tests where feasible.\r\n- [x] All commits contain a well written commit description including a title,\r\n      description and a `Fixes: #XXX` line if the commit addresses a particular\r\n      GitHub issue.\r\n- [x] If your commit description contains a `Fixes: <commit-id>` tag, then\r\n      please add the commit author[s] as reviewer[s] to this issue.\r\n- [x] All commits are signed off. See the section [Developer’s Certificate of Origin](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#dev-coo)\r\n- [x] Provide a title or release-note blurb suitable for the release notes.\r\n- [x] Are you a user of Cilium? Added https://github.com/cilium/cilium/pull/32738\r\n- [x] Thanks for contributing!\r\n\r\n<!-- Description of change -->\r\n\r\nFixes: https://github.com/cilium/cilium/issues/32721",
+        "Commit e08b21edc628a6d7f42fafb1d54e4fc1af5ac66f does not match \"(?m)^Signed-off-by:\".\n\nPlease follow instructions provided in https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#developer-s-certificate-of-origin\nCould you speak a bit about why we need three options for configuring devices? I would have expected one of two:\r\n\r\n(a) Auto-detection. Cilium tries its best to select devices, and Cilium is responsible for picking the devices.\r\n(b) Case (a) didn't work for some reason (bug?), so the user wants to override the set of devices. In this case Cilium is clearly *not* responsible for picking the devices.\r\n\r\nCase (c) Both Cilium and the user specify devices seems like it confuses who is responsible for this logic, and it's yet another complicated flag in an already complicated set of flags for the agent. Can't we just fix (a) or (b) to better cover your use case?\n@joestringer sure, I can explain. The reason is that we're not end user, we're adopting Cilium together with [kube-ovn](https://github.com/kubeovn/kube-ovn) in [Cozystack](https://github.com/aenix.io/cozystack) a free platform for running managed services. We need kube-ovn as it provides extensive network fabric for running VirtualMachines using KubeVirt.\r\n\r\nOur users might have various hardware configurations with various interfaces, eg. some of them using bonding and vlan interfaces, some of them are not, so devices must be auto-detected.\r\n\r\nBut in order to make this configuration working, the `ovn0` device should also be added to the list of auto-detected devices.\r\n\r\nThe reason I'm insist for adding an extra option and not extend autodetection rules, is that I don't want to break exiting installations. Eg. OpenShift project also uses OVN but different implementation [ovn-kubernetes](https://github.com/ovn-org/ovn-kubernetes). Some other users might want to run Kubernetes with Cilium on hypervisors with OVN which is unrelated to the Kubernetes networking. Eg, Mirantis uses Kubernetes to provision OpenStack platform, OVN is a default networking for OpenStack for now.\r\n\r\nAnother user-story that I see is that there might be other users who might want to do the same, eg. to create an extra VPN device on every node, that must be always specified in a list in addition to auto-detection rules.\nThe use-case and the ability to configure this makes sense to me. Though I think we need to consider how to expose this to users. I find `--enforce-device-detection` to be misleading, especially as we had earlier this notion of whether or not to detect any devices at all, so I think it'd be better not to use that wording.\r\n\r\nWhat we essentially want to accomplish here is filter based on contents of  `--devices`, but also apply the normal device filtering/detection logic. My suggestion would be to flip this around and have an option e.g. \"--force-devices\" (maybe someone can think of a better name) that is set to true by default and has the meaning that \"--devices\" are chosen without the additional filtering.\r\n\r\nOr we could also have a separate option \"--device-filter\", but that's likely more confusing, both to users and in terms of implementation.\nOriginal idea was to call it `--enforce-devices-detection`, I renamed it into singular form after `--enable-runtime-device-detection` option\n@aanm I answered here https://github.com/cilium/cilium/pull/32730#issuecomment-2136661151\r\n\r\nWe provide a [platform](https://cozystack.io/), which simplifies configuration for users to run VMs and managed services in Kubernetes. Cilium and kube-ovn is used there. The same as you, we want to support device autodetection which would work in various environments. I'll list some of them:\r\n\r\n\r\nmultiple interfaces:",
+        "bonding with vlan"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "release-note-minor",
+      "ready-to-merge",
+      "kind-community-contribution"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cilium/cilium/pull/32730",
+    "sourceRepo": "cilium/cilium",
+    "reactions": 14,
+    "comments": 25
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:44:20.803Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

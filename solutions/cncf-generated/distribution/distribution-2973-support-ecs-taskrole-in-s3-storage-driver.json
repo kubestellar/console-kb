@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:47:56.706Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "distribution: Support ECS TaskRole in S3 storage driver",
+    "description": "Instead of constructing the list of credential providers manually, if we use the default list we can take advantage of the AWS SDK checking the environment and returning either the EC2RoleProvider or the generic HTTP credentials provider, configured to use the ECS credentials endpoint.\n\nAlso, use the `defaults.Config()` function instead of `aws.NewConfig()`, as this results in an initialised HTTP client which prevents a fatal error when retrieving credentials from the ECS credentials endpoint.\n\nFixes #2960\n\nSigned-off-by: Andrew Bulford <andrew.bulford@redmatter.com>",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "This PR reopens #2973 and fixes still hardcoded list of credential providers:\n\n- `StaticProvider`\n- `EnvVarProvider`\n- `SharedCredentialProvider`\n-  `EC2RoleProvider`\n\nInstead it relies on SDK defaults when creating a new AWS Config and AWS Session. And only overrides them with `StaticProvider` if `accesskey` and `secretkey` are provided via `config.yml`:\n\n```yaml\nstorage:\n  s3:\n    accesskey: ABCDEFG123HY4LWA5TOG\n    secretkey: AB1C+D2EF/Ge3cA/vQbUfMVpuDImUZsxkpCQDUy0\n    region: us-east-1\n    ...\n``` \n\nAs the result, it uses AssumeRoleWithWebIdentity credential provider (in [`session.resolveCredentials`](https://github.com/aws/aws-sdk-go/blob/95871fc3b42a8910f81ec01c74975293dafced97/aws/session/session.go#L630)) that resolves assigned IAM role to K8s Service Accounts via OIDC token. Please see [here](https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/) for more details.\n\nThis changed have been tested in the following scenario to grant access to AWS S3 Bucket:\n\n- IAM Role for Service Accounts that're assigned to Pods on EKS cluster\n- IAM Role for EC2 instances\n- Environment Variables: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` on a local machine\n\nUpstreamed from Docker Hub",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "storage:\r\n  s3:\r\n    accesskey: ABCDEFG123HY4LWA5TOG\r\n    secretkey: AB1C+D2EF/Ge3cA/vQbUfMVpuDImUZsxkpCQDUy0\r\n    region: us-east-1\r\n    ..."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "distribution",
+      "sandbox",
+      "app-definition",
+      "area-storage-s3"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "distribution"
+    ],
+    "targetResourceKinds": [
+      "Role"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/distribution/distribution/pull/2973",
+    "sourceRepo": "distribution/distribution",
+    "reactions": 5,
+    "comments": 16
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:47:56.706Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

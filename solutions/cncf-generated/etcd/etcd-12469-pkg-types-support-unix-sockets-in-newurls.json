@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:46:40.900Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "etcd: pkg/types: Support Unix sockets in NewURLS",
+    "description": "Resolves #12450\nThis commits adds support to unix/unixs socket URLs, which currently\nfail with the message \"URL address does not have the form \"host:port\".\nIt also replaces the work started in #11747.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "/kind bug\n/sig api-machinery\n\nTo dial to a UDS address, the url.Path part must be included in the address.",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "https://github.com/grpc/grpc/blob/master/doc/naming.md",
+        "The grpc spec said \"there will actually be three slashes\" for the path to be considered as an absolute path, so `unix://127.0.0.5:1456` should be considered as a related path.\r\n\r\nI agree that we need more unit tests to verify the syntax and backwards compatibility concerns.\nNot entirely sure why tests have failed for this PR, since I only added more unit testing and rebased it since last they ran.\n> The grpc spec said \"there will actually be three slashes\" for the path to be considered as an absolute path, so `unix://127.0.0.5:1456` should be considered as a related path.\r\n\r\nSo this is kind of a 'third' format: officially not supported (documented) by grpc (as it has 2 slashes, so neither 0 nor 3) , \r\nthat's good that it allows to stay backward compatible, but we should be: \r\n  - be explicit about this in the methods documentation\r\n  - have test coverage\r\n\r\nPlease also run:",
+        "to trigger the re-testing. \nIn https://github.com/etcd-io/etcd/pull/12671 the test is related: \r\nhttps://github.com/etcd-io/etcd/pull/12671/commits/0b75fede6450af96614c4f23f9bb51e0ab3d0b2a#diff-46e9c3eaee9d6846f4cb50dae30fe8fb56db34b7155a36cc31881e85b29fafb1\r\n\r\nthat shows mapping between legacy \"etcd\" naming and grpc supported names. \r\n\r\n@trawler -> Please rebase (that will also retrigger tests) to get attention to this PR. \n> @trawler -> Please rebase (that will also retrigger tests) to get attention to this PR.\r\n\r\ndone\nI played a little bit with the fix, to migrate all etcd integration tests to use \r\n   `unix:///tmp/testTempDir/127.0.0.1:32432`\r\nendpoints,  but it was more challenging than I expected: \r\n\r\n  - There are tests that speak v2 protocol over http. The standard transports does not know how to speak HTTP over UNIX socket, it particular its not clear what's 'host' in the address:  `unix:///tmp/testTempDir/127.0.0.1:32432`\r\n[From URL parsing its '' (illegal), from certificate validation its '127.0.0.1'. \r\nThere is special handling for unis://localdir:port files here: \r\nhttps://github.com/etcd-io/etcd/blob/792b7f57d3505b6c87fe46a6b9b4875de0c2c042/pkg/transport/transport.go#L69\r\nbut it does not handles the potential names introduces by this PR. \r\n\r\n  - We might have code in server itself that speak V2 over HTTP. For example: https://github.com/etcd-io/etcd/blob/792b7f57d3505b6c87fe46a6b9b4875de0c2c042/server/etcdserver/server.go#L1911\r\n\r\n - In general raft speaks over HTTP in etcd. \r\n\r\nFor now I decided to workaround the 'test-sockets' location problem by changing the working directory of the test execution. \r\n---\r\n\r\nTo declare support for such URLs, I think we need to have a dedicated testcase, e.g. in `tests/integration/clientv3/connectivity/dial_test.go` that: \r\n  - creates 3 instance etcd instance using such URLs  (to cover infra-cluster V2 functionalities or wait for deprecation )\r\n  - connect to it using the URL, including the TLS case.\n# [Codecov](https://codecov.io/gh/etcd-io/etcd/pull/12469?src=pr&el=h1) Report\n> Merging [#12469](https://codecov.io/gh/etcd-io/etcd/pull/12469?src=pr&el=desc) (982a763) into [master](https://codecov.io/gh/etcd-io/etcd/commit/73c50b869ab7c4676806e4d1f827915f98e6d8f9?el=desc) (73c50b8) will **increase** coverage by `20.74%`.\n> The diff coverage is `100.00%`.\n\n[![Impacted file tree graph](https://codecov.io/gh/etcd-io/etcd/pull/12469/graphs/tree.svg?width=650&height=150&src=pr&token=so7nNovJo3)](https://codecov.io/gh/etcd-io/etcd/pull/12469?src=pr&el=tree)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration"
+    ],
+    "category": "troubleshooting",
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/etcd-io/etcd/pull/12469",
+    "sourceRepo": "etcd-io/etcd",
+    "reactions": 3,
+    "comments": 24
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:46:40.900Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

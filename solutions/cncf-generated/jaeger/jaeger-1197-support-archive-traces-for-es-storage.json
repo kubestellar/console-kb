@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:27.051Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "jaeger: Support archive traces for ES storage",
+    "description": "Resolves https://github.com/jaegertracing/jaeger/issues/818\nRelated to https://github.com/jaegertracing/jaeger/issues/1242\n\nThis adds the implementation of archive storage for ES. There are two possible configurations how to use this feature:\n\n* the default - it will store and read archived traces from `jaeger-archive-span` index.\n* using rollover API - it writers spans to an alias `jaeger-span-archive-write` and reads from an alias `jaeger-span-archive-read`. This deployment requires an external component that performs index managent: creating index, creating alias, callig rollover API and managing `max-span-age` by removing indices from read alias. This component is `esRollover.py` available as `jaeger-es-rollover` docker image.\n\nAs the default index name does not collide with aliases used by rollover users can seameasly migrate from default deployment to rollover by putting  `jaeger-archive-span` index into the read alias.\n\n### Default use case\nIt does not require any configuration ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "This is ready for review @jaegertracing/elasticsearch @yurishkuro @objectiser \n\nPlease read the first comment. We could also automatically default to write and read aliases and do not support no ttl use case.\n\nThe question is also who should create aliases. We could embed it in Jaeger, although I am not sure about that approach.",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "--es-archive.use-aliases                                    Use read and write aliases for indices. Use this option with Elasticsearch rollover API. It requires an external component to create aliases before startup and then performing its management. Note that es-archive.max-span-age is not taken into the account and has to be substituted by external component managing read alias. (default false)",
+        "ARCHIVE=true UNIT=seconds python3 esRollover.py init localhost:9200",
+        "ARCHIVE=true CONDITIONS='{\"max_age\": \"1s\"}'  python3 esRollover.py  rollover localhost:9200"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "jaeger",
+      "graduated",
+      "observability",
+      "storage-elasticsearch"
+    ],
+    "category": "observability",
+    "cncfProjects": [
+      "jaeger"
+    ],
+    "targetResourceKinds": [
+      "Deployment"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/jaegertracing/jaeger/pull/1197",
+    "sourceRepo": "jaegertracing/jaeger",
+    "reactions": 1,
+    "comments": 22
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:27.051Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

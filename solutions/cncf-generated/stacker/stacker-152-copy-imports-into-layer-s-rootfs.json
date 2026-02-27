@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:49:30.109Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "stacker: Copy imports into layer's rootfs",
+    "description": "Copy them into the specified destination\notherwise copy them into layer's rootfs \"/\"\nPreserves links, executability, times.\nDon't preserve user/grop ownership and perms.\ncloses #83",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "A couple of thoughts here:\n\n1. it would be nice if we still bind mounted things in the default configuration (i.e. just `import: foo`); this patch as-is doubles the i/o for an import, copying it once to .stacker and again into the rootfs. Perhaps that means this should be a separate key, like overlay_dirs: in the original issue, so the UX isn't too confusing?\n\n2. It would be really nice if these would just get generated as an OCI layer straight into the output, so that if they didn't change but the contents of the run: section did, you wouldn't get this additional delta.\n\nLet me know if those don't make sense.",
+      "steps": [
+        "it would be nice if we still bind mounted things in the default configuration (i.e. just `import: foo`); this patch as-is doubles the i/o for an import, copying it once to .stacker and again into the rootfs. Perhaps that means this should be a separate key, like overlay_dirs: in the original issue, so the UX isn't too confusing?",
+        "It would be really nice if these would just get generated as an OCI layer straight into the output, so that if they didn't change but the contents of the run: section did, you wouldn't get this additional delta."
+      ],
+      "codeSnippets": [
+        "overlay_dirs:\r\n    - source: /my/host/application\r\n      dest: /opt/application",
+        "diff --git a/build.go b/build.go\r\nindex df03e34..4e09b8b 100644\r\n--- a/build.go\r\n+++ b/build.go\r\n@@ -405,6 +405,11 @@ func (b *Builder) Build(s types.Storage, file string) error {\r\n                        return err\r\n                }\r\n \r\n+               err = s.GenerateOverlayDirLayers(sf.OverlayDirs)\r\n+               if err != nil {\r\n+                       return err\r\n+               }\r\n+\r\n                c, err := NewContainer(opts.Config, s, name)\r\n                if err != nil {\r\n                        return err\r\ndiff --git a/overlay/metadata.go b/overlay/metadata.go\r\nindex 2d2a0c9..74dae09 100644\r\n--- a/overlay/metadata.go\r\n+++ b/overlay/metadata.go\r\n@@ -21,6 +21,9 @@ type overlayMetadata struct {\r\n \r\n        // layers not yet rendered into the output image\r\n        BuiltLayers []string\r\n+\r\n+       // stuff from the overlay_dirs stacker.yaml entry\r\n+       OverlayDirs []ispec.Descriptor\r\n }\r\n \r\n func newOverlayMetadata() overlayMetadata {\r\n@@ -111,6 +114,14 @@ func (ovl overlayMetadata) lxcRootfsString(config types.StackerConfig, tag strin\r\n                lowerdirs = append(lowerdirs, contents)\r\n        }\r\n \r\n+       for _, layer := range manifest.OverlayDirs {\r\n+               contents := overlayPath(config, layer.Digest, \"overlay\")\r\n+               if _, err := os.Stat(contents); err != nil {\r\n+                       return \"\", errors.Wrapf(err, \"%s does not exist\", contents)\r\n+               }\r\n+               lowerdirs = append(lowerdirs, contents)\r\n+       }\r\n+\r\n        // overlayfs doesn't work with < 2 lowerdirs, so we add some\r\n        // workaround dirs if necessary (if e.g. the source only has\r\n        // one layer, or it's an empty rootfs with no layers, we still\r\ndiff --git a/overlay/overlay.go b/overlay/overlay.go\r\nindex 7d5d765..afa971c 100644\r\n--- a/overlay/overlay.go\r\n+++ b/overlay/overlay.go\r\n@@ -243,3 +243,12 @@ func (o *overlay) GetLXCRootfsConfig(name string) (string, error) {\r\n func (o *overlay) TarExtractLocation(name string) string {\r\n        return path.Join(o.config.RootFSDir, name, \"overlay\")\r\n }\r\n+\r\n+func (o *overlay) GenerateOverlayDirLayers(...) error {\r\n+       /*\r\n+        * munge the overlay_metadata.json for each target here; it should\r\n+        * already exist have BuiltLayers and Manifest populated accordingly, so\r\n+        * we just need to do the GenerateInsertLayer() bit and write out the\r\n+        * new metadata.json\r\n+        */\r\n+}",
+        "{\r\n  \"Manifests\": {\r\n    \"tar\": {\r\n      \"schemaVersion\": 2,\r\n      \"config\": {\r\n        \"mediaType\": \"application/vnd.oci.image.config.v1+json\",\r\n        \"digest\": \"sha256:8dd57e171a61368ffcfde38045ddb6ed74a32950c271c1da93eaddfb66a77e78\",\r\n        \"size\": 1074\r\n      },\r\n      \"layers\": [\r\n        {\r\n          \"mediaType\": \"application/vnd.oci.image.layer.v1.tar+gzip\",\r\n          \"digest\": \"sha256:7a0437f04f83f084b7ed68ad9c4a4947e12fc4e1b006b38129bac89114ec3621\",\r\n          \"size\": 75181999\r\n        },\r\n        {\r\n          \"mediaType\": \"application/vnd.oci.image.layer.v1.tar\",\r\n          \"digest\": \"sha256:fa2cea153cb781fa2607f9fc6bad85b039dc06526e9c71a2bfc61bf4e173c697\",\r\n          \"size\": 59335\r\n        }\r\n      ]\r\n    }\r\n  },\r\n  \"BuiltLayers\": null,\r\n  \"OverlayDirs\": [\r\n    {\r\n      \"mediaType\": \"application/vnd.oci.image.layer.v1.tar\",\r\n      \"digest\": \"sha256:fa2cea153cb781fa2607f9fc6bad85b039dc06526e9c71a2bfc61bf4e173c697\",\r\n      \"size\": 59335\r\n    }\r\n  ]\r\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "stacker",
+      "sandbox",
+      "app-definition"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "stacker"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/project-stacker/stacker/pull/152",
+    "sourceRepo": "project-stacker/stacker",
+    "reactions": 0,
+    "comments": 12
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:49:30.109Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

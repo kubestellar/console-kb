@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:45:00.569Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "containerd: Make killing shims more resilient",
+    "description": "Currently, we send a single SIGKILL to the shim process\nonce and then we spin in a loop where we use kill(pid, 0)\nto detect when the pid has disappeared completely.\n\nUnfortunately, this has a race condition since pids can be reused causing us \nto spin in an infinite loop when that happens.\n\nThis adds a timeout to this loop which logs a warning and exits the infinite loop.\n\nThis fixes https://github.com/containerd/cri/issues/1427",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "let's try this again",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "$ pidof containerd\r\n1567\r\n$ strace -fp 1567 -e trace=kill\r\nstrace: Process 1567 attached with 301 threads\r\n[pid 13252] kill(13737, SIG_0)          = 0\r\n[pid 11864] kill(13737, SIG_0)          = 0\r\n[pid  6042] kill(13737, SIG_0)          = 0\r\n[pid 11864] kill(13737, SIG_0)          = 0\r\n[pid  6042] kill(13737, SIG_0)          = 0\r\n[pid  7318] kill(13737, SIG_0)          = 0\r\n[pid  8004] kill(13737, SIG_0)          = 0\r\n[pid 11864] kill(13737, SIG_0)          = 0\r\n[pid  8004] kill(13737, SIG_0)          = 0\r\n[pid 20957] kill(13737, SIG_0)          = 0\r\n[pid 11864] kill(13737, SIG_0)          = 0\r\n[pid 11864] kill(13737, SIG_0)          = 0\r\n[pid  6042] kill(13737, SIG_0)          = 0\r\n[pid  6042] kill(13737, SIG_0)          = 0\r\n...",
+        "$ ps aux | grep 13737\r\nroot     13737  0.0  0.0 110356  6576 ?        Sl   07:18   0:00 containerd-shim -namespace k8s.io -workdir /var/lib/container-runtime/containerd/io.containerd.runtime.v1.linux/k8s.io/051b2f90455d240b29f3130682e851c0e7fd6bc0e64121b5e77bcfb516c49b18 -address /run/containerd/containerd.sock -containerd-binary /usr/local/bin/containerd",
+        "| Flag | Coverage Δ | |\n|---|---|---|\n| #windows | `38.34% <ø> (ø)` | |\n\n\n------\n\n[Continue to review full report at Codecov](https://codecov.io/gh/containerd/containerd/pull/4204?src=pr&el=continue).\n> **Legend** - [Click here to learn more](https://docs.codecov.io/docs/codecov-delta)\n> `Δ = absolute <relative> (impact)`, `ø = not affected`, `? = missing data`\n> Powered by [Codecov](https://codecov.io/gh/containerd/containerd/pull/4204?src=pr&el=footer). Last update [e094d36...c3d0845](https://codecov.io/gh/containerd/containerd/pull/4204?src=pr&el=lastupdated). Read the [comment docs](https://docs.codecov.io/docs/pull-request-comments).\n\nIs this problem also relevant to the v2 shim?\nI spent some time trying to look into that late last week; my understanding is that the v2/ code doesn't have this same flow of waiting for a complete exit.\r\n\r\nMy problem with the PR is that it effectively is changing the semantics of \"waitForExit\" to \"keepTryingToKillForAwhile\" :) I'm not sure if @crosbymichael has had a chance to look at this as he is more intimately familiar with this code.\n@estesp to provide some more info here. We ran the killsnoop bpf tool (https://github.com/iovisor/bcc/blob/master/tools/killsnoop.py) to inspect and track all the `kill` signals being sent by containerd and the responses they were getting from the kenel.\r\n\r\nHere is the output from an occurrence of this issue."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime"
+    ],
+    "category": "runtime",
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "expert",
+    "sourceIssue": "https://github.com/containerd/containerd/pull/4204",
+    "sourceRepo": "containerd/containerd",
+    "reactions": 3,
+    "comments": 43
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:45:00.569Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

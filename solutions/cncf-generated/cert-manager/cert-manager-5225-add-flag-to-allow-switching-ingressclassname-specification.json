@@ -1,0 +1,60 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:44:00.164Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cert-manager: Add flag to allow switching ingressClassName specification",
+    "description": "### Pull Request Motivation\n\nIn order to support both the legacy annotation and the new ingressClassName of Ingress v1, a flag has been added to allow switching. This should allow users with clusters supporting only ingressClassName to use the latest version, while being fully backwards compatible with existing users that use clusters that do not support ingressClassName.\n\nCloses: #4821 \n\n### Kind\n\nfeature\n\n### Release Note\n\n```release-note\nAdd new flag `acme-http01-solver-use-ingress-class-name` to allow switching between the legacy annotation and new ingressClassName field.\n```",
+    "type": "deploy",
+    "status": "completed",
+    "resolution": {
+      "summary": "Hi! I'll be spending time reviewing this PR today.\n\n@alijahnas A few questions:\n\n1. Which version of ingress-nginx are you using?\n2. What is the value of your Issuer's `spec.acme.solvers.http01.ingress.class`?\n3. Do you use the flag `--ingress-class` on your ingress-nginx deployment?\n\nCheck that the value in `spec.acme.solvers.http01.ingress.class` matches the value in `--ingress-class`.\n\nNote that the flag `--ingress-class` doesn't refer to an IngressClass resource. The flag `--ingress-class` refers to the value of the annotation `kubernetes.io/ingress.class`.",
+      "steps": [
+        "Which version of ingress-nginx are you using?",
+        "What is the value of your Issuer's `spec.acme.solvers.http01.ingress.class`?",
+        "Do you use the flag `--ingress-class` on your ingress-nginx deployment?"
+      ],
+      "codeSnippets": [
+        "Hi @dsonck92. Thanks for your PR.\n\nI'm waiting for a [cert-manager](https://github.com/orgs/cert-manager/people) member to verify that this patch is reasonable to test. If it is, they should reply with `/ok-to-test` on its own line. Until that is done, I will not automatically test new commits in this PR, but the usual testing commands by org members will still work. Regular contributors should [join the org](https://github.com/orgs/cert-manager/people) to skip this step.\n\nOnce the patch is verified, the new status will be reflected by the `ok-to-test` label.\n\nI understand the commands that are listed [here](https://go.k8s.io/bot-commands?repo=cert-manager%2Fcert-manager).\n\n<details>\n\nInstructions for interacting with me using PR comments are available [here](https://git.k8s.io/community/contributors/guide/pull-requests.md).  If you have questions or suggestions related to my behavior, please file an issue against the [kubernetes/test-infra](https://github.com/kubernetes/test-infra/issues/new?title=Prow%20issue:) repository.\n</details>\n\nHi, thanks for the PR @dsonck92 !\r\n\r\nI've not looked at the contents yet, in general the idea of a flag seems not bad if it solves people's problems.\r\n\r\nThere was a lengthy discussion about this and around how downstream projects like us and ingress controllers should approach the new field vs annotation and I know that at least ingress-nginx folks rolled back a bunch of deprecations in regards to the class name field vs annotation as an outcome (same as us).\r\n\r\nTo help us understand the user value of this flag, could you please provide one or two scenarios where the latest cert-manager release does not work for you (i.e which ingress controller and which version of it and why, if you know that)?\r\n(I'm aware that there are a bunch of comments on the original issue, but most of them don't have enough detail)\n@irbekrm Well, it turns out I could bump the version of my traefik install enough to the point where I could specify the class name as suggested by cert-manager (the value to tweak this setting was added to the helm chart), and this did fix the issue of traefik not picking up the ingresses with only an annotation.\r\n\r\nSo as far as my own problem, this is actually solved. However, looking back at the whole crisis going on with terraform-kubernetes-provider for lack of support of v1 ingresses, I do have the opinion that giving the end user choice of going full v1 if possible is definitely a plus. In my eyes, the implementation of the flag was relatively straight forward (not sure why it's classed size/M) and documented so it adds the option to go full v1 without annotations. But I do understand that I won't be the one that maintains this code in the long run.\nThanks @dsonck92 appreciate that the current situation is generally suboptimal as it is also not clear if there ever will be a migration path off the annotation or if the ingress controllers and us will have to keep supporting this 'forever' in which case we'd then have two mechanisms to maintain 'forever' instead of one with this PR- that is my main concern. \r\n\r\nFor now, I'd probably keep this open for a bit to see if any more use cases appear - for now I am not convinced that there is enough value for users to justify this.\nSo what is the current workaround now? I have 2 ingress controllers, and solvers for one are not being picked up.\r\nSetting edit in place gives me cryptic:",
+        "cert-manager has both ingress controllers set in solvers settings. I am using `ingressClassName` field in spec, as recommended by `networking.k8s.io/v1` resource version.\r\n\r\nVersions:\r\nhelm chart `nginx-ingress-0.14.0` AppVersion `2.3.0`\r\nhelm chart `cert-manager-v1.7.1` AppVersion `v1.7.1`\r\nK8s Rev: `v1.21.9`\nI came across this as I'm having similar issues.  cert-manager 1.9.1 and nginx 1.3.1. None of my renewals work anymore without me going into the ingress and setting ingressClassName on the spec. The annotation is not working anymore. Would love to know what the intended solution is.\n> For now, I'd probably keep this open for a bit to see if any more use cases appear - for now I am not convinced that there is enough value for users to justify this.\r\n\r\nOne use-case is newer ingress controllers that do not support the ingress annotation, like the ingress controller in Cilium. In my case, using the ingress controller is Cilium easier as I'm already running Cilium, so I don't need to install a extra component to handle ingresses.\nWhy do we need a flag to switch? Is it not possible to have both fields simultaneously?\r\n\r\nWe can have a feature flag; when enabled, the cert-manager adds `ingressClassName` in addition to the classic annotations. With this approach, backward compatibility is not compromised. We can plan for deprecating the classic annotations at a later point in time. Does this make sense?\nAs the annotation is deprecated, why not go with the initial solution from https://github.com/cert-manager/cert-manager/issues/4821? \r\n\r\nJust add",
+        "It's non breaking, easy to upgrade. \r\n\r\n\nHi, we have the same issue as @markgould. The annotation doesn't work, and the ingress controller tells us that : error=\"ingress class annotation is not equal to the expected by Ingress Controller\"\r\n\r\nWe need to use IngressClassName in the ingress objects created by cert-manager.\r\n\r\nWhen do you think this will be available ? Thanks.\r\n\r\n\r\n\r\n\nHi! I'll be spending time reviewing this PR today.\r\n\r\n@alijahnas A few questions:\r\n\r\n1. Which version of ingress-nginx are you using?\r\n2. What is the value of your Issuer's `spec.acme.solvers.http01.ingress.class`?\r\n3. Do you use the flag `--ingress-class` on your ingress-nginx deployment?\r\n\r\nCheck that the value in `spec.acme.solvers.http01.ingress.class` matches the value in `--ingress-class`.\r\n\r\nNote that the flag `--ingress-class` doesn't refer to an IngressClass resource. The flag `--ingress-class` refers to the value of the annotation `kubernetes.io/ingress.class`.\nHi @maelvls \r\nWe use ingress version 1.5.1, and cert-manager 1.9.1.\r\nThanks a lot !\r\n\nHey @dsonck92. Thank you so much for the PR!\r\n\r\nUsing a flag to \"toggle\" between the annotation mode and the ingressClassName mode seemed OK to me at first, but I see two problems:\r\n\r\n- **Validation Consistency**: the annotation value for `kubernetes.io/ingress.class` that you can set with `http01.ingress.class` can be any string. On the other side, `ingressClassName` must only be a DNS label. A notable example is the Azure AGIC ingress controller that uses the annotation value `azure/application-gateway`. With `--acme-http01-solver-use-ingress-class-name=false`, no validation issue will be found. With `--acme-http01-solver-use-ingress-class-name`, the ingress controller will start failing.\r\n- **Incompatible Ingress Controllers:** if I use an ingress controller that only supports annotations (ingress-gce is the only example) and I also want to use ingressClassName with another ingress controller, then this flag won't be useful.\r\n\r\nWhat do you think about adding a new field on the Issuer and ClusterIssuer CRD instead of using a flag?\r\n\r\nFor example:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cert-manager",
+      "graduated",
+      "security",
+      "size-l",
+      "release-note",
+      "needs-rebase",
+      "area-api",
+      "area-acme",
+      "dco-signoff--yes",
+      "ok-to-test",
+      "area-acme-http01",
+      "area-deploy",
+      "needs-kind"
+    ],
+    "category": "security",
+    "cncfProjects": [
+      "cert-manager"
+    ],
+    "targetResourceKinds": [
+      "Ingress"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cert-manager/cert-manager/pull/5225",
+    "sourceRepo": "cert-manager/cert-manager",
+    "reactions": 9,
+    "comments": 17
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:44:00.164Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

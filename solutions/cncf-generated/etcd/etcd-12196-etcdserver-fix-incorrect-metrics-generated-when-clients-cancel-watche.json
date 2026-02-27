@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:46:35.229Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "etcd: etcdserver: fix incorrect metrics generated when clients cancel watches",
+    "description": "Before this patch, a client which cancels the context for a watch results in the\nserver generating a `rpctypes.ErrGRPCNoLeader` error that leads the recording of\na gRPC `Unavailable` metric in association with the client watch cancellation.\nThe metric looks like this:\n\n    grpc_server_handled_total{grpc_code=\"Unavailable\",grpc_method=\"Watch\",grpc_service=\"etcdserverpb.Watch\",grpc_type=\"bidi_stream\"}\n\nSo, the watch server has misidentified the error as a server error and then\npropagates the mistake to metrics, leading to a false indicator that the leader\nhas been lost. This false signal then leads to false alerting.\n\nThe commit 9c103dd0dedfc723cd4f33b6a5e81343d8a6bae7 introduced an interceptor which wraps\nwatch streams requiring a leader, causing those streams to be actively canceled\nwhen leader loss is detected.\n\nHowever, the error handling code assumes all stream context cancellations are\nfrom the interceptor. This assumption is broken when the context was canceled\nbecause of a client",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Currently, when a client closes context during watch we pass. `codes.Unavailable` to `status.New()` via `rpctypes.ErrGRPCNoLeader`[1],[2] this inadvertently registers `Unavailable` in Prometheus metrics which causes an issue as `Unavailable` indicates the service is currently unavailable [3]. This PR changes the logic for how we conclude the leader is lost by observing `RaftStatusGetter.Leader()`[4] for `raft.None`. Only then do we return Unavailable (no leader) otherwise Canceled.\n\nFixes #10289 #9725 #9576 #9166\n\n[1] https://github.com/etcd-io/etcd/pull/11375/files#diff-8a4ebdea7c0a8a8926fca73c3058b0b9L200\n[2] - https://github.com/etcd-io/etcd/blob/0fb26df249f1cd4982c49ef125a3b313dfbde7d6/etcdserver/api/v3rpc/rpctypes/error.go#L68\n[3] https://github.com/grpc/grpc-go/blob/master/codes/codes.go#L140\n[4] -  https://github.com/etcd-io/etcd/blob/bbe1e78e6242a57d54c4b96d8c49ea1e094c3cbb/etcdserver/server.go#L1907",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "The following portion of [watch.go](https://github.com/etcd-io/etcd/blob/master/etcdserver/api/v3rpc/watch.go#L200) exhibits a race condition in stream error handling which seems to intermittently obfuscate the client/server nature of the error. Annotations inline:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration"
+    ],
+    "category": "troubleshooting",
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/etcd-io/etcd/pull/12196",
+    "sourceRepo": "etcd-io/etcd",
+    "reactions": 5,
+    "comments": 19
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:46:35.229Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

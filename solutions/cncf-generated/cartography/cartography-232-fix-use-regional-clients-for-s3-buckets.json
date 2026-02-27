@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:46:44.510Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cartography: fix: use regional clients for s3 buckets",
+    "description": "Closes #231",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Hi there!  I haven't had a chance to dig in deep yet, but is there any chance that this is related to this PR? https://github.com/lyft/cartography/pull/146",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "The output confirms, if you're using an opt-in region, you must have a matching client/server region for s3 APIs to work properly. If you'd like, I can modify the code to only use specific regional s3 clients if the regions are opt-in. \r\n\r\n![image](https://user-images.githubusercontent.com/1248221/73088534-74988c80-3ea2-11ea-8d15-86eb0d850228.png)\r\n\r\n\r\nEDIT: Forgot to add, I tested using the latest version of boto/botocore to be sure that's not the issue.\n@flyinbutrs Thanks for your detailed writeup!\r\nWe're first going to (omg finally) put #146 through internal testing early next week since it also deals with regions.  Would you be able to test if that change fixes the `IllegalConstraint` error?  I suspect it might not since it doesn't check for opt-in, but I'm still curious.  \r\n\r\nAfter merging #146 I think we should do something to incorporate your \"opt-in logic\" in, as I don't think s3.py should call `describe-regions`.  \r\n\r\nRather, once #146 is merged and if you experience the same exception, I think it would make more sense to put that opt-in logic in `cartography.intel.aws.sync_one_account()`.\r\n\r\nWhat do you think?\nYeah, I can checkout that branch and retry, no prob. The `opted-in` region concept is new. I suspect they're trying to minimize the number of resources that need to be replicated to new regions as they keep adding more every year.\nJust ran a test, same bug is present with #146 merged in. I can rebase mine on that branch and then repush. I think it will require a slightly different tweak to get the `ec2` calls out of `s3.py`, but should still work fine. \r\n\r\nDo you want me to create an s3 client per region, or just for the `opted-in` regions? I can do either way.\n@flyinbutrs Going to do some investigation and digging\n@flyinbutrs I'm going to try to summarize things.  Admittedly I am confused, can you check if my understanding is correct?  Here goes:\r\n\r\nSome newer AWS regions require your AWS account to be [opted](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions) [in](https://aws.amazon.com/blogs/security/setting-permissions-to-enable-accounts-for-upcoming-aws-regions/) to perform actions on them.\r\n\r\nWith boto3, you can point your HTTP calls to a specific region in the `client` object, the `session` object, `credentials` file, and `config` file.  As seen in boto/boto3#781, you can define a `{CreateBucket/GetBucket/Whatever}Configuration` object to specify which region your s3 call will hit.\r\n\r\nCartography's s3 sync [does not specify region in the boto3 `client`, and it does not specify region in the boto3 `session`](https://github.com/lyft/cartography/blob/6803357bb8f693e8706bb329e52ffc9a3ee052e1/cartography/intel/aws/__init__.py#L22).  Therefore, Cartography's s3 sync is probably relying on the `config` or the `credentials` files, which results in confusing behavior including the problem you found.\r\n\r\nI re-read your writeup and your code, but I'm not sure what you mean about a \"client\" versus \"server\".  \r\n\r\nIn any case, after reading that boto3 issue, I think that the right solution would be to supply a `regions` object to the s3 sync (like in [these lines](https://github.com/lyft/cartography/blob/6803357bb8f693e8706bb329e52ffc9a3ee052e1/cartography/intel/aws/__init__.py#L37-L39)).  If need be, we can limit the regions supplied to the s3 sync to only those that have been opted-in.\r\n\nclient = `boto3.client`\r\nserver = the AWS managed S3 endpoint\r\n\r\nWhile boto/boto3#781 is referring to the same issue, they're not actually giving the complete response. Based on my testing above, the opt-in regions require _any_ API calls made to a bucket in those regions to have the region encoded in the `client` or `session`, `config` or `credentials` files.\r\n\r\nI think the correct fix for this issue is as follows (and I'm happy to update the PR, though it may take a few days):\r\n\r\n1. pass in the `regions` object to the s3 sync.\r\n2. use region specific s3 clients for opted-in regions.\r\n\r\n\n@flyinbutrs\r\n\r\n> 1. pass in the regions object to the s3 sync.\r\n\r\nRight, and that would look like",
+        "(side note: we might want to dig in to way IAM doesn't need regions right now but one problem at a time lol)\r\n\r\nAlso I'm just sketching this out and it's untested and all that.\r\n\r\n> 2. use region specific s3 clients for opted-in regions.\r\n\r\nYeah I agree with this change too.  We can change [ec2.get_ec2_regions()](https://github.com/lyft/cartography/blob/4ac824471cb13dd4d9dab5e23cf7a9ae9807d3d9/cartography/intel/aws/ec2.py#L22) to return only opted-in regions; maybe something like this (incorporating your code):",
+        "Then we would need to create s3 clients with the proper regions, which makes us need to change [s3.sync()](https://github.com/lyft/cartography/blob/4ac824471cb13dd4d9dab5e23cf7a9ae9807d3d9/cartography/intel/aws/s3.py#L318) like this:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cartography",
+      "sandbox",
+      "app-definition",
+      "stale"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "cartography"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cartography-cncf/cartography/pull/232",
+    "sourceRepo": "cartography-cncf/cartography",
+    "reactions": 0,
+    "comments": 11
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:46:44.511Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

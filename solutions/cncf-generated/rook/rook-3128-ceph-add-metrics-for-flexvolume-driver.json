@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:45:04.176Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "rook: ceph: add metrics for flexvolume driver",
+    "description": "This allows to export persistent volume metrics.\n\nSigned-off-by: Maksim Nabokikh <maksim.nabokikh@flant.com>\n\n**Description of your changes:**\nAccording to https://github.com/kubernetes/kubernetes/issues/67400 in kubernetes 1.13 metrics support for flex volume was added.\nI wonder, is adding support metrics flag enough to fix the issue?\n\n**Which issue is resolved by this Pull Request:**\nResolves #1659\n\n**Checklist:**\n- [ ] Documentation has been updated, if necessary.\n- [ ] Pending release notes updated with breaking and/or notable changes, if necessary.\n- [x] Upgrade from previous release is tested and upgrade user guide is updated, if necessary.\n- [x] Code generation (`make codegen`) has been run to update object specifications, if necessary.\n- [x] Comments have been added or updated based on the standards set in [CONTRIBUTING.md](../CONTRIBUTING.md#comments)",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "> I wonder, is adding support metrics flag enough to fix the issue?\n\n@nabokihms Well have you tried it out? Do you get flex volume metrics after this change?",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "apiVersion: apps/v1\r\nkind: StatefulSet\r\nmetadata:\r\n  name: test-pgsql\r\nspec:\r\n  serviceName: pgsql\r\n  replicas: 1\r\n  selector:\r\n    matchLabels:\r\n      name: test-pgsql\r\n  template:\r\n    metadata:\r\n      labels:\r\n        name: test-pgsql\r\n    spec:\r\n      containers:\r\n      - name: postgres\r\n        image: postgres:10\r\n        lifecycle:\r\n          preStop:\r\n            exec:\r\n              command: [\"/etc/init.d/postgres\", \"stop\"]\r\n        ports:\r\n        - containerPort: 5432\r\n          name: pgsql\r\n          protocol: TCP\r\n        volumeMounts:\r\n        - mountPath: /var/lib/postgresql/data\r\n          name: pgsql\r\n          subPath: postgres\r\n  volumeClaimTemplates:\r\n  - metadata:\r\n      name: pgsql\r\n    spec:\r\n      accessModes: \r\n        - ReadWriteOnce\r\n      resources:\r\n        requests:\r\n          storage: 5Gi\r\n      storageClassName: rook-ceph-block",
+        "kubelet_volume_stats_available_bytes{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 5.275631616e+09\r\nkubelet_volume_stats_capacity_bytes{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 5.356126208e+09\r\nkubelet_volume_stats_inodes{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 2.62144e+06\r\nkubelet_volume_stats_inodes_free{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 2.620459e+06\r\nkubelet_volume_stats_inodes_used{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 981\r\nkubelet_volume_stats_used_bytes{namespace=\"default\",persistentvolumeclaim=\"pgsql-test-pgsql-0\"} 8.0494592e+07",
+        "from os import statvfs\r\nfrom json import dumps\r\n\r\n\r\ndef get_metrics(path: str):\r\n    stats = statvfs(path)\r\n\r\n    return {\r\n        'available': stats.f_bavail * stats.f_bsize,\r\n        'capacity': stats.f_blocks * stats.f_bsize,\r\n        'usage': (\r\n            stats.f_blocks - stats.f_bfree\r\n        ) * stats.f_bsize,\r\n        'iNodes': stats.f_files,\r\n        'iNodesFree': stats.f_ffree,\r\n        'iNodesUsed': stats.f_files - stats.f_ffree,\r\n    }\r\n\r\n\r\nif __name__ == '__main__':\r\n    print(dumps(\r\n        get_metrics('/var/lib/postgresql/data')\r\n    ))"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage"
+    ],
+    "category": "troubleshooting",
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/rook/rook/pull/3128",
+    "sourceRepo": "rook/rook",
+    "reactions": 23,
+    "comments": 11
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:45:04.176Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

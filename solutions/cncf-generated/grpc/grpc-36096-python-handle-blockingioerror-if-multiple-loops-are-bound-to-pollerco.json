@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:49.598Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "grpc: [Python] Handle BlockingIOError if multiple loops are bound to PollerCompletionQueue",
+    "description": "Fixes #25364\n\nWhen using grpc with multiple asyncio event loops in different threads, we may have multiple loops bound to the same `PollerCompletionQueue`. If the event loops support file descriptor monitoring, each loop will be configured with `loop.add_reader` to handle read events on the notification socket. This means that when completion events are available, `PollerCompletionQueue._handle_events` may be called multiple times for the different loops, but only one call will actually receive the byte written to the notification socket. The other calls will raise `BlockingIOError`, which then bubbles up and gets printed by the event loop's default exception handler, resulting in spurious error messages since things are in fact working fine. This changes `_handle_events` to catch and supress these `BlockingIOError`s.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "When using grpc with asyncio from multiple threads, spurious `PollerCompletionQueue` errors are printed due to multiple event loops listening a socket to be notified of grpc events. More than one event loop may be woken when the completion queue writes a byte to the notification socket, but only one of the loops receives the data and the others raise a `BlockingIOError`. This doesn't actually cause a problem in the grpc still works with asyncio in multiple threads, but lots of spurious error messages are printed by the default exception handler. (See https://github.com/grpc/grpc/issues/25364 for discussion of the issue.)\n\nThis configures the asyncio event loop used for grpc with an exception handler that ignores these `BlockingIOError`s from the `PollerCompletionQueue` so that we don't spam the logs with scary-looking messages when using grpc with asyncio from multiple threads.",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "in a python 3.12 virtualenv, but that fails with an error while building wheels. Any additional pointers you have about running tests locally would be greatly appreciated.\nHi, thanks for contributing the test! Do you mind share more information about the failures? In the meanwhile, you can also trigger the test using `bazel` like this:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "grpc",
+      "incubating",
+      "networking",
+      "lang-python",
+      "kokoro-run",
+      "release-notes--no"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "grpc"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/grpc/grpc/pull/36096",
+    "sourceRepo": "grpc/grpc",
+    "reactions": 5,
+    "comments": 10
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:49.598Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

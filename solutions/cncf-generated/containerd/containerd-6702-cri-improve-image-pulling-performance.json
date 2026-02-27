@@ -1,0 +1,52 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:44:46.270Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "containerd: CRI: improve image pulling performance",
+    "description": "### Background:\n\nWith current design, the content backend uses key-lock for long-lived\nwrite transaction. If the content reference has been marked for write\ntransaction, the other requestes on the same reference will fail fast with\nunavailable error. Since the metadata plugin is based on boltbd which\nonly supports single-writer, the content backend can't block or handle\nthe request too long. It requires the client to handle retry by itself,\nlike OpenWriter - backoff retry helper. But the maximum retry interval\ncan be up to 2 seconds. If there are several concurrent requestes fo the\nsame image, the waiters maybe wakeup at the same time and there is only\none waiter can continue. A lot of waiters will get into sleep and we will\ntake long time to finish all the pulling jobs and be worse if the image\nhas many more layers, which mentioned in issue #4937.\n\nAfter fetching, containerd.Pull API allows several hanlers to commit\nsame ChainID snapshotter but only one can be done successfully. Since",
+    "type": "analyze",
+    "status": "completed",
+    "resolution": {
+      "summary": "With the way things work right now, there's nothing stopping a parallel unpack of the exact\nsame layer to a snapshot. The first one to get committed will live on while the other(s) get garbage collected\nso in the end things work out, but regardless of this it's wasted work. The real issue is that while unpack\nshould be pretty cheap on Linux, the opposite is true for the Windows and lcow formats. Kicking off\n10 parallel pulls of the same image brings my 6 core machine to a halt and pushes 100% cpu utilization.\nWhat all of this ends up causing is exponentially slower parallel pull times for images that either share layers,\nor just pulling the same image.\n\nI'm not sure if this is a \"sound\" way to approach this, or if there's possibly a much easier way to go about this change. I tried\nto model it in a way that wouldn't disrupt things from a clients perspective, so the logic lives in the metadata snapshotter\nlayer. The gist of this change is if a new RemoteContext option is specified, the snapshotter now keeps track of what active\nsnapshots are \"in progress\". Any other snapshots that call Prepare with the same key as a snapshot that is already in progress\nwill now simply wait for one of two things to occur.\n1. The first active snapshot it's waiting on gets removed via `Remove` (so it was never committed). For this case there\nwas likely an error during setup for the first snapshot/unpack, so any waiters continue as normal for this branch and create a new snapshot.\n2. First active s",
+      "steps": [
+        "The first active snapshot it's waiting on gets removed via `Remove` (so it was never committed). For this case there",
+        "First active s"
+      ],
+      "codeSnippets": [
+        "Both content backoff retry and unnecessary unpack impacts the performance.\r\n\r\n### Solution:\r\n\r\nIntroduced the duplicate suppression in fetch and unpack context. The\r\ndeplicate suppression uses key-mutex and single-waiter-notify to support\r\nsingleflight. The caller can use the duplicate suppression in different\r\nPullImage handlers so that we can avoid unnecessary unpack and spin-lock\r\nin OpenWriter.\r\n\r\n### Test Result:\r\n\r\n#### Before enhancement:",
+        "#### With this enhancement:",
+        "### Test Script:\r\n\r\nlocalhost:5000/{redis|golang}:latest is equal to\r\ndocker.io/library/{redis|golang}:latest. The image is hold in local registry\r\nservice by `docker run -d -p 5000:5000 --name registry registry:2`."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime",
+      "area-cri",
+      "kind-performance"
+    ],
+    "category": "runtime",
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/containerd/containerd/pull/6702",
+    "sourceRepo": "containerd/containerd",
+    "reactions": 18,
+    "comments": 24
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:44:46.270Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

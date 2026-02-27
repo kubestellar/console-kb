@@ -1,0 +1,52 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:45:39.350Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "vitess: Improve Schema Engine's TablesWithSize80 query",
+    "description": "With **_only the query change_** the manual test in https://github.com/vitessio/vitess/issues/17059 passes. The reason that this impacts the OnlineDDL cutover is because:\n1. We have thousands of tables\n2. This made [our I_S query that the tabletserver's Schema Engine uses to maintain a cache of the table schemas](https://github.com/vitessio/vitess/blob/be0bca33f89b9212abede7d9479933fbc5db9cde/go/mysql/flavor_mysql.go#L425-L437) very slow\n3. The DDL that we do is done via [the `ApplySchema` RPC, which tells the schema engine to reload its cache at the end](https://github.com/vitessio/vitess/blob/be0bca33f89b9212abede7d9479933fbc5db9cde/go/vt/vttablet/tabletmanager/rpc_schema.go#L80-L99), which uses the noted slow query in step 2. This causes the Schema Engine's cache to be [reloaded *while holding the mutex*](https://github.com/vitessio/vitess/blob/be0bca33f89b9212abede7d9479933fbc5db9cde/go/vt/vttablet/tabletserver/schema/engine.go#L362-L382).\n4. [OnlineDDL creates a sentry table (poss",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Oh, that's a nice catch. This query has been especially painful for us in our CI setup, where we use vtcombo with 16 copies of every Keyspace, some of them sharded.\n\nGreat to see it optimized even further!",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "command mysql -u root --socket ${VTDATAROOT}/vt_0000000$(vtctldclient GetTablets --keyspace commerce --tablet-type primary --shard \"0\" | awk '{print $1}' | cut -d- -f2 | bc)/mysql.sock vt_commerce \r\n\r\nmysql> SELECT t.table_name, t.table_type, UNIX_TIMESTAMP(t.create_time), t.table_comment, SUM(i.file_size), SUM(i.allocated_size) FROM information_schema.tables t LEFT JOIN information_schema.innodb_tablespaces i ON i.name LIKE CONCAT(t.table_schema, '/', t.table_name, IF(t.create_options <=> 'partitioned', '#p#%', '')) COLLATE utf8mb3_general_ci WHERE t.table_schema = database() GROUP BY t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment;\r\n...\r\n3004 rows in set (13.43 sec)\r\n\r\nmysql> SELECT t.table_name,     t.table_type,     UNIX_TIMESTAMP(t.create_time),     t.table_comment,     SUM(i.file_size),     SUM(i.allocated_size)   FROM information_schema.tables t   LEFT JOIN (SELECT name, file_size, allocated_size FROM information_schema.innodb_tablespaces WHERE name LIKE CONCAT(database(), '/%')) i   ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci   WHERE     t.table_schema = database() AND IFNULL(t.create_options, '') NOT LIKE '%partitioned%'   GROUP BY     t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment UNION ALL SELECT t.table_name,     t.table_type,     UNIX_TIMESTAMP(t.create_time),     t.table_comment,     SUM(i.file_size),     SUM(i.allocated_size)   FROM information_schema.tables t   LEFT JOIN (SELECT name, file_size, allocated_size FROM information_schema.innodb_tablespaces WHERE name LIKE CONCAT(database(), '/%')) i     ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci)   WHERE     t.table_schema = database() AND t.create_options LIKE '%partitioned%'   GROUP BY     t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment;\r\n...\r\n3004 rows in set (0.05 sec)",
+        "</details>\n\n[:umbrella: View full report in Codecov by Sentry](https://app.codecov.io/gh/vitessio/vitess/pull/17066?dropdown=coverage&src=pr&el=continue&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=vitessio).   \n:loudspeaker: Have feedback on the report? [Share it here](https://about.codecov.io/codecov-pr-comment-feedback/?utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=vitessio).\n\nOh, that's a nice catch. This query has been especially painful for us in our CI setup, where we use vtcombo with 16 copies of every Keyspace, some of them sharded.\n\nGreat to see it optimized even further!\nCan this change be backported? 🙇\nI feel like we might be going in circles. The outstanding problem with the suggested solution is that it does not respect tables that might have `#p#` in their names. Such table names are extremely undesired in the first place, and if we say a user must never name their tables like so, so be it.\r\n\r\nBut if we do plan to allow and support such table names, then we've already been there. In the past I've already optimized the query here:\r\n\r\nhttps://github.com/vitessio/vitess/pull/13375\r\n\r\nAnd running #13375 query on a 1000 tables database on my local dev host runs in `0.33sec` as compared to timeout for the query in `main`.\r\n\r\nNow, #13375 was overridden by https://github.com/vitessio/vitess/pull/15713 for performance improvements, and yet when I'm comparing the two right now, the overriding #15713 is what we actually have in `main` right now _[**EDIT** not exactly, we still modified it since then]_. So the original #13375 outperforms it and is on par with _this_ PR and more correct.\r\n\r\nIn trying to fix the `#p#` problem with this PR, I ended up reproducing pretty much the same solution as #13375. Can we consider going back to #13375 then?\nThe best solution I find, if I take this PR's query as the baseline, is as follows:",
+        "This basically duplicates the PR's query, except we run:\r\n- `ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci` for when the table is not partitioned\r\n- `ON SUBSTRING_INDEX(i.name, '#p#', 1) = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci` when the table is partitioned.\r\n\r\nThe query executes very well.\r\n\r\n**EDIT** and it's still a bug when the table is partitioned _and_ is called `zoo#p#bar`... Which requires constructing the table name much like in #13375, using `ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci)`:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "vitess",
+      "graduated",
+      "storage",
+      "type--enhancement",
+      "component--vreplication",
+      "component--query-serving",
+      "component--schema-tracker",
+      "component--online-ddl"
+    ],
+    "category": "troubleshooting",
+    "cncfProjects": [
+      "vitess"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/vitessio/vitess/pull/17066",
+    "sourceRepo": "vitessio/vitess",
+    "reactions": 8,
+    "comments": 29
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:45:39.350Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

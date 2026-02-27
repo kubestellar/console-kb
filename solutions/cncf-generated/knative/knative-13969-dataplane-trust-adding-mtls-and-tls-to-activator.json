@@ -1,0 +1,49 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:51.494Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "knative: Dataplane-trust Adding mTLS and TLS  To Activator",
+    "description": "Fixes #13968\n\nThis PR implements dataplane-trust options of the Activator. \n\nCode from `knative/pkg/network/transports.go` was modified and moved here to `activator/handler/transport.go`. \nThe code at `activator/handler/transport.go` depends on `activator/handler/context.go` and therefore cannot be moved back to `knative/pkg/network/transports.go`\n\nLeaving Queue changes to a separate PR\n\n**Release Note**\n\n```release-note\nWe added alpha support for dataplane-trust network options of Activator including TLS or mTLS and an appropriate set of certificates to implement trust between Activator and Queue.\n```",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Ensure that if someone uses the deprecated InternalEncryption, we use Dataplane-trust=Minimal as a minimum. \nInternalEncryption is deprecated but will take time to remove from dependencies",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "Ensure that if someone uses the deprecated InternalEncryption, we use Dataplane-trust=Minimal as a minimum. \r\nInternalEncryption is deprecated but will take time to remove from dependencies\r\n\n@evankanderson @dprotaso @psschwei @ReToCode @nak3 \n> 5. Modifying function signatures will require changes to knative/networking...\r\n\r\nSorry if I misunderstand but do you mean `knative/pkg`'s networking  and the change will affect a large area out side of this dataplane-trust change?\r\n\r\nIf the change will not affect a large area or at least we can manage it, I think it is OK to move forward this PR. I would like to wait for other reviewers, though.\n> > 5. Modifying function signatures will require changes to knative/networking...\r\n> \r\n> Sorry if I misunderstand but do you mean `knative/pkg`'s networking and the change will affect a large area out side of this dataplane-trust change?\r\n\r\nYes, you are correct, I am referring to `knative/pkg`'s networking.\r\n\r\nWe have a couple of options: one is to have a PR that detach from the parts of `knative/pkg`'s networking that need to change and later embed them into `knative/pkg`'s networking. The other is to make changes in `knative/pkg`'s networking first, then continue with this PR. \r\n\r\n\r\n> \r\n> If the change will not affect a large area or at least we can manage it, I think it is OK to move forward this PR. I would like to wait for other reviewers, though.\r\n\r\nSince *http.Transport offers http.RoundTripper interface, it seems e can do the changes in `knative/pkg`'s networking without changing the contract with the callers  - \r\n\r\nChanging `func NewProxyAutoTLSTransport(maxIdle, maxIdlePerHost int, tlsConf *tls.Config) http.RoundTripper` to `func NewProxyAutoTLSTransport(maxIdle, maxIdlePerHost int, tlsConf *tls.Config) *http.Transport` for example, seem to not change the contract for the caller?\r\n\r\nThe other option is to add new exportables to `knative/pkg`'s networking with the new signature.\r\n\r\n \n> Changing func NewProxyAutoTLSTransport(maxIdle, maxIdlePerHost int, tlsConf *tls.Config) http.RoundTripper to func NewProxyAutoTLSTransport(maxIdle, maxIdlePerHost int, tlsConf *tls.Config) *http.Transport for example, seem to not change the contract for the caller?\r\n\r\nActually that's what I wanted to confirm :smile: If it does not change the contract for caller, I think the change does not affect so much and it should be alright.\n~~A bigger issue we may have is with testing - we have tests that rely on the interface - they use the handler.New() function. and provide it with an `http.RoundTripper` interface that is implemented as part of the test code.~~\r\n\r\n~~If we now move to use `*http.transport`, these tests will not work and we will need to rethink how to do them (Any thoughts there?)~~\r\n\r\nThis was later reverted\r\n\n## [Codecov](https://app.codecov.io/gh/knative/serving/pull/13969?src=pr&el=h1&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative) Report\nPatch coverage: **`28.94`**% and project coverage change: **`-0.33`** :warning:\n> Comparison is base [(`5a90438`)](https://app.codecov.io/gh/knative/serving/commit/5a90438bbd9d7a677310c238b388d6f9a82ffe5c?el=desc&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative) 86.22% compared to head [(`01804ac`)](https://app.codecov.io/gh/knative/serving/pull/13969?src=pr&el=desc&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative) 85.90%.\n\n> :exclamation: Current head 01804ac differs from pull request most recent head 64683a7. Consider uploading reports for the commit 64683a7 to get more accurate results\n\n<details><summary>Additional details and impacted files</summary>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "knative",
+      "graduated",
+      "app-definition",
+      "area-api",
+      "size-xl",
+      "area-networking",
+      "area-autoscale"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "knative"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/knative/serving/pull/13969",
+    "sourceRepo": "knative/serving",
+    "reactions": 2,
+    "comments": 22
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:51.494Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

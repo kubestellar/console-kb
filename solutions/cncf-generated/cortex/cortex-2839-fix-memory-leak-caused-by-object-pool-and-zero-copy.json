@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T17:43:29.432Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cortex: Fix memory leak caused by object pool and zero copy",
+    "description": "**What this PR does**:\nThe purpose of this PR is to fix the memory leak of Cortex Ingester. After this PR is merged, it is expected to reduce the runtime memory of Ingester by at least 30%.\n\n**Which issue(s) this PR fixes**:\nFixes #2665 \n\nAlthough the PR code looks very simple, the principle inside is more complicated. I try to make it as easy to understand as possible. If there are errors in some parts, please correct me.\nWhen troubleshooting the memory problem of Ingester, I simplified Ingester.Push to make it do almost nothing. Like below：\n```\n// Push implements client.IngesterServer\nfunc (i *Ingester) Push(ctx context.Context, req *client.WriteRequest) (*client.WriteResponse, error) {\n    defer client.ReuseSlice(req.Timeseries)\n    return &client.WriteResponse{}, nil\n}\n```\nAfter the above modifications, Ingester still takes up very high memory (60G+), until OOM, I think it must be a problem with `client.ReuseSlice`.\n\nHowever, when I commented out the reuse of TimeSeries, the proble",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "May I ask how large the incoming messages are?  E.g. how many samples do you allow per `Push()` ?",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "// Push implements client.IngesterServer\r\nfunc (i *Ingester) Push(ctx context.Context, req *client.WriteRequest) (*client.WriteResponse, error) {\r\n    defer client.ReuseSlice(req.Timeseries)\r\n    return &client.WriteResponse{}, nil\r\n}",
+        "func ReuseTimeseries(ts *TimeSeries) {\r\n\t// ts.Labels = ts.Labels[:0]\r\n\t// ts.Samples = ts.Samples[:0]\r\n\t// timeSeriesPool.Put(ts)\r\n}",
+        "ts.Labels = ts.Labels[:0]\r\nts.Samples = ts.Samples[:0]"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cortex",
+      "incubating",
+      "observability",
+      "size-xs"
+    ],
+    "category": "observability",
+    "cncfProjects": [
+      "cortex"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cortexproject/cortex/pull/2839",
+    "sourceRepo": "cortexproject/cortex",
+    "reactions": 3,
+    "comments": 17
+  },
+  "security": {
+    "scannedAt": "2026-02-27T17:43:29.432Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
