@@ -1,0 +1,62 @@
+name: Generate CNCF Missions
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+  workflow_dispatch:
+    inputs:
+      projects:
+        description: 'Comma-separated CNCF project names (empty = all)'
+        required: false
+      min_reactions:
+        description: 'Minimum reactions threshold'
+        required: false
+        default: '10'
+      dry_run:
+        description: 'Dry run (no PR created)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm ci
+      - name: Generate missions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIN_REACTIONS: ${{ inputs.min_reactions || '10' }}
+          TARGET_PROJECTS: ${{ inputs.projects || '' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: node scripts/generate-cncf-missions.mjs
+      - name: Check for new missions
+        id: check
+        run: |
+          CHANGED=$(git diff --name-only -- 'solutions/cncf-generated/' | wc -l | tr -d ' ')
+          echo "count=$CHANGED" >> $GITHUB_OUTPUT
+      - name: Create PR
+        if: steps.check.outputs.count != '0' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="cncf-gen-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git add solutions/cncf-generated/
+          git commit -s -m "🌱 Auto-generate CNCF missions ($(date +%Y-%m-%d))
+
+          Generated from high-engagement issues across CNCF landscape projects."
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "🌱 CNCF mission generation $(date +%Y-%m-%d)" \
+            --body "$(cat generation-report.md)" \
+            --base main \
+            --head "$BRANCH"
