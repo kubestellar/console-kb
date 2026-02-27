@@ -2,10 +2,22 @@
 /**
  * Crawls CNCF project repos for high-engagement issues and generates
  * kc-mission-v1 formatted missions from them.
+ *
+ * Supports multiple knowledge sources (GitHub issues, Reddit, Stack Overflow,
+ * GitHub Discussions) configured via knowledge-sources.yaml.
+ * Tracks processed items in search-state.json for incremental runs.
  */
-import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './cncf-projects.mjs'
+import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
+import { slugify as baseSlugify } from './sources/base-source.mjs'
+import { RedditSource } from './sources/reddit.mjs'
+import { StackOverflowSource } from './sources/stackoverflow.mjs'
+import { GitHubDiscussionsSource } from './sources/github-discussions.mjs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
@@ -15,10 +27,119 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
 const DRY_RUN = process.env.DRY_RUN === 'true'
 const BATCH_INDEX = process.env.BATCH_INDEX != null ? parseInt(process.env.BATCH_INDEX, 10) : null
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
+const FORCE_RESCAN = process.env.FORCE_RESCAN === 'true'
+const ENABLED_SOURCES = process.env.ENABLED_SOURCES
+  ? process.env.ENABLED_SOURCES.split(',').map(s => s.trim()).filter(Boolean)
+  : null // null = use config file
 const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-generated')
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
+
+/**
+ * Load knowledge-sources.yaml config. Falls back to defaults if missing.
+ */
+function loadSourcesConfig() {
+  const configPath = join(__dirname, 'knowledge-sources.yaml')
+  if (!existsSync(configPath)) {
+    console.warn('Warning: knowledge-sources.yaml not found, using defaults')
+    return { sources: { 'github-issues': { enabled: true, minReactions: 10, maxPerProject: 20, searchWindow: '90d' } } }
+  }
+  // Simple YAML parser for our flat structure (avoids needing js-yaml dependency)
+  const raw = readFileSync(configPath, 'utf-8')
+  return parseSimpleYaml(raw)
+}
+
+/**
+ * Minimal YAML parser for our config format (no nested objects beyond 2 levels).
+ */
+function parseSimpleYaml(yaml) {
+  const config = { sources: {} }
+  let currentSource = null
+  let lastArrayKey = null
+  for (const line of yaml.split('\n')) {
+    const indent = line.length - line.trimStart().length
+    const trimmed = line.trim().replace(/#.*$/, '').trimEnd()
+    if (!trimmed) continue
+
+    if (indent === 0 && trimmed === 'sources:') continue
+
+    // Source name at 2-space indent
+    if (indent === 2 && trimmed.endsWith(':') && !trimmed.includes(' ')) {
+      currentSource = trimmed.replace(/:$/, '')
+      config.sources[currentSource] = {}
+      lastArrayKey = null
+      continue
+    }
+
+    // Key-value pair at 4-space indent
+    if (indent === 4 && currentSource) {
+      // Bare key for array below (e.g. subreddits:)
+      if (trimmed.endsWith(':') && !trimmed.includes(' ')) {
+        lastArrayKey = trimmed.replace(/:$/, '')
+        config.sources[currentSource][lastArrayKey] = []
+        continue
+      }
+
+      const colonIdx = trimmed.indexOf(':')
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim()
+        let val = trimmed.slice(colonIdx + 1).trim()
+        lastArrayKey = null
+
+        if (val === 'true') config.sources[currentSource][key] = true
+        else if (val === 'false') config.sources[currentSource][key] = false
+        else if (/^\d+$/.test(val)) config.sources[currentSource][key] = parseInt(val, 10)
+        else if (val.startsWith('[') && val.endsWith(']')) {
+          config.sources[currentSource][key] = val.slice(1, -1).split(',').map(s => s.trim())
+        } else {
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1)
+          }
+          config.sources[currentSource][key] = val
+        }
+      }
+    }
+
+    // Array items at 6-space indent
+    if (indent === 6 && trimmed.startsWith('- ') && currentSource && lastArrayKey) {
+      config.sources[currentSource][lastArrayKey].push(trimmed.replace(/^- /, '').trim())
+    }
+  }
+  return config
+}
+
+/**
+ * Initialize source modules based on config.
+ */
+function initializeSources(config) {
+  const sources = []
+
+  for (const [id, sourceConfig] of Object.entries(config.sources)) {
+    if (!sourceConfig.enabled) continue
+    if (ENABLED_SOURCES && !ENABLED_SOURCES.includes(id)) continue
+
+    switch (id) {
+      case 'github-issues':
+        // Built-in — handled by existing findHighEngagementIssues()
+        sources.push({ id, builtin: true, config: sourceConfig })
+        break
+      case 'reddit':
+        sources.push({ id, builtin: false, instance: new RedditSource(sourceConfig), config: sourceConfig })
+        break
+      case 'stackoverflow':
+        sources.push({ id, builtin: false, instance: new StackOverflowSource(sourceConfig), config: sourceConfig })
+        break
+      case 'github-discussions':
+        sources.push({ id, builtin: false, instance: new GitHubDiscussionsSource(sourceConfig), config: sourceConfig })
+        break
+      default:
+        console.log(`  Unknown source: ${id}, skipping`)
+    }
+  }
+
+  return sources
+}
 
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
@@ -346,13 +467,13 @@ function formatReport(report) {
     '',
     `**Date:** ${new Date().toISOString()}`,
     `**Total generated:** ${report.generated}`,
-    `**Skipped (duplicates):** ${report.skipped}`,
+    `**Skipped (duplicates/processed):** ${report.skipped}`,
     `**Errors:** ${report.errors}`,
     '',
     '## Projects Processed',
     '',
-    '| Project | Maturity | Issues Found | Missions Generated | Errors |',
-    '|---------|----------|-------------|-------------------|--------|',
+    '| Project | Maturity | Items Found | Missions Generated | Errors |',
+    '|---------|----------|------------|-------------------|--------|',
   ]
 
   for (const p of report.projects) {
@@ -376,6 +497,14 @@ async function main() {
     console.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
   }
 
+  // Load knowledge sources config and search state
+  const sourcesConfig = loadSourcesConfig()
+  const sources = initializeSources(sourcesConfig)
+  const searchState = FORCE_RESCAN ? { version: 1, lastUpdated: null, projects: {} } : loadSearchState()
+
+  console.log(`Active sources: ${sources.map(s => s.id).join(', ')}`)
+  console.log(`Force rescan: ${FORCE_RESCAN}`)
+
   let projects = TARGET_PROJECTS
     ? CNCF_PROJECTS.filter(p => TARGET_PROJECTS.includes(p.name))
     : CNCF_PROJECTS
@@ -390,7 +519,6 @@ async function main() {
 
   if (projects.length === 0) {
     console.log('No projects in this batch range. Exiting.')
-    // Write empty report so downstream steps don't fail
     const reportPath = join(process.cwd(), BATCH_INDEX != null ? `generation-report-${BATCH_INDEX}.md` : 'generation-report.md')
     writeFileSync(reportPath, formatReport({ generated: 0, skipped: 0, errors: 0, projects: [], missions: [] }))
     process.exit(0)
@@ -407,73 +535,149 @@ async function main() {
     const projectReport = { name: project.name, maturity: project.maturity, issuesFound: 0, generated: 0, errors: 0 }
     console.log(`\nProcessing ${project.name} (${project.repo})...`)
 
-    try {
-      const issues = await findHighEngagementIssues(project)
-      projectReport.issuesFound = issues.length
-      console.log(`  Found ${issues.length} high-engagement issues`)
+    const projectDir = join(SOLUTIONS_DIR, project.name)
+    mkdirSync(projectDir, { recursive: true })
 
-      const projectDir = join(SOLUTIONS_DIR, project.name)
-      mkdirSync(projectDir, { recursive: true })
+    // --- Process each knowledge source ---
+    for (const source of sources) {
+      try {
+        if (source.builtin && source.id === 'github-issues') {
+          // Original built-in GitHub issues flow
+          const sourceState = getSourceState(searchState, project.repo, 'github-issues')
+          const issues = await findHighEngagementIssues(project)
+          projectReport.issuesFound += issues.length
+          console.log(`  [github-issues] Found ${issues.length} high-engagement issues`)
 
-      for (const issue of issues) {
-        const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+          const newIds = []
+          for (const issue of issues) {
+            const canonicalId = `gh:${project.repo}#${issue.number}`
+            if (!FORCE_RESCAN && sourceState.processedIds.includes(canonicalId)) {
+              console.log(`  [github-issues] Skipping already-processed: #${issue.number}`)
+              report.skipped++
+              continue
+            }
 
-        if (deduplicateAgainstExisting(slug, projectDir)) {
-          console.log(`  Skipping duplicate: ${slug}`)
-          report.skipped++
-          continue
-        }
+            const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+            if (deduplicateAgainstExisting(slug, projectDir)) {
+              console.log(`  [github-issues] Skipping duplicate: ${slug}`)
+              report.skipped++
+              newIds.push(canonicalId) // Mark as processed even if file exists
+              continue
+            }
 
-        try {
-          console.log(`  Processing issue #${issue.number}: ${issue.title.slice(0, 60)}...`)
-          const details = await getIssueDetails(owner, repo, issue.number)
-          if (!details) {
-            console.warn(`  Could not fetch details for #${issue.number}, skipping.`)
-            continue
+            try {
+              console.log(`  [github-issues] Processing issue #${issue.number}: ${issue.title.slice(0, 60)}...`)
+              const details = await getIssueDetails(owner, repo, issue.number)
+              if (!details) {
+                console.warn(`  Could not fetch details for #${issue.number}, skipping.`)
+                continue
+              }
+
+              const resolution = extractResolutionFromIssue(details.issue, details.comments, details.linkedPR)
+              const mission = generateMission(project, details.issue, resolution)
+              const filePath = join(projectDir, `${slug}.json`)
+
+              if (DRY_RUN) {
+                console.log(`  [DRY RUN] Would write: ${filePath}`)
+              } else {
+                writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
+                console.log(`  Written: ${slug}.json`)
+              }
+
+              newIds.push(canonicalId)
+              report.generated++
+              projectReport.generated++
+              report.missions.push({
+                title: mission.mission.title,
+                difficulty: mission.metadata.difficulty,
+                sourceIssue: mission.metadata.sourceIssue,
+              })
+              await sleep(200)
+            } catch (err) {
+              console.error(`  Error processing issue #${issue.number}: ${err.message}`)
+              projectReport.errors++
+              report.errors++
+            }
           }
 
-          const resolution = extractResolutionFromIssue(
-            details.issue,
-            details.comments,
-            details.linkedPR
-          )
+          updateSourceState(searchState, project.repo, 'github-issues', newIds)
+        } else if (!source.builtin && source.instance) {
+          // External source (Reddit, SO, Discussions)
+          const sourceState = getSourceState(searchState, project.repo, source.id)
+          console.log(`  [${source.id}] Searching...`)
 
-          const mission = generateMission(project, details.issue, resolution)
-          const filePath = join(projectDir, `${slug}.json`)
+          try {
+            const result = await source.instance.search(project, sourceState)
+            const items = result.items || []
+            console.log(`  [${source.id}] Found ${items.length} items`)
 
-          if (DRY_RUN) {
-            console.log(`  [DRY RUN] Would write: ${filePath}`)
-          } else {
-            writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
-            console.log(`  Written: ${slug}.json`)
+            const newIds = []
+            for (const item of items) {
+              const canonicalId = source.instance.canonicalId(item)
+
+              try {
+                const mission = await source.instance.extractMission(item, project)
+                if (!mission) {
+                  console.log(`  [${source.id}] Could not extract mission from ${canonicalId}, skipping`)
+                  newIds.push(canonicalId)
+                  continue
+                }
+
+                const slug = baseSlugify(`${project.name}-${source.id}-${mission.mission?.title || canonicalId}`)
+                const filePath = join(projectDir, `${slug}.json`)
+
+                if (deduplicateAgainstExisting(slug, projectDir)) {
+                  console.log(`  [${source.id}] Skipping duplicate: ${slug}`)
+                  report.skipped++
+                  newIds.push(canonicalId)
+                  continue
+                }
+
+                if (DRY_RUN) {
+                  console.log(`  [DRY RUN] Would write: ${filePath}`)
+                } else {
+                  writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
+                  console.log(`  [${source.id}] Written: ${slug}.json`)
+                }
+
+                newIds.push(canonicalId)
+                report.generated++
+                projectReport.generated++
+                report.missions.push({
+                  title: mission.mission?.title || slug,
+                  difficulty: mission.metadata?.difficulty || 'intermediate',
+                  sourceIssue: mission.metadata?.sourceUrl || '',
+                })
+              } catch (err) {
+                console.error(`  [${source.id}] Error processing ${canonicalId}: ${err.message}`)
+                projectReport.errors++
+                report.errors++
+                newIds.push(canonicalId) // Don't retry failed items
+              }
+            }
+
+            updateSourceState(searchState, project.repo, source.id, newIds, result.cursor || null)
+          } catch (err) {
+            console.error(`  [${source.id}] Search error for ${project.name}: ${err.message}`)
+            projectReport.errors++
+            report.errors++
           }
-
-          report.generated++
-          projectReport.generated++
-          report.missions.push({
-            title: mission.mission.title,
-            difficulty: mission.metadata.difficulty,
-            sourceIssue: mission.metadata.sourceIssue,
-          })
-
-          // Small delay between issue fetches to be a good API citizen
-          await sleep(200)
-        } catch (err) {
-          console.error(`  Error processing issue #${issue.number}: ${err.message}`)
-          projectReport.errors++
-          report.errors++
         }
+      } catch (err) {
+        console.error(`  [${source.id}] Fatal error for ${project.name}: ${err.message}`)
+        projectReport.errors++
+        report.errors++
       }
-    } catch (err) {
-      console.error(`Error processing ${project.name}: ${err.message}`)
-      projectReport.errors++
-      report.errors++
     }
 
     report.projects.push(projectReport)
-
-    // Brief pause between projects
     await sleep(500)
+  }
+
+  // Save updated search state
+  if (!DRY_RUN) {
+    saveSearchState(searchState)
+    console.log('\nSearch state saved.')
   }
 
   // Write generation report (batch-specific filename if batching)

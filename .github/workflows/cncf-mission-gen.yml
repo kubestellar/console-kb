@@ -20,6 +20,14 @@ on:
         required: false
         type: boolean
         default: false
+      sources:
+        description: 'Comma-separated sources to enable (empty = use config file). Options: github-issues,reddit,stackoverflow,github-discussions'
+        required: false
+      force_rescan:
+        description: 'Ignore search state and re-search everything'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -80,6 +88,8 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
           BATCH_INDEX: ${{ needs.plan.outputs.is_targeted == 'true' && '' || matrix.batch }}
           BATCH_SIZE: ${{ inputs.batch_size || '20' }}
+          ENABLED_SOURCES: ${{ inputs.sources || '' }}
+          FORCE_RESCAN: ${{ inputs.force_rescan || 'false' }}
         run: node scripts/generate-cncf-missions.mjs
       - name: Upload generated missions
         uses: actions/upload-artifact@v4
@@ -88,6 +98,7 @@ jobs:
           path: |
             solutions/cncf-generated/
             generation-report*.md
+            search-state.json
           if-no-files-found: ignore
 
   collect:
@@ -140,9 +151,13 @@ jobs:
           BRANCH="cncf-gen-$(date +%Y%m%d)"
           git checkout -b "$BRANCH"
           git add solutions/cncf-generated/
+          # Commit search state if present (tracks processed items)
+          if [ -f search-state.json ]; then
+            git add search-state.json
+          fi
           git commit -s -m "🌱 Auto-generate CNCF missions ($(date +%Y-%m-%d))
 
-          Generated from high-engagement issues across ${{ needs.plan.outputs.batch_count }} batches of CNCF landscape projects."
+          Generated from multiple knowledge sources across ${{ needs.plan.outputs.batch_count }} batches of CNCF landscape projects."
           git push origin "$BRANCH"
           gh pr create \
             --title "🌱 CNCF mission generation $(date +%Y-%m-%d)" \
