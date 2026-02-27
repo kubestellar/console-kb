@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:28:19.939Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "grpc: Add compatibility for Python's Eventlet library",
+    "description": "Trying to use the gRPC library in a Python program that uses the\nEventlet library doesn't work as expected, and we end up with deadlocks\nand blocked threads.\n\nThis patch adds a custom eventlet IO manager to provide compatibility\nbetween the Eventlet and gRPC libraries.\n\nThe code includes 2 workarounds for existing eventlet bugs, but this\ncode is compatible with the proposed PRs to solve them, so there should\nbe no problem if/when implements a fix for them:\n\n - https://github.com/eventlet/eventlet/issues/508\n - https://github.com/eventlet/eventlet/issues/599\n\nAn extra import and call is necessary for applications to use gRPC with\neventlets.  This call must be done after eventlet has monkey patched the\nPython libraries.\n\nThe code would look something like this:\n\n    import eventlet\n    eventlet.monkey_patch()  # noqa\n\n    import grpc\n    from grpc.experimental import eventlet as grpc_eventlet\n\n    if __name__ == '__main__':\n        grpc_eventlet.init_eventlet()\n\nResolve #15923\n\n@nicolasn",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "When working on the [eventlet Python I/O manager](https://github.com/grpc/grpc/pull/22062) I found some deficiencies when running Python tests with `run_tests.py`:\n\n- The `--forever` parameter doesn't work as expected, because there are false detection of changed source files because we write coverage and results in watched directories.\n\n- When passing `--runs_per_test` we cannot tell how many runs actually failed, we can only tell how many tests failed, but multiple tests may have failed in a single run.\n\n- Flaky tests in Python Custom I/O managers can only be disabled, we cannot do a single retry for them.\n\n- Passing `--runs_per_tests=1000` with `--use_docker` will result in all tests failing after a while because the container runs out of disk space.\n\nThis PR includes the changes I did to resolve these and be able to evaluate the impact that running the eventlet tests in the CI would have.\n\n@veblush",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "python tools/run_tests/run_tests.py --runs_per_test 1000 --language python --iomgr_platform eventlet"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "grpc",
+      "incubating",
+      "networking",
+      "kind-enhancement",
+      "lang-python",
+      "release-notes--yes",
+      "kind-experimental-api",
+      "disposition-stale"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "grpc"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "sourceIssue": "https://github.com/grpc/grpc/pull/22062",
+    "sourceRepo": "grpc/grpc",
+    "reactions": 6,
+    "comments": 11
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:28:19.939Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

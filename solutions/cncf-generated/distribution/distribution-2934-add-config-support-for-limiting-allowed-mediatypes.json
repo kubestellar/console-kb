@@ -1,0 +1,46 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:32:50.332Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "distribution: Add config support for limiting allowed mediaTypes",
+    "description": "Fixes #2928 (please see issue for details).\n\nAdded docs and tests. Let me know if any changes required. Thank you!",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Adds page for projects or companies currently engaged in efforts to\nsupport OCI artifacts.\n\nSigned-off-by: hasheddan <georgedanielmangum@gmail.com>",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "| Flag | Coverage Δ | |\n|---|---|---|\n| #linux | `60.68% <75.86%> (+0.23%)` | :arrow_up: |\n\n| [Impacted Files](https://codecov.io/gh/docker/distribution/pull/2934?src=pr&el=tree) | Coverage Δ | |\n|---|---|---|\n| [configuration/configuration.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-Y29uZmlndXJhdGlvbi9jb25maWd1cmF0aW9uLmdv) | `65.59% <ø> (ø)` | :arrow_up: |\n| [registry/api/v2/descriptors.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvYXBpL3YyL2Rlc2NyaXB0b3JzLmdv) | `100% <ø> (ø)` | :arrow_up: |\n| [registry/handlers/manifests.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvaGFuZGxlcnMvbWFuaWZlc3RzLmdv) | `52.94% <0%> (-0.71%)` | :arrow_down: |\n| [registry/storage/ocimanifesthandler.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvc3RvcmFnZS9vY2ltYW5pZmVzdGhhbmRsZXIuZ28=) | `70.31% <100%> (+1.46%)` | :arrow_up: |\n| [registry/storage/registry.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvc3RvcmFnZS9yZWdpc3RyeS5nbw==) | `89.56% <100%> (+1.28%)` | :arrow_up: |\n| [registry/storage/schema2manifesthandler.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvc3RvcmFnZS9zY2hlbWEybWFuaWZlc3RoYW5kbGVyLmdv) | `67.18% <100%> (+1.61%)` | :arrow_up: |\n| [registry/storage/mediatype.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvc3RvcmFnZS9tZWRpYXR5cGUuZ28=) | `100% <100%> (ø)` | |\n| [registry/handlers/app.go](https://codecov.io/gh/docker/distribution/pull/2934/diff?src=pr&el=tree#diff-cmVnaXN0cnkvaGFuZGxlcnMvYXBwLmdv) | `49.48% <53.12%> (+1.32%)` | :arrow_up: |\n\n------\n\n[Continue to review full report at Codecov](https://codecov.io/gh/docker/distribution/pull/2934?src=pr&el=continue).\n> **Legend** - [Click here to learn more](https://docs.codecov.io/docs/codecov-delta)\n> `Δ = absolute <relative> (impact)`, `ø = not affected`, `? = missing data`\n> Powered by [Codecov](https://codecov.io/gh/docker/distribution/pull/2934?src=pr&el=footer). Last update [3226863...f0489b7](https://codecov.io/gh/docker/distribution/pull/2934?src=pr&el=lastupdated). Read the [comment docs](https://docs.codecov.io/docs/pull-request-comments).\n\nHi, any update?\n@jdolitsky thx for this PR, lots to review, seems well thought out :-) @dmcgowan \n@mikebrow yep, definitely! Let me know if any changes required, happy to do so\nNot a maintainer here, so just a drive-by observation 🤗\r\n\r\n\r\nIt looks like there's a subtle, but possibly important difference between and URL allow/deny rules;\r\n\r\nFor URLs:\r\n\r\n> If allow is `unset`, pushing a manifest containing URLs fails.\r\n\r\nFor mediaTypes:\r\n\r\n> If allow is unset, pushing a manifest containing any mediaType in the config succeeds (all config mediaTypes allowed).\r\n\r\n\r\nI assume this is for backward compatibility, but as a result won't allow the option of configuring a _whitelist_ (deny \"everything\", and _allow_ a specific list of media types)\r\n\r\n- Would that be an important use-case?\r\n- To facilitate that use-case, would perhaps making a distinction between \"no set\" and \"set, but empty list\" work?\r\n\r\nAnother thing I looked at was \"regular expressions\" in the initial implementation. I'm not a maintainer for this project, but I tend to prefer keeping things simple (in this case; just a list of mediatypes), unless it's critical to make the feature useful. (Usually, it's easier to _add_ functionality (eg separate `allowMatch` rule) than to _remove_ once added).\r\n\r\nI can see it being consistent with existing allow/deny rules, so that may be the reason for using regular expressions; just curious;\r\n\r\n- If there's actual use-cases where regular expressions are _required_ for this functionality (the apples/bananas example is fictive, so doesn't give a clue for a real-life scenario), or\r\n- if regular expressions add _significant_ benefits for the feature\r\n\r\n\n@caervs -\r\n\r\n> Do you think it would make sense as a follow-up to this PR for the service to block blob uploads for media types that aren't valid as configs or layers?\r\n\r\nyes, let's.\r\n\r\nin terms of the stuff in handlers/app.go - this was mostly copying what had been done for the other section of the config. will take care of the docs fix.\r\n\r\n---\r\n\r\n@thaJeztah - \r\n\r\nI was troubled by trying to apply regex to the media types.. I would honestly rather have just a static list as a distribution deploy-er. I'm not sure if its better to follow the convention in the config or do something custom. what do you think? @caervs?\r\n\r\nsomething maybe like"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "distribution",
+      "sandbox",
+      "app-definition",
+      "area-config"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "distribution"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/distribution/distribution/pull/2934",
+    "sourceRepo": "distribution/distribution",
+    "reactions": 9,
+    "comments": 15
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:32:50.332Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

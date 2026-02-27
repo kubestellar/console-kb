@@ -1,0 +1,47 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:29:29.598Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "containerd: pushWriter: correctly propagate errors",
+    "description": ":bug: Fixes https://github.com/containerd/containerd/issues/7972\n\nIn the refactor from #6995, the error handling was substantially reworked, and changed the types of errors returned - this caused issues in retry logic downstream in BuildKit (see https://github.com/docker/build-push-action/issues/761). BuildKit uses this error result from this function [to determine whether to retry the push or not](https://github.com/jedevc/buildkit/blob/40bc1b316f6ce2be69ed522dc6d531ef1d3323e8/util/resolver/retryhandler/retry.go#L54-L76).\n\nNotably, in the case of a network error, instead of propagating the error through to return from `pushWriter.Write` (as previously), it would be propagated through to `pushWriter.Commit` - however, this is too late, since we've already closed the `io.Pipe` by the time we would have reached this function. Therefore, we get the generic error message `\"io: read/write on closed pipe\"` for *every network error* - this seems to be the issue in https://github.com/container",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "- backport of https://github.com/containerd/containerd/pull/7985\n- fixes https://github.com/containerd/containerd/issues/7972\n- relates to https://github.com/containerd/containerd/pull/6995\n- relates to https://github.com/docker/build-push-action/issues/761\n\nIn the refactor from 926b9c72f61b5be6bf8d952512f1d0932fbaf898, the error handling was substantially reworked, and changed the types of errors returned.\n\nNotably, in the case of a network error, instead of propogating the error through to return from pushWriter.Write (as previously), it would be propagated through to pushWriter.Commit - however, this is too late, since we've already closed the io.Pipe by the time we would have reached this function. Therefore, we get the generic error message  \"io: read/write on closed pipe\" for *every network error*.\n\nThis patch corrects this behavior to ensure that the correct error object is always returned as early as possible, by checking the error result after writing and detecting a closed pipe.\n\nAdditionally, we do some additional hardening - specifically we prevent falling through when resetting the content or detecting errors, and update the tests to explicitly check for the ErrReset message.\n\n(cherry picked from commit 9f6058d029ebffdcd6a8a954143cd4070f62f720)",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime",
+      "ok-to-test",
+      "cherry-picked-1-5-x",
+      "cherry-picked-1-6-x"
+    ],
+    "category": "runtime",
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/containerd/containerd/pull/7985",
+    "sourceRepo": "containerd/containerd",
+    "reactions": 5,
+    "comments": 10
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:29:29.598Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

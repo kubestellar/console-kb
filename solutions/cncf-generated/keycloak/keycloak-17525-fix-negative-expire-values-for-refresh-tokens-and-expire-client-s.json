@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:29:06.214Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "keycloak: Fix negative expire values for refresh tokens and expire client session when user session",
+    "description": "Closes https://github.com/keycloak/keycloak/issues/14854\nCloses https://github.com/keycloak/keycloak/issues/11990\n\nI have joined both PRs into one. They are related and modify the same code area. Adding tests to check both. I have respected the original authors.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Adding user session creation time when calculating client session lifespan\n\nNew client session note is added storing information about start timestamp of associated user session\n\nCloses #14854",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "java.lang.AssertionError: expected null, but was:<org.keycloak.models.sessions.infinispan.AuthenticatedClientSessionAdapter@45081571>\n\tat org.junit.Assert.fail(Assert.java:89)\n\tat org.junit.Assert.failNotNull(Assert.java:756)\n\tat org.junit.Assert.assertNull(Assert.java:738)\n\tat org.junit.Assert.assertNull(Assert.java:748)\n...",
+        "It failed in the [4th run](https://github.com/rmartinc/keycloak/actions/runs/5131184206/jobs/9231312787):",
+        "So, I don't think we can do much here. Except rechecking expiration, always, only if cross-dc,... Note that returning a expired session can cause negative times in tokens. I think that the flaky issue #16511 is the same cause.\r\n\r\nCorrection: This is just idle, not expiration. So maybe it's no so important. I'm going to check if I can improve the test to test N times it's expired by idle.\r\n\r\n\n@rmartinc The updated version in now green after 10 runs https://github.com/martin-kanis/keycloak/actions/runs/5130604990/jobs/9229608348\n> @rmartinc The updated version in now green after 10 runs https://github.com/martin-kanis/keycloak/actions/runs/5130604990/jobs/9229608348\r\n\r\n:heart_eyes: Great! But if you see `SessionTimeoutsTest#testOfflineUserClientIdleTimeoutSmallerThanSessionNoRefresh` is flaky. The reason is in my previous comment. Maybe checking idle so rigorously is not OK, I can improve the test to do N checks inside, and only fail if the idle is wrong after the N times. WDYT? \nOK, I have tested different things with the CI (as I cannot reproduce the issue in my laptop) with the profile `legacy-jpa+cross-dc-infinispan-offline-sessions-preloading` and trying to execute a single test 100 times:\r\n\r\n* testOfflineUserClientIdleTimeoutSmallerThanSessionNoRefresh: failed at 4th (check idle without any refresh).\r\n* testOfflineUserClientIdleTimeoutSmallerThanSessionOneRefresh: failed at 31st (check idle with one refresh).\r\n* testOfflineUserClientMaxLifespanSmallerThanSession: failed at 54th run (check max lifespan).\r\n\r\nSo, it's not just idle, it can happen in max lifespan too. It seems to be more probable with idle, but it also happens with max lifespan. So I'm not doing anything more, I will wait for @martin-kanis comments. As commented the only thing I see to improve this at keycloak side is always checking expiration before returning the sessions (or at least in some scenarios like cross-dc).\r\n\r\nNOTE: In my laptop I have executed `testOfflineUserClientIdleTimeoutSmallerThanSessionNoRefresh` 100 times without any issue. So maybe this is a just a problem of the CI env (multicast issues or similar on github actions nodes).\r\n\r\nCheers!\n## Unreported flaky test detected\nIf the below flaky tests below are affected by the changes, please review and update the changes accordingly. Otherwise, a maintainer should report the flaky tests prior to merging the PR.\n\n### org.keycloak.testsuite.model.session.SessionTimeoutsTest#testOfflineUserClientIdleTimeoutSmallerThanSessionNoRefresh\n\n[Keycloak CI - Store Model Tests]()"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "incubating",
+      "security",
+      "team-cloud-native",
+      "team-ui",
+      "flaky-test"
+    ],
+    "category": "security",
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/keycloak/keycloak/pull/17525",
+    "sourceRepo": "keycloak/keycloak",
+    "reactions": 11,
+    "comments": 15
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:29:06.214Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

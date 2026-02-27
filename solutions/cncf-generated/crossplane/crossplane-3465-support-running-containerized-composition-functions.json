@@ -1,0 +1,52 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:30:25.354Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "crossplane: Support running Containerized Composition functions",
+    "description": "### Description of your changes\n\nFixes https://github.com/crossplane/crossplane/issues/2524\nCloses https://github.com/crossplane/crossplane/pull/3550\n\nThis PR implements Composition Functions per the [design document](https://github.com/crossplane/crossplane/blob/b9e4773dc431d974a44232b95500e6f815a9b8ac/design/design-doc-composition-functions.md).\n\nIt introduces a new OCI image - `crossplane/xfn` - with a corresponding `xfn` binary.\n\n* `xfn start` starts a long-running process, listening on a gRPC API for requests to run . \n* `xfn run` is a test/helper utility that runs a single Composition Function.\n\nI made a simple no-op Composition Function that can be used to test `xfn`:\n\n```console\n$ cat ~/fnio.yaml | xfn run negz/xfn-nop:latest -\n```\n\nIn order to run this Composition Function, `xfn` will create a new user (and mount) namespace. It will then invoke `xfn spark` as a user that is root inside the new user namespace, but unprivileged relative to the 'real' parent namespace. Spark will",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Here's the example `fnio.yaml` I tested with:\n\n```yaml\napiVersion: apiextensions.crossplane.io/v1alpha1\nkind: FunctionIO\nconfig:\n  apiVersion: database.example.org/v1alpha1\n  kind: Config\n  metadata:\n    name: cloudsql\n  spec:\n    version: POSTGRES_9_6\nobserved:\n  composite:\n    resource:\n      apiVersion: database.example.org/v1alpha1\n      kind: XPostgreSQLInstance\n      metadata:\n        name: my-db\n      spec:\n        parameters:\n          storageGB: 20\n        compositionSelector:\n          matchLabels:\n            provider: gcp\n      status:\n        conditions:\n        - type: Ready\n          status: True\n    connectionDetails:\n    - name: uri\n      value: postgresql://db.example.org:5432\n```\n\nNote that per https://github.com/negz/xfns/blob/39e6bdb/xfn-nop/nop.sh the `negz/xfn-nop:latest` function doesn't actually care whether it's passed a `FunctionIO`, but `xfn run` does because it currently deserializes and then re-serializes it before passing it to the function's entrypoint.",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "In order to run this Composition Function, `xfn` will create a new user (and mount) namespace. It will then invoke `xfn spark` as a user that is root inside the new user namespace, but unprivileged relative to the 'real' parent namespace. Spark will:\r\n\r\n1. Fetch and cache the Composition Function image.\r\n2. Build an OCI runtime bundle for the Composition Function container run.\r\n3. Use an OCI runtime (by default `crun`) to run the Composition Function container.\r\n4. Clean everything up.\r\n\r\nIf `xfn` is run with CAP_SETUID and CAP_SETGID it's able to create a slightly \"better\" user namespace, in that the user namespace supports up to 65,536 UIDs and GIDs. It's possible to run `xfn` without any privileges at all,  but it will be limited to creating user namespaces where only one UID and GID (the user namespace root's) exist.\r\n\r\nIf `xfn spark` is running in an environment that supports overlayfs in user namespaces (i.e. Kernel 5.11 or above, with a cache directory that is not itself on an overlayfs) it will use overlayfs to create container root filesystems. Otherwise, it will fall back to an \"uncompressed\" image cache that extracts uncompressed tarballs each time a function is run. The overlay is faster, while the uncompressed approach is widely compatible.\r\n\r\nThis PR also implements the \"Crossplane end\" of Composition Functions - new Composition logic that is capable of running a pipeline of Composition Functions as well as contemporary Patch & Transform (P&T) style Composition. While this change required significant refactoring of the Composition logic I've tried to keep things _mostly_ the same unless `--enable-composition-functions` is set.\r\n\r\nOne notable place this implementation differs from the design document is that Composition Functions must include _all_ desired state. The design document had proposed they could omit desired state they were not concerned with. I couldn't find a good way to make that design work in practice - in particular it wasn't possible to differentiate \"delete this resource (or field)\"  from \"I don't have an opinion about this resource (or field)\".\r\n\r\nUnless anything comes up in review, the only remaining blocker to ship this with v1.11 is writing documentation.\r\n\r\nThere's a few small things I may attempt to add, In separate PRs, before v1.11 if there is time:\r\n\r\n- [ ] Implement image pull auth\r\n- [ ]  Have RunFunction return errors with meaningful gRPC status codes\r\n- [ ]  Refactor spark.Run for reduced complexity, add tests\r\n- [ ]  Figure out broken FunctionIO CRD generation (maybe due to missing object metadata?)\r\n\r\nPost v1.11 I would like to:\r\n\r\n- [ ] Implement some kind of garbage collection for the image cache\r\n- [ ]  Look into optionally deploying xfn as a deployment - it should scale horizontally pretty well.\r\n- [ ]  Determine whether we need to do anything to support multi-platform OCI images.\r\n- [ ]  Allow functions to access the environment (perhaps once its non-alpha?)\r\n- [ ]  Optionally cache results of function runs with the same input for configurable duration\r\n\r\nI have:\r\n\r\n- [x] Read and followed Crossplane's [contribution process].\r\n- [x] Run `make reviewable` to ensure this PR is ready for review.\r\n- [ ] Added `backport release-x.y` labels to auto-backport this PR if necessary.\r\n\r\n### How has this code been tested\r\n\r\n<!--\r\nBefore reviewers can be confident in the correctness of this pull request, it\r\nneeds to tested and shown to be correct. Briefly describe the testing that has\r\nalready been done or which is planned for this change.\r\n-->\r\n\r\n[contribution process]: https://git.io/fj2m9\r\n\r\nThis PR needs much more testing, but as of right now Composition Functions are running end-to-end in kind for me. I've also validated that everything appears to work as normal when Composition Functions are not enabled by deploying https://marketplace.upbound.io/configurations/upbound/platform-ref-gcp/v0.3.0.\r\n\r\nTo test this you can:\r\n\r\n1. Checkout this PR.\r\n2. Run `make` to build it\r\n3. Run `./cluster/local/kind.sh up` to get a kind cluster\r\n\r\nYou can then use the below command to deploy Crossplane with alpha Composition Functions support enabled.",
+        "Once Crossplane is running you can add a `functions` array to a Composition. I've been using a locally modified fork of platform-ref-gcp to do so.",
+        "If you want to try write your own function you can see the I/O specification in the [Composition Functions design doc](https://github.com/crossplane/crossplane/blob/9ee7a27dcf643a92df68d2a6de6e55ce95e7f907/design/design-doc-composition-functions.md#function-api). Note as above, and contrary to the design, that the `desired` object of a `FunctionIO` must include _all_ desired state. Your function will be passed a `desired` object containing the desired state according to Crossplane (e.g. from the `resources` array of the Composition if any) and any functions that ran before it. Your function may modify the desired state in any way it sees fit."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Secret",
+      "Namespace",
+      "Networkpolicy"
+    ],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/crossplane/crossplane/pull/3465",
+    "sourceRepo": "crossplane/crossplane",
+    "reactions": 7,
+    "comments": 7
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:30:25.354Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:31:05.194Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "etcd: Fix the data inconsistency issue by moving the SetConsistentIndex into the transaction lock",
+    "description": "Fix [issues/13766 ](https://github.com/etcd-io/etcd/issues/13766).\n\nPreviously the `SetConsistentIndex()` is called during the apply workflow, but it's outside the backend transaction. Obviously they do not belong to an atomic operation any more. If a periodic commit happens between `SetConsistentIndex` and the left apply workflow, and etcd crashes for whatever reason right after the commit, then etcd runs into the data inconsistency issue. Please refer to discussion in [pull/13844](https://github.com/etcd-io/etcd/pull/13844) and [issues/13766](https://github.com/etcd-io/etcd/issues/13766).\n\nIn this PR, I moved the `SetConsistentIndex` into a `txPostLockHook`, which is executed each time right after the `batchTx.Lock()` being called. \n\n`batchTx.Lock()` is called in many places, but `txPostLockHook` is only supposed to be executed in the apply workflow. So I added one more interface method `LockWithoutHook` into `BatchTx`; it doesn't execute the `txPostLockHook` at all.\n```\n\t// LockWith",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "Try to fix [13766](https://github.com/etcd-io/etcd/issues/13766).",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "// LockWithoutHook doesn't execute the txPostLockHook.\r\n\tLockWithoutHook()",
+        "And the other way around:  Authenticate is being called outside of 'apply' from interceptors...",
+        "Thanks @ptabor . \r\n\r\nIn your first stack trace, we do need to call `Lock()`. It's coming from the apply workflow, so we need to move the `consistent_index` forward although it's read-only.\r\n\r\nIn your second stack trace coming from outside `apply`, yes. It's a good catch. \r\n\r\nI just enhanced `authBackend` to support read-only ReadTx. Please note that some read-only operations may also need to move the consistent_index forward if they are coming from the apply workflow. But the [GetUser](https://github.com/etcd-io/etcd/blob/main/server/storage/schema/auth_users.go#L22) is a corner case, because it's called by a couple of places; some calling are coming from the apply workflow, while others are not. So I addressed it separately. \r\n\r\nI rebased this PR, so all the three commits are submitted again, but you only need to take a look at the last one to check the latest change I made. \nI enabled the `EXPECT_DEBUG`, realized that the cov test is always failed. Steps to reproduce it:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration",
+      "priority-important-soon"
+    ],
+    "category": "troubleshooting",
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/etcd-io/etcd/pull/13854",
+    "sourceRepo": "etcd-io/etcd",
+    "reactions": 10,
+    "comments": 28
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:31:05.194Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

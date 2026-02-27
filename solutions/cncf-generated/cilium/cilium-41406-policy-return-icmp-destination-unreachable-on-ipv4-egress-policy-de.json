@@ -1,0 +1,54 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:29:00.600Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cilium: policy: return ICMP \"Destination unreachable\" on ipv4 egress policy denials",
+    "description": "# Description\nThis PR adds a new flag `--policy-deny-response` to control the way we reject packets when they are getting a policy denial. There are two options:\n- `none` - this is the behavior we have today, packets are dropped silently. This can cause clients to timeout indefinitely (see more context in https://github.com/cilium/cilium/issues/17944)\n- `icmp` - **new feature**: this sends an ICMP \"Destination Unreachable / Packet Filtered\" response to the client so that they can kill the connection much quicker\n\nThe implementation in this PR is for ipv4 egress traffic only. ipv6 and ingress will be added later on in separate PRs.\n\nThis relies very heavily on code from https://github.com/cilium/cilium/pull/28157 which implemented very similar kind of behavior for services with no backends. I simply re-used the same code for ICMP packet generation and put it in the policy denial logic.\n\nI didn't implement the TCP RST behavior from the original issue, I think the ICMP response should be ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "> * Before I continue any further with tests, docs, Helm values, etc. I'd like to get some feedback on whether this approach generally makes sense.\n\nThe approach looks good to me :)\n\nShould we return icmp-port-unreachable for L4 drops?\n\n> * If the approach makes sense, I'm also curious to know what would be the best way to test this behavior. Should I add something in `bpf/tests` or e2e tests or both?\n\nIMO, `bpf/tests` is enough to validate this.\n\n> FWIW I can see that [there's rate-limiting](https://github.com/cilium/cilium/blob/86dd1d02444f4d5b6c826af234f7f37432563398/bpf/lib/lb.h#L1997) only for the ICMPv6 version of the `SERVICE_NO_BACKEND_RESPONSE` feature but not for ICMPv4\n\nThat doesn't look expected to me. We might need to discuss/track it into a dedicated issue. cc @dylandreimerink",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "# curl --connect-timeout 5 google.com\r\ncurl: (28) Failed to connect to google.com port 80: Connection timed out",
+        "# curl google.com\r\ncurl: (7) Failed to connect to google.com port 80: No route to host",
+        "# ping 142.250.75.238\r\nPING 142.250.75.238 (142.250.75.238) 56(84) bytes of data.\r\nFrom 142.250.75.238 icmp_seq=1 Packet filtered\r\nFrom 142.250.75.238 icmp_seq=2 Packet filtered\r\n[...]"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "area-datapath",
+      "release-note-major",
+      "sig-policy"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service",
+      "Ingress"
+    ],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/cilium/cilium/pull/41406",
+    "sourceRepo": "cilium/cilium",
+    "reactions": 9,
+    "comments": 7
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:29:00.601Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:29:04.046Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cilium: policy: Fix selector identity release for FQDN",
+    "description": "Alexander reports in issue #18023 that establishing a connection\nvia an FQDN policy, then modifying that FQDN policy, would cause\nsubsequent traffic to the FQDN to be dropped, even if the new policy\nstill allowed the same traffic via a `toFQDNs` statement.\n\nThis was caused by overzealous release of CIDR identities while\ngenerating a new policy. Although the policy calculation itself keeps\nall `SelectorCache` entries alive during the policy generation phase (see\n`cachedSelectorPolicy.setPolicy()`), after the new policy is inserted\ninto the `PolicyCache`, the `distillery` would clean up the old\npolicy. As part of that cleanup, it would call into the individual\nselector to call the `RemoveSelectors()` function.\n\nThe previous implementation of this logic unintentionally released the\nunderlying identities any time a user of a selector was released, rather\nthan only releasing the underlying identities when the number of users\nreached zero and the selector itself would be released. This meant",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "* #17982 -- workflows: Run CodeQL workflow is the workflow is edited (@pchaigno)\n * #18155 -- docs: Update the minimum required Minikube version (@pchaigno)\n * #18166 -- policy: Fix selector identity release for FQDN (@joestringer)\n\nOnce this PR is merged, you can update the PR labels via:\n```upstream-prs\n$ for pr in 17982 18155 18166; do contrib/backporting/set-labels.py $pr done 1.10; done\n```",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "/test\nForgot to include the new policy since it was all working locally, new version includes the replacement policy (same as the original one, with just one extra `toFQDNs` statement.)\n/test\n/test-gke\r\n\r\nGKE had failed with timeouts while retrieving the Quay images, retriggering.\nK8s 1.23 / 4.9 hit an issue that looks similar to #13552, though the full stacktrace is a bit different:\r\n\r\n<details>\r\n<summary>Stacktrace</summary>",
+        "</details>\r\n\r\nI have never seen this one, does it ring a bell to anyone?\r\n\nCI 3.0 GKE workflow hit a Hubble flow listener timeout similar to #17907.\nTravis ARM build hit #17444, retriggering as this looks like a transient infra issue.\n@nbusseneau I looked into that failure, taking the actual error report, unfortunately ginkgo decides to ignore the formatting primitives inside the string and print it as one giant long line that's hard to read... however if we just interpret those formatting primitives (and add a bit more tasty, tasty spacing :yum: )  then we get:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "release-note-bug",
+      "sig-policy",
+      "backport-done-1-11"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cilium/cilium/pull/18166",
+    "sourceRepo": "cilium/cilium",
+    "reactions": 8,
+    "comments": 10
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:29:04.046Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

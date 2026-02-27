@@ -1,0 +1,43 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:35:09.168Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "opentofu: statemgr: Make Filesystem impl \"correct\" and fast",
+    "description": "The existing Filesystem statemgr implementation claims to use in-memory transient storage and the local filesystem for persistent storage.\n\n> // Filesystem is a full state manager that uses a file in the local filesystem\n> // for persistent storage.\n> //\n> // The transient storage for Filesystem is always in-memory.\n\nHowever, the actual WriteState impl admits to being \"incorrect\":\n\n> // WriteState is an incorrect implementation of Writer that actually also\n> // persists.\n\nIt appears to have been this way since 2018. Perhaps this incorrectness is load-bearing, but given that this is only one of many implementations of the state manager interface, I suspect it would be fine to fix the implementation to be \"correct\".\n\nThis change splits off the expensive parts of WriteState into the PersistState method, which was previously a no-op.\n\nWithout this change, the time we spend maintaining is roughly quadratic with the number of resources being managed because each resouce causes:\n\n1. The state",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "My colleague @jonjohnsonjr has been doing quite a lot of profiling of `terraform`, and has found some possible areas where time is being wasted unnecessarily.\n\nThe following flamegraph shows where time is spent running `terraform apply` on an admittedly pretty pathologically large TF graph (aren't they all 🤷). It shows TF state being marshalled to JSON 4 times, taking up about 1/2 of the total time. This is done so that the previous/new state can be diffed, to determine if any changes actually need to be made.\n\nRoughly half of each of those JSON marshallings is `appendIndent`, which is only called with `json.MarshalIndent`.\n\n<img width=\"1419\" alt=\"Screenshot 2023-09-13 at 1 43 20 PM\" src=\"https://github.com/opentffoundation/opentf/assets/210737/7202e9f8-1972-4521-b2b0-4dcb9b35521d\">\n\nThe theory is that dropping indentation would cut this 22s apply down to about 17s.\n\nI am not a deep enough TF expert to know what other implications this change might have. Based on a brief look around, I don't believe it would have any impact on state diffing, since both sides of the diff go through this same code path to accomplish the diff (and so would both be unmarshalled or not).\n\nThere might be other cases where state is expected/required to be marshalled for some reason; AFAIK, no human is expected to read that directly, but maybe something somewhere cares about there being newlines and spaces. If nothing else I'd love to learn through this process what that might be, if this change isn",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentofu",
+      "sandbox",
+      "app-definition",
+      "accepted"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "opentofu"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/opentofu/opentofu/pull/579",
+    "sourceRepo": "opentofu/opentofu",
+    "reactions": 11,
+    "comments": 6
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:35:09.168Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

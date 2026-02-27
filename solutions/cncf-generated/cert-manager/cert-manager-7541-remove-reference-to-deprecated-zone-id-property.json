@@ -1,0 +1,52 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:28:33.421Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "cert-manager: Remove reference to deprecated zone id property",
+    "description": "### Pull Request Motivation\n\nFixes [this issue](https://github.com/cert-manager/cert-manager/issues/7540), where zone id is no longer being returned from the cloudflare api on dns records.\n\n### Kind\n\n/kind bug\n\n### Release Note\n\n```release-note\nRefactor usage of cloudflare api's now-deprecated `ZoneID` property\n```",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "## Problem\n\nThe `letsencrypt-issuer` ArgoCD application has been resyncing every 5 minutes with 443+ auto-heal attempts.\n\n## Root Cause\n\nThe `zoneID` field in the ClusterIssuer manifests was **never a valid CRD field** for the Cloudflare DNS01 solver. The cert-manager CRD schema for cloudflare only accepts:\n- `apiKeySecretRef`\n- `apiTokenSecretRef`  \n- `email`\n\nKubernetes Server-Side Apply was stripping the unrecognized `zoneID` field, causing ArgoCD to detect drift and trigger a resync repeatedly.\n\n## Background\n\nThe `zoneID` was added in commit a80323b to fix DNS cleanup errors (Error 7003). However, that fix was incorrect - cert-manager handles zone discovery internally since v1.17.1 via `getHostedZoneID()` which traverses up from the ACME record to find the linked zone.\n\nReferences:\n- [cert-manager/cert-manager#7540](https://github.com/cert-manager/cert-manager/issues/7540) - Cloudflare API breaking change\n- [cert-manager/cert-manager#7541](https://github.com/cert-manager/cert-manager/pull/7541) - Fix discussion\n\n## Impact\n\n- **Affected services**: cert-manager ClusterIssuers (letsencrypt-prod, letsencrypt-staging)\n- **Breaking changes**: None\n- **Configuration changes**: Removes invalid field\n\n## Verification\n\nAfter merge, verify:\n```bash\nkubectl get application letsencrypt-issuer -n argocd -o jsonpath='{.status.sync.status}'\n# Expected: Synced (not OutOfSync)\n\nkubectl get application letsencrypt-issuer -n argocd -o jsonpath='{.status.operationState.operation.sync.autoHe",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "## Problem\n\nThe `letsencrypt-issuer` ArgoCD application has been resyncing every 5 minutes with 443+ auto-heal attempts.\n\n## Root Cause\n\nThe `zoneID` field in the ClusterIssuer manifests was **never a valid CRD field** for the Cloudflare DNS01 solver. The cert-manager CRD schema for cloudflare only accepts:\n- `apiKeySecretRef`\n- `apiTokenSecretRef`  \n- `email`\n\nKubernetes Server-Side Apply was stripping the unrecognized `zoneID` field, causing ArgoCD to detect drift and trigger a resync repeatedly.\n\n## Background\n\nThe `zoneID` was added in commit a80323b to fix DNS cleanup errors (Error 7003). However, that fix was incorrect - cert-manager handles zone discovery internally since v1.17.1 via `getHostedZoneID()` which traverses up from the ACME record to find the linked zone.\n\nReferences:\n- [cert-manager/cert-manager#7540](https://github.com/cert-manager/cert-manager/issues/7540) - Cloudflare API breaking change\n- [cert-manager/cert-manager#7541](https://github.com/cert-manager/cert-manager/pull/7541) - Fix discussion\n\n## Impact\n\n- **Affected services**: cert-manager ClusterIssuers (letsencrypt-prod, letsencrypt-staging)\n- **Breaking changes**: None\n- **Configuration changes**: Removes invalid field\n\n## Verification\n\nAfter merge, verify:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cert-manager",
+      "graduated",
+      "security",
+      "size-xs",
+      "release-note",
+      "kind-bug",
+      "needs-ok-to-test",
+      "area-acme",
+      "dco-signoff--yes",
+      "area-acme-dns01"
+    ],
+    "category": "security",
+    "cncfProjects": [
+      "cert-manager"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/cert-manager/cert-manager/pull/7541",
+    "sourceRepo": "cert-manager/cert-manager",
+    "reactions": 7,
+    "comments": 7
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:28:33.421Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

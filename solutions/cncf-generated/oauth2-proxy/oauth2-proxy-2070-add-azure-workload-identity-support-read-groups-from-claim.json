@@ -1,0 +1,51 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:34:44.785Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "oauth2-proxy: Add Azure Workload Identity support & read groups from claim",
+    "description": "This pull request enables to use oauth2-proxy with federated credentials offered by A",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "This pull request enables Workload Identity for A",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "- --http-address=0.0.0.0:4180\r\n        - --metrics-address=0.0.0.0:44180\r\n        - --provider=azure\r\n        - --oidc-issuer-url=https://login.microsoftonline.com/{tenant-id}/v2.0 # tested with V1 as well\r\n        - --email-domain=\"*\"\r\n        - --cookie-domain=\".domain.com\"\r\n        - --whitelist-domain=\"*\"\r\n        - --footer=\"Some msg\"\r\n        - --skip-jwt-bearer-tokens=true\r\n        - --set-xauthrequest=true\r\n        - --silence-ping-logging=true\r\n        - --reverse-proxy=true\r\n        - --oidc-email-claim=email\r\n        - --insecure-oidc-allow-unverified-email=true\r\n        - --skip-provider-button=true\r\n        - --upstream=static://202\r\n        - --set-authorization-header=false\r\n        - --client-id={client-id}\r\n        - --cookie-secret={cookie-secret}\r\n        - --azure-federated-token-auth-enabled=true # tested with client secrets as well",
+        "resource \"azuread_application\" \"auth\" {\r\n  display_name = \"oauth2-proxy\"\r\n\r\n  web {\r\n    redirect_uris = [\r\n      \"https://myapp.domain.com/oauth2/callback\",\r\n    ]\r\n  }\r\n\r\n  required_resource_access {\r\n    resource_app_id = \"00000003-0000-0000-c000-000000000000\" # Microsoft Graph\r\n    resource_access {\r\n      id   = \"e1fe6dd8-ba31-4d61-89e7-88639da4683d\" # User.Read\r\n      type = \"Scope\"\r\n    }\r\n  }\r\n}\r\nresource \"azuread_application_federated_identity_credential\" \"oauth2-proxy\" {\r\n  application_id = azuread_application.auth.id\r\n  display_name   = \"oauth2-proxy\"\r\n  description    = \"oauth2-proxy\"\r\n  audiences      = [\"api://AzureADTokenExchange\"]\r\n  issuer         = \"https://mycluster.oidc-endpoint.com\"\r\n  subject        = \"system:serviceaccount:oauth2-proxy:oauth2-proxy\"\r\n}",
+        "serviceAccount:\r\n  annotations:\r\n    azure.workload.identity/client-id: 5b2583ce-9789-4fd2-970c-2cf711b648ed\r\n\r\npodLabels:\r\n  azure.workload.identity/use: \"true\"\r\n\r\nextraArgs:\r\n  - --provider=azure\r\n  - --client-id=<my-client-id>\r\n  - --azure-federated-token-auth-enabled\r\n  - --oidc-issuer-url=<my-tenant-id>\r\n  - --upstream=static://202\r\n  - --reverse-proxy=true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "oauth2-proxy",
+      "sandbox",
+      "app-definition",
+      "enhancement"
+    ],
+    "category": "workloads",
+    "cncfProjects": [
+      "oauth2-proxy"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Secret"
+    ],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/oauth2-proxy/oauth2-proxy/pull/2070",
+    "sourceRepo": "oauth2-proxy/oauth2-proxy",
+    "reactions": 11,
+    "comments": 13
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:34:44.785Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

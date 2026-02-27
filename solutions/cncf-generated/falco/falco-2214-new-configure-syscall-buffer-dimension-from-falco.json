@@ -1,0 +1,53 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:31:23.792Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "falco: new: configure syscall buffer dimension from Falco",
+    "description": "**What type of PR is this?**\n\n/kind feature\n\n**Any specific area of the project related to this PR?**\n\n**What this PR does / why we need it**:\n\nAs discussed in various places (https://github.com/falcosecurity/falco/pull/2164#issuecomment-1220479171, https://github.com/falcosecurity/falco/pull/2164#issuecomment-1220792012, https://github.com/falcosecurity/falco/issues/2208)  this PR adds the possibility to change the syscall buffer dimension through the Falco configuration file.\n\nThe approach used is the one described here https://github.com/falcosecurity/falco/issues/2208#issuecomment-1248354349. Users will have an array of indexes that map to precise buffer dimensions in bytes. You can find more information in the `falco.yaml` file, but just for simplicity I report them here:\n\n```yaml\n# --- [Description]\n#\n# This is an index that controls the dimension of the syscall buffers.\n# The syscall buffer is the shared space between Falco and its drivers where all the syscall events\n# are stor",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "**What type of PR is this?**\n\n/kind bug\n\n**Any specific area of the project related to this PR?**\n\n/area build\n\n**What this PR does / why we need it**:\n\nTrying to run the latest Falco deb/rpm package there is an issue:\n\nSince this PR https://github.com/falcosecurity/falco/pull/2214, Falco service needs to write under `/sys/module/falco/parameters/g_buffer_bytes_dim`  the variable buffer dimension. The problem is that right now the path `/sys/module` is mounted read-only so Falco will fail with `Errno 30` in the attempt to write `/sys/module/falco/parameters/g_buffer_bytes_dim`:\n\n```\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Falco version: 0.32.1-241+251b4d5 (x86_64)\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Fri Oct  7 23:41:26 2022: Falco version: 0.32.1-241+251b4d5 (x86_64)\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Fri Oct  7 23:41:26 2022: Falco initialized with configuration file: /etc/falco/falco.yaml\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Falco initialized with configuration file: /etc/falco/falco.yaml\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Loading rules from file /etc/falco/falco_rules.yaml\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Fri Oct  7 23:41:26 2022: Loading rules from file /etc/falco/falco_rules.yaml\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Loading rules from file /etc/falco/falco_rules.local.yaml\nOct 07 23:41:26 ubuntu2204.localdomain falco[34605]: Fri Oct  7 23:41:26 2022: Load",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "# --- [Description]\r\n#\r\n# This is an index that controls the dimension of the syscall buffers.\r\n# The syscall buffer is the shared space between Falco and its drivers where all the syscall events\r\n# are stored.\r\n# Falco uses a syscall buffer for every online CPU, and all these buffers share the same dimension.\r\n# So this parameter allows you to control the size of all the buffers!\r\n#\r\n# --- [Usage]\r\n#\r\n# You can choose between different indexes: from `1` to `10` (`0` is reserved for future uses).\r\n# Every index corresponds to a dimension in bytes:\r\n#\r\n# [(*), 1 MB, 2 MB, 4 MB, 8 MB, 16 MB, 32 MB, 64 MB, 128 MB, 256 MB, 512 MB]\r\n#   ^    ^     ^     ^     ^     ^      ^      ^       ^       ^       ^\r\n#   |    |     |     |     |     |      |      |       |       |       |\r\n#   0    1     2     3     4     5      6      7       8       9       10\r\n#\r\n# As you can see the `0` index is reserved, while the index `1` corresponds to\r\n# `1 MB` and so on.\r\n#\r\n# These dimensions in bytes derive from the fact that the buffer size must be:\r\n# (1) a power of 2.\r\n# (2) a multiple of your system_page_dimension.\r\n# (3) greater than `2 * (system_page_dimension)`.\r\n#\r\n# According to these constraints is possible that sometimes you cannot use all the indexes, let's consider an\r\n# example to better understand it:\r\n# If you have a `page_size` of 1 MB the first available buffer size is 4 MB because 2 MB is exactly\r\n# `2 * (system_page_size)` -> `2 * 1 MB`, but this is not enough we need more than `2 * (system_page_size)`!\r\n# So from this example is clear that if you have a page size of 1 MB the first index that you can use is `3`.\r\n#\r\n# Please note: this is a very extreme case just to let you understand the mechanism, usually the page size is something\r\n# like 4 KB so you have no problem at all and you can use all the indexes (from `1` to `10`).\r\n#\r\n# To check your system page size use the Falco `--page-size` command line option. The output on a system with a page\r\n# size of 4096 Bytes (4 KB) should be the following:\r\n#\r\n# \"Your system page size is: 4096 bytes.\"\r\n#\r\n# --- [Suggestions]\r\n#\r\n# Before the introduction of this param the buffer size was fixed to 8 MB (so index `4`, as you can see\r\n# in the default value below).\r\n# You can increase the buffer size when you face syscall drops. A size of 16 MB (so index `5`) can reduce\r\n# syscall drops in production-heavy systems without noticeable impact. Very large buffers however could\r\n# slow down the entire machine.\r\n# On the other side you can try to reduce the buffer size to speed up the system, but this could\r\n# increase the number of syscall drops!\r\n# As a final remark consider that the buffer size is mapped twice in the process' virtual memory so a buffer of 8 MB\r\n# will result in a 16 MB area in the process virtual memory.\r\n# Please pay attention when you use this parameter and change it only if the default size doesn't fit your use case.\r\n\r\nsyscall_buf_size_preset: 4",
+        "**What type of PR is this?**\r\n\r\n/kind bug\r\n\r\n**Any specific area of the project related to this PR?**\r\n\r\n/area build\r\n\r\n**What this PR does / why we need it**:\r\n\r\nTrying to run the latest Falco deb/rpm package there is an issue:\r\n\r\nSince this PR https://github.com/falcosecurity/falco/pull/2214, Falco service needs to write under `/sys/module/falco/parameters/g_buffer_bytes_dim`  the variable buffer dimension. The problem is that right now the path `/sys/module` is mounted read-only so Falco will fail with `Errno 30` in the attempt to write `/sys/module/falco/parameters/g_buffer_bytes_dim`:",
+        "Considering the falco service config:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "falco",
+      "graduated",
+      "security",
+      "kind-feature",
+      "release-note",
+      "dco-signoff--yes",
+      "lgtm",
+      "approved",
+      "size-l"
+    ],
+    "category": "security",
+    "cncfProjects": [
+      "falco"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "sourceIssue": "https://github.com/falcosecurity/falco/pull/2214",
+    "sourceRepo": "falcosecurity/falco",
+    "reactions": 8,
+    "comments": 6
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:31:23.792Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
