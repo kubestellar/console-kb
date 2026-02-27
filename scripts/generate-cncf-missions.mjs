@@ -13,6 +13,8 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
   : null
 const DRY_RUN = process.env.DRY_RUN === 'true'
+const BATCH_INDEX = process.env.BATCH_INDEX != null ? parseInt(process.env.BATCH_INDEX, 10) : null
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-generated')
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
@@ -374,13 +376,24 @@ async function main() {
     console.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
   }
 
-  const projects = TARGET_PROJECTS
+  let projects = TARGET_PROJECTS
     ? CNCF_PROJECTS.filter(p => TARGET_PROJECTS.includes(p.name))
     : CNCF_PROJECTS
 
+  // Apply batch slicing if BATCH_INDEX is set
+  if (BATCH_INDEX != null) {
+    const start = BATCH_INDEX * BATCH_SIZE
+    const end = start + BATCH_SIZE
+    projects = projects.slice(start, end)
+    console.log(`Batch ${BATCH_INDEX}: projects ${start}-${Math.min(end, CNCF_PROJECTS.length) - 1} of ${CNCF_PROJECTS.length}`)
+  }
+
   if (projects.length === 0) {
-    console.error('No matching projects found for:', TARGET_PROJECTS)
-    process.exit(1)
+    console.log('No projects in this batch range. Exiting.')
+    // Write empty report so downstream steps don't fail
+    const reportPath = join(process.cwd(), BATCH_INDEX != null ? `generation-report-${BATCH_INDEX}.md` : 'generation-report.md')
+    writeFileSync(reportPath, formatReport({ generated: 0, skipped: 0, errors: 0, projects: [], missions: [] }))
+    process.exit(0)
   }
 
   console.log(`Processing ${projects.length} CNCF projects (min_reactions=${MIN_REACTIONS}, dry_run=${DRY_RUN})`)
@@ -463,8 +476,9 @@ async function main() {
     await sleep(500)
   }
 
-  // Write generation report for PR body
-  const reportPath = join(process.cwd(), 'generation-report.md')
+  // Write generation report (batch-specific filename if batching)
+  const reportName = BATCH_INDEX != null ? `generation-report-${BATCH_INDEX}.md` : 'generation-report.md'
+  const reportPath = join(process.cwd(), reportName)
   writeFileSync(reportPath, formatReport(report))
   console.log(`\nReport written to: ${reportPath}`)
   console.log(`Done: ${report.generated} generated, ${report.skipped} skipped, ${report.errors} errors`)
