@@ -1,0 +1,50 @@
+{
+  "format": "kc-mission-v1",
+  "exportedAt": "2026-02-27T18:25:38.496Z",
+  "exportedBy": "cncf-mission-generator",
+  "consoleVersion": "auto-generated",
+  "mission": {
+    "title": "envoy: tls: support for ECDSA P-384 and P-521 certificates",
+    "description": "Commit Message: tls: support for ECDSA P-384 and P-521 certificates (#10855)\n\nAdditional Description: Commercial National Security Algorithm Suite (CNSA) requires ECDSA keys be specified with P-384 curves. The assertion that there are [no security benefits to curves higher than P-256](https://github.com/envoyproxy/envoy/pull/5224#issue-387770091) is no longer true. This change is intended to limit the adoptable curves to P-384 and P-521.\n\nRisk Level: Medium - removal of limitation of curves to be used for ECDSA certificates, with [potential misconfiguration and DoS risks](https://github.com/envoyproxy/envoy/issues/10855#issuecomment-618023133) mentioned in previous discourse on the issue. This risk is mitigated in this PR, however, by continuing to expressly limit the type of EC keys accepted to those associated with the P-256, P-384 or P-521 curves and no others.\n\nTesting: Testing using unit and integration tests\n\nRan build envoy artefact locally with below config:\n\n```\n---\nadmin:\n  a",
+    "type": "troubleshoot",
+    "status": "completed",
+    "resolution": {
+      "summary": "> @ggreenway Do you recall why only P-256 curve as supported initially? I think it's the only FIPS one back in the days, was it because of that?\n\nhttps://github.com/envoyproxy/envoy/issues/10855#issuecomment-618023133 explains it",
+      "steps": [
+        "Review the issue discussion for context",
+        "Apply the fix from the linked pull request"
+      ],
+      "codeSnippets": [
+        "---\r\nadmin:\r\n  address:\r\n    socket_address:\r\n      address: 127.0.0.1\r\n      port_value: 9901\r\nstatic_resources:\r\n  listeners:\r\n    - name: listener_0\r\n      address:\r\n        socket_address:\r\n          address: 127.0.0.1\r\n          port_value: 10000\r\n      filter_chains:\r\n        - filters:\r\n            - name: envoy.filters.network.http_connection_manager\r\n              typed_config:\r\n                \"@type\": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager\r\n                stat_prefix: ingress_http\r\n                codec_type: AUTO\r\n                route_config:\r\n                  name: local_route\r\n                  virtual_hosts:\r\n                    - name: local_service\r\n                      domains:\r\n                        - \"*\"\r\n                      routes:\r\n                        - match:\r\n                            prefix: /\r\n                          route:\r\n                            cluster: some_service\r\n                http_filters:\r\n                  - name: envoy.filters.http.router\r\n                    typed_config:\r\n                      \"@type\": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router\r\n          transport_socket:\r\n            name: envoy.transport_sockets.tls\r\n            typed_config:\r\n              \"@type\": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext\r\n              common_tls_context:\r\n                tls_certificates:\r\n                - certificate_chain: {filename: \"test/common/tls/test_data/selfsigned_ecdsa_p384_cert.pem\"}\r\n                  private_key: {filename: \"test/common/tls/test_data/selfsigned_ecdsa_p384_key.pem\"}\r\n  clusters:\r\n    - name: some_service\r\n      connect_timeout: 0.25s\r\n      type: STATIC\r\n      lb_policy: ROUND_ROBIN\r\n      load_assignment:\r\n        cluster_name: some_service\r\n        endpoints:\r\n          - lb_endpoints:\r\n              - endpoint:\r\n                  address:\r\n                    socket_address:\r\n                      address: 127.0.0.1\r\n                      port_value: 1234",
+        "Connecting to 127.0.0.1\r\nCONNECTED(00000003)\r\nCan't use SSL_get_servername\r\ndepth=0 C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\nverify error:num=18:self-signed certificate\r\nverify return:1\r\ndepth=0 C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\nverify return:1\r\n---\r\nCertificate chain\r\n 0 s:C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\n   i:C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\n   a:PKEY: id-ecPublicKey, 384 (bit); sigalg: ecdsa-with-SHA256\r\n   v:NotBefore: Aug 21 19:14:10 2024 GMT; NotAfter: Aug 21 19:14:10 2026 GMT\r\n---\r\nServer certificate\r\n-----BEGIN CERTIFICATE-----\r\nMIIC0jCCAlegAwIBAgIUUv13YuIFYMJxp1t4z8Z7H0cFdHowCgYIKoZIzj0EAwIw\r\nejELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDVNh\r\nbiBGcmFuY2lzY28xDTALBgNVBAoMBEx5ZnQxGTAXBgNVBAsMEEx5ZnQgRW5naW5l\r\nZXJpbmcxFDASBgNVBAMMC1Rlc3QgU2VydmVyMB4XDTI0MDgyMTE5MTQxMFoXDTI2\r\nMDgyMTE5MTQxMFowejELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWEx\r\nFjAUBgNVBAcMDVNhbiBGcmFuY2lzY28xDTALBgNVBAoMBEx5ZnQxGTAXBgNVBAsM\r\nEEx5ZnQgRW5naW5lZXJpbmcxFDASBgNVBAMMC1Rlc3QgU2VydmVyMHYwEAYHKoZI\r\nzj0CAQYFK4EEACIDYgAEtFQWaGrCFUT70YVGv9IA0H1d/fUGdoATjqAQlgOnzWf4\r\nFcJIqRQ8dGJ0wom/p8b/3MrKpy8wpWBnAo2C9+9owGdOqcqSIFLVV0iaGogKhIAx\r\n7KAjWoMEpal4uNnaYLlCo4GdMIGaMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgXg\r\nMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDATAeBgNVHREEFzAVghNzZXJ2\r\nZXIxLmV4YW1wbGUuY29tMB0GA1UdDgQWBBQ23kFgk8ELq1P0xW3R8SYRwJRcyjAf\r\nBgNVHSMEGDAWgBQ23kFgk8ELq1P0xW3R8SYRwJRcyjAKBggqhkjOPQQDAgNpADBm\r\nAjEA6FC5eEaKcV7i9AUuVsIJruDKqLVmSLKzHX+DVxOvaxQcTuKMwtg8AuTq1qq+\r\nMZ8EAjEA3JKxxjQAp2hi2gvSUGXQqk3seETImDNmUdWXmYcohDRM36KKJORqXoui\r\njD+/8ipt\r\n-----END CERTIFICATE-----\r\nsubject=C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\nissuer=C=US, ST=California, L=San Francisco, O=Lyft, OU=Lyft Engineering, CN=Test Server\r\n---\r\nNo client certificate CA names sent\r\nPeer signing digest: SHA384\r\nPeer signature type: ECDSA\r\nServer Temp Key: X25519, 253 bits\r\n---\r\nSSL handshake has read 1062 bytes and written 379 bytes\r\nVerification error: self-signed certificate\r\n---\r\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384\r\nServer public key is 384 bit\r\nThis TLS version forbids renegotiation.\r\nCompression: NONE\r\nExpansion: NONE\r\nNo ALPN negotiated\r\nEarly data was not sent\r\nVerify return code: 18 (self-signed certificate)\r\n---"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "envoy",
+      "graduated",
+      "networking",
+      "deps"
+    ],
+    "category": "networking",
+    "cncfProjects": [
+      "envoy"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Ingress"
+    ],
+    "difficulty": "intermediate",
+    "sourceIssue": "https://github.com/envoyproxy/envoy/pull/36369",
+    "sourceRepo": "envoyproxy/envoy",
+    "reactions": 4,
+    "comments": 23
+  },
+  "security": {
+    "scannedAt": "2026-02-27T18:25:38.496Z",
+    "scannerVersion": "cncf-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
