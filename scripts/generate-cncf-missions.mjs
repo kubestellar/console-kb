@@ -470,7 +470,9 @@ async function main() {
   console.log(`Done: ${report.generated} generated, ${report.skipped} skipped, ${report.errors} errors`)
 }
 
-main().catch(err => {
-  console.error(err)
-  process.exit(1)
-})
+// Only run main when executed directly
+if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
+  main().catch(err => { console.error(err); process.exit(1) })
+}
+
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, extractResolutionFromIssue, formatReport }
