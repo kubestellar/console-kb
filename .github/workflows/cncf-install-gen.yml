@@ -149,23 +149,29 @@ jobs:
           echo "Found $PUBLISHED published, $DRAFTS draft missions"
 
           # Batch-level quality gate (Gate 7)
-          # Report table format: | project | maturity | SCORE | tier | methods |
+          # Read quality scores directly from mission JSON metadata
           if [ "$TOTAL" -gt 0 ]; then
-            SCORES=$(awk -F'|' '/\|.*\|.*\|.*\|.*\|/ && $4 ~ /[0-9]/ { gsub(/ /,"",$4); if ($4+0 > 0) print $4 }' install-report-*.md 2>/dev/null || echo "")
-            if [ -z "$SCORES" ]; then
-              # Fallback: try "Average quality score: N" line
-              SCORES=$(grep -oP 'Average quality score:\s*\K[0-9.]+' install-report-*.md 2>/dev/null | head -1 || echo "")
+            AVG=$(node -e "
+              const fs = require('fs');
+              const path = require('path');
+              const dir = 'solutions/cncf-install';
+              const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && f !== '.gitkeep');
+              const scores = files.map(f => {
+                try {
+                  const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+                  return d.metadata?.qualityScore || d.qualityScore || 0;
+                } catch { return 0; }
+              }).filter(s => s > 0);
+              console.log(scores.length > 0 ? Math.round(scores.reduce((a,b) => a+b, 0) / scores.length) : 0);
+            " 2>/dev/null || echo "0")
+            echo "avg_score=$AVG" >> $GITHUB_OUTPUT
+            echo "Average quality score: $AVG"
+            if [ "$AVG" -lt 50 ]; then
+              echo "draft_pr=true" >> $GITHUB_OUTPUT
+              echo "⚠️ Batch average score $AVG < 50 — PR will be created as draft"
+            else
+              echo "draft_pr=false" >> $GITHUB_OUTPUT
             fi
-            if [ -n "$SCORES" ]; then
-              AVG=$(echo "$SCORES" | awk '{ sum += $1; n++ } END { if (n > 0) print int(sum/n); else print 0 }')
-              echo "avg_score=$AVG" >> $GITHUB_OUTPUT
-              echo "Average quality score: $AVG"
-              if [ "$AVG" -lt 50 ]; then
-                echo "draft_pr=true" >> $GITHUB_OUTPUT
-                echo "⚠️ Batch average score $AVG < 50 — PR will be created as draft"
-              else
-                echo "draft_pr=false" >> $GITHUB_OUTPUT
-              fi
             else
               echo "avg_score=0" >> $GITHUB_OUTPUT
               echo "draft_pr=false" >> $GITHUB_OUTPUT
