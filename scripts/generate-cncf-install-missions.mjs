@@ -229,6 +229,9 @@ Rules:
 
 function buildInstallPrompt(project, context) {
   const sections = [`# Install mission for: ${project.name} (${project.maturity})`]
+  if (project.parentProject) {
+    sections.push(`**This is a sub-component of the ${project.parentProject} project.** Generate a mission specifically for ${project.name} (repo: ${project.repo}), NOT the parent project.`)
+  }
   sections.push(`Category: ${project.category}`)
   sections.push(`Repo: github.com/${project.repo}`)
 
@@ -405,6 +408,17 @@ function buildMissionJson(project, llmResult, context, config) {
   const version = context.latestRelease?.tag_name || 'latest'
   const homepage = context.repoMeta?.homepage || `https://github.com/${project.repo}`
 
+  // Build a clear title that distinguishes sub-projects from their parent
+  const displayName = titleCase(project.name)
+  const repoShort = project.repo.split('/')[1] || project.repo
+  let missionTitle
+  if (project.parentProject) {
+    const parentName = titleCase(project.parentProject)
+    missionTitle = `Install and Configure ${displayName} (${parentName}) on Kubernetes`
+  } else {
+    missionTitle = `Install and Configure ${displayName} on Kubernetes`
+  }
+
   const mission = {
     version: 'kc-mission-v1',
     name: `install-${project.name}`,
@@ -412,8 +426,8 @@ function buildMissionJson(project, llmResult, context, config) {
     author: authorConf.name || 'KubeStellar Bot',
     authorGithub: authorConf.github || 'kubestellar',
     mission: {
-      title: `Install and Configure ${titleCase(project.name)} on Kubernetes`,
-      description: llmResult.description || `Production-ready installation guide for ${project.name}.`,
+      title: missionTitle,
+      description: llmResult.description || `Production-ready installation guide for ${displayName} (${repoShort}).`,
       type: 'deploy',
       status: 'completed',
       steps: (llmResult.steps || []).map(s => ({
@@ -421,13 +435,13 @@ function buildMissionJson(project, llmResult, context, config) {
         description: s.description.slice(0, 3000),
       })),
       resolution: {
-        summary: llmResult.resolution || `${titleCase(project.name)} is installed and verified.`,
+        summary: llmResult.resolution || `${displayName} is installed and verified.`,
         codeSnippets: extractCodeSnippets(llmResult.steps || []),
       },
     },
     metadata: {
-      tags: ['installation', 'configuration', 'cncf', project.category, project.maturity],
-      cncfProjects: [project.name],
+      tags: ['installation', 'configuration', 'cncf', project.category, project.maturity, ...(project.parentProject ? [project.parentProject] : [])],
+      cncfProjects: project.parentProject ? [project.parentProject, project.name] : [project.name],
       targetResourceKinds: detectResourceKinds(llmResult.steps || []),
       difficulty: llmResult.difficulty || 'intermediate',
       issueTypes: ['installation', 'configuration'],
