@@ -149,8 +149,13 @@ jobs:
           echo "Found $PUBLISHED published, $DRAFTS draft missions"
 
           # Batch-level quality gate (Gate 7)
+          # Report table format: | project | maturity | SCORE | tier | methods |
           if [ "$TOTAL" -gt 0 ]; then
-            SCORES=$(grep -oP 'Score.*?\| (\d+)' install-report-*.md 2>/dev/null | grep -oP '\d+$' || echo "")
+            SCORES=$(awk -F'|' '/\|.*\|.*\|.*\|.*\|/ && $4 ~ /[0-9]/ { gsub(/ /,"",$4); if ($4+0 > 0) print $4 }' install-report-*.md 2>/dev/null || echo "")
+            if [ -z "$SCORES" ]; then
+              # Fallback: try "Average quality score: N" line
+              SCORES=$(grep -oP 'Average quality score:\s*\K[0-9.]+' install-report-*.md 2>/dev/null | head -1 || echo "")
+            fi
             if [ -n "$SCORES" ]; then
               AVG=$(echo "$SCORES" | awk '{ sum += $1; n++ } END { if (n > 0) print int(sum/n); else print 0 }')
               echo "avg_score=$AVG" >> $GITHUB_OUTPUT
@@ -465,7 +470,6 @@ jobs:
     needs: [plan, collect]
     if: |
       inputs.dry_run != true &&
-      needs.collect.outputs.verdict_action == 'merge' &&
       needs.collect.outputs.mission_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -705,6 +709,10 @@ jobs:
           if [ "${{ steps.final.outputs.action }}" = "draft" ]; then
             DRAFT_FLAG="--draft"
           fi
+
+          # Ensure labels exist
+          gh label create "auto-generated" --color "0E8A16" --description "Automatically generated content" 2>/dev/null || true
+          gh label create "install-missions" --color "1D76DB" --description "CNCF install mission files" 2>/dev/null || true
 
           PR_URL=$(gh pr create \
             --title "✨ CNCF install mission generation $(date +%Y-%m-%d)" \
