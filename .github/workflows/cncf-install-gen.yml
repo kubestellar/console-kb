@@ -97,6 +97,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm install --no-audit
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
@@ -110,11 +115,6 @@ jobs:
           echo "**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> install-report.md
           echo "**Batches:** ${{ needs.plan.outputs.batch_count }}" >> install-report.md
           echo "" >> install-report.md
-
-          TOTAL_SCORE=0
-          SCORE_COUNT=0
-          TOTAL_FAIL=0
-          TOTAL_PROJECTS=0
 
           for f in install-report-*.md; do
             if [ -f "$f" ]; then
@@ -135,9 +135,7 @@ jobs:
           echo "Found $PUBLISHED published, $DRAFTS draft missions"
 
           # Batch-level quality gate (Gate 7)
-          # Check average score and failure rate from reports
           if [ "$TOTAL" -gt 0 ]; then
-            # Extract scores from reports using grep
             SCORES=$(grep -oP 'Score.*?\| (\d+)' install-report-*.md 2>/dev/null | grep -oP '\d+$' || echo "")
             if [ -n "$SCORES" ]; then
               AVG=$(echo "$SCORES" | awk '{ sum += $1; n++ } END { if (n > 0) print int(sum/n); else print 0 }')
@@ -168,6 +166,134 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
+      # ── Quality checks ──────────────────────────────────────────
+      - name: 'Quality: Schema validation'
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "## Schema Validation" >> install-report.md
+          FILES=$(find solutions/cncf-install -name '*.json' ! -name '.gitkeep')
+          if [ -n "$FILES" ]; then
+            node scripts/validate-schema.mjs $FILES 2>&1 | tee -a install-report.md
+          fi
+
+      - name: 'Quality: Security scan'
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "" >> install-report.md
+          echo "## Security Scan" >> install-report.md
+          FINDINGS=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep'); do
+            RESULT=$(node -e "
+              import {scanMissionFile} from './scripts/scanner.mjs';
+              import {readFileSync} from 'fs';
+              const r = scanMissionFile(readFileSync('$f','utf-8'));
+              const s = r.scan?.sensitive?.findings?.length || 0;
+              const m = r.scan?.malicious?.findings?.length || 0;
+              if (s + m > 0) { console.log('FAIL:' + s + ' sensitive, ' + m + ' malicious'); process.exit(1); }
+              else console.log('PASS');
+            " 2>&1) || FINDINGS=$((FINDINGS + 1))
+            echo "  $f: $RESULT" | tee -a install-report.md
+          done
+          if [ "$FINDINGS" -gt 0 ]; then
+            echo "::warning::$FINDINGS mission(s) have security findings"
+          else
+            echo "✅ All missions passed security scan" | tee -a install-report.md
+          fi
+
+      - name: 'Quality: Link validation'
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "" >> install-report.md
+          echo "## Link Validation" >> install-report.md
+          BROKEN=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+            REPO_URL=$(node -e "const d=JSON.parse(require('fs').readFileSync('$f','utf-8')); console.log(d.metadata?.sourceUrls?.repo || '')")
+            if [ -n "$REPO_URL" ]; then
+              STATUS=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 "$REPO_URL" 2>/dev/null || echo "000")
+              if [ "$STATUS" -ge 400 ] || [ "$STATUS" = "000" ]; then
+                echo "  ⚠️ $f: $REPO_URL → HTTP $STATUS" | tee -a install-report.md
+                BROKEN=$((BROKEN + 1))
+              fi
+            fi
+          done
+          if [ "$BROKEN" -gt 0 ]; then
+            echo "::warning::$BROKEN mission(s) have broken source URLs"
+          else
+            echo "✅ All source URLs valid" | tee -a install-report.md
+          fi
+
+      - name: 'Quality: Version freshness'
+        if: steps.check.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "" >> install-report.md
+          echo "## Version Freshness" >> install-report.md
+          STALE=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+            read -r REPO VERSION <<< $(node -e "
+              const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
+              console.log((d.metadata?.sourceUrls?.repo || '').replace('https://github.com/','') + ' ' + (d.metadata?.projectVersion || 'latest'))
+            ")
+            if [ "$VERSION" != "latest" ] && [ -n "$REPO" ]; then
+              LATEST=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).tag_name||'')}catch{console.log('')}})" 2>/dev/null)
+              if [ -n "$LATEST" ] && [ "$LATEST" != "$VERSION" ]; then
+                echo "  ⚠️ $(basename $f): has $VERSION, latest is $LATEST" | tee -a install-report.md
+                STALE=$((STALE + 1))
+              fi
+            fi
+          done
+          if [ "$STALE" -gt 0 ]; then
+            echo "::warning::$STALE mission(s) reference outdated versions"
+          else
+            echo "✅ All versions current" | tee -a install-report.md
+          fi
+
+      - name: 'Quality: Rebuild index'
+        if: steps.check.outputs.count != '0'
+        run: |
+          node scripts/build-index.mjs
+          echo "" >> install-report.md
+          INDEXED=$(node -e "const d=JSON.parse(require('fs').readFileSync('solutions/index.json','utf-8')); console.log(d.count)")
+          echo "## Index: $INDEXED missions indexed" | tee -a install-report.md
+
+      - name: 'Quality: Command syntax smoke test'
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "" >> install-report.md
+          echo "## Command Smoke Test" >> install-report.md
+          BAD=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json' | shuf | head -5); do
+            # Check that helm/kubectl commands have valid structure
+            CMDS=$(node -e "
+              const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
+              const steps = d.mission?.steps || [];
+              const cmds = steps.flatMap(s => (s.description||'').match(/(?:helm|kubectl|docker)\s+\w+[^\n\`]*/g) || []);
+              cmds.forEach(c => console.log(c.trim().slice(0, 120)));
+            ")
+            if [ -z "$CMDS" ]; then
+              echo "  ⚠️ $(basename $f): no CLI commands found" | tee -a install-report.md
+              BAD=$((BAD + 1))
+            else
+              echo "  ✅ $(basename $f): $(echo "$CMDS" | wc -l | tr -d ' ') commands found" | tee -a install-report.md
+            fi
+          done
+          if [ "$BAD" -gt 0 ]; then
+            echo "::warning::$BAD sampled mission(s) have no CLI commands"
+          fi
+
+      - name: Post generation summary
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "### Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Published | ${{ steps.report.outputs.published }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Drafts | ${{ steps.report.outputs.drafts }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Average Score | ${{ steps.report.outputs.avg_score }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Draft PR | ${{ steps.report.outputs.draft_pr }} |" >> $GITHUB_STEP_SUMMARY
+
+      # ── Create PR ───────────────────────────────────────────────
       - name: Create PR
         if: steps.check.outputs.count != '0'
         env:
@@ -177,7 +303,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH="cncf-install-gen-$(date +%Y%m%d)"
           git checkout -b "$BRANCH"
-          git add solutions/cncf-install/
+          git add solutions/cncf-install/ solutions/index.json
           git commit -s -m "✨ Auto-generate CNCF install missions ($(date +%Y-%m-%d))
 
           Generated install & configure missions across ${{ needs.plan.outputs.batch_count }} batches.
@@ -196,4 +322,5 @@ jobs:
             --body "$(cat install-report.md | head -500)" \
             --base master \
             --head "$BRANCH" \
+            --label "auto-generated,install-missions" \
             $DRAFT_FLAG
