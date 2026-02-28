@@ -102,6 +102,9 @@ export async function buildMission({ title, description, problem, solution, step
       exportedAt: new Date().toISOString(),
       exportedBy: 'cncf-mission-generator',
       consoleVersion: 'auto-generated',
+      missionClass: 'troubleshoot',
+      author: 'KubeStellar Bot',
+      authorGithub: 'kubestellar',
       mission: {
         title,
         description: llmResult.description,
@@ -140,6 +143,9 @@ export async function buildMission({ title, description, problem, solution, step
     exportedAt: new Date().toISOString(),
     exportedBy: 'cncf-mission-generator',
     consoleVersion: 'auto-generated',
+    missionClass: 'troubleshoot',
+    author: 'KubeStellar Bot',
+    authorGithub: 'kubestellar',
     mission: {
       title,
       description: description || problem || title,

@@ -25,23 +25,38 @@ function extractMetadata(content, filePath) {
   const relPath = relative(process.cwd(), filePath);
   try {
     const data = filePath.endsWith('.json') ? JSON.parse(content) : parseYaml(content);
-    if (!data || !data.title) return null;
+    if (!data || (!data.title && !data.mission?.title)) return null;
     
     // Extract category from path: solutions/<category>/...
     const pathParts = relPath.split('/');
     const category = pathParts.length > 1 ? pathParts[1] : 'general';
+
+    // Determine missionClass: explicit field > path-based > default
+    let missionClass = data.missionClass;
+    if (!missionClass) {
+      missionClass = category === 'cncf-install' ? 'install' : 'troubleshoot';
+    }
+
+    // Author: from mission JSON or default to bot
+    const author = data.author || 'KubeStellar Bot';
+    const authorGithub = data.authorGithub || 'kubestellar';
     
     return {
       path: relPath,
-      title: data.title || '',
-      description: (data.description || '').slice(0, 200),
+      title: data.title || data.mission?.title || '',
+      description: (data.description || data.mission?.description || '').slice(0, 200),
       category,
+      missionClass,
+      author,
+      authorGithub,
+      authorAvatar: `https://github.com/${authorGithub}.png`,
       tags: data.metadata?.tags || data.tags || [],
-      cncfProjects: data.metadata?.cncfProjects || data.metadata?.cncfProject ? [data.metadata.cncfProject] : [],
+      cncfProjects: data.metadata?.cncfProjects || (data.metadata?.cncfProject ? [data.metadata.cncfProject] : []),
       targetResourceKinds: data.metadata?.targetResourceKinds || [],
       difficulty: data.metadata?.difficulty || 'intermediate',
       issueTypes: data.metadata?.issueTypes || extractIssueTypes(data),
-      type: data.type || 'troubleshoot',
+      type: data.type || data.mission?.type || 'troubleshoot',
+      installMethods: data.metadata?.installMethods || [],
     };
   } catch (e) {
     console.warn(`Skipping ${relPath}: ${e.message}`);

@@ -1,0 +1,672 @@
+#!/usr/bin/env node
+/**
+ * Generates 1 canonical install + configure mission per CNCF project.
+ * Crawls 6 knowledge sources (docs, README, Helm, containers, configs, manifests),
+ * synthesizes via LLM, and applies a 7-gate quality gate.
+ *
+ * Environment variables:
+ *   GITHUB_TOKEN       — GitHub API + GitHub Models auth
+ *   TARGET_PROJECTS    — comma-separated project names (empty = all)
+ *   BATCH_INDEX        — batch index for parallelism
+ *   BATCH_SIZE         — projects per batch (default 20)
+ *   DRY_RUN            — if 'true', no files written
+ *   QUALITY_THRESHOLD  — minimum score (default 60)
+ *   FORCE_REGENERATE   — if 'true', overwrite existing missions
+ */
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { parse as parseYaml } from 'yaml'
+import { CNCF_PROJECTS } from './cncf-projects.mjs'
+import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
+import { scoreMission } from './quality-scorer.mjs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ─── Config ──────────────────────────────────────────────────────────
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+const TARGET_PROJECTS = process.env.TARGET_PROJECTS
+  ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+  : null
+const DRY_RUN = process.env.DRY_RUN === 'true'
+const BATCH_INDEX = process.env.BATCH_INDEX != null ? parseInt(process.env.BATCH_INDEX, 10) : null
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
+const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
+const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
+const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
+const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-install')
+
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
+
+let rateLimitRemaining = 5000
+let rateLimitReset = 0
+
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
+
+function loadInstallSourcesConfig() {
+  const configPath = join(__dirname, 'install-sources.yaml')
+  if (!existsSync(configPath)) {
+    console.warn('Warning: install-sources.yaml not found, using defaults')
+    return { sources: {}, quality: { minScore: 60, draftMinScore: 40 }, author: { name: 'KubeStellar Bot', github: 'kubestellar' } }
+  }
+  return parseYaml(readFileSync(configPath, 'utf-8'))
+}
+
+// ─── GitHub API helpers ──────────────────────────────────────────────
+async function waitForRateLimit() {
+  if (rateLimitRemaining < 10) {
+    const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
+    console.log(`  Rate limit low (${rateLimitRemaining}), waiting ${Math.round(waitMs / 1000)}s...`)
+    await sleep(waitMs)
+  }
+}
+
+async function githubApi(url, options = {}) {
+  await waitForRateLimit()
+  const headers = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'cncf-install-mission-gen/1.0',
+  }
+  if (GITHUB_TOKEN) headers.Authorization = `Bearer ${GITHUB_TOKEN}`
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
+    const rem = response.headers.get('x-ratelimit-remaining')
+    const rst = response.headers.get('x-ratelimit-reset')
+    if (rem != null) rateLimitRemaining = parseInt(rem, 10)
+    if (rst != null) rateLimitReset = parseInt(rst, 10)
+
+    if (response.status === 403 && rateLimitRemaining === 0) {
+      const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
+      console.warn(`  Rate limited, waiting ${Math.round(waitMs / 1000)}s...`)
+      await sleep(waitMs)
+      continue
+    }
+    if (response.status === 404) return null
+    if (response.status >= 500) { await sleep(2000 * Math.pow(2, attempt)); continue }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      console.warn(`  GitHub API ${response.status}: ${url} — ${body.slice(0, 200)}`)
+      return null
+    }
+    return response.json()
+  }
+  return null
+}
+
+async function fetchRawFile(owner, repo, path) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
+  const data = await githubApi(url)
+  if (!data || !data.content) return null
+  return Buffer.from(data.content, 'base64').toString('utf-8')
+}
+
+// ─── Knowledge source fetchers ───────────────────────────────────────
+
+async function fetchReadme(owner, repo) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/readme`
+  const data = await githubApi(url)
+  if (!data || !data.content) return null
+  return Buffer.from(data.content, 'base64').toString('utf-8')
+}
+
+async function fetchRepoMeta(owner, repo) {
+  return githubApi(`https://api.github.com/repos/${owner}/${repo}`)
+}
+
+async function fetchLatestRelease(owner, repo) {
+  return githubApi(`https://api.github.com/repos/${owner}/${repo}/releases/latest`)
+}
+
+async function findHelmChart(owner, repo, config) {
+  const chartPaths = config?.sources?.['helm-charts']?.chartPaths || ['charts/', 'deploy/charts/', 'helm/', 'install/helm/']
+  for (const p of chartPaths) {
+    const chartYaml = await fetchRawFile(owner, repo, `${p}Chart.yaml`)
+    if (chartYaml) {
+      const valuesYaml = await fetchRawFile(owner, repo, `${p}values.yaml`)
+      return { chartYaml, valuesYaml, path: p }
+    }
+    // Try one level deeper (e.g. charts/projectname/Chart.yaml)
+    const tree = await githubApi(`https://api.github.com/repos/${owner}/${repo}/contents/${p}`)
+    if (Array.isArray(tree)) {
+      for (const entry of tree.slice(0, 3)) {
+        if (entry.type === 'dir') {
+          const nested = await fetchRawFile(owner, repo, `${p}${entry.name}/Chart.yaml`)
+          if (nested) {
+            const vals = await fetchRawFile(owner, repo, `${p}${entry.name}/values.yaml`)
+            return { chartYaml: nested, valuesYaml: vals, path: `${p}${entry.name}/` }
+          }
+        }
+      }
+    }
+  }
+  return null
+}
+
+async function findManifests(owner, repo, config) {
+  const paths = config?.sources?.['kubectl-manifests']?.manifestPaths || ['deploy/', 'install/', 'manifests/', 'config/crd/']
+  const manifests = []
+  for (const p of paths) {
+    const tree = await githubApi(`https://api.github.com/repos/${owner}/${repo}/contents/${p}`)
+    if (Array.isArray(tree)) {
+      const yamlFiles = tree.filter(f => f.name.endsWith('.yaml') || f.name.endsWith('.yml')).slice(0, 3)
+      for (const f of yamlFiles) {
+        const content = await fetchRawFile(owner, repo, `${p}${f.name}`)
+        if (content) manifests.push({ name: f.name, content: content.slice(0, 3000) })
+      }
+      if (manifests.length > 0) break
+    }
+  }
+  return manifests
+}
+
+async function findExampleConfigs(owner, repo, config) {
+  const paths = config?.sources?.['common-configs']?.configPaths || ['examples/', 'config/', 'config/samples/']
+  const configs = []
+  for (const p of paths) {
+    const tree = await githubApi(`https://api.github.com/repos/${owner}/${repo}/contents/${p}`)
+    if (Array.isArray(tree)) {
+      const relevant = tree.filter(f =>
+        /\.(yaml|yml|json|toml)$/.test(f.name) &&
+        /example|sample|default|basic|production|recommended/i.test(f.name)
+      ).slice(0, 3)
+      for (const f of relevant) {
+        const content = await fetchRawFile(owner, repo, `${p}${f.name}`)
+        if (content) configs.push({ name: `${p}${f.name}`, content: content.slice(0, 2000) })
+      }
+      if (configs.length > 0) break
+    }
+  }
+  return configs
+}
+
+async function findDockerfile(owner, repo) {
+  for (const p of ['Dockerfile', 'build/Dockerfile', 'docker/Dockerfile']) {
+    const content = await fetchRawFile(owner, repo, p)
+    if (content) return content.slice(0, 2000)
+  }
+  return null
+}
+
+// ─── LLM synthesis ───────────────────────────────────────────────────
+
+const INSTALL_SYSTEM_PROMPT = `You are an expert Kubernetes technical writer creating INSTALLATION missions for the KubeStellar Console.
+An "install mission" is a structured, copy-pasteable guide that takes a user from zero to a running instance of a CNCF project.
+
+Your output MUST be a JSON object with these fields:
+{
+  "description": "1-3 sentences describing what this project does and why you'd install it.",
+  "steps": [
+    {
+      "title": "Short imperative title (e.g. 'Add the Helm repository')",
+      "description": "Detailed step with exact commands. Must be copy-pasteable. Use code blocks."
+    }
+  ],
+  "resolution": "2-3 sentences confirming what a successful installation looks like.",
+  "difficulty": "beginner|intermediate|advanced",
+  "installMethods": ["helm", "kubectl", "operator", "kustomize", "docker"],
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["helm", "kubectl"],
+    "description": "Brief prereq description"
+  },
+  "containerImages": ["registry/org/image:tag"],
+  "skip": false
+}
+
+Rules:
+- If the project has NO installable component (it's a spec, SDK, or library only), return {"skip": true}
+- Prefer Helm install as primary method when a Helm chart exists
+- Steps MUST have real commands — never "see the documentation"
+- Include a verification step (kubectl get pods, health check, port-forward)
+- Include at least 1 post-install configuration step (resource limits, RBAC, TLS, or monitoring)
+- Pin versions — never use :latest
+- Use --namespace and --create-namespace
+- 4-6 steps is ideal
+- Do NOT invent URLs or image names — only use what's in the provided context`
+
+function buildInstallPrompt(project, context) {
+  const sections = [`# Install mission for: ${project.name} (${project.maturity})`]
+  sections.push(`Category: ${project.category}`)
+  sections.push(`Repo: github.com/${project.repo}`)
+
+  if (context.repoMeta) {
+    sections.push(`\n## Project Info\n- Stars: ${context.repoMeta.stargazers_count}\n- Language: ${context.repoMeta.language}\n- Description: ${context.repoMeta.description || 'N/A'}`)
+    if (context.repoMeta.homepage) sections.push(`- Homepage: ${context.repoMeta.homepage}`)
+  }
+
+  if (context.latestRelease) {
+    sections.push(`\n## Latest Release\n- Tag: ${context.latestRelease.tag_name}\n- Date: ${context.latestRelease.published_at}`)
+  }
+
+  if (context.readme) {
+    sections.push(`\n## README (excerpt)\n${truncate(context.readme, 3000)}`)
+  }
+
+  if (context.helmChart) {
+    sections.push(`\n## Helm Chart (${context.helmChart.path})`)
+    if (context.helmChart.chartYaml) sections.push(`### Chart.yaml\n\`\`\`yaml\n${truncate(context.helmChart.chartYaml, 1000)}\n\`\`\``)
+    if (context.helmChart.valuesYaml) sections.push(`### values.yaml (excerpt)\n\`\`\`yaml\n${truncate(context.helmChart.valuesYaml, 2000)}\n\`\`\``)
+  }
+
+  if (context.manifests?.length > 0) {
+    sections.push(`\n## Kubernetes Manifests`)
+    for (const m of context.manifests) {
+      sections.push(`### ${m.name}\n\`\`\`yaml\n${truncate(m.content, 1500)}\n\`\`\``)
+    }
+  }
+
+  if (context.exampleConfigs?.length > 0) {
+    sections.push(`\n## Example Configurations`)
+    for (const c of context.exampleConfigs) {
+      sections.push(`### ${c.name}\n\`\`\`\n${truncate(c.content, 1000)}\n\`\`\``)
+    }
+  }
+
+  if (context.dockerfile) {
+    sections.push(`\n## Dockerfile (excerpt)\n\`\`\`dockerfile\n${truncate(context.dockerfile, 800)}\n\`\`\``)
+  }
+
+  sections.push('\nGenerate a complete install mission from the above context. Return JSON.')
+  return sections.join('\n')
+}
+
+async function synthesizeInstallMission(project, context) {
+  const token = process.env.LLM_TOKEN || GITHUB_TOKEN
+  if (!token) return null
+
+  const prompt = buildInstallPrompt(project, context)
+
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(LLM_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages: [
+            { role: 'system', content: INSTALL_SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 3000,
+          response_format: { type: 'json_object' },
+        }),
+        signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+      })
+
+      if (response.status === 429) {
+        const wait = parseInt(response.headers.get('retry-after') || '10', 10)
+        console.warn(`  [LLM] Rate limited, waiting ${wait}s`)
+        await sleep(wait * 1000)
+        continue
+      }
+      if (!response.ok) {
+        console.warn(`  [LLM] API error ${response.status}`)
+        return null
+      }
+
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+      if (!content) return null
+
+      const parsed = JSON.parse(content)
+      if (parsed.skip || !parsed.steps?.length) return null
+      return parsed
+    } catch (err) {
+      console.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
+      if (attempt < 2) await sleep(3000 * (attempt + 1))
+    }
+  }
+  return null
+}
+
+// ─── Quality Gate ────────────────────────────────────────────────────
+
+const INSTALL_CMD_RE = /helm install|helm upgrade|kubectl apply|kubectl create|docker run|operator-sdk|kustomize build|kubectl kustomize/i
+const VERIFY_CMD_RE = /kubectl get|kubectl describe|kubectl logs|curl.*health|curl.*ready|kubectl port-forward|kubectl rollout status/i
+
+function applyQualityGate(mission, config) {
+  const gates = []
+  const qualityConf = config.quality || {}
+  const minScore = qualityConf.minScore || QUALITY_THRESHOLD
+  const draftMin = qualityConf.draftMinScore || DRAFT_THRESHOLD
+
+  // Gate 5+6: Security scan (run first — cheapest)
+  const sensitiveFindings = scanForSensitiveData(mission)
+  if (sensitiveFindings.findings.length > 0) {
+    gates.push({ gate: 'no-sensitive-data', pass: false, reason: `${sensitiveFindings.findings.length} sensitive data finding(s)` })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'no-sensitive-data', pass: true })
+
+  const maliciousFindings = scanForMaliciousContent(mission)
+  if (maliciousFindings.findings.length > 0) {
+    gates.push({ gate: 'no-malicious-content', pass: false, reason: `${maliciousFindings.findings.length} malicious content finding(s)` })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'no-malicious-content', pass: true })
+
+  // Gate 1: Schema compliance
+  const schemaResult = validateMissionExport(mission)
+  if (!schemaResult.valid) {
+    gates.push({ gate: 'schema-compliance', pass: false, reason: schemaResult.errors.join('; ') })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'schema-compliance', pass: true })
+
+  // Gate 3: Actionable install command
+  const allStepText = (mission.mission?.steps || []).map(s => s.description || '').join('\n')
+  const resSnippets = (mission.mission?.resolution?.codeSnippets || []).join('\n')
+  const allText = allStepText + '\n' + resSnippets
+  if (!INSTALL_CMD_RE.test(allText)) {
+    gates.push({ gate: 'actionable-install-cmd', pass: false, reason: 'No install command found in steps' })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'actionable-install-cmd', pass: true })
+
+  // Gate 4: Verification step
+  if (!VERIFY_CMD_RE.test(allText)) {
+    gates.push({ gate: 'verification-step', pass: false, reason: 'No verification command found in steps' })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'verification-step', pass: true })
+
+  // Gate 2: Quality score
+  const { score } = scoreMission(mission, minScore)
+  // Apply install-specific bonuses
+  let adjustedScore = score
+  if (INSTALL_CMD_RE.test(allText)) adjustedScore += 10
+  if (VERIFY_CMD_RE.test(allText)) adjustedScore += 10
+  if (/prerequisit|requires?\s+kubernetes|helm\s+3|kubectl/i.test(allText)) adjustedScore += 5
+  if (/v\d+\.\d+\.\d+|:\d+\.\d+/.test(allText)) adjustedScore += 5
+  if (/--namespace|--create-namespace/i.test(allText)) adjustedScore += 5
+  if (/resource.*limit|rbac|tls|certificate/i.test(allText)) adjustedScore += 5
+  if (/see docs|see the documentation/i.test(allText) && !INSTALL_CMD_RE.test(allText)) adjustedScore -= 10
+  if (/:latest\b/.test(allText)) adjustedScore -= 5
+  adjustedScore = Math.min(100, Math.max(0, adjustedScore))
+
+  let tier
+  if (adjustedScore >= minScore) tier = 'publish'
+  else if (adjustedScore >= draftMin) tier = 'draft'
+  else tier = 'rejected'
+
+  gates.push({ gate: 'quality-score', pass: tier !== 'rejected', score: adjustedScore, tier })
+
+  return { pass: tier !== 'rejected', gates, score: adjustedScore, tier }
+}
+
+// ─── Mission builder ─────────────────────────────────────────────────
+
+function buildMissionJson(project, llmResult, context, config) {
+  const authorConf = config.author || {}
+  const version = context.latestRelease?.tag_name || 'latest'
+  const homepage = context.repoMeta?.homepage || `https://github.com/${project.repo}`
+
+  const mission = {
+    version: 'kc-mission-v1',
+    name: `install-${project.name}`,
+    missionClass: 'install',
+    author: authorConf.name || 'KubeStellar Bot',
+    authorGithub: authorConf.github || 'kubestellar',
+    mission: {
+      title: `Install and Configure ${titleCase(project.name)} on Kubernetes`,
+      description: llmResult.description || `Production-ready installation guide for ${project.name}.`,
+      type: 'deploy',
+      status: 'completed',
+      steps: (llmResult.steps || []).map(s => ({
+        title: s.title.slice(0, 120),
+        description: s.description.slice(0, 3000),
+      })),
+      resolution: {
+        summary: llmResult.resolution || `${titleCase(project.name)} is installed and verified.`,
+        codeSnippets: extractCodeSnippets(llmResult.steps || []),
+      },
+    },
+    metadata: {
+      tags: ['installation', 'configuration', 'cncf', project.category, project.maturity],
+      cncfProjects: [project.name],
+      targetResourceKinds: detectResourceKinds(llmResult.steps || []),
+      difficulty: llmResult.difficulty || 'intermediate',
+      issueTypes: ['installation', 'configuration'],
+      installMethods: llmResult.installMethods || detectInstallMethods(llmResult.steps || []),
+      maturity: project.maturity,
+      projectVersion: version,
+      containerImages: llmResult.containerImages || [],
+      sourceUrls: {
+        docs: homepage,
+        repo: `https://github.com/${project.repo}`,
+        ...(context.helmChart ? { helm: `https://github.com/${project.repo}/tree/main/${context.helmChart.path}` } : {}),
+      },
+    },
+    prerequisites: llmResult.prerequisites || {
+      kubernetes: '>=1.24',
+      tools: ['kubectl'],
+      description: `A running Kubernetes cluster with kubectl configured.`,
+    },
+    security: {
+      scannedAt: new Date().toISOString(),
+      scannerVersion: 'cncf-install-gen-1.0.0',
+      sanitized: true,
+      findings: [],
+    },
+  }
+
+  return mission
+}
+
+function extractCodeSnippets(steps) {
+  const snippets = []
+  for (const step of steps) {
+    const matches = (step.description || '').matchAll(/```[\w]*\n([\s\S]*?)```/g)
+    for (const m of matches) {
+      if (m[1].trim().length > 10) snippets.push(m[1].trim())
+      if (snippets.length >= 5) return snippets
+    }
+  }
+  return snippets
+}
+
+function detectResourceKinds(steps) {
+  const text = steps.map(s => s.description || '').join('\n').toLowerCase()
+  const kinds = []
+  const resources = ['deployment', 'service', 'configmap', 'secret', 'namespace', 'serviceaccount',
+    'clusterrole', 'clusterrolebinding', 'ingress', 'statefulset', 'daemonset',
+    'persistentvolumeclaim', 'networkpolicy', 'horizontalpodautoscaler', 'customresourcedefinition']
+  for (const kind of resources) {
+    if (text.includes(kind)) kinds.push(kind.charAt(0).toUpperCase() + kind.slice(1))
+  }
+  return [...new Set(kinds)].slice(0, 8)
+}
+
+function detectInstallMethods(steps) {
+  const text = steps.map(s => s.description || '').join('\n')
+  const methods = []
+  if (/helm install|helm upgrade|helm repo/i.test(text)) methods.push('helm')
+  if (/kubectl apply|kubectl create/i.test(text)) methods.push('kubectl')
+  if (/kustomize build|kubectl kustomize/i.test(text)) methods.push('kustomize')
+  if (/operator-sdk|OLM|OperatorHub/i.test(text)) methods.push('operator')
+  if (/docker run|docker compose/i.test(text)) methods.push('docker')
+  return methods.length > 0 ? methods : ['kubectl']
+}
+
+function titleCase(str) {
+  return str.replace(/(?:^|[-_])(\w)/g, (_, c) => ' ' + c.toUpperCase()).trim()
+}
+
+function truncate(text, max) {
+  if (!text) return ''
+  return text.length <= max ? text : text.slice(0, max) + '\n... [truncated]'
+}
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
+}
+
+// ─── Report ──────────────────────────────────────────────────────────
+
+function formatReport(report) {
+  const lines = [
+    '# CNCF Install Mission Generation Report',
+    '',
+    `**Date:** ${new Date().toISOString()}`,
+    `**Published:** ${report.published}`,
+    `**Drafts:** ${report.drafts}`,
+    `**Rejected:** ${report.rejected}`,
+    `**Skipped (no installable component):** ${report.skipped}`,
+    `**Errors:** ${report.errors}`,
+    `**Average quality score:** ${report.avgScore.toFixed(1)}`,
+    '',
+    '## Projects',
+    '',
+    '| Project | Maturity | Score | Tier | Install Methods |',
+    '|---------|----------|-------|------|-----------------|',
+  ]
+  for (const p of report.projects) {
+    lines.push(`| ${p.name} | ${p.maturity} | ${p.score} | ${p.tier} | ${p.installMethods} |`)
+  }
+
+  if (report.rejectedProjects.length > 0) {
+    lines.push('', '## Rejected (quality gate failures)', '')
+    for (const r of report.rejectedProjects) {
+      lines.push(`- **${r.name}**: ${r.reason}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+// ─── Main ────────────────────────────────────────────────────────────
+
+async function main() {
+  if (!GITHUB_TOKEN) {
+    console.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
+  }
+
+  const config = loadInstallSourcesConfig()
+
+  // Filter projects — exclude kubestellar itself
+  let projects = CNCF_PROJECTS.filter(p => p.name !== 'kubestellar')
+
+  if (TARGET_PROJECTS) {
+    projects = projects.filter(p => TARGET_PROJECTS.includes(p.name))
+  }
+
+  if (BATCH_INDEX != null) {
+    const start = BATCH_INDEX * BATCH_SIZE
+    projects = projects.slice(start, start + BATCH_SIZE)
+    console.log(`Batch ${BATCH_INDEX}: ${projects.length} projects`)
+  }
+
+  if (projects.length === 0) {
+    console.log('No projects to process.')
+    const reportPath = join(process.cwd(), BATCH_INDEX != null ? `install-report-${BATCH_INDEX}.md` : 'install-report.md')
+    writeFileSync(reportPath, formatReport({ published: 0, drafts: 0, rejected: 0, skipped: 0, errors: 0, avgScore: 0, projects: [], rejectedProjects: [] }))
+    process.exit(0)
+  }
+
+  console.log(`Processing ${projects.length} CNCF projects for install missions`)
+  mkdirSync(SOLUTIONS_DIR, { recursive: true })
+
+  const report = { published: 0, drafts: 0, rejected: 0, skipped: 0, errors: 0, scores: [], projects: [], rejectedProjects: [] }
+
+  for (const project of projects) {
+    const [owner, repo] = project.repo.split('/')
+    console.log(`\n── ${project.name} (${project.repo}) ──`)
+
+    // Skip if already exists (unless FORCE_REGENERATE)
+    const outPath = join(SOLUTIONS_DIR, `install-${slugify(project.name)}.json`)
+    const draftPath = join(SOLUTIONS_DIR, `install-${slugify(project.name)}.draft.json`)
+    if (!FORCE_REGENERATE && (existsSync(outPath) || existsSync(draftPath))) {
+      console.log('  Already exists, skipping (use FORCE_REGENERATE=true to overwrite)')
+      continue
+    }
+
+    try {
+      // Fetch all 6 knowledge sources in parallel where possible
+      console.log('  Fetching knowledge sources...')
+      const [repoMeta, readme, latestRelease] = await Promise.all([
+        fetchRepoMeta(owner, repo),
+        fetchReadme(owner, repo),
+        fetchLatestRelease(owner, repo),
+      ])
+      await sleep(200)
+
+      const [helmChart, manifests, exampleConfigs, dockerfile] = await Promise.all([
+        findHelmChart(owner, repo, config),
+        findManifests(owner, repo, config),
+        findExampleConfigs(owner, repo, config),
+        findDockerfile(owner, repo),
+      ])
+
+      const context = { repoMeta, readme, latestRelease, helmChart, manifests, exampleConfigs, dockerfile }
+
+      const sourceCount = [readme, helmChart, manifests?.length > 0, exampleConfigs?.length > 0, dockerfile, latestRelease].filter(Boolean).length
+      console.log(`  Sources found: ${sourceCount}/6 (readme:${!!readme} helm:${!!helmChart} manifests:${manifests?.length || 0} configs:${exampleConfigs?.length || 0} dockerfile:${!!dockerfile} release:${!!latestRelease})`)
+
+      // Synthesize via LLM
+      console.log('  Synthesizing install mission via LLM...')
+      const llmResult = await synthesizeInstallMission(project, context)
+
+      if (!llmResult) {
+        console.log('  LLM returned skip/null — project may not be installable')
+        report.skipped++
+        report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'skipped', installMethods: 'N/A' })
+        continue
+      }
+
+      // Build mission JSON
+      const mission = buildMissionJson(project, llmResult, context, config)
+
+      // Apply quality gate
+      const gateResult = applyQualityGate(mission, config)
+      mission.metadata.qualityScore = gateResult.score
+      console.log(`  Quality: ${gateResult.score}/100 — ${gateResult.tier}`)
+
+      if (gateResult.tier === 'rejected') {
+        const failedGates = gateResult.gates.filter(g => !g.pass).map(g => `${g.gate}: ${g.reason || 'failed'}`).join(', ')
+        console.log(`  ❌ Rejected: ${failedGates}`)
+        report.rejected++
+        report.rejectedProjects.push({ name: project.name, reason: failedGates })
+        report.projects.push({ name: project.name, maturity: project.maturity, score: gateResult.score, tier: 'rejected', installMethods: 'N/A' })
+        continue
+      }
+
+      report.scores.push(gateResult.score)
+      const methods = (mission.metadata.installMethods || []).join(', ')
+
+      if (DRY_RUN) {
+        console.log(`  [DRY RUN] Would write: ${gateResult.tier === 'draft' ? draftPath : outPath}`)
+      } else {
+        const targetPath = gateResult.tier === 'draft' ? draftPath : outPath
+        writeFileSync(targetPath, JSON.stringify(mission, null, 2) + '\n')
+        console.log(`  ✅ Written: ${targetPath.split('/').pop()} (${methods})`)
+      }
+
+      if (gateResult.tier === 'draft') report.drafts++
+      else report.published++
+
+      report.projects.push({ name: project.name, maturity: project.maturity, score: gateResult.score, tier: gateResult.tier, installMethods: methods })
+
+      await sleep(500)
+    } catch (err) {
+      console.error(`  ❌ Error: ${err.message}`)
+      report.errors++
+      report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'error', installMethods: 'N/A' })
+    }
+  }
+
+  report.avgScore = report.scores.length > 0 ? report.scores.reduce((a, b) => a + b, 0) / report.scores.length : 0
+
+  const reportName = BATCH_INDEX != null ? `install-report-${BATCH_INDEX}.md` : 'install-report.md'
+  writeFileSync(join(process.cwd(), reportName), formatReport(report))
+  console.log(`\nDone: ${report.published} published, ${report.drafts} drafts, ${report.rejected} rejected, ${report.skipped} skipped, ${report.errors} errors`)
+  console.log(`Average score: ${report.avgScore.toFixed(1)}`)
+}
+
+if (process.argv[1]?.endsWith('generate-cncf-install-missions.mjs')) {
+  main().catch(err => { console.error(err); process.exit(1) })
+}
+
+export { applyQualityGate, buildMissionJson, synthesizeInstallMission, slugify, titleCase, formatReport }

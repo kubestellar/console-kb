@@ -1,0 +1,199 @@
+name: Generate CNCF Install Missions
+on:
+  schedule:
+    - cron: '0 6 * * 3'  # Weekly Wednesday 6am UTC (offset from troubleshoot missions on Monday)
+  workflow_dispatch:
+    inputs:
+      projects:
+        description: 'Comma-separated CNCF project names (empty = all in batches)'
+        required: false
+      batch_size:
+        description: 'Projects per batch'
+        required: false
+        default: '20'
+      dry_run:
+        description: 'Dry run (no PR created)'
+        required: false
+        type: boolean
+        default: false
+      force_regenerate:
+        description: 'Overwrite existing missions'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.calc.outputs.matrix }}
+      batch_count: ${{ steps.calc.outputs.batch_count }}
+      is_targeted: ${{ steps.calc.outputs.is_targeted }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Calculate batches
+        id: calc
+        run: |
+          BATCH_SIZE=${{ inputs.batch_size || '20' }}
+          TARGET="${{ inputs.projects || '' }}"
+
+          if [ -n "$TARGET" ]; then
+            echo "is_targeted=true" >> $GITHUB_OUTPUT
+            echo 'matrix={"batch":[0]}' >> $GITHUB_OUTPUT
+            echo "batch_count=1" >> $GITHUB_OUTPUT
+          else
+            # Exclude kubestellar from count
+            TOTAL=$(node -e "import('./scripts/cncf-projects.mjs').then(m => console.log(m.CNCF_PROJECTS.filter(p => p.name !== 'kubestellar').length))")
+            BATCHES=$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE ))
+            INDICES=$(node -e "console.log(JSON.stringify({batch: Array.from({length: $BATCHES}, (_, i) => i)}))")
+            echo "matrix=$INDICES" >> $GITHUB_OUTPUT
+            echo "batch_count=$BATCHES" >> $GITHUB_OUTPUT
+            echo "is_targeted=false" >> $GITHUB_OUTPUT
+            echo "Total projects: $TOTAL, batch size: $BATCH_SIZE, batches: $BATCHES"
+          fi
+
+  generate:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+      max-parallel: 3
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm install --no-audit
+      - name: Generate install missions (batch ${{ matrix.batch }})
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_PROJECTS: ${{ inputs.projects || '' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          FORCE_REGENERATE: ${{ inputs.force_regenerate || 'false' }}
+          BATCH_INDEX: ${{ needs.plan.outputs.is_targeted == 'true' && '' || matrix.batch }}
+          BATCH_SIZE: ${{ inputs.batch_size || '20' }}
+        run: node scripts/generate-cncf-install-missions.mjs
+      - name: Upload generated missions
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-missions-batch-${{ matrix.batch }}
+          path: |
+            solutions/cncf-install/
+            install-report*.md
+          if-no-files-found: ignore
+
+  collect:
+    needs: [plan, generate]
+    if: inputs.dry_run != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all batch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: install-missions-batch-*
+          merge-multiple: true
+      - name: Merge reports
+        id: report
+        run: |
+          echo "# CNCF Install Mission Generation Report (All Batches)" > install-report.md
+          echo "" >> install-report.md
+          echo "**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> install-report.md
+          echo "**Batches:** ${{ needs.plan.outputs.batch_count }}" >> install-report.md
+          echo "" >> install-report.md
+
+          TOTAL_SCORE=0
+          SCORE_COUNT=0
+          TOTAL_FAIL=0
+          TOTAL_PROJECTS=0
+
+          for f in install-report-*.md; do
+            if [ -f "$f" ]; then
+              echo "---" >> install-report.md
+              echo "## Batch: $f" >> install-report.md
+              cat "$f" >> install-report.md
+              echo "" >> install-report.md
+            fi
+          done
+
+          # Count published vs draft vs rejected
+          PUBLISHED=$(find solutions/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | wc -l | tr -d ' ')
+          DRAFTS=$(find solutions/cncf-install -name '*.draft.json' 2>/dev/null | wc -l | tr -d ' ')
+          TOTAL=$((PUBLISHED + DRAFTS))
+          echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
+          echo "drafts=$DRAFTS" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "Found $PUBLISHED published, $DRAFTS draft missions"
+
+          # Batch-level quality gate (Gate 7)
+          # Check average score and failure rate from reports
+          if [ "$TOTAL" -gt 0 ]; then
+            # Extract scores from reports using grep
+            SCORES=$(grep -oP 'Score.*?\| (\d+)' install-report-*.md 2>/dev/null | grep -oP '\d+$' || echo "")
+            if [ -n "$SCORES" ]; then
+              AVG=$(echo "$SCORES" | awk '{ sum += $1; n++ } END { if (n > 0) print int(sum/n); else print 0 }')
+              echo "avg_score=$AVG" >> $GITHUB_OUTPUT
+              echo "Average quality score: $AVG"
+              if [ "$AVG" -lt 50 ]; then
+                echo "draft_pr=true" >> $GITHUB_OUTPUT
+                echo "⚠️ Batch average score $AVG < 50 — PR will be created as draft"
+              else
+                echo "draft_pr=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "avg_score=0" >> $GITHUB_OUTPUT
+              echo "draft_pr=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "avg_score=0" >> $GITHUB_OUTPUT
+            echo "draft_pr=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for new missions
+        id: check
+        run: |
+          if [ -d "solutions/cncf-install" ]; then
+            COUNT=$(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' | wc -l | tr -d ' ')
+          else
+            COUNT=0
+          fi
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+      - name: Create PR
+        if: steps.check.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="cncf-install-gen-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git add solutions/cncf-install/
+          git commit -s -m "✨ Auto-generate CNCF install missions ($(date +%Y-%m-%d))
+
+          Generated install & configure missions across ${{ needs.plan.outputs.batch_count }} batches.
+          Published: ${{ steps.report.outputs.published }}, Drafts: ${{ steps.report.outputs.drafts }}
+          Average quality score: ${{ steps.report.outputs.avg_score }}"
+          git push origin "$BRANCH"
+
+          DRAFT_FLAG=""
+          if [ "${{ steps.report.outputs.draft_pr }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+            echo "⚠️ Creating as draft PR due to low batch quality score"
+          fi
+
+          gh pr create \
+            --title "✨ CNCF install mission generation $(date +%Y-%m-%d)" \
+            --body "$(cat install-report.md | head -500)" \
+            --base master \
+            --head "$BRANCH" \
+            $DRAFT_FLAG
