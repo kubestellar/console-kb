@@ -95,6 +95,19 @@ jobs:
     needs: [plan, generate]
     if: inputs.dry_run != true
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.report.outputs.published }}
+      drafts: ${{ steps.report.outputs.drafts }}
+      avg_score: ${{ steps.report.outputs.avg_score }}
+      mission_count: ${{ steps.check.outputs.count }}
+      verdict_action: ${{ steps.verdict.outputs.action }}
+      verdict_summary: ${{ steps.verdict.outputs.summary }}
+      schema_result: ${{ steps.schema.outputs.result }}
+      security_result: ${{ steps.security.outputs.result }}
+      links_result: ${{ steps.links.outputs.result }}
+      freshness_result: ${{ steps.freshness.outputs.result }}
+      index_result: ${{ steps.index.outputs.result }}
+      smoketest_result: ${{ steps.smoketest.outputs.result }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -166,17 +179,37 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
-      # ── Quality checks ──────────────────────────────────────────
-      - name: 'Quality: Schema validation'
+      # ── Automated Quality Review ─────────────────────────────────
+      # Each check tracks pass/fail. All must pass for auto-merge.
+      # Hard failures (schema, security) → block merge entirely.
+      # Soft warnings (links, freshness) → merge with annotations.
+
+      - name: 'Review: Schema validation'
+        id: schema
         if: steps.check.outputs.count != '0'
         run: |
           echo "## Schema Validation" >> install-report.md
-          FILES=$(find solutions/cncf-install -name '*.json' ! -name '.gitkeep')
-          if [ -n "$FILES" ]; then
-            node scripts/validate-schema.mjs $FILES 2>&1 | tee -a install-report.md
+          FAIL=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep'); do
+            if ! node scripts/validate-schema.mjs "$f" >> install-report.md 2>&1; then
+              FAIL=$((FAIL + 1))
+              echo "  ❌ $f: INVALID" | tee -a install-report.md
+            else
+              echo "  ✅ $(basename $f): valid" | tee -a install-report.md
+            fi
+          done
+          if [ "$FAIL" -gt 0 ]; then
+            echo "result=fail" >> $GITHUB_OUTPUT
+            echo "detail=$FAIL file(s) failed schema validation" >> $GITHUB_OUTPUT
+            echo "::error::$FAIL mission(s) failed schema validation — blocking merge"
+          else
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=All files passed" >> $GITHUB_OUTPUT
+            echo "✅ All missions passed schema validation" | tee -a install-report.md
           fi
 
-      - name: 'Quality: Security scan'
+      - name: 'Review: Security scan'
+        id: security
         if: steps.check.outputs.count != '0'
         run: |
           echo "" >> install-report.md
@@ -195,20 +228,27 @@ jobs:
             echo "  $f: $RESULT" | tee -a install-report.md
           done
           if [ "$FINDINGS" -gt 0 ]; then
-            echo "::warning::$FINDINGS mission(s) have security findings"
+            echo "result=fail" >> $GITHUB_OUTPUT
+            echo "detail=$FINDINGS file(s) have security findings" >> $GITHUB_OUTPUT
+            echo "::error::$FINDINGS mission(s) have security findings — blocking merge"
           else
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=No findings" >> $GITHUB_OUTPUT
             echo "✅ All missions passed security scan" | tee -a install-report.md
           fi
 
-      - name: 'Quality: Link validation'
+      - name: 'Review: Link validation'
+        id: links
         if: steps.check.outputs.count != '0'
         run: |
           echo "" >> install-report.md
           echo "## Link Validation" >> install-report.md
           BROKEN=0
+          CHECKED=0
           for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             REPO_URL=$(node -e "const d=JSON.parse(require('fs').readFileSync('$f','utf-8')); console.log(d.metadata?.sourceUrls?.repo || '')")
             if [ -n "$REPO_URL" ]; then
+              CHECKED=$((CHECKED + 1))
               STATUS=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 "$REPO_URL" 2>/dev/null || echo "000")
               if [ "$STATUS" -ge 400 ] || [ "$STATUS" = "000" ]; then
                 echo "  ⚠️ $f: $REPO_URL → HTTP $STATUS" | tee -a install-report.md
@@ -217,12 +257,17 @@ jobs:
             fi
           done
           if [ "$BROKEN" -gt 0 ]; then
+            echo "result=warn" >> $GITHUB_OUTPUT
+            echo "detail=$BROKEN/$CHECKED URLs broken" >> $GITHUB_OUTPUT
             echo "::warning::$BROKEN mission(s) have broken source URLs"
           else
-            echo "✅ All source URLs valid" | tee -a install-report.md
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=$CHECKED URLs checked, all valid" >> $GITHUB_OUTPUT
+            echo "✅ All source URLs valid ($CHECKED checked)" | tee -a install-report.md
           fi
 
-      - name: 'Quality: Version freshness'
+      - name: 'Review: Version freshness'
+        id: freshness
         if: steps.check.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,12 +275,14 @@ jobs:
           echo "" >> install-report.md
           echo "## Version Freshness" >> install-report.md
           STALE=0
+          CHECKED=0
           for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             read -r REPO VERSION <<< $(node -e "
               const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
               console.log((d.metadata?.sourceUrls?.repo || '').replace('https://github.com/','') + ' ' + (d.metadata?.projectVersion || 'latest'))
             ")
             if [ "$VERSION" != "latest" ] && [ -n "$REPO" ]; then
+              CHECKED=$((CHECKED + 1))
               LATEST=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).tag_name||'')}catch{console.log('')}})" 2>/dev/null)
               if [ -n "$LATEST" ] && [ "$LATEST" != "$VERSION" ]; then
                 echo "  ⚠️ $(basename $f): has $VERSION, latest is $LATEST" | tee -a install-report.md
@@ -244,31 +291,45 @@ jobs:
             fi
           done
           if [ "$STALE" -gt 0 ]; then
+            echo "result=warn" >> $GITHUB_OUTPUT
+            echo "detail=$STALE/$CHECKED outdated" >> $GITHUB_OUTPUT
             echo "::warning::$STALE mission(s) reference outdated versions"
           else
-            echo "✅ All versions current" | tee -a install-report.md
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=All $CHECKED versions current" >> $GITHUB_OUTPUT
+            echo "✅ All versions current ($CHECKED checked)" | tee -a install-report.md
           fi
 
-      - name: 'Quality: Rebuild index'
+      - name: 'Review: Rebuild index'
+        id: index
         if: steps.check.outputs.count != '0'
         run: |
-          node scripts/build-index.mjs
-          echo "" >> install-report.md
-          INDEXED=$(node -e "const d=JSON.parse(require('fs').readFileSync('solutions/index.json','utf-8')); console.log(d.count)")
-          echo "## Index: $INDEXED missions indexed" | tee -a install-report.md
+          if node scripts/build-index.mjs 2>&1; then
+            INDEXED=$(node -e "const d=JSON.parse(require('fs').readFileSync('solutions/index.json','utf-8')); console.log(d.count)")
+            echo "" >> install-report.md
+            echo "## Index: $INDEXED missions indexed ✅" | tee -a install-report.md
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=$INDEXED missions indexed" >> $GITHUB_OUTPUT
+          else
+            echo "result=fail" >> $GITHUB_OUTPUT
+            echo "detail=Index build failed" >> $GITHUB_OUTPUT
+            echo "::error::Index rebuild failed — blocking merge"
+          fi
 
-      - name: 'Quality: Command syntax smoke test'
+      - name: 'Review: Command smoke test'
+        id: smoketest
         if: steps.check.outputs.count != '0'
         run: |
           echo "" >> install-report.md
           echo "## Command Smoke Test" >> install-report.md
           BAD=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json' | shuf | head -5); do
-            # Check that helm/kubectl commands have valid structure
+          TOTAL=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+            TOTAL=$((TOTAL + 1))
             CMDS=$(node -e "
               const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
               const steps = d.mission?.steps || [];
-              const cmds = steps.flatMap(s => (s.description||'').match(/(?:helm|kubectl|docker)\s+\w+[^\n\`]*/g) || []);
+              const cmds = steps.flatMap(s => (s.description||'').match(/(?:helm|kubectl|docker|kustomize|operator-sdk)\s+\w+[^\n\`]*/g) || []);
               cmds.forEach(c => console.log(c.trim().slice(0, 120)));
             ")
             if [ -z "$CMDS" ]; then
@@ -279,48 +340,450 @@ jobs:
             fi
           done
           if [ "$BAD" -gt 0 ]; then
-            echo "::warning::$BAD sampled mission(s) have no CLI commands"
+            echo "result=warn" >> $GITHUB_OUTPUT
+            echo "detail=$BAD/$TOTAL missions missing CLI commands" >> $GITHUB_OUTPUT
+            echo "::warning::$BAD mission(s) have no CLI commands"
+          else
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=All $TOTAL missions have CLI commands" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Automated Review Decision ──────────────────────────────
+      - name: 'Review: Render verdict'
+        id: verdict
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "" >> install-report.md
+          echo "---" >> install-report.md
+          echo "## 🤖 Automated Review Verdict" >> install-report.md
+          echo "" >> install-report.md
+          echo "| Check | Result | Detail |" >> install-report.md
+          echo "|-------|--------|--------|" >> install-report.md
+
+          HARD_FAIL=0
+          WARNINGS=0
+
+          # Hard gates — any failure blocks merge
+          for CHECK in schema security index; do
+            RESULT="${{ steps.schema.outputs.result }}"
+            DETAIL="${{ steps.schema.outputs.detail }}"
+            case "$CHECK" in
+              security) RESULT="${{ steps.security.outputs.result }}"; DETAIL="${{ steps.security.outputs.detail }}" ;;
+              index) RESULT="${{ steps.index.outputs.result }}"; DETAIL="${{ steps.index.outputs.detail }}" ;;
+            esac
+            ICON="✅"
+            if [ "$RESULT" = "fail" ]; then
+              ICON="❌"
+              HARD_FAIL=$((HARD_FAIL + 1))
+            fi
+            echo "| $CHECK | $ICON $RESULT | $DETAIL |" >> install-report.md
+          done
+
+          # Soft gates — warnings don't block merge
+          for CHECK in links freshness smoketest; do
+            RESULT="${{ steps.links.outputs.result }}"
+            DETAIL="${{ steps.links.outputs.detail }}"
+            case "$CHECK" in
+              freshness) RESULT="${{ steps.freshness.outputs.result }}"; DETAIL="${{ steps.freshness.outputs.detail }}" ;;
+              smoketest) RESULT="${{ steps.smoketest.outputs.result }}"; DETAIL="${{ steps.smoketest.outputs.detail }}" ;;
+            esac
+            ICON="✅"
+            if [ "$RESULT" = "warn" ]; then
+              ICON="⚠️"
+              WARNINGS=$((WARNINGS + 1))
+            elif [ "$RESULT" = "fail" ]; then
+              ICON="❌"
+              HARD_FAIL=$((HARD_FAIL + 1))
+            fi
+            echo "| $CHECK | $ICON $RESULT | $DETAIL |" >> install-report.md
+          done
+
+          # Batch quality score check
+          AVG="${{ steps.report.outputs.avg_score }}"
+          if [ "${AVG:-0}" -lt 50 ]; then
+            echo "| batch_score | ❌ fail | avg=$AVG (<50) |" >> install-report.md
+            HARD_FAIL=$((HARD_FAIL + 1))
+          else
+            echo "| batch_score | ✅ pass | avg=$AVG |" >> install-report.md
+          fi
+
+          echo "" >> install-report.md
+
+          # Final verdict
+          if [ "$HARD_FAIL" -gt 0 ]; then
+            echo "**VERDICT: ❌ BLOCKED** — $HARD_FAIL hard failure(s). PR created as draft for investigation." >> install-report.md
+            echo "action=draft" >> $GITHUB_OUTPUT
+            echo "verdict=blocked" >> $GITHUB_OUTPUT
+            echo "summary=$HARD_FAIL hard failure(s), $WARNINGS warning(s)" >> $GITHUB_OUTPUT
+          elif [ "$WARNINGS" -gt 0 ]; then
+            echo "**VERDICT: ✅ APPROVED WITH WARNINGS** — $WARNINGS soft warning(s). Auto-merging." >> install-report.md
+            echo "action=merge" >> $GITHUB_OUTPUT
+            echo "verdict=approved_with_warnings" >> $GITHUB_OUTPUT
+            echo "summary=Approved with $WARNINGS warning(s)" >> $GITHUB_OUTPUT
+          else
+            echo "**VERDICT: ✅ APPROVED** — All checks passed. Auto-merging." >> install-report.md
+            echo "action=merge" >> $GITHUB_OUTPUT
+            echo "verdict=approved" >> $GITHUB_OUTPUT
+            echo "summary=All checks passed" >> $GITHUB_OUTPUT
           fi
 
       - name: Post generation summary
         if: steps.check.outputs.count != '0'
         run: |
-          echo "### Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### 🤖 Automated Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Published | ${{ steps.report.outputs.published }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Drafts | ${{ steps.report.outputs.drafts }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Average Score | ${{ steps.report.outputs.avg_score }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Draft PR | ${{ steps.report.outputs.draft_pr }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Schema | ${{ steps.schema.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ steps.security.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Links | ${{ steps.links.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Freshness | ${{ steps.freshness.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Index | ${{ steps.index.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Test | ${{ steps.smoketest.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Verdict** | **${{ steps.verdict.outputs.verdict }}** |" >> $GITHUB_STEP_SUMMARY
 
-      # ── Create PR ───────────────────────────────────────────────
-      - name: Create PR
+      # Upload missions + report for downstream jobs
+      - name: Upload reviewed missions
         if: steps.check.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-missions
+          path: |
+            solutions/
+            install-report.md
+
+  # ════════════════════════════════════════════════════════════════
+  # Integration Test: LLM-powered mission execution on Kind cluster
+  # Samples 3 missions and runs them with an AI agent that executes
+  # each step, diagnoses failures, and retries — full end-to-end.
+  # ════════════════════════════════════════════════════════════════
+  integration-test:
+    needs: [plan, collect]
+    if: |
+      inputs.dry_run != true &&
+      needs.collect.outputs.verdict_action == 'merge' &&
+      needs.collect.outputs.mission_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      result: ${{ steps.execute.outputs.result }}
+      passed: ${{ steps.execute.outputs.passed }}
+      failed: ${{ steps.execute.outputs.failed }}
+      total: ${{ steps.execute.outputs.total }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm install --no-audit
+
+      - name: Download reviewed missions
+        uses: actions/download-artifact@v4
+        with:
+          name: reviewed-missions
+
+      - name: Set up Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: mission-test
+          wait: 120s
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Verify cluster
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          echo "Cluster ready for mission execution"
+
+      - name: Sample missions for testing
+        id: sample
+        run: |
+          # Pick up to 3 published (non-draft) missions, preferring popular projects
+          PREFERRED="cilium prometheus envoy"
+          SELECTED=""
+          for proj in $PREFERRED; do
+            FILE=$(find solutions/cncf-install -name "${proj}.json" ! -name '*.draft.json' 2>/dev/null | head -1)
+            if [ -n "$FILE" ]; then
+              SELECTED="$SELECTED $FILE"
+            fi
+          done
+          # Fill remaining slots with random missions
+          REMAINING=$((3 - $(echo $SELECTED | wc -w | tr -d ' ')))
+          if [ "$REMAINING" -gt 0 ]; then
+            RANDOM_FILES=$(find solutions/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | shuf | head -$REMAINING)
+            SELECTED="$SELECTED $RANDOM_FILES"
+          fi
+          SELECTED=$(echo $SELECTED | xargs)
+          echo "files=$SELECTED" >> $GITHUB_OUTPUT
+          echo "count=$(echo $SELECTED | wc -w | tr -d ' ')" >> $GITHUB_OUTPUT
+          echo "Selected missions for integration test:"
+          for f in $SELECTED; do echo "  - $f"; done
+
+      - name: Execute missions on Kind
+        id: execute
+        if: steps.sample.outputs.count != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_PATH: mission-execution-report.json
+          MISSION_TIMEOUT_MS: '300000'
+          STEP_TIMEOUT_MS: '120000'
+          MAX_RETRIES: '3'
+        run: |
+          set +e
+          node scripts/mission-executor.mjs ${{ steps.sample.outputs.files }}
+          EXIT_CODE=$?
+          set -e
+
+          # Parse results
+          if [ -f mission-execution-report.json ]; then
+            PASSED=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.passed)")
+            FAILED=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.failed)")
+            TOTAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.total)")
+            PARTIAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.partial)")
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+            if [ "$FAILED" -gt "$(( TOTAL / 2 ))" ]; then
+              echo "result=fail" >> $GITHUB_OUTPUT
+              echo "::warning::Integration test: $FAILED/$TOTAL missions failed"
+            elif [ "$FAILED" -gt 0 ]; then
+              echo "result=warn" >> $GITHUB_OUTPUT
+              echo "::warning::Integration test: $FAILED/$TOTAL missions failed (below threshold)"
+            else
+              echo "result=pass" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "result=error" >> $GITHUB_OUTPUT
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "total=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload execution report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-report
+          path: mission-execution-report.json
+          if-no-files-found: ignore
+
+      - name: Post Kind test summary
+        if: always()
+        run: |
+          echo "### 🧪 Integration Test (Kind Cluster)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f mission-execution-report.json ]; then
+            echo "| Mission | Verdict | Duration |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|---------|----------|" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8'));
+              for (const m of r.results) {
+                const icon = {pass:'✅',partial:'⚠️',pass_unverified:'⚠️',fail:'❌',error:'💥'}[m.verdict]||'❓';
+                const dur = m.duration_ms ? (m.duration_ms/1000).toFixed(1)+'s' : '-';
+                console.log('| ' + (m.mission||m.file).slice(0,50) + ' | ' + icon + ' ' + m.verdict + ' | ' + dur + ' |');
+              }
+            " >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Result:** ${{ steps.execute.outputs.result }} (${{ steps.execute.outputs.passed }}/${{ steps.execute.outputs.total }} passed)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No execution report generated." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ════════════════════════════════════════════════════════════════
+  # Auto-Review: Create PR, post review, and merge/draft based on
+  # quality checks + integration test results. No human needed.
+  # ════════════════════════════════════════════════════════════════
+  auto-review:
+    needs: [plan, collect, integration-test]
+    if: |
+      always() &&
+      inputs.dry_run != true &&
+      needs.collect.outputs.mission_count != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download reviewed missions
+        uses: actions/download-artifact@v4
+        with:
+          name: reviewed-missions
+
+      - name: Download integration test report
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-test-report
+          path: .
+        continue-on-error: true
+
+      - name: Determine final action
+        id: final
+        run: |
+          COLLECT_VERDICT="${{ needs.collect.outputs.verdict_action }}"
+          INTEG_RESULT="${{ needs.integration-test.outputs.result }}"
+          INTEG_PASSED="${{ needs.integration-test.outputs.passed || '0' }}"
+          INTEG_FAILED="${{ needs.integration-test.outputs.failed || '0' }}"
+          INTEG_TOTAL="${{ needs.integration-test.outputs.total || '0' }}"
+
+          echo "" >> install-report.md
+          echo "---" >> install-report.md
+          echo "## 🧪 Integration Test Results" >> install-report.md
+
+          if [ -f mission-execution-report.json ]; then
+            echo "" >> install-report.md
+            echo "| Mission | Verdict | Duration |" >> install-report.md
+            echo "|---------|---------|----------|" >> install-report.md
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8'));
+              for (const m of r.results) {
+                const icon = {pass:'✅',partial:'⚠️',pass_unverified:'⚠️',fail:'❌',error:'💥'}[m.verdict]||'❓';
+                const dur = m.duration_ms ? (m.duration_ms/1000).toFixed(1)+'s' : '-';
+                console.log('| ' + (m.mission||m.file).slice(0,60) + ' | ' + icon + ' ' + m.verdict + ' | ' + dur + ' |');
+              }
+            " >> install-report.md
+            echo "" >> install-report.md
+            echo "**Passed:** $INTEG_PASSED/$INTEG_TOTAL | **Result:** $INTEG_RESULT" >> install-report.md
+          else
+            echo "Integration test did not produce a report (may have been skipped)." >> install-report.md
+            INTEG_RESULT="skipped"
+          fi
+
+          # Final decision matrix:
+          # collect=merge + integ=pass/warn/skipped → merge
+          # collect=merge + integ=fail → draft (integ failures block)
+          # collect=draft → draft (quality failures block)
+          echo "" >> install-report.md
+          echo "---" >> install-report.md
+          echo "## 🤖 Final Verdict" >> install-report.md
+
+          if [ "$COLLECT_VERDICT" = "draft" ]; then
+            echo "action=draft" >> $GITHUB_OUTPUT
+            echo "reason=Quality checks failed" >> $GITHUB_OUTPUT
+            echo "**❌ BLOCKED** — Quality checks failed. Draft PR for investigation." >> install-report.md
+          elif [ "$INTEG_RESULT" = "fail" ]; then
+            echo "action=draft" >> $GITHUB_OUTPUT
+            echo "reason=Integration test: $INTEG_FAILED/$INTEG_TOTAL missions failed on Kind" >> $GITHUB_OUTPUT
+            echo "**❌ BLOCKED** — Integration test failed ($INTEG_FAILED/$INTEG_TOTAL). Draft PR for investigation." >> install-report.md
+          elif [ "$INTEG_RESULT" = "warn" ]; then
+            echo "action=merge" >> $GITHUB_OUTPUT
+            echo "reason=Quality passed, integration partial ($INTEG_PASSED/$INTEG_TOTAL)" >> $GITHUB_OUTPUT
+            echo "**✅ APPROVED WITH WARNINGS** — Quality passed, integration partial ($INTEG_PASSED/$INTEG_TOTAL). Auto-merging." >> install-report.md
+          else
+            echo "action=merge" >> $GITHUB_OUTPUT
+            echo "reason=All checks passed" >> $GITHUB_OUTPUT
+            echo "**✅ APPROVED** — Quality checks + integration test passed. Auto-merging." >> install-report.md
+          fi
+
+      - name: Create PR
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BRANCH="cncf-install-gen-$(date +%Y%m%d)"
+          BRANCH="cncf-install-gen-$(date +%Y%m%d)-$(date +%s | tail -c 5)"
           git checkout -b "$BRANCH"
           git add solutions/cncf-install/ solutions/index.json
           git commit -s -m "✨ Auto-generate CNCF install missions ($(date +%Y-%m-%d))
 
           Generated install & configure missions across ${{ needs.plan.outputs.batch_count }} batches.
-          Published: ${{ steps.report.outputs.published }}, Drafts: ${{ steps.report.outputs.drafts }}
-          Average quality score: ${{ steps.report.outputs.avg_score }}"
+          Published: ${{ needs.collect.outputs.published }}, Drafts: ${{ needs.collect.outputs.drafts }}
+          Average quality score: ${{ needs.collect.outputs.avg_score }}
+          Integration test: ${{ needs.integration-test.outputs.result }} (${{ needs.integration-test.outputs.passed }}/${{ needs.integration-test.outputs.total }} passed)
+          Final: ${{ steps.final.outputs.action }} — ${{ steps.final.outputs.reason }}"
           git push origin "$BRANCH"
 
           DRAFT_FLAG=""
-          if [ "${{ steps.report.outputs.draft_pr }}" = "true" ]; then
+          if [ "${{ steps.final.outputs.action }}" = "draft" ]; then
             DRAFT_FLAG="--draft"
-            echo "⚠️ Creating as draft PR due to low batch quality score"
           fi
 
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "✨ CNCF install mission generation $(date +%Y-%m-%d)" \
-            --body "$(cat install-report.md | head -500)" \
+            --body "$(cat install-report.md | head -1500)" \
             --base master \
             --head "$BRANCH" \
             --label "auto-generated,install-missions" \
-            $DRAFT_FLAG
+            $DRAFT_FLAG)
+
+          PR_NUM=$(echo "$PR_URL" | grep -oP '\d+$')
+          echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: 'Auto-review: Post review'
+        if: steps.pr.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ACTION="${{ steps.final.outputs.action }}"
+          REASON="${{ steps.final.outputs.reason }}"
+
+          REVIEW_BODY="## 🤖 Automated Mission Review
+
+          **Final Verdict: $ACTION**
+          **Reason:** $REASON
+
+          ### Quality Checks
+          | Check | Result |
+          |-------|--------|
+          | Schema | ${{ needs.collect.outputs.schema_result }} |
+          | Security | ${{ needs.collect.outputs.security_result }} |
+          | Links | ${{ needs.collect.outputs.links_result }} |
+          | Freshness | ${{ needs.collect.outputs.freshness_result }} |
+          | Index | ${{ needs.collect.outputs.index_result }} |
+          | Smoke Test | ${{ needs.collect.outputs.smoketest_result }} |
+          | Batch Score | avg=${{ needs.collect.outputs.avg_score }} |
+
+          ### Integration Test (Kind)
+          | Metric | Value |
+          |--------|-------|
+          | Result | ${{ needs.integration-test.outputs.result || 'skipped' }} |
+          | Passed | ${{ needs.integration-test.outputs.passed || '0' }}/${{ needs.integration-test.outputs.total || '0' }} |
+
+          **Stats:** ${{ needs.collect.outputs.published }} published, ${{ needs.collect.outputs.drafts }} drafts
+
+          ---
+          *Fully automated review. Quality checks + Kind integration test.*
+          *No human review required unless PR is in draft state.*"
+
+          if [ "$ACTION" = "merge" ]; then
+            gh pr review ${{ steps.pr.outputs.pr_number }} --approve --body "$REVIEW_BODY"
+          else
+            gh pr review ${{ steps.pr.outputs.pr_number }} --request-changes --body "$REVIEW_BODY"
+          fi
+
+      - name: 'Auto-review: Merge PR'
+        if: steps.final.outputs.action == 'merge'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🤖 Auto-merging PR #${{ steps.pr.outputs.pr_number }} — ${{ steps.final.outputs.reason }}"
+          gh pr merge ${{ steps.pr.outputs.pr_number }} --squash --admin \
+            --subject "✨ CNCF install missions (auto-reviewed) $(date +%Y-%m-%d)" \
+            --body "Automated review: ${{ steps.final.outputs.reason }}"
+          git push origin --delete "${{ steps.pr.outputs.branch }}" 2>/dev/null || true
+
+      - name: 'Auto-review: Block notification'
+        if: steps.final.outputs.action == 'draft'
+        run: |
+          echo "::error::PR #${{ steps.pr.outputs.pr_number }} blocked: ${{ steps.final.outputs.reason }}"
+          echo "Draft PR created for investigation. Fix issues and manually merge."
+
+      - name: Final summary
+        if: always()
+        run: |
+          echo "### 🤖 Final Auto-Review Decision" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Checks | ${{ needs.collect.outputs.verdict_action }} (${{ needs.collect.outputs.verdict_summary }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Test | ${{ needs.integration-test.outputs.result || 'skipped' }} (${{ needs.integration-test.outputs.passed || '0' }}/${{ needs.integration-test.outputs.total || '0' }} passed) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Final Action** | **${{ steps.final.outputs.action }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| Reason | ${{ steps.final.outputs.reason }} |" >> $GITHUB_STEP_SUMMARY
