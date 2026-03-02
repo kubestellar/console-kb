@@ -356,6 +356,46 @@ jobs:
             echo "detail=All $TOTAL missions have CLI commands" >> $GITHUB_OUTPUT
           fi
 
+      # ── Section Completeness Check ─────────────────────────────
+      - name: 'Review: Section completeness'
+        id: completeness
+        if: steps.check.outputs.count != '0'
+        run: |
+          echo "" >> install-report.md
+          echo "## Section Completeness" >> install-report.md
+          TOTAL=0
+          COMPLETE=0
+          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+            TOTAL=$((TOTAL + 1))
+            SECTIONS=$(node -e "
+              const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
+              const m = d.mission || {};
+              const has = [];
+              if ((m.steps || []).length > 0) has.push('install');
+              if ((m.uninstall || []).length > 0) has.push('uninstall');
+              if ((m.upgrade || []).length > 0) has.push('upgrade');
+              if ((m.troubleshooting || []).length > 0) has.push('troubleshooting');
+              console.log(has.join(',') + '|' + has.length + '/4');
+            ")
+            SECTIONS_LIST=$(echo "$SECTIONS" | cut -d'|' -f1)
+            SECTIONS_COUNT=$(echo "$SECTIONS" | cut -d'|' -f2)
+            if [ "$SECTIONS_COUNT" = "4/4" ]; then
+              echo "  ✅ $(basename $f): $SECTIONS_COUNT ($SECTIONS_LIST)" | tee -a install-report.md
+              COMPLETE=$((COMPLETE + 1))
+            else
+              echo "  ⚠️ $(basename $f): $SECTIONS_COUNT ($SECTIONS_LIST)" | tee -a install-report.md
+            fi
+          done
+          if [ "$TOTAL" -gt 0 ]; then
+            PCT=$((COMPLETE * 100 / TOTAL))
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=$COMPLETE/$TOTAL complete ($PCT%)" >> $GITHUB_OUTPUT
+            echo "📊 Section completeness: $COMPLETE/$TOTAL missions have all 4 sections ($PCT%)" | tee -a install-report.md
+          else
+            echo "result=pass" >> $GITHUB_OUTPUT
+            echo "detail=No missions to check" >> $GITHUB_OUTPUT
+          fi
+
       # ── Automated Review Decision ──────────────────────────────
       - name: 'Review: Render verdict'
         id: verdict
@@ -388,12 +428,13 @@ jobs:
           done
 
           # Soft gates — warnings don't block merge
-          for CHECK in links freshness smoketest; do
+          for CHECK in links freshness smoketest completeness; do
             RESULT="${{ steps.links.outputs.result }}"
             DETAIL="${{ steps.links.outputs.detail }}"
             case "$CHECK" in
               freshness) RESULT="${{ steps.freshness.outputs.result }}"; DETAIL="${{ steps.freshness.outputs.detail }}" ;;
               smoketest) RESULT="${{ steps.smoketest.outputs.result }}"; DETAIL="${{ steps.smoketest.outputs.detail }}" ;;
+              completeness) RESULT="${{ steps.completeness.outputs.result }}"; DETAIL="${{ steps.completeness.outputs.detail }}" ;;
             esac
             ICON="✅"
             if [ "$RESULT" = "warn" ]; then
@@ -451,6 +492,7 @@ jobs:
           echo "| Freshness | ${{ steps.freshness.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Index | ${{ steps.index.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Smoke Test | ${{ steps.smoketest.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Completeness | ${{ steps.completeness.outputs.result }} (${{ steps.completeness.outputs.detail }}) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Verdict** | **${{ steps.verdict.outputs.verdict }}** |" >> $GITHUB_STEP_SUMMARY
 
       # Upload missions + report for downstream jobs
