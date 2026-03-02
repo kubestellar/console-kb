@@ -72,34 +72,37 @@ describe('slugify', () => {
 
 describe('generateMission', () => {
   const resolution = {
-    problem: 'Pod is crashing on startup',
-    solution: 'Fix the liveness probe configuration',
-    yamlSnippets: [],
-    steps: ['Check liveness probe', 'Update timeout value'],
+    problem: 'Pod is crashing on startup due to misconfigured liveness probe timeout. The default 1s timeout is too short for the initialization.',
+    solution: 'Fix the liveness probe configuration by increasing the initial delay and timeout. Set initialDelaySeconds to 30 and timeoutSeconds to 10 to allow sufficient startup time.',
+    yamlSnippets: ['apiVersion: v1\nkind: Pod\nmetadata:\n  name: test\nspec:\n  containers:\n  - name: app\n    livenessProbe:\n      initialDelaySeconds: 30'],
+    steps: ['Check liveness probe configuration', 'Update timeout value to 10 seconds'],
   }
 
-  it('produces valid kc-mission-v1 format', () => {
+  it('produces valid kc-mission-v1 format', async () => {
     const issue = mockIssue({ title: 'Pod crash loop' })
-    const mission = generateMission(sampleProject, issue, resolution)
-    expect(mission.format).toBe('kc-mission-v1')
+    const mission = await generateMission(sampleProject, issue, resolution)
+    expect(mission.version).toBe('kc-mission-v1')
+    expect(mission.name).toBeDefined()
+    expect(mission.missionClass).toBe('solution')
     expect(mission.mission).toBeDefined()
     expect(mission.metadata).toBeDefined()
+    expect(mission.prerequisites).toBeDefined()
     expect(mission.security).toBeDefined()
   })
 
-  it('includes correct CNCF project tag', () => {
+  it('includes correct CNCF project tag', async () => {
     const issue = mockIssue({ title: 'Pod crash loop' })
-    const mission = generateMission(sampleProject, issue, resolution)
+    const mission = await generateMission(sampleProject, issue, resolution)
     expect(mission.metadata.tags).toContain('kubernetes')
     expect(mission.metadata.cncfProjects).toEqual(['kubernetes'])
   })
 
-  it('mission type matches issue labels', () => {
+  it('mission type matches issue labels', async () => {
     const issue = mockIssue({
       title: 'Memory leak in controller',
       labels: [{ name: 'memory' }],
     })
-    const mission = generateMission(sampleProject, issue, resolution)
+    const mission = await generateMission(sampleProject, issue, resolution)
     // "memory" triggers 'analyze'
     expect(mission.mission.type).toBe('analyze')
   })
