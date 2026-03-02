@@ -40,7 +40,53 @@
         "helm upgrade kured kured/kured --namespace <namespace> --set resources.limits.cpu=100m --set resources.limits.memory=128Mi",
         "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: kured\nrules:\n- apiGroups: [\"\"]\n  resources: [\"nodes\"]\n  verbs: [\"get\", \"list\", \"watch\", \"patch\"]\n- apiGroups: [\"\"]\n  resources: [\"pods\"]\n  verbs: [\"get\", \"list\", \"watch\"]\n- apiGroups: [\"kubelet.k8s.io\"]\n  resources: [\"pods\"]\n  verbs: [\"create\", \"delete\"]\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: kured\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: kured\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: <namespace>"
       ]
-    }
+    },
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "To uninstall Kured, first remove the Helm release using the following command. Replace `<namespace>` with your specified namespace:\n```bash\nhelm uninstall kured --namespace <namespace>\n```"
+      },
+      {
+        "title": "Clean up CRDs and persistent resources",
+        "description": "Next, delete any Custom Resource Definitions (CRDs) and persistent resources that were created during the installation:\n```bash\nkubectl delete crd kureds.kured.dev\n```"
+      },
+      {
+        "title": "Remove namespace and verify",
+        "description": "Finally, if you no longer need the namespace, delete it and verify that all resources have been removed:\n```bash\nkubectl delete namespace <namespace>\nkubectl get all -n <namespace>\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Before upgrading, it's a good practice to back up the current Helm release configuration. You can do this by exporting the current values:\n```bash\nhelm get values kured --namespace <namespace> > kured-backup-values.yaml\n```"
+      },
+      {
+        "title": "Update repo and run upgrade command",
+        "description": "Update the Helm repository and then upgrade Kured to the latest version. Replace `<namespace>` with your specified namespace:\n```bash\nhelm repo update\nhelm upgrade kured kured/kured --namespace <namespace> --version 1.22.0\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "After the upgrade, check the status of the pods to ensure that Kured is running the new version correctly:\n```bash\nkubectl get pods -n <namespace>\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in CrashLoopBackOff",
+        "description": "If you notice that Kured pods are in a CrashLoopBackOff state, you can diagnose the issue by checking the logs:\n```bash\nkubectl logs <pod-name> -n <namespace>\n```\nLook for any error messages that indicate what might be causing the crash."
+      },
+      {
+        "title": "Kured not draining nodes",
+        "description": "If Kured is not draining nodes as expected, check the Kured logs for any errors related to node cordoning:\n```bash\nkubectl logs <kured-pod-name> -n <namespace>\n```\nEnsure that the RBAC permissions are correctly set and that Kured has access to manage nodes."
+      },
+      {
+        "title": "Helm upgrade fails with version conflict",
+        "description": "If you encounter a version conflict during the Helm upgrade, check the currently installed version and the version you are trying to upgrade to:\n```bash\nhelm list --namespace <namespace>\n```\nMake sure you are using a compatible version and try upgrading again."
+      },
+      {
+        "title": "Resource limits causing pod eviction",
+        "description": "If Kured pods are being evicted due to resource limits, check the events in the namespace:\n```bash\nkubectl get events -n <namespace>\n```\nConsider adjusting the resource limits set during installation to provide more resources to the Kured pods."
+      }
+    ]
   },
   "metadata": {
     "tags": [
