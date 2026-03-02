@@ -146,15 +146,44 @@ const MALICIOUS_PATTERNS = [
   { name: 'RBAC wildcard resources', pattern: /resources\s*:\s*\[?\s*["']?\*["']?\s*\]?/gi },
   { name: 'RBAC wildcard verbs', pattern: /verbs\s*:\s*\[?\s*["']?\*["']?\s*\]?/gi },
 
-  // Command injection
-  { name: 'Command injection: backtick', pattern: /`[^`]*(?:\$\(|;|&&|\|\|)[^`]*`/g },
-  { name: 'Command injection: $() in string', pattern: /\$\([^)]{4,}\)/g },
+  // Command injection (safe CLI tools like kubectl/helm/jq are allowlisted)
+  { name: 'Command injection: backtick', pattern: /`[^`]*(?:\$\(|;|&&|\|\|)[^`]*`/g, allowSafeCLI: true },
+  { name: 'Command injection: $() in string', pattern: /\$\([^)]{4,}\)/g, allowSafeCLI: true },
   { name: 'Suspicious curl pipe', pattern: /curl\s[^|]*\|\s*(?:ba)?sh/gi },
   { name: 'Suspicious wget pipe', pattern: /wget\s[^|]*\|\s*(?:ba)?sh/gi },
 
   // Crypto mining indicators
   { name: 'Crypto miner reference', pattern: /\b(?:xmrig|cryptonight|stratum\+tcp|minerd|coinhive)\b/gi },
 ];
+
+// Safe CLI commands that are expected inside $() in mission code snippets
+const SAFE_CLI_COMMANDS = new Set([
+  'kubectl', 'helm', 'jq', 'awk', 'grep', 'sed', 'cut', 'tr', 'sort',
+  'uniq', 'wc', 'head', 'tail', 'cat', 'echo', 'date', 'basename',
+  'dirname', 'xargs', 'find', 'ls', 'yq', 'kustomize', 'istioctl',
+]);
+
+/**
+ * Checks if a matched string only contains safe CLI tool invocations.
+ * Returns true if the match should be skipped (is safe).
+ */
+function isSafeCLIMatch(value) {
+  // Extract content inside $(...) blocks
+  const subshells = [...value.matchAll(/\$\(([^)]+)\)/g)].map(m => m[1].trim());
+  if (subshells.length === 0) {
+    // For backtick pattern: check piped commands after ; or &&
+    const segments = value.replace(/^`|`$/g, '').split(/[;&|]+/).map(s => s.trim()).filter(Boolean);
+    return segments.every(seg => {
+      const cmd = seg.split(/\s+/)[0];
+      return SAFE_CLI_COMMANDS.has(cmd);
+    });
+  }
+  return subshells.every(inner => {
+    // First command in a pipeline or chain
+    const cmds = inner.split(/[|;&]+/).map(s => s.trim().split(/\s+/)[0]);
+    return cmds.every(cmd => SAFE_CLI_COMMANDS.has(cmd));
+  });
+}
 
 /**
  * Scans a parsed mission object for malicious content (XSS, privileged YAML, injection).
@@ -164,10 +193,12 @@ export function scanForMaliciousContent(mission) {
   const findings = [];
   const text = deepStringValues(mission).join('\n');
 
-  for (const { name, pattern } of MALICIOUS_PATTERNS) {
+  for (const { name, pattern, allowSafeCLI } of MALICIOUS_PATTERNS) {
     pattern.lastIndex = 0;
     let match;
     while ((match = pattern.exec(text)) !== null) {
+      // Skip safe CLI tool invocations in mission code snippets
+      if (allowSafeCLI && isSafeCLIMatch(match[0])) continue;
       findings.push({
         type: name,
         value: match[0],
