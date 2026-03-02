@@ -1,0 +1,102 @@
+{
+  "version": "kc-mission-v1",
+  "name": "k3s-3049-add-dual-stack-support-to-k3s",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "k3s: Add dual stack support to K3S",
+    "description": "Problem: Although Kubernetes does support dual stack, K3S does not\n\nSolution: Modify K3S so it can both support parameters for dual stack,\nand pass them to the different Kubernetes daemons\n\n#### Proposed Changes ####\n\nAdd dual stack support to K3S\n\n#### Types of Changes ####\n\nNew Feature\n\n#### Verification ####\nYou'll need to start K3S with the `DualStack` feature flag. Also you'll need a different CNI than flannel, because it does not support dual stack (yet). I used Cilium and it worked fine. ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Problem: Although Kubernetes does support dual stack, K3S does not\n\nSolution: Modify K3S so it can both support parameters for dual stack,\nand pass them to the different Kubernetes daemons\n\n#### Propo"
+      },
+      {
+        "title": "Only ipv4 stack as the origin.",
+        "description": "Only ipv4 stack as the origin."
+      },
+      {
+        "title": "Only ipv6 stack",
+        "description": "Only ipv6 stack"
+      },
+      {
+        "title": "Dual stack",
+        "description": "Dual stack"
+      },
+      {
+        "title": "setting flanneld daemon with `--kube-subnet-mgr --auto-detect-ipv6`",
+        "description": "setting flanneld daemon with `--kube-subnet-mgr --auto-detect-ipv6`"
+      },
+      {
+        "title": "settting `EnableIPv6` and `IPv6Network` in `net-conf.json`, like the",
+        "description": "settting `EnableIPv6` and `IPv6Network` in `net-conf.json`, like the"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n/usr/local/bin/k3s server --disable traefik –-flannel-backend=none --disable-network-policy  --disable servicelb --no-flannel --disable-kube-proxy  \\\r\n\t\t--node-ip <node IPv4 IP> \\\r\n\t\t--node-ip <node IPv6 IP> \\\r\n\t\t--kube-apiserver-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kube-controller-manager-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kubelet-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--cluster-cidr '<cluster IPv4 cidr>,<cluster IPv6 cidr>' \\\r\n\t\t--service-cidr '<service IPv4 cidr>,<clu\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/flannel-io/flannel/pull/1398. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "Add dual stack support for flannel, it provided with three mode for flannel:\n1. Only ipv4 stack as the origin.\n2. Only ipv6 stack\n3. Dual stack \n\nAdd new option for flannel daemon to support dual stack:\n- \"publicIPv6\": \"IPv6 accessible by other nodes for\n  inter-host communication\"\n- \"auto-detect-ipv4\": \"auto detect ipv4 address of the iface\",\n  default value is true.\n- \"auto-detect-ipv6\": \"auto detect ipv6 address of the iface\",\n  default value is false\n\nAdd new option into `net-conf.json` configuration, like following:\n```\n{\n  \"EnableIPv4\": true,\n  \"EnableIPv6\": true,\n  \"Network\": \"172.16.0.0/16\",\n  \"IPv6Network\": \"fc00::/48\",\n  \"Backend\": {\n    \"Type\": \"vxlan\"\n  }\n}\n```\n`EnableIPv4` default value is true for useing kube subnet manager.\n`EnableIpv6` default value is false.\n\nFlannel dual stack feature has limitation, only work with vxlan backend\nand kube subnet manager now. To enable flannel dual stack feature, need\nto do the following step:\n1. setting flanneld daemon with `--kube-subnet-mgr --auto-detect-ipv6`\n2. settting `EnableIPv6` and `IPv6Network` in `net-conf.json`, like the\n    above configuration.\n3. setting network interface that flannel used ipv6 address and\ndefault ipv6 gateway in the host node.\n4. vxlan support ipv6 tunnel require kernel version >= 3.12.\n\nIt also need flannel cni plugin to support dual stack ip allocation, so it \ndepends on: [https://github.com/containernetworking/plugins/pull/570](https://github.com/containernetworking/plugins/pull/570 )\n\n#248",
+      "codeSnippets": [
+        "/usr/local/bin/k3s server --disable traefik –-flannel-backend=none --disable-network-policy  --disable servicelb --no-flannel --disable-kube-proxy  \\\r\n\t\t--node-ip <node IPv4 IP> \\\r\n\t\t--node-ip <node IPv6 IP> \\\r\n\t\t--kube-apiserver-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kube-controller-manager-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kubelet-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--cluster-cidr '<cluster IPv4 cidr>,<cluster IPv6 cidr>' \\\r\n\t\t--service-cidr '<service IPv4 cidr>,<clu",
+        "/usr/local/bin/k3s server --disable traefik –-flannel-backend=none --disable-network-policy  --disable servicelb --no-flannel --disable-kube-proxy  \\\r\n\t\t--node-ip <node IPv4 IP> \\\r\n\t\t--node-ip <node IPv6 IP> \\\r\n\t\t--kube-apiserver-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kube-controller-manager-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--kubelet-arg 'feature-gates=IPv6DualStack=true' \\\r\n\t\t--cluster-cidr '<cluster IPv4 cidr>,<cluster IPv6 cidr>' \\\r\n\t\t--service-cidr '<service IPv4 cidr>,<cluster IPv6 cidr>' \\",
+        "{\r\n  \"EnableIPv4\": true,\r\n  \"EnableIPv6\": true,\r\n  \"Network\": \"172.16.0.0/16\",\r\n  \"IPv6Network\": \"fc00::/48\",\r\n  \"Backend\": {\r\n    \"Type\": \"vxlan\"\r\n  }\r\n}",
+        "enable-ipv6: \"true\"\r\n  cluster-pool-ipv6-cidr: \"fd00:5000::/64\" \r\n  cluster-pool-ipv6-mask-size: \"64\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "k3s",
+      "sandbox",
+      "orchestration",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "k3s"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Node"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/k3s-io/k3s/pull/3049",
+      "repo": "https://github.com/k3s-io/k3s",
+      "pr": "https://github.com/flannel-io/flannel/pull/1398"
+    },
+    "reactions": 3,
+    "comments": 12,
+    "synthesizedBy": "regex",
+    "qualityScore": 69
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with k3s installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:40:16.011Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

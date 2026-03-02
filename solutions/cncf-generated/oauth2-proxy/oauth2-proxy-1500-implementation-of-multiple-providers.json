@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "oauth2-proxy-1500-implementation-of-multiple-providers",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "oauth2-proxy: Implementation of Multiple Providers",
+    "description": "* Added BUILDPLATFORM arg to dockerfile in order to pass arg from docker-compose build commands\n* Updated make file to support a multiple provider setup\n* Updated docker compose to support build + up\n* updated alpha configs to actually work\n* Updated sign_in template to support multiple providers\n* Updated validation package to loop over the provider array and validate all providers\n* Added Provider ID to Providerdata struct\n* Added Provider ID to the state so callback knows which provider to us",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "* Added BUILDPLATFORM arg to dockerfile in order to pass arg from docker-compose build commands\n* Updated make file to support a multiple provider setup\n* Updated docker compose to support build + up\n"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nI still have the following point to look at - but will open another PR for this point.\r\n\r\n* Currently combining all certificates for providers if offered - I think each provider needs its own http client so we have flexibility to handle combinations of providers with different settings (i.e. 1 provider has custom cert but another does not) - this will be a big task so i will probably create another PR\r\n\r\n\r\n## Description\r\n\r\n* Added BUILDPLATFORM arg to dockerfile in order to pass arg from docker\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/oauth2-proxy/oauth2-proxy/pull/1418. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "## Description, Motivation and Context\n\nThis is a possible implementation of the facility discussed in #1314 to make it possible to pass through query parameters from `/oauth2/start` to the Identity Provider login URL in a secure and controlled way.  Motivating use cases include\n\n - wanting most requests to use `prompt=login` by default, but with the possibility to override this to `prompt=select_account` or `prompt=consent` in certain specific cases\n - passing a `login_hint` when you already know the user's email address (#1369)\n - passing additional non-standard parameters required by certain providers, e.g. `organization` when using auth0 (https://github.com/oauth2-proxy/oauth2-proxy/issues/1314#issuecomment-950273012)\n\nI've introduced a generic mechanism whereby an oauth2-proxy user can configure `loginURLParameters` in the \"alpha\" YAML config to define the parameters that may be passed through from `/oauth2/start` to the IdP.  This is a map from the query parameter name to a set of configuration options:\n\n```yaml\nloginURLParameters:\n  prompt:\n    default: [\"login\"]\n    allowed: [\"select_account\", \"consent\"]\n  login_hint:\n    allowAny: true\n  organization:\n    default: [\"org1\"]\n```\n\nThe interaction between these options is not entirely intuitive, but the logic is intended to work as follows:\n\n- only URL parameters named under `loginURLParameters` are candidates to be passed through from `/oauth2/start?...` to the IdP, any other parameters on the `/oauth2/start` URL will b",
+      "codeSnippets": [
+        "I still have the following point to look at - but will open another PR for this point.\r\n\r\n* Currently combining all certificates for providers if offered - I think each provider needs its own http client so we have flexibility to handle combinations of providers with different settings (i.e. 1 provider has custom cert but another does not) - this will be a big task so i will probably create another PR\r\n\r\n\r\n## Description\r\n\r\n* Added BUILDPLATFORM arg to dockerfile in order to pass arg from docker",
+        "I still have the following point to look at - but will open another PR for this point.\r\n\r\n* Currently combining all certificates for providers if offered - I think each provider needs its own http client so we have flexibility to handle combinations of providers with different settings (i.e. 1 provider has custom cert but another does not) - this will be a big task so i will probably create another PR\r\n\r\n\r\n## Description\r\n\r\n* Added BUILDPLATFORM arg to dockerfile in order to pass arg from docker-compose build commands\r\n* Updated make file to support a multiple provider setup\r\n* Updated docker compose to support build + up\r\n* updated alpha configs to actually work\r\n* Updated sign_in template to support multiple providers\r\n* Updated validation package to loop over the provider array and validate all providers\r\n* Added Provider ID to Providerdata struct\r\n* Added Provider ID to the state so callback knows which provider to use\r\n* Added dynamic oauth2/{id}/start routes for each provider ( /oauth2/start uses [0] provider still )\r\n* Converted providers.Provider interface to a slice in oauth struct.\r\n* Updated unit tests to support provider struct.\r\n* Return 404/400 if a /oauth2/{id}/start request does not match a providerid\r\n* Added validation to check for a provider ID and providerName in each provider - will shutdown if both do not exist.\r\n* Added Cookie refresh logic to select the correct provider\r\n* Update documentation for multiple provider config\r\n\r\n## Motivation and Context\r\n\r\n<!--- Why is this change required? What problem does it solve? --> Important for environments with multiple companies etc\r\n<!--- If it fixes an open issue, please link to the issue here. --> https://github.com/oauth2-proxy/oauth2-proxy/issues/926 Closes #926\r\n\r\n## How Has This Been Tested?\r\n\r\n<!--- Please describe in detail how you tested your changes. -->\r\ntested locally with Keycloak and Dex as multiple providers\r\n<!--- Include details of your testing environment, and the tests you ran to -->\r\n\r\n* Tested locally via docker compose using keycloak and dex as providers\r\n* Still must check new session setup with redis.\r\n* Will test this branch version on our kubernetes feature branch sandboxes over the next month - first with 1 provider to ensure no functionality is lost, then with mutiple afterwards\r\n* Tests still need to be updated \r\n\r\nWill test with Azure provider in our work environment.\r\n\r\n<!--- see how your change affects other areas of the code, etc. -->\r\n\r\nCurrently it should not affect anything else other than breaking the sign-in-message override, as it can not support multiple providers.\r\n\r\n## Checklist:\r\n\r\n<!--- Go over all the following points, and put an `x` in all the boxes that apply. -->\r\n<!--- If you're unsure about any of these, don't hesitate to ask. We're here to help! -->\r\n\r\n- [x] My change requires a change to the documentation or CHANGELOG.\r\n- [x] I have updated the documentation/CHANGELOG accordingly.\r\n- [x] I have created a feature (non-master) branch for my PR.\r\n\n<!--- Provide a general summary of your changes in the Title above -->\r\n\r\n## Description, Motivation and Context\r\n\r\nThis is a possible implementation of the facility discussed in #1314 to make it possible to pass through query parameters from `/oauth2/start` to the Identity Provider login URL in a secure and controlled way.  Motivating use cases include\r\n\r\n - wanting most requests to use `prompt=login` by default, but with the possibility to override this to `prompt=select_account` or `prompt=consent` in certain specific cases\r\n - passing a `login_hint` when you already know the user's email address (#1369)\r\n - passing additional non-standard parameters required by certain providers, e.g. `organization` when using auth0 (https://github.com/oauth2-proxy/oauth2-proxy/issues/1314#issuecomment-950273012)\r\n\r\nI've introduced a generic mechanism whereby an oauth2-proxy user can configure `loginURLParameters` in the \"alpha\" YAML config to define the parameters that may be passed through from `/oauth2/start` to the IdP.  This is a map from the query parameter name to a set of configuration options:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "oauth2-proxy",
+      "sandbox",
+      "app-definition",
+      "troubleshoot",
+      "enhancement"
+    ],
+    "cncfProjects": [
+      "oauth2-proxy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/oauth2-proxy/oauth2-proxy/pull/1500",
+      "repo": "https://github.com/oauth2-proxy/oauth2-proxy",
+      "pr": "https://github.com/oauth2-proxy/oauth2-proxy/pull/1418"
+    },
+    "reactions": 11,
+    "comments": 4,
+    "synthesizedBy": "regex",
+    "qualityScore": 60
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with oauth2-proxy installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:42:12.726Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

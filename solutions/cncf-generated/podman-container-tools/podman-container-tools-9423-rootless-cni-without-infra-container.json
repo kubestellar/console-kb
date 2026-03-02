@@ -1,0 +1,85 @@
+{
+  "version": "kc-mission-v1",
+  "name": "podman-container-tools-9423-rootless-cni-without-infra-container",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "podman-container-tools: rootless cni without infra container",
+    "description": "Instead of creating an extra container create a network and mount\nnamespace inside the podman user namespace. This ns is used to\nfor rootless cni operations.\nThis helps to align the rootless and rootful network code path.\nIf we run as rootless we just have to set up a extra net ns and\ninitialize slirp4netns in it. The ocicni lib will be called in\nthat net ns.\n\nThis design allows allows easier maintenance, no extra container\nwith pause processes, support for rootless cni with --uidmap\nand possibl",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Instead of creating an extra container create a network and mount\nnamespace inside the podman user namespace. This ns is used to\nfor rootless cni operations.\nThis helps to align the rootless and rootf"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nI'm seeing this (Build failed, gosrc something) in other PRs. I'm guessing Cirrus is down or having problems.\n@edsantiago has it, that should work fine (and looks like it does) for `.cirrus.yml`. However, the compose tests don't go through `dotest()` function in `contrib/cirrus/runner.sh`.  So `compose test on fedora-33 (rootless)` is in name only, we also need to teach the script how to actually run as the user...\nOkay, I think this should work (and support running other tests rootless in the f\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/containers/podman/pull/8910. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "As proposed by Akihiro Suda make the rootless-cni-infra container use\nthe host rootfs instead of an image. This works by mounting the host\nrootfs in the user namespace to `$runroot/rootless-cni-infra`\nand use this as rootfs for the container.\n\nSecond, rewrite the rootless-cni-infra shell script in go to remove the\nextra cnitool dependency which is not packaged anywhere. With that we\nonly need the same dependencies as rootful podman which should be\nalready installed.\n\nAdvantages:\n- Works for all architectures podman supports.\n- Works without internet connection.\n- No extra maintainence of an extra image.\n\nDisadvantages:\n- Requires the dependencies to be available on the host (e.g. dnsname\nplugin). The user may not have control over those.\n\nProblems:\n- It doesn't unmount the rootfs if the the rootless-cni-infra container\nis stopped directly.\n\nAlso the image version did not respect the `--cni-config-dir` option\nproperly. It mounted the cni config dir only at container create time\nbut this option can be used on podman run commands which did not\nworked if the rootless-cni-infra container was already running.\nThis is only possible with the rootfs version.\n\nLive upgrading is possible. If the old infra container is still\nrunning podman talks via the old api to the script. Once the\nold infra container is deleted the new imageless infra container\nwill be created and podman can talk via the new api. A version\nlabel is added to the container to distinguish between old and new.",
+      "codeSnippets": [
+        "I'm seeing this (Build failed, gosrc something) in other PRs. I'm guessing Cirrus is down or having problems.\n@edsantiago has it, that should work fine (and looks like it does) for `.cirrus.yml`. However, the compose tests don't go through `dotest()` function in `contrib/cirrus/runner.sh`.  So `compose test on fedora-33 (rootless)` is in name only, we also need to teach the script how to actually run as the user...\nOkay, I think this should work (and support running other tests rootless in the f",
+        "I'm seeing this (Build failed, gosrc something) in other PRs. I'm guessing Cirrus is down or having problems.\n@edsantiago has it, that should work fine (and looks like it does) for `.cirrus.yml`. However, the compose tests don't go through `dotest()` function in `contrib/cirrus/runner.sh`.  So `compose test on fedora-33 (rootless)` is in name only, we also need to teach the script how to actually run as the user...\nOkay, I think this should work (and support running other tests rootless in the future, if needed):"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "podman-container-tools",
+      "sandbox",
+      "app-definition",
+      "troubleshoot",
+      "rootless",
+      "lgtm",
+      "approved",
+      "cni",
+      "locked---please-file-new-issue-pr"
+    ],
+    "cncfProjects": [
+      "podman-container-tools"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/containers/podman/pull/9423",
+      "repo": "https://github.com/containers/podman",
+      "pr": "https://github.com/containers/podman/pull/8910"
+    },
+    "reactions": 4,
+    "comments": 10,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with podman-container-tools installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:42:35.773Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

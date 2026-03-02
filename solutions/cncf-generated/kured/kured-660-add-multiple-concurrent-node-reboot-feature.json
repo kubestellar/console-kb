@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kured-660-add-multiple-concurrent-node-reboot-feature",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kured: Add multiple concurrent node reboot feature",
+    "description": "Currently in kured a single node can get a lock with Acquire. There could be situations where multiple nodes might want a lock in the event that a cluster can handle multiple nodes being rebooted. This adds the side-by-side implementation for a multiple node lock situation.\n\n### Testing done\n\nAdded unit tests. Also ran a manual test with `--concurrency=2`. I observed that two nodes rebooted at the same time:\n\n```\n$ kubectl get no\nNAME                                STATUS                        ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Currently in kured a single node can get a lock with Acquire. There could be situations where multiple nodes might want a lock in the event that a cluster can handle multiple nodes being rebooted. Thi"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n$ kubectl get no\r\nNAME                                STATUS                        ROLES   AGE   VERSION\r\naks-nodepool1-14327021-vmss000000   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000001   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000002   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000003   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000004   N\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "It seems that all nodes are rebooting at once: @trstringer \n```\nThere are 5 nodes in the cluster\n0 nodes were removed from pool once:\n0 nodes removed from the pool are now back:\nResult of command kubectl get nodes ... showing unschedulable nodes:\nchart-testing-control-plane    <none>\nchart-testing-control-plane2   <none>\nchart-testing-control-plane3   <none>\nchart-testing-worker           <none>\nchart-testing-worker2          <none>\nAttempt 1 failed! Trying again in 60 seconds...\n0 nodes were removed from pool once:\n0 nodes removed from the pool are now back:\nResult of command kubectl get nodes ... showing unschedulable nodes:\nchart-testing-control-plane    true\nchart-testing-control-plane2   true\nchart-testing-control-plane3   true\nchart-testing-worker           true\nchart-testing-worker2          true\nchart-testing-control-plane is now unschedulable!\nchart-testing-control-plane2 is now unschedulable!\nchart-testing-control-plane3 is now unschedulable!\nchart-testing-worker is now unschedulable!\nchart-testing-worker2 is now unschedulable!\nAttempt 2 failed! Trying again in 60 seconds...\n```",
+      "codeSnippets": [
+        "$ kubectl get no\r\nNAME                                STATUS                        ROLES   AGE   VERSION\r\naks-nodepool1-14327021-vmss000000   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000001   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000002   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000003   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000004   N",
+        "$ kubectl get no\r\nNAME                                STATUS                        ROLES   AGE   VERSION\r\naks-nodepool1-14327021-vmss000000   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000001   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000002   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000003   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000004   NotReady,SchedulingDisabled   agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000005   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000006   Ready                         agent   24m   v1.23.8\r\naks-nodepool1-14327021-vmss000007   Ready,SchedulingDisabled      agent   24m   v1.23.8",
+        "\"weave.works/kured-node-lock\": \"{\\\"maxOwners\\\":2,\\\"locks\\\":[{\\\"nodeID\\\":\\\"aks-nodepool1-14327021-vmss000007\\\",\\\"metadata\\\":{\\\"unschedulable\\\":false},\\\"created\\\":\\\"2022-09-23T21:06:30.814409507Z\\\",\\\"TTL\\\":0},{\\\"nodeID\\\":\\\"aks-nodepool1-14327021-vmss000004\\\",\\\"metadata\\\":{\\\"unschedulable\\\":false},\\\"created\\\":\\\"2022-09-23T21:06:57.626718467Z\\\",\\\"TTL\\\":0}]}\"",
+        "There are 5 nodes in the cluster\r\n0 nodes were removed from pool once:\r\n0 nodes removed from the pool are now back:\r\nResult of command kubectl get nodes ... showing unschedulable nodes:\r\nchart-testing-control-plane    <none>\r\nchart-testing-control-plane2   <none>\r\nchart-testing-control-plane3   <none>\r\nchart-testing-worker           <none>\r\nchart-testing-worker2          <none>\r\nAttempt 1 failed! Trying again in 60 seconds...\r\n0 nodes were removed from pool once:\r\n0 nodes removed from the pool are now back:\r\nResult of command kubectl get nodes ... showing unschedulable nodes:\r\nchart-testing-control-plane    true\r\nchart-testing-control-plane2   true\r\nchart-testing-control-plane3   true\r\nchart-testing-worker           true\r\nchart-testing-worker2          true\r\nchart-testing-control-plane is now unschedulable!\r\nchart-testing-control-plane2 is now unschedulable!\r\nchart-testing-control-plane3 is now unschedulable!\r\nchart-testing-worker is now unschedulable!\r\nchart-testing-worker2 is now unschedulable!\r\nAttempt 2 failed! Trying again in 60 seconds..."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kured",
+      "sandbox",
+      "app-definition",
+      "troubleshoot",
+      "enhancement",
+      "keep"
+    ],
+    "cncfProjects": [
+      "kured"
+    ],
+    "targetResourceKinds": [
+      "Role",
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubereboot/kured/pull/660",
+      "repo": "https://github.com/kubereboot/kured"
+    },
+    "reactions": 2,
+    "comments": 12,
+    "synthesizedBy": "regex",
+    "qualityScore": 61
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kured installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:41:42.219Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "volcano-4581-feat-add-ray-plugin-for-job",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "volcano: feat: add ray plugin for job",
+    "description": "--- # without ray plugin\napiVersion: batch.volcano.sh/v1alpha1\nkind: Job\nmetadata:\n  name: ray-cluster-job\nspec:\n  minAvailable: 3\n  schedulerName: volcano\n  plugins:\n    svc: []\n  queue: default\n  policies:\n    - event: PodEvicted\n      action: RestartJob\n  tasks:\n    - replicas: 1\n      name: head\n      template:\n        spec:\n          containers:\n            - name: head\n              command:\n                - sh\n                - -c\n                - ray start --head --block --port=6379 --",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "--- # without ray plugin\napiVersion: batch.volcano.sh/v1alpha1\nkind: Job\nmetadata:\n  name: ray-cluster-job\nspec:\n  minAvailable: 3\n  schedulerName: volcano\n  plugins:\n    svc: []\n  queue: default\n  po"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n--- # without ray plugin\r\napiVersion: batch.volcano.sh/v1alpha1\r\nkind: Job\r\nmetadata:\r\n  name: ray-cluster-job\r\nspec:\r\n  minAvailable: 3\r\n  schedulerName: volcano\r\n  plugins:\r\n    svc: []\r\n  queue: default\r\n  policies:\r\n    - event: PodEvicted\r\n      action: RestartJob\r\n  tasks:\r\n    - replicas: 1\r\n      name: head\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: head\r\n              command:\r\n                - sh\r\n                - -c\r\n                - ray start --hea\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> Sep 19 16:33:27 integration-worker3 kubelet[272]: E0919 16:33:27.945147 272 pod_workers.go:1301] \"Error syncing pod, skipping\" err=\"failed to \"StartContainer\" for \"tensorflow\" with ErrImagePull: \"failed to pull and unpack image \\\"docker.io/volcanosh/dist-mnist-tf-example:0.0.1\\\": failed to extract layer sha256:5061983e267fa42a4403de0a25f41e4ca5ba0c75db3b2a4ceae769f94035816b: write /var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/154/fs/opt/conda/lib/python3.5/site-packages/tensorflow/python/_pywrap_tensorflow_internal.so: no space left on device\"\" pod=\"x2n8bo60/tensorflow-dist-mnist-ps-0\" podUID=\"89d374cc-6b09-4498-a235-163431fcdb72\"\n\nYou can use `sudo docker system prune -a -f` or `sudo crictl rmi --prune` to release space before run a e2e.",
+      "codeSnippets": [
+        "--- # without ray plugin\r\napiVersion: batch.volcano.sh/v1alpha1\r\nkind: Job\r\nmetadata:\r\n  name: ray-cluster-job\r\nspec:\r\n  minAvailable: 3\r\n  schedulerName: volcano\r\n  plugins:\r\n    svc: []\r\n  queue: default\r\n  policies:\r\n    - event: PodEvicted\r\n      action: RestartJob\r\n  tasks:\r\n    - replicas: 1\r\n      name: head\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: head\r\n              command:\r\n                - sh\r\n                - -c\r\n                - ray start --hea",
+        "--- # without ray plugin\r\napiVersion: batch.volcano.sh/v1alpha1\r\nkind: Job\r\nmetadata:\r\n  name: ray-cluster-job\r\nspec:\r\n  minAvailable: 3\r\n  schedulerName: volcano\r\n  plugins:\r\n    svc: []\r\n  queue: default\r\n  policies:\r\n    - event: PodEvicted\r\n      action: RestartJob\r\n  tasks:\r\n    - replicas: 1\r\n      name: head\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: head\r\n              command:\r\n                - sh\r\n                - -c\r\n                - ray start --head --block --port=6379 --dashboard-host=0.0.0.0;\r\n              image: rayproject/ray:latest-py311-cpu\r\n              ports:\r\n                - containerPort: 8265\r\n                  name: dashboard\r\n                - containerPort: 6379\r\n                  name: gcs\r\n                - containerPort: 10001\r\n                  name: client\r\n              resources: {}\r\n          restartPolicy: OnFailure\r\n    - replicas: 2\r\n      name: worker\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: worker\r\n              command:\r\n                - sh\r\n                - -c\r\n                - |\r\n                  ray start --block --address=ray-cluster-job-head-0.ray-cluster-job:6379\r\n              image: rayproject/ray:latest-py311-cpu\r\n              resources: {}\r\n          restartPolicy: OnFailure",
+        "--- # with ray plugin\r\napiVersion: batch.volcano.sh/v1alpha1\r\nkind: Job\r\nmetadata:\r\n  name: ray-cluster-job\r\nspec:\r\n  minAvailable: 3\r\n  schedulerName: volcano\r\n  plugins:\r\n    ray: []\r\n    svc: []\r\n  policies:\r\n    - event: PodEvicted\r\n      action: RestartJob\r\n  queue: default\r\n  tasks:\r\n    - replicas: 1\r\n      name: head\r\n\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: head\r\n              image: rayproject/ray:latest-py311-cpu\r\n              resources: {}\r\n          restartPolicy: OnFailure\r\n    - replicas: 2\r\n      name: worker\r\n      template:\r\n        spec:\r\n          containers:\r\n            - name: worker\r\n              image: rayproject/ray:latest-py311-cpu\r\n              resources: {}\r\n          restartPolicy: Never"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "volcano",
+      "incubating",
+      "orchestration",
+      "troubleshoot",
+      "approved",
+      "lgtm",
+      "ok-to-test",
+      "size-xl"
+    ],
+    "cncfProjects": [
+      "volcano"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service",
+      "Job",
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/volcano-sh/volcano/pull/4581",
+      "repo": "https://github.com/volcano-sh/volcano"
+    },
+    "reactions": 3,
+    "comments": 21,
+    "synthesizedBy": "regex",
+    "qualityScore": 61
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with volcano installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:38:26.142Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

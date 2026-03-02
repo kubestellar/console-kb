@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-events-1395-feat-redis-streams-as-event-source",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-events: feat: Redis streams as event source",
+    "description": "Checklist:\n\n* [ ] My organization is added to [USERS.md](https://github.com/argoproj/argo-events/blob/master/USERS.md).\n\ncloses: #1369 \n\nTested with single and multiple streams on minikube cluster:\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: EventSource\nmetadata:\n  name: redis-stream\nspec:\n  redisStream:\n    example:\n      hostAddress: 192.168.0.106:6379\n      db: 0\n      streams:\n        - FOO\n        - BAR\n```\nWith pod creation as sensor:\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Senso",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Checklist:\n\n* [ ] My organization is added to [USERS.md](https://github.com/argoproj/argo-events/blob/master/USERS.md).\n\ncloses: #1369 \n\nTested with single and multiple streams on minikube cluster:\n``"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\napiVersion: argoproj.io/v1alpha1\r\nkind: EventSource\r\nmetadata:\r\n  name: redis-stream\r\nspec:\r\n  redisStream:\r\n    example:\r\n      hostAddress: 192.168.0.106:6379\r\n      db: 0\r\n      streams:\r\n        - FOO\r\n        - BAR\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/argoproj/argo-events/pull/1744. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "Checklist:\n\n* [x] My organization is added to [USERS.md](https://github.com/argoproj/argo-events/blob/master/USERS.md).\n\ncloses: #1369 \nprevious discussion: #1395 \n\nMessages from the stream are read using the Redis consumer group. The main reason for using consumer group is to resume from the last read upon pod restarts. A common consumer group (defaults to \"argo-events-cg\") is created (if not already exists) on all specified streams. When using consumer group, each read through a consumer group is a write operation, because Redis needs to update the last retrieved message id and the pending entries list(PEL) of that specific user in the consumer group. So it can only work with the master Redis instance and not replicas (https://redis.io/topics/streams-intro).\n\nRedis stream event source expects all the streams to be present on the Redis server. This event source only starts pulling messages from the streams when all of the specified streams exist on the Redis server. On the initial setup, the consumer group is created on all the specified streams to start reading from the latest message (not necessarily the beginning of the stream). On subsequent setups (the consumer group already exists on the streams) or during pod restarts, messages are pulled from the last unacknowledged message in the stream.\n\nThe consumer group is never deleted automatically. If you want a completely fresh setup again, you must delete the consumer group from the streams.\n\nTested with single and multiple",
+      "codeSnippets": [
+        "apiVersion: argoproj.io/v1alpha1\r\nkind: EventSource\r\nmetadata:\r\n  name: redis-stream\r\nspec:\r\n  redisStream:\r\n    example:\r\n      hostAddress: 192.168.0.106:6379\r\n      db: 0\r\n      streams:\r\n        - FOO\r\n        - BAR",
+        "apiVersion: argoproj.io/v1alpha1\r\nkind: EventSource\r\nmetadata:\r\n  name: redis-stream\r\nspec:\r\n  redisStream:\r\n    example:\r\n      hostAddress: 192.168.0.106:6379\r\n      db: 0\r\n      streams:\r\n        - FOO\r\n        - BAR",
+        "apiVersion: argoproj.io/v1alpha1\r\nkind: Sensor\r\nmetadata:\r\n  name: redis-stream-sensor\r\nspec:\r\n  template:\r\n    serviceAccountName: argo-events-sa\r\n  dependencies:\r\n  - name: payload\r\n    eventSourceName: redis-stream\r\n    eventName: example\r\n  triggers:\r\n  - template:\r\n      name: payload\r\n      k8s:\r\n        group: \"\"\r\n        version: v1\r\n        resource: pods\r\n        operation: create\r\n        source:\r\n          resource:\r\n            apiVersion: v1\r\n            kind: Pod\r\n            metadata:\r\n              generateName: payload-\r\n              labels:\r\n                app: payload\r\n            spec:\r\n              containers:\r\n              - name: hello\r\n                image: alpine\r\n                command: [\"echo\"]\r\n                args: [\"This is the message you sent me:\\n\", \"\"]\r\n              restartPolicy: Never\r\n        parameters:\r\n          - src:\r\n              dependencyName: payload\r\n              dataKey: body.message\r\n            dest: spec.containers.0.args.1",
+        "➜ kubectl -n argo-events logs -f payload-fxlfp\r\nThis is the message you sent me:\r\n {\"stream\":\"BAR\",\"message_id\":\"1635165767378-0\",\"values\":{\"BARId\":\"BAR-1\",\"second-key\":\"second-val\"}}\r\n\r\n➜ kubectl -n argo-events logs -f payload-xkfzs\r\nThis is the message you sent me:\r\n {\"stream\":\"FOO\",\"message_id\":\"1635165767376-0\",\"values\":{\"FOOId\":\"FOO-1\",\"second-key\":\"second-val\"}}",
+        "➜ kubectl -n argo-events logs -f redis-stream-eventsource-nnr9k-566d47dd54-lfvc4\r\n<--- snipped --->\r\n{\"level\":\"info\",\"ts\":1635165767.3778944,\"logger\":\"argo-events.eventsource\",\"caller\":\"redisstream/start.go:161\",\"msg\":\"received a message\",\"eventSourceName\":\"redis-stream\",\"eventSourceType\":\"redisStream\",\"eventName\":\"example\",\"stream\":\"FOO\",\"message_id\":\"1635165767376-0\"}\r\n{\"level\":\"info\",\"ts\":1635165767.37798,\"logger\":\"argo-events.eventsource\",\"caller\":\"redisstream/start.go:172\",\"msg\":\"dispatching the event on the data channel...\",\"eventSourceName\":\"redis-stream\",\"eventSourceType\":\"redisStream\",\"eventName\":\"example\",\"stream\":\"FOO\"}\r\n{\"level\":\"info\",\"ts\":1635165767.382242,\"logger\":\"argo-events.eventsource\",\"caller\":\"eventsources/eventing.go:427\",\"msg\":\"succeeded to publish an event\",\"eventSourceName\":\"redis-stream\",\"eventName\":\"example\",\"eventSourceType\":\"redisStream\",\"eventID\":\"65383936383734332d666337662d343762662d623035382d373134313863326565373865\"}\r\n{\"level\":\"info\",\"ts\":1635165767.3863325,\"logger\":\"argo-events.eventsource\",\"caller\":\"redisstream/start.go:161\",\"msg\":\"received a message\",\"eventSourceName\":\"redis-stream\",\"eventSourceType\":\"redisStream\",\"eventName\":\"example\",\"stream\":\"BAR\",\"message_id\":\"1635165767378-0\"}\r\n{\"level\":\"info\",\"ts\":1635165767.3864572,\"logger\":\"argo-events.eventsource\",\"caller\":\"redisstream/start.go:172\",\"msg\":\"dispatching the event on the data channel...\",\"eventSourceName\":\"redis-stream\",\"eventSourceType\":\"redisStream\",\"eventName\":\"example\",\"stream\":\"BAR\"}\r\n{\"level\":\"info\",\"ts\":1635165767.3950868,\"logger\":\"argo-events.eventsource\",\"caller\":\"eventsources/eventing.go:427\",\"msg\":\"succeeded to publish an event\",\"eventSourceName\":\"redis-stream\",\"eventName\":\"example\",\"eventSourceType\":\"redisStream\",\"eventID\":\"62353137353933352d363135392d346662642d396430622d393532376631396531353636\"}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-events",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-events"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service",
+      "Serviceaccount"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-events/pull/1395",
+      "repo": "https://github.com/argoproj/argo-events",
+      "pr": "https://github.com/argoproj/argo-events/pull/1744"
+    },
+    "reactions": 3,
+    "comments": 7,
+    "synthesizedBy": "regex",
+    "qualityScore": 71
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-events installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:26:51.426Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cilium-37601-kpr-support-kube-apiserver-ha",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cilium: kpr: Support kube-apiserver HA",
+    "description": "Cilium agent requires a connection to the kube-apiserver control plane to program the BPF datapath without depending on kube-proxy load-balancing when kube-proxy replacement is enabled. To achieve this, Cilium uses `API_SERVER_IP` and `API_SERVER_PORT` configurations for direct connection to the kube-apiserver. However, this approach doesn't support production environments that require multiple kube-apiservers for high availability. Additionally, it cannot rely on a fixed set of addresses provid",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Cilium agent requires a connection to the kube-apiserver control plane to program the BPF datapath without depending on kube-proxy load-balancing when kube-proxy replacement is enabled. To achieve thi"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n/test\n/test\n/test\n/test\n/test\n/test\nci-clustermesh is failing with known breakages. Rebasing the PR to pick up the upstream fixes.\r\n\r\nOther failures - \r\n\r\nhttps://github.com/cilium/cilium/issues/36902\r\nhttps://github.com/cilium/cilium/issues/37763\n/test\n/test\n/test\n/test\n/test\n> Docs good. A paragraph under https://docs.cilium.io/en/latest/network/kubernetes/kubeproxy-free/ would be nice as a follow-up too.\r\n\r\nYes, the KPR documentation does warrant a paragraph. I'll push a commit once in-flight\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> Have we considered that client-side load balancing for this feature might not be the right approach?\n> \n> Kubernetes pods (including Cilium Agent) have the `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT` environment variables, which allow for server-side load balancing of the Kubernetes API server.\n> \n> This load balancing is then typically the responsibility of the Kubernetes control plane provider.\n> \n> Example:\n> \n> ```\n> ~ $ k exec -ti -n kube-system cilium-7eplp -c cilium-agent -- bash\n> root@ip-10-4-6-110:/home/cilium# echo \"$KUBERNETES_SERVICE_HOST\"\n> A93391BB28B5A90F2585A3E36A26C11F.sk1.us-east-2.eks.amazonaws.com\n> root@ip-10-4-6-110:/home/cilium# echo \"$KUBERNETES_SERVICE_PORT\"\n> 443\n> ```\n\nSee the details in this commit - https://github.com/cilium/cilium/pull/37601/commits/bb50c3673f1e08aa2d247c72348e34e3ba7b8066.",
+      "codeSnippets": [
+        "/test\n/test\n/test\n/test\n/test\n/test\nci-clustermesh is failing with known breakages. Rebasing the PR to pick up the upstream fixes.\r\n\r\nOther failures - \r\n\r\nhttps://github.com/cilium/cilium/issues/36902\r\nhttps://github.com/cilium/cilium/issues/37763\n/test\n/test\n/test\n/test\n/test\n> Docs good. A paragraph under https://docs.cilium.io/en/latest/network/kubernetes/kubeproxy-free/ would be nice as a follow-up too.\r\n\r\nYes, the KPR documentation does warrant a paragraph. I'll push a commit once in-flight",
+        "/test\n/test\n/test\n/test\n/test\n/test\nci-clustermesh is failing with known breakages. Rebasing the PR to pick up the upstream fixes.\r\n\r\nOther failures - \r\n\r\nhttps://github.com/cilium/cilium/issues/36902\r\nhttps://github.com/cilium/cilium/issues/37763\n/test\n/test\n/test\n/test\n/test\n> Docs good. A paragraph under https://docs.cilium.io/en/latest/network/kubernetes/kubeproxy-free/ would be nice as a follow-up too.\r\n\r\nYes, the KPR documentation does warrant a paragraph. I'll push a commit once in-flight reviews are in.\n/test\n@lambdanis @dylandreimerink Thanks for the reviews -- addressed your comments. PTAL!\n/test\nSo, an interesting thing about how how the `default/kubernetes` service works: it's Special. It doesn't use a label selector like other services. Rather, each apiserver manually adds its own IP to the Endpoints when starting, and removes itself when going down.\r\n\r\nAn interesting problem is that Azure Kubernetes Service only ever has zero-or-one IP in the Endpoints. When the apiserver is being failed over, the old one first goes down, briefly causing 0 Endpoints to back the service. Then a new one is created and life goes on.\r\n\r\nFor clients connecting to the domain name this works fine. Likewise, for clients connecting to the service IP, this also works. However, does this code handle that case? It's very hard to tell.\r\n\r\nI would ask you to write some docblocks for the resolving code; I had a very hard time understanding what the functions do. Given that any potential issues are likely to be very high severity, it would be nice to have this well-documented.\n> An interesting problem is that Azure Kubernetes Service only ever has zero-or-one IP in the Endpoints. When the apiserver is being failed over, the old one first goes down, briefly causing 0 Endpoints to back the service. Then a new one is created and life goes on.\r\n> \r\n> For clients connecting to the domain name this works fine. Likewise, for clients connecting to the service IP, this also works. However, does this code handle that case? It's very hard to tell.\r\n> \r\n\r\nThe agent does switch to the apiservice address, but I don't know about the internal details of the AKS case.\r\nCan you elaborate how clients connect to the service VIP when there are 0 endpoints? \r\n\r\n> I would ask you to write some docblocks for the resolving code; I had a very hard time understanding what the functions do. Given that any potential issues are likely to be very high severity, it would be nice to have this well-documented.\r\n\r\nAgreed, there are in-line comments throughout the code that handles the HA functionality. But I'll also add a high level overview, and some more comments. \n> Have we considered that client-side load balancing for this feature might not be the right approach?\r\n> \r\n> Kubernetes pods (including Cilium Agent) have the `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT` environment variables, which allow for server-side load balancing of the Kubernetes API server.\r\n> \r\n> This load balancing is then typically the responsibility of the Kubernetes control plane provider.\r\n> \r\n> Example:\r\n> \r\n>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "troubleshoot",
+      "kind-feature",
+      "release-note-major",
+      "area-loadbalancing"
+    ],
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cilium/cilium/pull/37601",
+      "repo": "https://github.com/cilium/cilium"
+    },
+    "reactions": 24,
+    "comments": 25,
+    "synthesizedBy": "regex",
+    "qualityScore": 60
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cilium installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:27:58.786Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

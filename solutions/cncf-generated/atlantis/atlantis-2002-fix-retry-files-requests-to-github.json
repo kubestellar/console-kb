@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "atlantis-2002-fix-retry-files-requests-to-github",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "atlantis: fix: retry /files/ requests to github",
+    "description": "Similar to #1131, we see this for /files/ too, resulting in a plan\nerror.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Similar to #1131, we see this for /files/ too, resulting in a plan\nerror."
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nGET https://api.github.com/repos/{owner}/{repo}/pulls/{number}/files?per_page=300: 404 Not Found []\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/runatlantis/atlantis/pull/2013. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "This is a follow on to resolve similar issues to #1019.\n\nIn #1131 retries were added to GetPullRequest. And in #1810 a backoff was included.\n\nHowever, those only resolve one potential request at the very beginning of a PR creation. The other request that happens early on during auto-plan is one to ListFiles to detect the modified files. This too can sometimes result in a 404 due to async updates on the GitHub side.\n\n---\n\nMy team recently upgraded a few Atlantis instances that were pretty old. They didn't yet include the fixes described above.\n\nWe upgraded to v0.18.1. After upgrading we were hopeful our dev teams would be happy to know these race condition errors were a thing of the past. But in only a couple of days, we got another report!\n\nI was able to find an error log with the following message (org/repo/pr-number redacted):\n```\nGET https://api.github.com/repos/{owner}/{repo}/pulls/{number}/files?per_page=300: 404 Not Found []\n```\n\nAnd the following stacktrace:\n```\ngithub.com/runatlantis/atlantis/server/events.(*PullUpdater).updatePull\n\tgithub.com/runatlantis/atlantis/server/events/pull_updater.go:14\ngithub.com/runatlantis/atlantis/server/events.(*PlanCommandRunner).runAutoplan\n\tgithub.com/runatlantis/atlantis/server/events/plan_command_runner.go:77\ngithub.com/runatlantis/atlantis/server/events.(*PlanCommandRunner).Run\n\tgithub.com/runatlantis/atlantis/server/events/plan_command_runner.go:221\ngithub.com/runatlantis/atlantis/server/events.(*DefaultCommandRunner).RunAutoplan",
+      "codeSnippets": [
+        "GET https://api.github.com/repos/{owner}/{repo}/pulls/{number}/files?per_page=300: 404 Not Found []",
+        "GET https://api.github.com/repos/{owner}/{repo}/pulls/{number}/files?per_page=300: 404 Not Found []",
+        "github.com/runatlantis/atlantis/server/events.(*PullUpdater).updatePull\r\n\tgithub.com/runatlantis/atlantis/server/events/pull_updater.go:14\r\ngithub.com/runatlantis/atlantis/server/events.(*PlanCommandRunner).runAutoplan\r\n\tgithub.com/runatlantis/atlantis/server/events/plan_command_runner.go:77\r\ngithub.com/runatlantis/atlantis/server/events.(*PlanCommandRunner).Run\r\n\tgithub.com/runatlantis/atlantis/server/events/plan_command_runner.go:221\r\ngithub.com/runatlantis/atlantis/server/events.(*DefaultCommandRunner).RunAutoplanCommand\r\n\tgithub.com/runatlantis/atlantis/server/events/command_runner.go:163"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "atlantis",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "atlantis"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/runatlantis/atlantis/pull/2002",
+      "repo": "https://github.com/runatlantis/atlantis",
+      "pr": "https://github.com/runatlantis/atlantis/pull/2013"
+    },
+    "reactions": 12,
+    "comments": 3,
+    "synthesizedBy": "regex",
+    "qualityScore": 61
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with atlantis installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:39:07.898Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-1930-add-special-variable-substitution-logic-for-preconditions",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: add special variable substitution logic for preconditions",
+    "description": "## Related issue\n\n## Proposed Changes\n- Remove variable substitution logic from preconditions evaluation\n- Put special variable substitution logic before preconditions evaluation\n- Special means \"do not fail on error\" as described in expected result of the issue\n\n### Proof Manifests\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: set-service-labels\n  annotations:\n    pod-policies.kyverno.io/autogen-controllers: none\nspec:\n  background: false\n  rules:\n    - name: set-servi",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "## Related issue\n\n## Proposed Changes\n- Remove variable substitution logic from preconditions evaluation\n- Put special variable substitution logic before preconditions evaluation\n- Special means \"do n"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\napiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: set-service-labels\r\n  annotations:\r\n    pod-policies.kyverno.io/autogen-controllers: none\r\nspec:\r\n  background: false\r\n  rules:\r\n    - name: set-service-labels-pods\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Pod\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:\r\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "ok, can you please log an issue to track the doc update?\n\nAdding the test scenario:\n>My expectation is that if try to create a loadbalancer service without the specific annotation it should be denied. Only if LB service has exactly this annotation it should be allowed\n>```\n>service.beta.kubernetes.io/azure-load-balancer-internal: \"true\"\n>```\n>In terms of AKS cluster lb service with this annotatio will create internal Lb in azure otherwise it will be public\n\nAdding the policy:\n```\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  annotations:\n    meta.helm.sh/release-name: kyverno-policies      \n    meta.helm.sh/release-namespace: kyverno\n    pod-policies.kyverno.io/autogen-controllers: none\n  labels:\n    app.kubernetes.io/managed-by: Helm\n  name: if-baltic-restrict-external-load-balancer\nspec:\n  background: true\n  rules:\n  - match:\n      resources:\n        kinds:\n        - Service\n    name: match-service-type\n    preconditions:\n    - key: '{{request.object.spec.type}}'\n      operator: Equals\n      value: LoadBalancer\n    validate:\n      deny:\n        conditions:\n        - key: \"{{ request.object.metadata.annotations.\\\"service.beta.kubernetes.io/azure-load-balancer-internal\\\"}}\"\n          operator: NotEquals\n          value: \"true\"\n  validationFailureAction: enforce\n```",
+      "codeSnippets": [
+        "apiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: set-service-labels\r\n  annotations:\r\n    pod-policies.kyverno.io/autogen-controllers: none\r\nspec:\r\n  background: false\r\n  rules:\r\n    - name: set-service-labels-pods\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Pod\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:",
+        "apiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: set-service-labels\r\n  annotations:\r\n    pod-policies.kyverno.io/autogen-controllers: none\r\nspec:\r\n  background: false\r\n  rules:\r\n    - name: set-service-labels-pods\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Pod\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:\r\n          - key: \"{{ request.object.metadata.labels.serviceOverride }}\"\r\n            operator: NotEquals\r\n            value: \"*?\"\r\n      mutate:\r\n        patchStrategicMerge:\r\n          metadata:\r\n            labels:\r\n              +(service): \"{{ request.object.metadata.labels.app }}\"\r\n          spec:\r\n            containers:\r\n              - (name): \"*\"\r\n                env:\r\n                  - name: \"SERVICE\"\r\n                    value: \"{{ request.object.metadata.labels.app }}\"\r\n    - name: set-service-labels-deployments-and-sets\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Deployment\r\n          - DaemonSet\r\n          - StatefulSet\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:\r\n          - key: \"{{ request.object.metadata.labels.serviceOverride }}\"\r\n            operator: NotEquals\r\n            value: \"*?\"\r\n      mutate:\r\n        patchStrategicMerge:\r\n          spec:\r\n            template:\r\n              metadata:\r\n                labels:\r\n                  +(service): \"{{ request.object.spec.template.metadata.labels.app }}\"\r\n              spec:\r\n                containers:\r\n                  - (name): \"*\"\r\n                    env:\r\n                      - name: \"SERVICE\"\r\n                        value: \"{{ request.object.spec.template.metadata.labels.app }}\"",
+        "kind: Deployment\r\napiVersion: apps/v1\r\nmetadata:\r\n  name: audit-deployment\r\n  labels:\r\n    app: audit\r\n    name: audit\r\n    service: audit\r\nspec:\r\n  replicas: 1\r\n  selector:\r\n    matchLabels:\r\n      app: audit\r\n  template:\r\n    metadata:\r\n      creationTimestamp: null\r\n      labels:\r\n        app: audit\r\n        service: audit\r\n    spec:\r\n      containers:\r\n        - name: audit\r\n          image: busybox\r\n          resources:\r\n            limits:\r\n              cpu: 2500m\r\n              memory: 3584Mi\r\n            requests:\r\n              cpu: 1500m\r\n              memory: 2Gi\r\n          imagePullPolicy: Always\r\n      restartPolicy: Always\r\n      terminationGracePeriodSeconds: 30\r\n      dnsPolicy: ClusterFirst\r\n      securityContext: {}",
+        "---\r\napiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: set-service-labels\r\n  annotations:\r\n    pod-policies.kyverno.io/autogen-controllers: none\r\nspec:\r\n  background: false\r\n  rules:\r\n    - name: set-service-labels-pods\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Pod\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:\r\n          - key: \"{{ request.object.metadata.labels.serviceOverride }}\"\r\n            operator: NotEquals\r\n            value: \"*\"\r\n      mutate:\r\n        patchStrategicMerge:\r\n          metadata:\r\n            labels:\r\n              +(service): \"{{ request.object.metadata.labels.app }}\"\r\n          spec:\r\n            containers:\r\n              - (name): \"*\"\r\n                env:\r\n                  - name: \"SERVICE\"\r\n                    value: \"{{ request.object.metadata.labels.app }}\"\r\n    - name: set-service-labels-deployments-and-sets\r\n      match:\r\n        resources:\r\n          kinds:\r\n          - Deployment\r\n          - DaemonSet\r\n          - StatefulSet\r\n      exclude:\r\n        resources:\r\n          namespaces:\r\n            - \"kube*\"\r\n            - \"openshift*\"\r\n            - \"kube-*\"\r\n            - \"openshift-*\"\r\n      preconditions:\r\n        any:\r\n          - key: \"{{ request.object.metadata.labels.serviceOverride }}\"\r\n            operator: NotEquals\r\n            value: \"*?\"\r\n      mutate:\r\n        patchStrategicMerge:\r\n          spec:\r\n            template:\r\n              metadata:\r\n                labels:\r\n                  +(service): \"{{ request.object.spec.template.metadata.labels.app }}\"\r\n              spec:\r\n                containers:\r\n                  - (name): \"*\"\r\n                    env:\r\n                      - name: \"SERVICE\"\r\n                        value: \"{{ request.object.spec.template.metadata.labels.app }}\"",
+        "apiVersion: apps/v1\r\nkind: Deployment\r\nmetadata:\r\n  name: nginx-deployment\r\n  labels:\r\n    app: nginx\r\nspec:\r\n  replicas: 3\r\n  selector:\r\n    matchLabels:\r\n      app: nginx\r\n  template:\r\n    metadata:\r\n      labels:\r\n        app: nginx\r\n    spec:\r\n      containers:\r\n      - name: nginx\r\n        image: nginx:1.14.2\r\n        ports:\r\n        - containerPort: 80"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service",
+      "Statefulset",
+      "Daemonset",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/pull/1930",
+      "repo": "https://github.com/kyverno/kyverno"
+    },
+    "reactions": 2,
+    "comments": 10,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:38:16.285Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

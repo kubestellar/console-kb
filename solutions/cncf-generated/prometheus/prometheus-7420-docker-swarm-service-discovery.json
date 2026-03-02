@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-7420-docker-swarm-service-discovery",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: Docker Swarm service discovery",
+    "description": "This is a docker swarm implementation without business logic.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "This is a docker swarm implementation without business logic."
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nprometheus:\r\n    image: prom/prometheus\r\n    networks:\r\n      - monitor\r\n    ports:\r\n      - \"9090:9090\"\r\n    command:\r\n      - '--config.file=/etc/prometheus/prometheus.yml'\r\n      - '--storage.tsdb.path=/prometheus'\r\n      - '--storage.tsdb.retention=${PROMETHEUS_RETENTION:-24h}'\r\n    volumes:\r\n      - prometheus:/prometheus\r\n      - /home/efs/devops/dsm:/etc/prometheus:ro\r\n      - /var/run/docker.sock:/var/run/docker.sock:ro\r\n    deploy:\r\n      mode: replicated\r\n      replicas: 1\r\n      resou\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> Docker (Swarm) allows you to access the docker.sock; I was under the impression that the 'host' parameter (of prometheus) only accepts a address. Are you saying that one can also use file:// as a value for host?\n> \n> 2375 is by default not exposed, nor is 2376. Since 19.03 this is also considered malpractice, as docker can be managed through SSH (DOCKER_HOST=ssh://manager-node.domain) - which means you no longer need to expose the socket insecurely (2375) or setup a separate PKI (2376) but rather securely manage your Swarm using your existing PKI (SSH). Effectively the Docker client establishes an SSH session to the ${DOCKER_HOST} and communicates with the Unix socket (/var/run/docker.sock) of that host.\n\nCan you comment on the issue #7603? thanks",
+      "codeSnippets": [
+        "prometheus:\r\n    image: prom/prometheus\r\n    networks:\r\n      - monitor\r\n    ports:\r\n      - \"9090:9090\"\r\n    command:\r\n      - '--config.file=/etc/prometheus/prometheus.yml'\r\n      - '--storage.tsdb.path=/prometheus'\r\n      - '--storage.tsdb.retention=${PROMETHEUS_RETENTION:-24h}'\r\n    volumes:\r\n      - prometheus:/prometheus\r\n      - /home/efs/devops/dsm:/etc/prometheus:ro\r\n      - /var/run/docker.sock:/var/run/docker.sock:ro\r\n    deploy:\r\n      mode: replicated\r\n      replicas: 1\r\n      resou",
+        "prometheus:\r\n    image: prom/prometheus\r\n    networks:\r\n      - monitor\r\n    ports:\r\n      - \"9090:9090\"\r\n    command:\r\n      - '--config.file=/etc/prometheus/prometheus.yml'\r\n      - '--storage.tsdb.path=/prometheus'\r\n      - '--storage.tsdb.retention=${PROMETHEUS_RETENTION:-24h}'\r\n    volumes:\r\n      - prometheus:/prometheus\r\n      - /home/efs/devops/dsm:/etc/prometheus:ro\r\n      - /var/run/docker.sock:/var/run/docker.sock:ro\r\n    deploy:\r\n      mode: replicated\r\n      replicas: 1\r\n      resources:\r\n        limits:\r\n          memory: 1024M\r\n        reservations:\r\n          memory: 128M",
+        "scrape_configs:\r\n  - job_name: 'docker'\r\n    dockerswarm_sd_configs:\r\n    - host: unix:///var/run/docker.sock\r\n      role: nodes"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/pull/7420",
+      "repo": "https://github.com/prometheus/prometheus"
+    },
+    "reactions": 5,
+    "comments": 20,
+    "synthesizedBy": "regex",
+    "qualityScore": 67
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:36:23.584Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

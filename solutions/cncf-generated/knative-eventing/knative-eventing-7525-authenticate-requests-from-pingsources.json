@@ -1,0 +1,87 @@
+{
+  "version": "kc-mission-v1",
+  "name": "knative-eventing-7525-authenticate-requests-from-pingsources",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "knative-eventing: Authenticate requests from PingSources",
+    "description": "## Proposed Changes\n\n(Prerequisites: OIDC mode is enabled, and sink has a defined audience)\n- Binds the source's service account to allow the source to create a JWT token\n- Edited existing tests to add sinkAudience\n\n### Pre-review Checklist\n\n**Release Note**\n\n**Docs**",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "## Proposed Changes\n\n(Prerequisites: OIDC mode is enabled, and sink has a defined audience)\n- Binds the source's service account to allow the source to create a JWT token\n- Edited existing tests to ad"
+      },
+      {
+        "title": "You need to set the TokenProvider in the adapter.ClientConfig, which gets use...",
+        "description": "You need to set the TokenProvider in the adapter.ClientConfig, which gets used by the adapter in https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L211-L217"
+      },
+      {
+        "title": "You need to pass/set the Audience and OIDCServiceAccountName in the env struc...",
+        "description": "You need to pass/set the Audience and OIDCServiceAccountName in the env struct, which gets passed to the ClientConfig [here](https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L212) too. You can get both from the source status (`source.Status.SinkAudience` and `source.Status.Auth.ServiceAccountName`). (Hint: currently, we are missing to set the sink audience correctly. This is addressed in #7553. So you might need to rebase after it merged)"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n</details>\n\n[:umbrella: View full report in Codecov by Sentry](https://app.codecov.io/gh/knative/eventing/pull/7525?src=pr&el=continue&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).   \n:loudspeaker: Have feedback on the report? [Share it here](https://about.codecov.io/codecov-pr-comment-feedback/?utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).\n\nHello @Zazzscoot,\r\nthanks for your update. I\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "Hello @Zazzscoot,\nthanks for your update. It seems the e2e test failures are because you're missing the implementation for the pingsource:\n\n1. You need to set the TokenProvider in the adapter.ClientConfig, which gets used by the adapter in https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L211-L217\n\n   You can get the tokenProvider from `a.clientConfig.TokenProvider`.\n\n2. You need to pass/set the Audience and OIDCServiceAccountName in the env struct, which gets passed to the ClientConfig [here](https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L212) too. You can get both from the source status (`source.Status.SinkAudience` and `source.Status.Auth.ServiceAccountName`). (Hint: currently, we are missing to set the sink audience correctly. This is addressed in #7553. So you might need to rebase after it merged)\n\nAnd one thing about your e2e test: You are not passing the expected audience of the sink, when you setup the PingSource in https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/test/auth/features/oidc/pingsource.go#L38. You can pass the audience via the following: \n```\npingsource.WithSink(&duckv1.Destination{\n\tRef:      service.AsKReference(sink),\n\tAudience: &sinkAudience,\n})))\n```\nAnyhow, `pingsource.WithSink()` does not set the audience of the sink yet. You can check e.g. on https://github.com/knative/eventing/blob/7f43f16",
+      "codeSnippets": [
+        "</details>\n\n[:umbrella: View full report in Codecov by Sentry](https://app.codecov.io/gh/knative/eventing/pull/7525?src=pr&el=continue&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).   \n:loudspeaker: Have feedback on the report? [Share it here](https://about.codecov.io/codecov-pr-comment-feedback/?utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).\n\nHello @Zazzscoot,\r\nthanks for your update. I",
+        "</details>\n\n[:umbrella: View full report in Codecov by Sentry](https://app.codecov.io/gh/knative/eventing/pull/7525?src=pr&el=continue&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).   \n:loudspeaker: Have feedback on the report? [Share it here](https://about.codecov.io/codecov-pr-comment-feedback/?utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=knative).\n\nHello @Zazzscoot,\r\nthanks for your update. It seems the e2e test failures are because you're missing the implementation for the pingsource:\r\n\r\n1. You need to set the TokenProvider in the adapter.ClientConfig, which gets used by the adapter in https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L211-L217\r\n\r\n   You can get the tokenProvider from `a.clientConfig.TokenProvider`.\r\n\r\n2. You need to pass/set the Audience and OIDCServiceAccountName in the env struct, which gets passed to the ClientConfig [here](https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/pkg/adapter/mtping/runner.go#L212) too. You can get both from the source status (`source.Status.SinkAudience` and `source.Status.Auth.ServiceAccountName`). (Hint: currently, we are missing to set the sink audience correctly. This is addressed in #7553. So you might need to rebase after it merged)\r\n\r\nAnd one thing about your e2e test: You are not passing the expected audience of the sink, when you setup the PingSource in https://github.com/knative/eventing/blob/c28078eca2a1ec94138794f64f274d25e6292354/test/auth/features/oidc/pingsource.go#L38. You can pass the audience via the following:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "knative-eventing",
+      "graduated",
+      "app-definition",
+      "troubleshoot",
+      "approved",
+      "size-l",
+      "lgtm",
+      "area-test-and-release",
+      "ok-to-test"
+    ],
+    "cncfProjects": [
+      "knative-eventing"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/knative/eventing/pull/7525",
+      "repo": "https://github.com/knative/eventing"
+    },
+    "reactions": 2,
+    "comments": 33,
+    "synthesizedBy": "regex",
+    "qualityScore": 66
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with knative-eventing installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:28:38.296Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

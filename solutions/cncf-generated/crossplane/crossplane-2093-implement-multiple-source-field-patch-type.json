@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-2093-implement-multiple-source-field-patch-type",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: Implement multiple-source-field patch type",
+    "description": "### Description of your changes\nThis PR adds a new patch type, `FromManyCompositeFieldPaths`, which accepts a list of composite field paths.\n\nWhen the patch is applied, these multiple values are retrieved from the composite. If any value cannot be retrieved, the patch is aborted.\n\nThe `Transform` system has been modified to allow Transforms to run on multiple values. Standard transforms will output the same number of values as they are passed.\n\nThe `String` transform will now take any number of ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "### Description of your changes\nThis PR adds a new patch type, `FromManyCompositeFieldPaths`, which accepts a list of composite field paths.\n\nWhen the patch is applied, these multiple values are retri"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\napiVersion: example.org/v1alpha1 \r\nkind: Test\r\nmetadata:\r\n  name: test-one\r\n  annotations:\r\n    woo: lalala\r\n  labels:\r\n    label: test\r\nspec:\r\n  parameters:\r\n    fieldOne: one\r\n    fieldTwo: two\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/crossplane/crossplane/pull/2298. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "### Description of your changes\n\nThis implements a `FromConstantValue` patch type for compositions. \n\nI have:\n\n- [X] Read and followed Crossplane's [contribution process].\n- [X] Run `make reviewable test` to ensure this PR is ready for review.\n\n### How has this code been tested\n\nI have created a Composition test at https://github.com/stevendborrelli/composition-examples/tree/main/FromConstantValuePatch and tested it against a 1.2.1 Crossplane build.\n\nThis results in a DB being created with the properties:\n```yaml\napiVersion: database.gcp.crossplane.io/v1beta1\nkind: CloudSQLInstance\nmetadata:\n  annotations:\n    crossplane.io/composition-resource-name: cloudsqlinstance\n    crossplane.io/external-name: cv-test-db-tbzwp-x2dqn\n    test.crossplane.io/constant-value: constant annotation\n  creationTimestamp: \"2021-05-07T18:19:04Z\"\n  finalizers:\n  - finalizer.managedresource.crossplane.io\n  generateName: cv-test-db-tbzwp-\n  generation: 4\n  labels:\n    crossplane.io/claim-name: cv-test-db\n    crossplane.io/claim-namespace: default\n    crossplane.io/composite: cv-test-db-tbzwp\n  name: cv-test-db-tbzwp-x2dqn\n  ownerReferences:\n  - apiVersion: database.example.org/v1alpha1\n    controller: true\n    kind: CompositePostgreSQLInstance\n    name: cv-test-db-tbzwp\n    uid: acd55391-8df9-4f69-835a-e12f8b17371c\n  resourceVersion: \"266474\"\n  uid: 096bb318-caac-4c80-9a0f-e0c6c0f1ee18\nspec:\n  forProvider:\n    databaseVersion: POSTGRES_9_6\n    g",
+      "codeSnippets": [
+        "apiVersion: example.org/v1alpha1 \r\nkind: Test\r\nmetadata:\r\n  name: test-one\r\n  annotations:\r\n    woo: lalala\r\n  labels:\r\n    label: test\r\nspec:\r\n  parameters:\r\n    fieldOne: one\r\n    fieldTwo: two",
+        "apiVersion: example.org/v1alpha1 \r\nkind: Test\r\nmetadata:\r\n  name: test-one\r\n  annotations:\r\n    woo: lalala\r\n  labels:\r\n    label: test\r\nspec:\r\n  parameters:\r\n    fieldOne: one\r\n    fieldTwo: two",
+        "# Create XRD with some default source values\r\napiVersion: apiextensions.crossplane.io/v1\r\nkind: CompositeResourceDefinition\r\nmetadata:\r\n  name: compositetests.example.org\r\nspec:\r\n  group: example.org\r\n  names:\r\n    kind: CompositeTest\r\n    plural: compositetests\r\n  claimNames:\r\n    kind: Test\r\n    plural: tests\r\n  defaultCompositionRef:\r\n    name: test\r\n  versions:\r\n    - name: v1alpha1\r\n      referenceable: true\r\n      served: true\r\n      schema:\r\n        openAPIV3Schema:\r\n          type: object\r\n          properties:\r\n            spec:\r\n              type: object\r\n              properties:\r\n                parameters:\r\n                  type: object\r\n                  properties:\r\n                    fieldOne:\r\n                      type: string\r\n                    fieldTwo:\r\n                      type: string\r\n              required:\r\n                - parameters",
+        "apiVersion: apiextensions.crossplane.io/v1\r\nkind: Composition\r\nmetadata:\r\n  name: test \r\nspec:\r\n  compositeTypeRef:\r\n    apiVersion: example.org/v1alpha1\r\n    kind: CompositeTest\r\n  patchSets:\r\n    - name: Metadata\r\n      patches:\r\n      - fromFieldPath: metadata.labels\r\n      - fromFieldPath: metadata.labels[\"crossplane.io/claim-namespace\"]\r\n        toFieldPath: metadata.namespace\r\n\r\n    - name: Parameters\r\n      patches:\r\n      - type: FromMultipleCompositeFieldPaths\r\n        # Retrieve two values from XRD parameters\r\n        fromMultipleFieldPaths: \r\n          - spec.parameters.fieldOne\r\n          - spec.parameters.fieldTwo\r\n        toFieldPath: metadata.annotations[\"description\"]\r\n        transforms:\r\n          # Map each field value to another value\r\n          # [\"one\",\"two\"] -> [\"1\",\"2\"]\r\n          - type: map\r\n            map:\r\n              one: \"1\"\r\n              two: \"2\"\r\n\r\n          # Format all values into a single output\r\n          # [\"1\",\"2\"] -> \"Field One: 31 - Field Two: 32\"\r\n          - type: combine\r\n            combine:\r\n              type: string\r\n              string:\r\n                fmt: \"Field One: %x - Field Two: %x\"\r\n\r\n  resources:\r\n    - base:\r\n        apiVersion: v1\r\n        kind: Secret # Lazy testing, should not use native resources\r\n        metadata:\r\n          namespace:\r\n        type: kubernetes.io/opaque\r\n        data: {}\r\n      patches:\r\n        - type: PatchSet\r\n          patchSetName: Metadata\r\n        - type: PatchSet\r\n          patchSetName: Parameters",
+        "apiVersion: v1\r\n  kind: Secret\r\n  type: kubernetes.io/opaque\r\n  metadata:\r\n    annotations:\r\n      description: 'Field One: 31 - Field Two: 32'\r\n    generateName: test-one-v55gp-\r\n    labels:\r\n      crossplane.io/claim-name: test-one\r\n      crossplane.io/claim-namespace: default\r\n      crossplane.io/composite: test-one-v55gp\r\n      label: test\r\n    name: test-one-v55gp-lt7j7\r\n    namespace: default\r\n..."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Secret",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/pull/2093",
+      "repo": "https://github.com/crossplane/crossplane",
+      "pr": "https://github.com/crossplane/crossplane/pull/2298"
+    },
+    "reactions": 7,
+    "comments": 8,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:25:24.846Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

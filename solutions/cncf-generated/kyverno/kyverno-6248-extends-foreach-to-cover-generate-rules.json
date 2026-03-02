@@ -1,0 +1,87 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-6248-extends-foreach-to-cover-generate-rules",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno:  Extends foreach to cover generate rules",
+    "description": "## Explanation\nExtends foreach to cover generate rules.\n\n## Related issue\n\n## Milestone of this PR\n\nDone 👍🏽\n\n## Proposed Changes\nAfter merging this PR, A single \"trigger\" resource will result in the creation of multiple downstream resources for an example Creation of a pod could result in generation of multiple downstream resources like configMap, secret etc.\n\n### Proof Manifests\nIf the pollicy given below is applied then multiple configMap will get created on the creation of a pod\n```yaml\napi",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "## Explanation\nExtends foreach to cover generate rules.\n\n## Related issue\n\n## Milestone of this PR\n\nDone 👍🏽\n\n## Proposed Changes\nAfter merging this PR, A single \"trigger\" resource will result in the"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\napiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: basic-policy\r\nspec:\r\n  rules:\r\n    - name: test\r\n      match:\r\n        any:\r\n          - resources:\r\n              kinds:\r\n                - Pod\r\n      generate:\r\n        foreach:\r\n        - list: \"request.object.spec.containers\"\r\n          generateResources:\r\n          - kind: ConfigMap\r\n            apiVersion: v1\r\n            name: \"custom-created-configmap\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"\r\n     \n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/kyverno/kyverno/pull/4386. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "## Explanation\n\nExtends foreach to cover generate rules.\n\n## Related issue\n\n## Milestone of this PR\nDone 👍🏽 \n\n## Proposed Changes\n\nAfter merging this PR, A single \"trigger\" resource will result in the creation of multiple downstream resources for an example Creation of a pod could result in generation of multiple configMap.\n\n### Proof Manifests\n\nIf the pollicy given below is applied then multiple configMap will get created on the creation of a pod:\n\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: basic-policy2\nspec:\n  rules:\n  - name: test-foreach-generate\n    match:\n      any:\n      - resources:\n          kinds:\n          - Pod\n    generate:\n      foreach:\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n        apiVersion: v1\n        name: \"custom-created-configmap\"\n        namespace: \"{{request.object.metadata.namespace}}\"\n        synchronize: false\n        data:\n          data:\n            foo: \"bar is my container name\"\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n        apiVersion: v1\n        name: \"{{element.name}}-config\"\n        namespace: \"{{request.object.metadata.namespace}}\"\n        synchronize: false\n        data:\n          data:\n            foo: \"{{element.name}} is my container name\"\n      - list: \"request.object.spec.containers\"\n        apiVersion: v1\n        kind: ConfigMap\n        name: \"foreachgen-test\"\n        namespace: \"default",
+      "codeSnippets": [
+        "apiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: basic-policy\r\nspec:\r\n  rules:\r\n    - name: test\r\n      match:\r\n        any:\r\n          - resources:\r\n              kinds:\r\n                - Pod\r\n      generate:\r\n        foreach:\r\n        - list: \"request.object.spec.containers\"\r\n          generateResources:\r\n          - kind: ConfigMap\r\n            apiVersion: v1\r\n            name: \"custom-created-configmap\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"",
+        "apiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: basic-policy\r\nspec:\r\n  rules:\r\n    - name: test\r\n      match:\r\n        any:\r\n          - resources:\r\n              kinds:\r\n                - Pod\r\n      generate:\r\n        foreach:\r\n        - list: \"request.object.spec.containers\"\r\n          generateResources:\r\n          - kind: ConfigMap\r\n            apiVersion: v1\r\n            name: \"custom-created-configmap\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"\r\n            synchronize: false\r\n            data:\r\n              data:\r\n                foo: \"{{element.name}} is my container name\"\r\n          - kind: Secret\r\n            apiVersion: v1\r\n            name: \"custom-created-secret\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"\r\n            synchronize: false\r\n            data:\r\n              data:\r\n                extra: YmFyCg==",
+        "apiVersion: v1\r\nkind: Pod\r\nmetadata:\r\n  name: static-web\r\n  labels:\r\n    role: myrole\r\nspec:\r\n  containers:\r\n    - name: web\r\n      image: nginx\r\n      ports:\r\n        - name: web\r\n          containerPort: 80\r\n          protocol: TCP",
+        "apiVersion: kyverno.io/v1\r\nkind: ClusterPolicy\r\nmetadata:\r\n  name: basic-policy-cloned\r\nspec:\r\n  rules:\r\n    - name: test\r\n      match:\r\n        any:\r\n          - resources:\r\n              kinds:\r\n                - Pod\r\n      generate:\r\n        foreach:\r\n        - list: \"request.object.spec.containers\"\r\n          generateResources:\r\n          - kind: ConfigMap\r\n            apiVersion: v1\r\n            name: \"{{element.name}}\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"\r\n            synchronize: false\r\n            clone:\r\n              namespace: default\r\n              name: custom-created-configmap\r\n          - kind: Secret\r\n            apiVersion: v1\r\n            name: \"custom-created-secret-1\"\r\n            namespace: \"{{request.object.metadata.namespace}}\"\r\n            synchronize: false\r\n            clone:\r\n              namespace: default\r\n              name: custom-created-secret",
+        "apiVersion: v1\r\nkind: ConfigMap\r\nmetadata:\r\n  name: roles-dictionary\r\n  namespace: default\r\ndata:\r\n  allowed-roles: \"[\\\"cluster-admin\\\", \\\"cluster-operator\\\", \\\"tenant-admin\\\"]\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "troubleshoot",
+      "stale"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Configmap",
+      "Secret",
+      "Namespace",
+      "Role"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/pull/6248",
+      "repo": "https://github.com/kyverno/kyverno",
+      "pr": "https://github.com/kyverno/kyverno/pull/4386"
+    },
+    "reactions": 2,
+    "comments": 32,
+    "synthesizedBy": "regex",
+    "qualityScore": 62
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:38:15.066Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

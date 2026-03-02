@@ -1,0 +1,90 @@
+{
+  "version": "kc-mission-v1",
+  "name": "antrea-2121-packet-in-rate-limiting-with-of-meter",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "antrea: Packet-in rate limiting with OF Meter",
+    "description": "Add OF meter to implement rate-limiting for packet-in.\n\n1. Add meter entry while initialization.\n2. While building the flow that will trigger packet-in, except traceflow, apply meter entry to it.\n3. Update libOpenflow and ofnet version, because OF meter related commit has been merged into them.\n\nSince windows OVS doesn't support OF meter, we skip OF meter related operations for now. We contacted OVS team to ask for this support and will remove skip after windows OVS support OF meter.\n\nThe benchm",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Add OF meter to implement rate-limiting for packet-in.\n\n1. Add meter entry while initialization.\n2. While building the flow that will trigger packet-in, except traceflow, apply meter entry to it.\n3. U"
+      },
+      {
+        "title": "Add meter entries during initialization: one for Traceflow packets",
+        "description": "Add meter entries during initialization: one for Traceflow packets"
+      },
+      {
+        "title": "While building the flow that will trigger packet-in, use the meter",
+        "description": "While building the flow that will trigger packet-in, use the meter"
+      },
+      {
+        "title": "Update libOpenflow and ofnet version, to get meter programming",
+        "description": "Update libOpenflow and ofnet version, to get meter programming"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\ntop - 22:28:03 up 5 days,  5:34,  1 user,  load average: 0.03, 0.38, 0.55\r\nTasks: 157 total,   1 running, 156 sleeping,   0 stopped,   0 zombie\r\n%Cpu(s):  4.0 us,  5.8 sy,  0.0 ni, 60.2 id,  0.0 wa,  0.0 hi, 30.0 si,  0.0 st\r\nMiB Mem :   1987.6 total,    587.1 free,    472.5 used,    927.9 buff/cache\r\nMiB Swap:      0.0 total,      0.0 free,      0.0 used.   1333.6 avail Mem\r\n\r\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\r\n2022714 root      10 -10  235600  39464\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/antrea-io/antrea/pull/2215. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "Add OF meter to implement rate-limiting for packet-in messages.\n\n1. Add meter entries during initialization: one for Traceflow packets\n   and one for other (NetworkPolicy-related) packets.\n2. While building the flow that will trigger packet-in, use the meter\n   action.\n3. Update libOpenflow and ofnet version, to get meter programming\n   support.\n\nSince Windows OVS doesn't support OF meters, we skip OF meter related\noperations for now. On Linux, for the OVS kernel datapath, kernel\nversion 4.18 is required for meter support (should be 4.15, but is 4.18\nin practice because of an implementation bug): we add a check and\ndisable meters if the Linux kernel is not recent enough. This is to\navoid increasing the minimum kernel version requirement for Antrea, at\nleast for now.\n\nCo-authored-by: Antonin Bas <abas@vmware.com>",
+      "codeSnippets": [
+        "top - 22:28:03 up 5 days,  5:34,  1 user,  load average: 0.03, 0.38, 0.55\r\nTasks: 157 total,   1 running, 156 sleeping,   0 stopped,   0 zombie\r\n%Cpu(s):  4.0 us,  5.8 sy,  0.0 ni, 60.2 id,  0.0 wa,  0.0 hi, 30.0 si,  0.0 st\r\nMiB Mem :   1987.6 total,    587.1 free,    472.5 used,    927.9 buff/cache\r\nMiB Swap:      0.0 total,      0.0 free,      0.0 used.   1333.6 avail Mem\r\n\r\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\r\n2022714 root      10 -10  235600  39464",
+        "top - 22:28:03 up 5 days,  5:34,  1 user,  load average: 0.03, 0.38, 0.55\r\nTasks: 157 total,   1 running, 156 sleeping,   0 stopped,   0 zombie\r\n%Cpu(s):  4.0 us,  5.8 sy,  0.0 ni, 60.2 id,  0.0 wa,  0.0 hi, 30.0 si,  0.0 st\r\nMiB Mem :   1987.6 total,    587.1 free,    472.5 used,    927.9 buff/cache\r\nMiB Swap:      0.0 total,      0.0 free,      0.0 used.   1333.6 avail Mem\r\n\r\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\r\n2022714 root      10 -10  235600  39464  12156 S   7.3   1.9   0:02.00 ovs-vswitchd\r\n     10 root      20   0       0      0      0 S   5.7   0.0   0:42.08 ksoftirqd/0\r\n2022555 root      20   0 1267928  51976  34572 S   5.0   2.6   0:02.49 antrea-agent\r\n  14079 root      20   0 1941628  72840  30968 S   2.3   3.6 164:48.40 kubelet",
+        "top - 22:19:06 up 5 days,  5:25,  1 user,  load average: 1.48, 1.02, 0.75\r\nTasks: 147 total,   3 running, 144 sleeping,   0 stopped,   0 zombie\r\n%Cpu(s): 33.3 us, 19.1 sy,  0.0 ni, 11.1 id,  0.0 wa,  0.0 hi, 36.5 si,  0.0 st\r\nMiB Mem :   1987.6 total,    566.6 free,    480.7 used,    940.3 buff/cache\r\nMiB Swap:      0.0 total,      0.0 free,      0.0 used.   1326.7 avail Mem\r\n\r\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\r\n2010190 root      10 -10  235704  46428  12156 R  98.0   2.3   1:40.03 ovs-vswitchd\r\n2009999 root      20   0 1341660  56128  34732 R  55.4   2.8   1:02.89 antrea-agent\r\n     10 root      20   0       0      0      0 S   7.3   0.0   0:40.94 ksoftirqd/0\r\n  14079 root      20   0 1941628  73520  31496 S   3.6   3.6 164:32.39 kubelet"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "antrea",
+      "sandbox",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "antrea"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/antrea-io/antrea/pull/2121",
+      "repo": "https://github.com/antrea-io/antrea",
+      "pr": "https://github.com/antrea-io/antrea/pull/2215"
+    },
+    "reactions": 2,
+    "comments": 13,
+    "synthesizedBy": "regex",
+    "qualityScore": 68
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with antrea installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:38:41.408Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-4197-in-tail-create-stream-id-by-file-inode-4190",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: in_tail: create stream_id by file inode(#4190)",
+    "description": "Currently, stream_id of multiline is created by filename.\nIt means stream_id of rotated file will be same id since the filename is same.\n\nThis patch is to create stream_id from inode string.\nIt will create unique stream_id even if the file is rotated.\n\n----\nEnter `[N/A]` in the box, if an item is not applicable to your change.\n\n**Testing**\nBefore we can approve your change; please submit the following in a comment:\n- [X] Example configuration file for the change\n- [X] Debug log output from testi",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Currently, stream_id of multiline is created by filename.\nIt means stream_id of rotated file will be same id since the filename is same.\n\nThis patch is to create stream_id from inode string.\nIt will c"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n[SERVICE]\r\n    Flush        1\r\n    Daemon       Off\r\n    Log_Level    info\r\n    HTTP_Monitor Off\r\n    HTTP_Port    2020\r\n    storage.path              /tmp/fluent-bit-data/\r\n    storage.sync              normal\r\n    storage.checksum          off\r\n    storage.max_chunks_up     128\r\n    storage.backlog.mem_limit 512M\r\n    storage.metrics           on\r\n\r\n[INPUT]\r\n    Name              tail\r\n    Path              /tmp/logs/*.log\r\n    multiline.parser  cri\r\n    Tag               kube.*\r\n    Refresh_I\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/kube-logging/logging-operator/pull/884. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "| Q               | A\n| --------------- | ---\n| Bug fix?        | no\n| New feature?    | yes\n| API breaks?     | no\n| Deprecations?   | no\n| Related tickets | fixes #868\n| License         | Apache 2.0\n\n### What's in this PR?\nSupport for using `multiline.parser` in fluentbit.\n\n### Why?\nCurrently some container runtimes like containerd & cri can write longer log messages separated into multiple lines in the log file. A special flag is used to indicate if the message is partial (additional lines will follow) or full. You can handle this by using `Parser_Firstline` & `Parser_N` fields but with new multiline core support introduced in fluentbit 1.8 this can be achieved by only setting `multiline.parser` to the appropriate value and fluentbit handles this automatically. Multiple parser can be added which allow different node types to be scraped by the same fluentbit configuration. See more on https://docs.fluentbit.io/manual/pipeline/inputs/tail#multiline-support.\n\n### Additional context\n`fluentbit v1.8.9` is needed because of https://github.com/fluent/fluent-bit/pull/4197.\n\nThis was tested on one of our clusters using `logging-operator v3.15.0` and manually overriding fluentbit config using `customConfigSecret`. Only `multiline.parser` line was added to the tail INPUT. The only side-effect we noticed was that the message field changes from `message` to `log` after parsing.\n\nThe change seems straight-forward and simple but can be",
+      "codeSnippets": [
+        "[SERVICE]\r\n    Flush        1\r\n    Daemon       Off\r\n    Log_Level    info\r\n    HTTP_Monitor Off\r\n    HTTP_Port    2020\r\n    storage.path              /tmp/fluent-bit-data/\r\n    storage.sync              normal\r\n    storage.checksum          off\r\n    storage.max_chunks_up     128\r\n    storage.backlog.mem_limit 512M\r\n    storage.metrics           on\r\n\r\n[INPUT]\r\n    Name              tail\r\n    Path              /tmp/logs/*.log\r\n    multiline.parser  cri\r\n    Tag               kube.*\r\n    Refresh_I",
+        "[SERVICE]\r\n    Flush        1\r\n    Daemon       Off\r\n    Log_Level    info\r\n    HTTP_Monitor Off\r\n    HTTP_Port    2020\r\n    storage.path              /tmp/fluent-bit-data/\r\n    storage.sync              normal\r\n    storage.checksum          off\r\n    storage.max_chunks_up     128\r\n    storage.backlog.mem_limit 512M\r\n    storage.metrics           on\r\n\r\n[INPUT]\r\n    Name              tail\r\n    Path              /tmp/logs/*.log\r\n    multiline.parser  cri\r\n    Tag               kube.*\r\n    Refresh_Interval  1\r\n    Mem_Buf_Limit     50MB\r\n    Buffer_Chunk_Size 1MB\r\n    Buffer_Max_Size   2MB\r\n    Skip_Empty_Lines  On\r\n    Skip_Long_Lines   On\r\n    Rotate_Wait       5\r\n    DB                /tmp/tail-containers-state.db\r\n    DB.Sync           Normal\r\n    storage.type      filesystem\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *",
+        "/tmp/logs/*.log {\r\n\trotate 5\r\n\tmonthly\r\n\trotate 12\r\n\tcompress\r\n\tdelaycompress\r\n\tmissingok\r\n\tnotifempty\r\n\tcreate 644 root root\r\n}",
+        "$ ../bin/fluent-bit -c a.conf \r\nFluent Bit v1.9.0\r\n* Copyright (C) 2019-2021 The Fluent Bit Authors\r\n* Copyright (C) 2015-2018 Treasure Data\r\n* Fluent Bit is a CNCF sub-project under the umbrella of Fluentd\r\n* https://fluentbit.io\r\n\r\n[2021/10/17 12:25:58] [ info] [engine] started (pid=26733)\r\n[2021/10/17 12:25:58] [ info] [storage] version=1.1.4, initializing...\r\n[2021/10/17 12:25:58] [ info] [storage] root path '/tmp/fluent-bit-data/'\r\n[2021/10/17 12:25:58] [ info] [storage] normal synchronization mode, checksum disabled, max_chunks_up=128\r\n[2021/10/17 12:25:58] [ info] [storage] backlog input plugin: storage_backlog.1\r\n[2021/10/17 12:25:58] [ info] [cmetrics] version=0.2.2\r\n[2021/10/17 12:25:58] [ info] [input:tail:tail.0] multiline core started\r\n[2021/10/17 12:25:58] [ info] [input:storage_backlog:storage_backlog.1] queue memory limit: 488.3M\r\n[2021/10/17 12:25:58] [ info] [sp] stream processor started\r\n[2021/10/17 12:25:58] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703973 watch_fd=1 name=/tmp/logs/x.log\r\n[0] kube.tmp.logs.x.log: [1634441162.278157692, {\"time\"=>\"2021-10-17T03:26:02.278157692Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n[2021/10/17 12:26:05] [ info] [input:tail:tail.0] inode=1703973 handle rotation(): /tmp/logs/x.log => /tmp/logs/x.log.1\r\n[2021/10/17 12:26:05] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703973 watch_fd=1\r\n[2021/10/17 12:26:05] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703973 watch_fd=2 name=/tmp/logs/x.log.1\r\n[2021/10/17 12:26:05] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703983 watch_fd=3 name=/tmp/logs/x.log\r\n[0] kube.tmp.logs.x.log: [1634441170.868503898, {\"time\"=>\"2021-10-17T03:26:10.868503898Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n[0] kube.tmp.logs.x.log: [1634441172.198605785, {\"time\"=>\"2021-10-17T03:26:12.198605785Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n[2021/10/17 12:26:13] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703973 watch_fd=2\r\n^C[2021/10/17 12:26:13] [engine] caught signal (SIGINT)\r\n[2021/10/17 12:26:13] [ info] [input] pausing tail.0\r\n[2021/10/17 12:26:13] [ info] [input] pausing storage_backlog.1\r\n[2021/10/17 12:26:13] [ warn] [engine] service will stop in 5 seconds\r\n[2021/10/17 12:26:18] [ info] [engine] service stopped\r\n[2021/10/17 12:26:18] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703983 watch_fd=3",
+        "$ valgrind --leak-check=full ../bin/fluent-bit -c a.conf \r\n==26743== Memcheck, a memory error detector\r\n==26743== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.\r\n==26743== Using Valgrind-3.15.0 and LibVEX; rerun with -h for copyright info\r\n==26743== Command: ../bin/fluent-bit -c a.conf\r\n==26743== \r\nFluent Bit v1.9.0\r\n* Copyright (C) 2019-2021 The Fluent Bit Authors\r\n* Copyright (C) 2015-2018 Treasure Data\r\n* Fluent Bit is a CNCF sub-project under the umbrella of Fluentd\r\n* https://fluentbit.io\r\n\r\n[2021/10/17 12:27:31] [ info] [engine] started (pid=26743)\r\n[2021/10/17 12:27:31] [ info] [storage] version=1.1.4, initializing...\r\n[2021/10/17 12:27:31] [ info] [storage] root path '/tmp/fluent-bit-data/'\r\n[2021/10/17 12:27:31] [ info] [storage] normal synchronization mode, checksum disabled, max_chunks_up=128\r\n[2021/10/17 12:27:31] [ info] [storage] backlog input plugin: storage_backlog.1\r\n[2021/10/17 12:27:31] [ info] [cmetrics] version=0.2.2\r\n[2021/10/17 12:27:32] [ info] [input:tail:tail.0] multiline core started\r\n[2021/10/17 12:27:32] [ info] [input:storage_backlog:storage_backlog.1] queue memory limit: 488.3M\r\n[2021/10/17 12:27:32] [ info] [sp] stream processor started\r\n[2021/10/17 12:27:32] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703983 watch_fd=1 name=/tmp/logs/x.log\r\n==26743== Warning: client switching stacks?  SP change: 0x57e59c8 --> 0x4db4ac0\r\n==26743==          to suppress, use: --max-stackframe=10686216 or greater\r\n==26743== Warning: client switching stacks?  SP change: 0x4db4a38 --> 0x57e59c8\r\n==26743==          to suppress, use: --max-stackframe=10686352 or greater\r\n==26743== Warning: client switching stacks?  SP change: 0x57e59c8 --> 0x4db4a38\r\n==26743==          to suppress, use: --max-stackframe=10686352 or greater\r\n==26743==          further instances of this message will not be shown.\r\n[0] kube.tmp.logs.x.log: [1634441254.498786373, {\"time\"=>\"2021-10-17T03:27:34.498786373Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n[2021/10/17 12:27:38] [ info] [input:tail:tail.0] inode=1703983 handle rotation(): /tmp/logs/x.log => /tmp/logs/x.log.1\r\n[2021/10/17 12:27:38] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703983 watch_fd=1\r\n[2021/10/17 12:27:38] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703983 watch_fd=2 name=/tmp/logs/x.log.1\r\n[2021/10/17 12:27:38] [ info] [input:tail:tail.0] inotify_fs_add(): inode=1703973 watch_fd=3 name=/tmp/logs/x.log\r\n[0] kube.tmp.logs.x.log: [1634441262.603936634, {\"time\"=>\"2021-10-17T03:27:42.603936634Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n[0] kube.tmp.logs.x.log: [1634441264.109924829, {\"time\"=>\"2021-10-17T03:27:44.109924829Z\", \"stream\"=>\"stdout\", \"_p\"=>\"F\", \"log\"=>\"testing...\"}]\r\n^C[2021/10/17 12:27:46] [2021/10/17 12:27:46] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703983 watch_fd=2\r\n[engine] caught signal (SIGINT)\r\n[2021/10/17 12:27:46] [ info] [input] pausing tail.0\r\n[2021/10/17 12:27:46] [ info] [input] pausing storage_backlog.1\r\n[2021/10/17 12:27:46] [ warn] [engine] service will stop in 5 seconds\r\n[2021/10/17 12:27:51] [ info] [engine] service stopped\r\n[2021/10/17 12:27:51] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=1703973 watch_fd=3\r\n==26743== \r\n==26743== HEAP SUMMARY:\r\n==26743==     in use at exit: 0 bytes in 0 blocks\r\n==26743==   total heap usage: 1,782 allocs, 1,782 frees, 4,030,797 bytes allocated\r\n==26743== \r\n==26743== All heap blocks were freed -- no leaks are possible\r\n==26743== \r\n==26743== For lists of detected and suppressed errors, rerun with: -s\r\n==26743== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "troubleshoot",
+      "backport-to-v1-8-x"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Node"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/pull/4197",
+      "repo": "https://github.com/fluent/fluent-bit",
+      "pr": "https://github.com/kube-logging/logging-operator/pull/884"
+    },
+    "reactions": 4,
+    "comments": 2,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:28:05.842Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

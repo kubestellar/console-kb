@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "alertmanager-3944-feat-allow-nested-details-fields-in-pagerduty",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "alertmanager: feat: allow nested details fields in pagerduty",
+    "description": "This change allows nested key/value pair in pageduty configuration.\n\nEvents API V1 supports an object in `details` field:\nhttps://developer.pagerduty.com/docs/send-v1-event#parameters\n\nEvents API V2 supports an object in `payload.custom_details` field:\nhttps://developer.pagerduty.com/docs/send-alert-event#parameters\n\nThe configuration and message/payload types where changed from `map[string]string` to `map[string]any`.\n\nThe default template is updated to use the new `toJson` function.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "This change allows nested key/value pair in pageduty configuration.\n\nEvents API V1 supports an object in `details` field:\nhttps://developer.pagerduty.com/docs/send-v1-event#parameters\n\nEvents API V2 s"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nfields:\r\n    # Components\r\n    components: { name: \"Monitoring\" }\r\n    # Custom Field TextField\r\n    customfield_10001: \"Random text\"\r\n    # Custom Field SelectList\r\n    customfield_10002: {\"value\": \"red\"}\r\n    # Custom Field MultiSelect\r\n    customfield_10003: [{\"value\": \"red\"}, {\"value\": \"blue\"}, {\"value\": \"green\"}]\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/prometheus/alertmanager/pull/4083. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "The Jira API requests different fields value types depends on the custom field type itself.\n\nRef. https://developer.atlassian.com/server/jira/platform/jira-rest-api-examples/#setting-custom-field-data-for-other-field-types, for example:\n\n```\nfields:\n    # Components\n    components: { name: \"Monitoring\" }\n    # Custom Field TextField\n    customfield_10001: \"Random text\"\n    # Custom Field SelectList\n    customfield_10002: {\"value\": \"red\"}\n    # Custom Field MultiSelect\n    customfield_10003: [{\"value\": \"red\"}, {\"value\": \"blue\"}, {\"value\": \"green\"}]\n```\n\nWhile jiralert allowed field values with different types as well, it might be problematic in context of the Alertmanager.\n\n* A new dependency `github.com/trivago/tgo` was necessary to cast all keys to strings. Ref. https://github.com/prometheus/alertmanager/pull/3590#discussion_r1816521316\n* Looking at Prometheus Operator, Kubernetes CRDs doesn't [support such flexible types](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#specifying-a-structural-schema), because type is not allowed inside `anyOf`. From Kubernetes point of view, all field values must be declared as string and an additional transformation logic is necessary to convert string values to complex values.\n\nI feel that re-implement the logic from jiralert was design flaw while implement the jira notifier at Alertmanager.\n\nWDYT: @simonpasquier @dswarbrick",
+      "codeSnippets": [
+        "fields:\r\n    # Components\r\n    components: { name: \"Monitoring\" }\r\n    # Custom Field TextField\r\n    customfield_10001: \"Random text\"\r\n    # Custom Field SelectList\r\n    customfield_10002: {\"value\": \"red\"}\r\n    # Custom Field MultiSelect\r\n    customfield_10003: [{\"value\": \"red\"}, {\"value\": \"blue\"}, {\"value\": \"green\"}]",
+        "fields:\r\n    # Components\r\n    components: { name: \"Monitoring\" }\r\n    # Custom Field TextField\r\n    customfield_10001: \"Random text\"\r\n    # Custom Field SelectList\r\n    customfield_10002: {\"value\": \"red\"}\r\n    # Custom Field MultiSelect\r\n    customfield_10003: [{\"value\": \"red\"}, {\"value\": \"blue\"}, {\"value\": \"green\"}]",
+        "Would this avoid having to embed YAML inside existing YAML? I haven't checked if this will affect existing configurations, but  it would be good to understand if this is a better option.\n> Have you considered changing `Details` in the configuration file from `map[string]string` to `map[string]interface{}`?\r\n\r\nThat was the initial approach I though about. It will create a free style format and would require checking the interfaces one by one as they can be either maps or templated strings. I'm open to experiment with it.\nCurious to know... Is this going forward ?\r\nSeems a real blessing having PD Custom Details properly rendered from the Alert Payload. \nI'll update this PR with the suggested `map[string]interface{}` to support nested fields.\nThinking about this more, using a template like `alerts: {{ .Alerts }}` will translate into `alert` key with value of string as templates are only rendered into strings.\r\n\r\nParsing template results into maps or slices is possible but could be error-prone and we'd need a format for it.\r\nAlternative option could be toggles to include specific details in the payload:",
+        "I updated the PR to use the new `toJson` template function.\r\nAlso we can now support this in both Events API v1 and v2.\r\n<img width=\"587\" height=\"584\" alt=\"image\" src=\"https://github.com/user-attachments/assets/3644cc2b-c118-4909-86ed-6d6d95a20f5c\" />\r\n\n@siavashs you are a true hero\n@siavashs For v1 integration, this seems to have changed the urls in label/annotations to not render as links in PD. PD used to make them clickable hyperlinks when `firing` value was string, but now it's all jsonified and render as plain text.\n@abhijith-db this sounds like a UI issue on PD side.\r\nAs a workaround you can always use a \"non-json\" template on Alertmanager side and it should restore the old format.\n@siavashs Yeah that's a workaround. Only problem is there's no global PD default template to configure.  Each receiver has to use the non-json template to linkify urls in annotations\nI see, we'll add a global config for PagerDuty.\n@siavashs Also the deep copy with template was affecting this too. Had to fork and fix on our end to exclude string type. As:",
+        "Failing testcase that would have passed before this change:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "alertmanager",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "alertmanager"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/alertmanager/pull/3944",
+      "repo": "https://github.com/prometheus/alertmanager",
+      "pr": "https://github.com/prometheus/alertmanager/pull/4083"
+    },
+    "reactions": 7,
+    "comments": 15,
+    "synthesizedBy": "regex",
+    "qualityScore": 63
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with alertmanager installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:36:51.809Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

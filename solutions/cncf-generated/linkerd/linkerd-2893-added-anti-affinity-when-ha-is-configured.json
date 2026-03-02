@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "linkerd-2893-added-anti-affinity-when-ha-is-configured",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "linkerd: Added Anti Affinity when HA is configured",
+    "description": "The following PR adds anti-affinity rules to `proxy-injector`, `sp-validator`, `linkerd-controller`, `tap` deployments.\n\nThe idea was to make anti-affinity rules both based on `kubernetes.io/hostname` and `failure-domain.beta.kubernetes.io/zone` **preferred** when only the the `--ha` flag is configured.\n\nif the `--required-host-anti-affinity` is also configured along with `--ha`, then the `kubernetes.io/hostname` is **required** while `failure-domain.beta.kubernetes.io/zone` is still **preferred",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "The following PR adds anti-affinity rules to `proxy-injector`, `sp-validator`, `linkerd-controller`, `tap` deployments.\n\nThe idea was to make anti-affinity rules both based on `kubernetes.io/hostname`"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nlinkerd-existence\r\n-----------------\r\n√ 'linkerd-config' config map exists\r\n√ control plane replica sets are ready\r\n× no unschedulable pods\r\n    linkerd-controller-7d9bdd85b8-2sk7q: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-74vsr: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> Defaulting to preferred feels like we’re introducing two types of HA, “kinda” HA and “real” HA.\n\n:+1: Agreed.\n\n@grampelberg @Pothulapati So to summarize,\n\n* Remove the `--required-host-anti-affinity` option\n* By default, HA mode uses `required` hostname anti-affinity and `preferred` zone anti-affinity (there will almost always be more replicas than zones, so `required` zone anti-affinity won't work.)\n\nIf the `required` hostname anti-affinity is causing an installation failure, `linkerd check` actually detects the problem and outputs the reason:\n\n```\nlinkerd-existence\n-----------------\n√ 'linkerd-config' config map exists\n√ control plane replica sets are ready\n× no unschedulable pods\n    linkerd-controller-7d9bdd85b8-2sk7q: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\n    linkerd-controller-7d9bdd85b8-74vsr: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\n    linkerd-controller-7d9bdd85b8-97lds: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\n    linkerd-controller-7d9bdd85b8-9lj9v: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\n    linkerd-contro",
+      "codeSnippets": [
+        "linkerd-existence\r\n-----------------\r\n√ 'linkerd-config' config map exists\r\n√ control plane replica sets are ready\r\n× no unschedulable pods\r\n    linkerd-controller-7d9bdd85b8-2sk7q: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-74vsr: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy",
+        "linkerd-existence\r\n-----------------\r\n√ 'linkerd-config' config map exists\r\n√ control plane replica sets are ready\r\n× no unschedulable pods\r\n    linkerd-controller-7d9bdd85b8-2sk7q: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-74vsr: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-97lds: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-9lj9v: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-9sx8d: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-kbzwn: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-lcgww: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-7d9bdd85b8-zmsn4: 0/6 nodes are available: 1 Insufficient cpu, 5 node(s) didn't match pod affinity/anti-affinity, 5 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-proxy-injector-76c4f5c7d9-98gm8: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-proxy-injector-76c4f5c7d9-w7jwc: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-sp-validator-6bc6cc666b-4k5zs: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-sp-validator-6bc6cc666b-qvkdb: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-tap-8688fdf4f-c5tgb: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-tap-8688fdf4f-wmlnz: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    see https://linkerd.io/checks/#l5d-existence-unschedulable-pods for hints",
+        "✗ k get no -L failure-domain.beta.kubernetes.io/zone\r\nNAME                                         STATUS   ROLES    AGE   VERSION         ZONE\r\ngke-isim-dev-ha-default-pool-4b003e42-1m9b   Ready    <none>   22h   v1.13.7-gke.8   us-east1-b\r\ngke-isim-dev-ha-default-pool-4b003e42-p1ps   Ready    <none>   22h   v1.13.7-gke.8   us-east1-b\r\ngke-isim-dev-ha-default-pool-560160bf-7sl6   Ready    <none>   20h   v1.13.7-gke.8   us-east1-c\r\ngke-isim-dev-ha-default-pool-560160bf-cnzh   Ready    <none>   22h   v1.13.7-gke.8   us-east1-c\r\ngke-isim-dev-ha-default-pool-f4da19f4-4n3c   Ready    <none>   22h   v1.13.7-gke.8   us-east1-d\r\ngke-isim-dev-ha-default-pool-f4da19f4-g79p   Ready    <none>   22h   v1.13.7-gke.8   us-east1-d\r\n\r\n✗ k -n linkerd get po -owide\r\nNAME                                      READY   STATUS    RESTARTS   AGE   IP           NODE                                         NOMINATED NODE   READINESS GATES\r\nlinkerd-controller-5b5765b845-7cnpz       3/3     Running   0          18m   10.60.1.27   gke-isim-dev-ha-default-pool-4b003e42-p1ps   <none>           <none> # us-east1-b\r\nlinkerd-controller-5b5765b845-j6ss9       3/3     Running   0          18m   10.60.3.20   gke-isim-dev-ha-default-pool-560160bf-cnzh   <none>           <none> # us-east1-c\r\nlinkerd-controller-5b5765b845-r92md       3/3     Running   0          18m   10.60.4.23   gke-isim-dev-ha-default-pool-f4da19f4-4n3c   <none>           <none> # us-east1-d\r\nlinkerd-grafana-7df55df848-888ck          2/2     Running   0          12m   10.60.1.30   gke-isim-dev-ha-default-pool-4b003e42-p1ps   <none>           <none> \r\nlinkerd-identity-74cf6f446f-7r57m         2/2     Running   0          18m   10.60.4.22   gke-isim-dev-ha-default-pool-f4da19f4-4n3c   <none>           <none> # us-east1-d\r\nlinkerd-identity-74cf6f446f-b9gfc         2/2     Running   0          18m   10.60.1.26   gke-isim-dev-ha-default-pool-4b003e42-p1ps   <none>           <none> #us-east1-b \r\nlinkerd-identity-74cf6f446f-fbw5w         2/2     Running   0          18m   10.60.2.20   gke-isim-dev-ha-default-pool-560160bf-7sl6   <none>           <none> # us-east1-c\r\nlinkerd-prometheus-7bcc6c5b66-rv7n4       2/2     Running   3          18m   10.60.0.17   gke-isim-dev-ha-default-pool-4b003e42-1m9b   <none>           <none>\r\nlinkerd-proxy-injector-746bfbb494-8w8qk   2/2     Running   0          18m   10.60.3.21   gke-isim-dev-ha-default-pool-560160bf-cnzh   <none>           <none> # us-east1-c\r\nlinkerd-proxy-injector-746bfbb494-s42qm   2/2     Running   0          18m   10.60.4.24   gke-isim-dev-ha-default-pool-f4da19f4-4n3c   <none>           <none> # us-east1-d\r\nlinkerd-proxy-injector-746bfbb494-wlxxf   2/2     Running   0          18m   10.60.1.28   gke-isim-dev-ha-default-pool-4b003e42-p1ps   <none>           <none> # us-east1-b\r\nlinkerd-sp-validator-6947dff89c-4nqrs     2/2     Running   0          18m   10.60.0.18   gke-isim-dev-ha-default-pool-4b003e42-1m9b   <none>           <none> # us-east1-b\r\nlinkerd-sp-validator-6947dff89c-64vv9     2/2     Running   0          18m   10.60.2.23   gke-isim-dev-ha-default-pool-560160bf-7sl6   <none>           <none> # us-east1-c\r\nlinkerd-sp-validator-6947dff89c-cdd4q     2/2     Running   0          18m   10.60.5.20   gke-isim-dev-ha-default-pool-f4da19f4-g79p   <none>           <none> # us-east1-d\r\nlinkerd-tap-5d7745b8c8-n9xwj              2/2     Running   0          18m   10.60.5.21   gke-isim-dev-ha-default-pool-f4da19f4-g79p   <none>           <none> # us-east1-d\r\nlinkerd-tap-5d7745b8c8-q9rtx              2/2     Running   0          18m   10.60.3.22   gke-isim-dev-ha-default-pool-560160bf-cnzh   <none>           <none>  # us-east1-c\r\nlinkerd-tap-5d7745b8c8-rjznc              2/2     Running   0          18m   10.60.1.29   gke-isim-dev-ha-default-pool-4b003e42-p1ps   <none>           <none>  # us-east1-b\r\nlinkerd-web-7cd4bf9d7-cd4bv               2/2     Running   0          18m   10.60.2.21   gke-isim-dev-ha-default-pool-560160bf-7sl6   <none>           <none>",
+        "✗ k -n linkerd scale deploy/linkerd-controller --replicas=10\r\ndeployment.extensions/linkerd-controller scaled\r\n✗ linkerd check\r\nlinkerd-existence\r\n-----------------\r\n√ 'linkerd-config' config map exists\r\n√ control plane replica sets are ready\r\n× no unschedulable pods\r\n    linkerd-controller-5b5765b845-9nq7d: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-5b5765b845-ncztn: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-5b5765b845-tgdlp: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    linkerd-controller-5b5765b845-xshbc: 0/6 nodes are available: 6 node(s) didn't match pod affinity/anti-affinity, 6 node(s) didn't satisfy existing pods anti-affinity rules.\r\n    see https://linkerd.io/checks/#l5d-existence-unschedulable-pods for hints"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "linkerd",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "linkerd"
+    ],
+    "targetResourceKinds": [
+      "Deployment"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/linkerd/linkerd2/pull/2893",
+      "repo": "https://github.com/linkerd/linkerd2"
+    },
+    "reactions": 2,
+    "comments": 13,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with linkerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:35:31.305Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

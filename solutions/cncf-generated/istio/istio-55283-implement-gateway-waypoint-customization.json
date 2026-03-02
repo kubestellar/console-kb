@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "istio-55283-implement-gateway-waypoint-customization",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "istio: Implement Gateway/Waypoint customization",
+    "description": "Implements https://docs.google.com/document/d/13ZoxgR0CIaOuwyhA4xxI7L1XwsZaDVOmq13K8922zcU/edit?tab=t.0\n\nFixes https://github.com/istio/istio/issues/53964\nSolves the use case for https://github.com/istio/istio/issues/53473 (but doesn't directly implement what they asked for)\nFixes https://github.com/istio/istio/issues/46594\nMaybe resolves https://github.com/istio/istio/issues/54453 (not sure if you can _remove_ a port)\nFixes https://github.com/istio/istio/issues/53189\nFixes https://github.com/is",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "Implements https://docs.google.com/document/d/13ZoxgR0CIaOuwyhA4xxI7L1XwsZaDVOmq13K8922zcU/edit?tab=t.0\n\nFixes https://github.com/istio/istio/issues/53964\nSolves the use case for https://github.com/is"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\napiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: Gateway\r\nmetadata:\r\n  name: gateway\r\nspec:\r\n  infrastructure:\r\n    parametersRef:\r\n      group: \"\"\r\n      kind: ConfigMap\r\n      name: gw-options\r\n  gatewayClassName: istio\r\n  listeners:\r\n  - name: default\r\n    port: 80\r\n    protocol: HTTP\r\n---\r\napiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: HTTPRoute\r\nmetadata:\r\n  name: echo\r\nspec:\r\n  parentRefs:\r\n  - name: gateway\r\n  rules:\r\n  - backendRefs:\r\n    - name: echo\r\n      port: 80\r\n---\r\napiV\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> perhaps may want to be able to handle multiple configMaps as a infrastructure parameters ref. presumably people may want to mix and match elements and/or not have a giant configmap.\n\nCurrently the GW API spec only allows a single parametersRef.\n\nIstio does have some precedence for multiple in sidecars, though: https://istio.io/latest/docs/setup/additional-setup/sidecar-injection/#custom-templates-experimental. \n\n> presumably this would work for pdbs and services as well?\n\nYeah today you can customize the 3 types we create (deployment, Serviceaccount, service) and HPA (see note about HPA in description). We probably should do PDB as well as HPA the same way, I didn't add it since I wasn't sure if there would be consensus on adding HPA",
+      "codeSnippets": [
+        "apiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: Gateway\r\nmetadata:\r\n  name: gateway\r\nspec:\r\n  infrastructure:\r\n    parametersRef:\r\n      group: \"\"\r\n      kind: ConfigMap\r\n      name: gw-options\r\n  gatewayClassName: istio\r\n  listeners:\r\n  - name: default\r\n    port: 80\r\n    protocol: HTTP\r\n---\r\napiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: HTTPRoute\r\nmetadata:\r\n  name: echo\r\nspec:\r\n  parentRefs:\r\n  - name: gateway\r\n  rules:\r\n  - backendRefs:\r\n    - name: echo\r\n      port: 80\r\n---\r\napiV",
+        "apiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: Gateway\r\nmetadata:\r\n  name: gateway\r\nspec:\r\n  infrastructure:\r\n    parametersRef:\r\n      group: \"\"\r\n      kind: ConfigMap\r\n      name: gw-options\r\n  gatewayClassName: istio\r\n  listeners:\r\n  - name: default\r\n    port: 80\r\n    protocol: HTTP\r\n---\r\napiVersion: gateway.networking.k8s.io/v1beta1\r\nkind: HTTPRoute\r\nmetadata:\r\n  name: echo\r\nspec:\r\n  parentRefs:\r\n  - name: gateway\r\n  rules:\r\n  - backendRefs:\r\n    - name: echo\r\n      port: 80\r\n---\r\napiVersion: v1\r\nkind: ConfigMap\r\nmetadata:\r\n  name: gw-options\r\ndata:\r\n  horizontalPodAutoscaler: |\r\n    spec:\r\n      minReplicas: 2\r\n      maxReplicas: 2\r\n\r\n  deployment: |\r\n    metadata:\r\n      annotations:\r\n        john-gw: hi\r\n    spec:\r\n      replicas: 4\r\n      template:\r\n        spec:\r\n          containers:\r\n          - name: istio-proxy\r\n            resources:\r\n              requests:\r\n                cpu: 222m\r\n---\r\napiVersion: v1\r\nkind: ConfigMap\r\nmetadata:\r\n  name: istio-default-gatewayclass-istio\r\n  namespace: istio-system\r\ndata:\r\n  deployment: |-\r\n    metadata:\r\n      annotations:\r\n        john-gwc: hix",
+        "apiVersion: install.istio.io/v1alpha1\r\nkind: IstioOperator\r\nspec:\r\n  values:\r\n    gatewayClasses:\r\n      istio:\r\n        deployment:\r\n          metadata:\r\n            annotations:\r\n              john: hi"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "istio",
+      "graduated",
+      "networking",
+      "troubleshoot",
+      "size-xl"
+    ],
+    "cncfProjects": [
+      "istio"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Ingress",
+      "Configmap",
+      "Namespace",
+      "Horizontalpodautoscaler"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/istio/istio/pull/55283",
+      "repo": "https://github.com/istio/istio"
+    },
+    "reactions": 9,
+    "comments": 16,
+    "synthesizedBy": "regex",
+    "qualityScore": 65
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with istio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T19:26:45.803Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
