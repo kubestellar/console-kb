@@ -193,7 +193,7 @@ async function findDockerfile(owner, repo) {
 // ─── LLM synthesis ───────────────────────────────────────────────────
 
 const INSTALL_SYSTEM_PROMPT = `You are an expert Kubernetes technical writer creating INSTALLATION missions for the KubeStellar Console.
-An "install mission" is a structured, copy-pasteable guide that takes a user from zero to a running instance of a CNCF project.
+An "install mission" is a structured, copy-pasteable guide that takes a user from zero to a running instance of a CNCF project, and also covers uninstalling, upgrading, and troubleshooting.
 
 Your output MUST be a JSON object with these fields:
 {
@@ -202,6 +202,24 @@ Your output MUST be a JSON object with these fields:
     {
       "title": "Short imperative title (e.g. 'Add the Helm repository')",
       "description": "Detailed step with exact commands. Must be copy-pasteable. Use code blocks."
+    }
+  ],
+  "uninstall": [
+    {
+      "title": "Short imperative title (e.g. 'Remove the Helm release')",
+      "description": "Detailed step to cleanly remove the project. Include cleanup of CRDs, namespaces, PVCs, etc."
+    }
+  ],
+  "upgrade": [
+    {
+      "title": "Short imperative title (e.g. 'Update the Helm repository')",
+      "description": "Detailed step to upgrade/update an existing installation. Include backup steps, version checks, and rollback instructions."
+    }
+  ],
+  "troubleshooting": [
+    {
+      "title": "Short title describing the issue (e.g. 'Pods stuck in CrashLoopBackOff')",
+      "description": "Description of the problem, how to diagnose it, and the fix. Include exact diagnostic commands."
     }
   ],
   "resolution": "2-3 sentences confirming what a successful installation looks like.",
@@ -224,7 +242,10 @@ Rules:
 - Include at least 1 post-install configuration step (resource limits, RBAC, TLS, or monitoring)
 - Pin versions — never use :latest
 - Use --namespace and --create-namespace
-- 4-6 steps is ideal
+- 4-6 install steps is ideal
+- "uninstall" must have 2-4 steps covering: remove release, clean up CRDs/resources, remove namespace
+- "upgrade" must have 2-4 steps covering: backup current state, update repo/manifests, upgrade, verify
+- "troubleshooting" must have 3-5 common issues with diagnostic commands and fixes
 - Do NOT invent URLs or image names — only use what's in the provided context`
 
 function buildInstallPrompt(project, context) {
@@ -389,6 +410,13 @@ function applyQualityGate(mission, config) {
   if (/resource.*limit|rbac|tls|certificate/i.test(allText)) adjustedScore += 5
   if (/see docs|see the documentation/i.test(allText) && !INSTALL_CMD_RE.test(allText)) adjustedScore -= 10
   if (/:latest\b/.test(allText)) adjustedScore -= 5
+  // Bonuses for completeness: uninstall, upgrade, troubleshooting sections
+  const uninstallSteps = mission.mission?.uninstall || []
+  const upgradeSteps = mission.mission?.upgrade || []
+  const troubleSteps = mission.mission?.troubleshooting || []
+  if (uninstallSteps.length >= 2) adjustedScore += 5
+  if (upgradeSteps.length >= 2) adjustedScore += 5
+  if (troubleSteps.length >= 3) adjustedScore += 5
   adjustedScore = Math.min(100, Math.max(0, adjustedScore))
 
   let tier
@@ -431,6 +459,18 @@ function buildMissionJson(project, llmResult, context, config) {
       type: 'deploy',
       status: 'completed',
       steps: (llmResult.steps || []).map(s => ({
+        title: s.title.slice(0, 120),
+        description: s.description.slice(0, 3000),
+      })),
+      uninstall: (llmResult.uninstall || []).map(s => ({
+        title: s.title.slice(0, 120),
+        description: s.description.slice(0, 3000),
+      })),
+      upgrade: (llmResult.upgrade || []).map(s => ({
+        title: s.title.slice(0, 120),
+        description: s.description.slice(0, 3000),
+      })),
+      troubleshooting: (llmResult.troubleshooting || []).map(s => ({
         title: s.title.slice(0, 120),
         description: s.description.slice(0, 3000),
       })),
