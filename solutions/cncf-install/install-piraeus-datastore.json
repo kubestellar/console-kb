@@ -1,0 +1,147 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-piraeus-datastore",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Piraeus Datastore on Kubernetes",
+    "description": "The Piraeus Operator manages LINSTOR clusters in Kubernetes, providing a robust solution for software-defined storage. Installing it allows you to easily deploy and manage storage resources in your Kubernetes environment.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the Helm repository",
+        "description": "Add the Piraeus Helm chart repository to your Helm configuration:\n```bash\nhelm repo add piraeus https://charts.piraeus.io\nhelm repo update\n```"
+      },
+      {
+        "title": "Install the Piraeus Operator",
+        "description": "Install the Piraeus Operator using Helm with the specified version:\n```bash\nhelm install piraeus piraeus/piraeus --version 2.10.4 --namespace piraeus-datastore --create-namespace\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check if the Piraeus Operator pod is running:\n```bash\nkubectl wait pod --for=condition=Ready -n piraeus-datastore -l app.kubernetes.io/component=piraeus-operator\n```"
+      },
+      {
+        "title": "Create a LINSTOR cluster",
+        "description": "Deploy a basic LINSTOR cluster by applying the following manifest:\n```bash\nkubectl apply -f - <<EOF\napiVersion: piraeus.io/v1\nkind: LinstorCluster\nmetadata:\n  name: linstorcluster\nspec: {}\nEOF\n```"
+      },
+      {
+        "title": "Configure resource limits",
+        "description": "Edit the Helm release to set resource limits for the operator:\n```bash\nhelm upgrade piraeus piraeus/piraeus --namespace piraeus-datastore --set operator.resources.limits.cpu=100m --set operator.resources.limits.memory=128Mi\n```"
+      },
+      {
+        "title": "Port-forward to access the operator",
+        "description": "Set up port-forwarding to access the operator's API:\n```bash\nkubectl port-forward svc/piraeus-operator-controller-manager -n piraeus-datastore 8080:443\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the Piraeus Operator release:\n```bash\nhelm uninstall piraeus --namespace piraeus-datastore\n```"
+      },
+      {
+        "title": "Clean up CRDs",
+        "description": "Delete the Custom Resource Definitions associated with the Piraeus Operator:\n```bash\nkubectl delete crd linstorclusters.piraeus.io\n```"
+      },
+      {
+        "title": "Remove the namespace",
+        "description": "Delete the namespace used for Piraeus Operator:\n```bash\nkubectl delete namespace piraeus-datastore\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current LINSTOR cluster configuration:\n```bash\nkubectl get linstorcluster -n piraeus-datastore -o yaml > linstorcluster-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Update the Piraeus Helm repository to get the latest charts:\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade the Piraeus Operator",
+        "description": "Upgrade the Piraeus Operator to the latest version:\n```bash\nhelm upgrade piraeus piraeus/piraeus --namespace piraeus-datastore --version 2.10.4\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check if the upgraded Piraeus Operator pod is running:\n```bash\nkubectl wait pod --for=condition=Ready -n piraeus-datastore -l app.kubernetes.io/component=piraeus-operator\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in CrashLoopBackOff",
+        "description": "This may indicate a configuration issue. Check the logs of the pod:\n```bash\nkubectl logs -n piraeus-datastore <pod-name>\n```\nLook for error messages that indicate what went wrong."
+      },
+      {
+        "title": "Service not reachable",
+        "description": "If the service is not reachable, ensure that the service is running:\n```bash\nkubectl get svc -n piraeus-datastore\n```\nCheck the endpoints:\n```bash\nkubectl get endpoints -n piraeus-datastore\n```"
+      },
+      {
+        "title": "Failed to create LinstorCluster",
+        "description": "If the LinstorCluster fails to create, check the events:\n```bash\nkubectl describe linstorcluster linstorcluster -n piraeus-datastore\n```"
+      },
+      {
+        "title": "Insufficient resources",
+        "description": "If pods are not starting due to resource limits, check the resource usage:\n```bash\nkubectl top pods -n piraeus-datastore\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of the Piraeus Operator will have the operator pod running in the 'piraeus-datastore' namespace, and you will be able to create a LINSTOR cluster. You can verify this by checking the pod status and ensuring no errors are present in the logs.",
+      "codeSnippets": [
+        "helm repo add piraeus https://charts.piraeus.io\nhelm repo update",
+        "helm install piraeus piraeus/piraeus --version 2.10.4 --namespace piraeus-datastore --create-namespace",
+        "kubectl wait pod --for=condition=Ready -n piraeus-datastore -l app.kubernetes.io/component=piraeus-operator",
+        "kubectl apply -f - <<EOF\napiVersion: piraeus.io/v1\nkind: LinstorCluster\nmetadata:\n  name: linstorcluster\nspec: {}\nEOF",
+        "helm upgrade piraeus piraeus/piraeus --namespace piraeus-datastore --set operator.resources.limits.cpu=100m --set operator.resources.limits.memory=128Mi"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "storage",
+      "sandbox"
+    ],
+    "cncfProjects": [
+      "piraeus-datastore"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "sandbox",
+    "projectVersion": "v2.10.4",
+    "containerImages": [
+      "quay.io/piraeusdatastore/piraeus-operator:v2.10.4"
+    ],
+    "sourceUrls": {
+      "docs": "https://piraeus.io/",
+      "repo": "https://github.com/piraeusdatastore/piraeus-operator",
+      "helm": "https://github.com/piraeusdatastore/piraeus-operator/tree/main/charts/piraeus/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have Kubernetes cluster access and Helm installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-02T22:35:14.264Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
