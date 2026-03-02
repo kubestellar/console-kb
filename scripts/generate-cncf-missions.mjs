@@ -606,20 +606,26 @@ async function generateMission(project, issue, resolution, linkedPR) {
     console.log(`    [regex fallback] ${missionSteps.length} steps`)
   }
 
+  const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+
   const mission = {
-    format: 'kc-mission-v1',
-    exportedAt: new Date().toISOString(),
-    exportedBy: 'cncf-mission-generator',
-    consoleVersion: 'auto-generated',
+    version: 'kc-mission-v1',
+    name: slug,
+    missionClass: 'solution',
+    author: 'KubeStellar Bot',
+    authorGithub: 'kubestellar',
     mission: {
       title: `${project.name}: ${issue.title}`,
       description: missionDesc,
       type: missionType,
       status: 'completed',
-      steps: missionSteps,
+      steps: missionSteps.map(s => ({
+        title: s.title.slice(0, 120),
+        description: (s.description || '').slice(0, 3000),
+      })),
       resolution: {
         summary: missionResolution,
-        steps: missionSteps.map(s => s.title),
+        codeSnippets: extractCodeSnippets(missionSteps, resolution),
       },
     },
     metadata: {
@@ -627,17 +633,27 @@ async function generateMission(project, issue, resolution, linkedPR) {
         project.name,
         project.maturity,
         project.category,
+        missionType,
         ...extractLabels(issue),
       ].filter((v, i, a) => a.indexOf(v) === i),
-      category: CATEGORY_TO_DIR[project.category] || 'troubleshooting',
       cncfProjects: [project.name],
       targetResourceKinds: extractResourceKinds(issue),
       difficulty: missionDifficulty,
-      sourceIssue: issue.html_url,
-      sourceRepo: project.repo,
+      issueTypes: [missionType],
+      maturity: project.maturity,
+      sourceUrls: {
+        issue: issue.html_url,
+        repo: `https://github.com/${project.repo}`,
+        ...(linkedPR ? { pr: linkedPR.html_url } : {}),
+      },
       reactions: issue.reactions?.total_count || 0,
       comments: issue.comments || 0,
       synthesizedBy: llmResult ? 'llm' : 'regex',
+    },
+    prerequisites: {
+      kubernetes: '>=1.24',
+      tools: ['kubectl'],
+      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
     },
     security: {
       scannedAt: new Date().toISOString(),
@@ -647,12 +663,25 @@ async function generateMission(project, issue, resolution, linkedPR) {
     },
   }
 
-  // Include code snippets if available
-  if (resolution.yamlSnippets.length > 0) {
-    mission.mission.resolution.codeSnippets = resolution.yamlSnippets.slice(0, 3)
-  }
-
   return mission
+}
+
+function extractCodeSnippets(steps, resolution) {
+  const snippets = []
+  for (const step of steps) {
+    const matches = (step.description || '').matchAll(/```[\w]*\n([\s\S]*?)```/g)
+    for (const m of matches) {
+      if (m[1].trim().length > 10) snippets.push(m[1].trim())
+      if (snippets.length >= 5) return snippets
+    }
+  }
+  if (resolution.yamlSnippets) {
+    for (const s of resolution.yamlSnippets) {
+      if (snippets.length >= 5) break
+      if (s.trim().length > 10) snippets.push(s.trim())
+    }
+  }
+  return snippets
 }
 
 function deduplicateAgainstExisting(slug, projectDir) {
@@ -835,7 +864,7 @@ async function main() {
               report.missions.push({
                 title: mission.mission.title,
                 difficulty: mission.metadata.difficulty,
-                sourceIssue: mission.metadata.sourceIssue,
+                sourceIssue: mission.metadata.sourceUrls?.issue || '',
                 qualityScore: qualityResult.score,
                 synthesizedBy: mission.metadata.synthesizedBy,
               })

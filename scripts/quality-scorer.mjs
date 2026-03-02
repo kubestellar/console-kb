@@ -167,7 +167,7 @@ function scoreMetadata(meta) {
   else score += 0.5
 
   // Has source issue link
-  if (meta.sourceIssue) score += 2
+  if (meta.sourceUrls?.issue || meta.sourceUrls?.source || meta.sourceIssue) score += 2
 
   // Has reactions (engagement indicator)
   if (meta.reactions > 20) score += 2

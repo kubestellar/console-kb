@@ -96,13 +96,17 @@ export async function buildMission({ title, description, problem, solution, step
     // LLM not available, continue with raw extraction
   }
 
+  const slug = slugify(`${project.name}-${sourceType}-${title}`)
+
   if (llmResult) {
+    const missionSteps = (llmResult.steps || []).map(s => ({
+      title: s.title.slice(0, 120),
+      description: (s.description || '').slice(0, 3000),
+    }))
     return {
-      format: 'kc-mission-v1',
-      exportedAt: new Date().toISOString(),
-      exportedBy: 'cncf-mission-generator',
-      consoleVersion: 'auto-generated',
-      missionClass: 'troubleshoot',
+      version: 'kc-mission-v1',
+      name: slug,
+      missionClass: 'solution',
       author: 'KubeStellar Bot',
       authorGithub: 'kubestellar',
       mission: {
@@ -110,23 +114,29 @@ export async function buildMission({ title, description, problem, solution, step
         description: llmResult.description,
         type: llmResult.type || type || 'troubleshoot',
         status: 'completed',
-        steps: llmResult.steps,
+        steps: missionSteps,
         resolution: {
           summary: llmResult.resolution,
-          steps: llmResult.steps.map(s => s.title),
-          codeSnippets: yamlSnippets?.slice(0, 3),
+          codeSnippets: extractSnippetsFromSteps(missionSteps, yamlSnippets),
         },
       },
       metadata: {
-        tags: labels || [],
-        category: project.category,
+        tags: [project.name, project.maturity, ...(labels || [])].filter((v, i, a) => a.indexOf(v) === i),
         cncfProjects: [project.name],
         targetResourceKinds: resourceKinds || [],
         difficulty: llmResult.difficulty || difficulty || 'intermediate',
-        sourceUrl,
-        sourceType,
-        sourceRepo: project.repo,
+        issueTypes: [llmResult.type || type || 'troubleshoot'],
+        maturity: project.maturity,
+        sourceUrls: {
+          [sourceType || 'source']: sourceUrl,
+          repo: `https://github.com/${project.repo}`,
+        },
         synthesizedBy: 'llm',
+      },
+      prerequisites: {
+        kubernetes: '>=1.24',
+        tools: ['kubectl'],
+        description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
       },
       security: {
         scannedAt: new Date().toISOString(),
@@ -138,12 +148,14 @@ export async function buildMission({ title, description, problem, solution, step
   }
 
   // Fallback: raw extraction
+  const rawSteps = (steps || []).map(s => {
+    const step = typeof s === 'string' ? { title: s, description: s } : s
+    return { title: step.title.slice(0, 120), description: (step.description || '').slice(0, 3000) }
+  })
   return {
-    format: 'kc-mission-v1',
-    exportedAt: new Date().toISOString(),
-    exportedBy: 'cncf-mission-generator',
-    consoleVersion: 'auto-generated',
-    missionClass: 'troubleshoot',
+    version: 'kc-mission-v1',
+    name: slug,
+    missionClass: 'solution',
     author: 'KubeStellar Bot',
     authorGithub: 'kubestellar',
     mission: {
@@ -151,23 +163,29 @@ export async function buildMission({ title, description, problem, solution, step
       description: description || problem || title,
       type: type || 'troubleshoot',
       status: 'completed',
-      steps: (steps || []).map(s => typeof s === 'string' ? { title: s, description: s } : s),
+      steps: rawSteps,
       resolution: {
         summary: solution || description || '',
-        steps: steps || [],
-        codeSnippets: yamlSnippets?.slice(0, 3),
+        codeSnippets: extractSnippetsFromSteps(rawSteps, yamlSnippets),
       },
     },
     metadata: {
-      tags: labels || [],
-      category: project.category,
+      tags: [project.name, project.maturity, ...(labels || [])].filter((v, i, a) => a.indexOf(v) === i),
       cncfProjects: [project.name],
       targetResourceKinds: resourceKinds || [],
       difficulty: difficulty || 'intermediate',
-      sourceUrl,
-      sourceType,
-      sourceRepo: project.repo,
+      issueTypes: [type || 'troubleshoot'],
+      maturity: project.maturity,
+      sourceUrls: {
+        [sourceType || 'source']: sourceUrl,
+        repo: `https://github.com/${project.repo}`,
+      },
       synthesizedBy: 'regex',
+    },
+    prerequisites: {
+      kubernetes: '>=1.24',
+      tools: ['kubectl'],
+      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
     },
     security: {
       scannedAt: new Date().toISOString(),
@@ -176,4 +194,22 @@ export async function buildMission({ title, description, problem, solution, step
       findings: [],
     },
   }
+}
+
+function extractSnippetsFromSteps(steps, yamlSnippets) {
+  const snippets = []
+  for (const step of steps) {
+    const matches = (step.description || '').matchAll(/```[\w]*\n([\s\S]*?)```/g)
+    for (const m of matches) {
+      if (m[1].trim().length > 10) snippets.push(m[1].trim())
+      if (snippets.length >= 5) return snippets
+    }
+  }
+  if (yamlSnippets) {
+    for (const s of yamlSnippets) {
+      if (snippets.length >= 5) break
+      if (s.trim().length > 10) snippets.push(s.trim())
+    }
+  }
+  return snippets
 }
