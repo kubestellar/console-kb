@@ -41,7 +41,7 @@ const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'platform-install')
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
-const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
 
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
@@ -154,75 +154,83 @@ async function crawlPlatformKnowledge(platform) {
 }
 
 // ─── LLM Prompt ──────────────────────────────────────────────────────
-const PLATFORM_SYSTEM_PROMPT = `You are an expert Kubernetes platform engineer creating VERSION-AWARE installation missions for the KubeStellar Console.
+const PLATFORM_SYSTEM_PROMPT = `You are a senior Kubernetes platform engineer writing PRODUCTION-GRADE, copy-paste-ready installation missions.
 
-A "platform install mission" is a structured, copy-pasteable guide that covers setting up, configuring, upgrading, and troubleshooting a Kubernetes platform (managed service, distribution, or operator).
+The goal: a user reads your mission and completes the install WITHOUT searching the web. Every command must work. Every step must be specific. Save the user's time.
 
-CRITICAL: Your output MUST include version-specific instructions. Different versions of a platform may have different installation steps, CLI commands, or configuration options.
-
-Your output MUST be a JSON object with these fields:
+OUTPUT FORMAT — a single JSON object:
 {
-  "description": "1-3 sentences describing this platform/operator and when you'd use it.",
+  "description": "2-3 sentences: what this is, when to use it, key trade-offs.",
   "platformType": "managed|distribution|local|operator",
-  "supportedVersions": ["version1", "version2"],
-  "supportedK8sVersions": ["1.28", "1.29", "1.30"],
+  "supportedVersions": ["v1.30","v1.31"],
+  "supportedK8sVersions": ["1.29","1.30","1.31"],
   "steps": [
     {
-      "title": "Short imperative title",
-      "description": "Detailed step with exact commands. Include version-specific notes where applicable. Use code blocks."
+      "title": "Imperative title (e.g. 'Install the CLI')",
+      "description": "Plain text explanation of what this step does and why.",
+      "commands": [
+        { "cmd": "exact shell command", "note": "optional: when/why to use this variant" }
+      ]
     }
   ],
   "uninstall": [
     {
-      "title": "Short imperative title",
-      "description": "Detailed step to remove/tear down. Include cleanup of resources, CRDs, cloud resources."
+      "title": "Imperative title",
+      "description": "What gets removed and any data-loss warnings.",
+      "commands": [{ "cmd": "exact command" }]
     }
   ],
   "upgrade": [
     {
-      "title": "Short imperative title",
-      "description": "Detailed step for version upgrade. Include pre-upgrade checks, backup, version-specific migration notes, and rollback."
+      "title": "Imperative title",
+      "description": "Pre-upgrade checklist, backup, the upgrade, post-upgrade verification, rollback.",
+      "commands": [{ "cmd": "exact command", "note": "optional note" }]
     }
   ],
   "troubleshooting": [
     {
-      "title": "Short title describing the issue",
-      "description": "Description, diagnosis commands, and fix. Include version-specific gotchas."
+      "symptom": "Exact error message or observable symptom",
+      "cause": "Root cause in 1-2 sentences",
+      "fix": "Exact commands or config change to resolve it",
+      "versions": "Which versions are affected (e.g. '<= 1.29' or 'all')"
     }
   ],
   "versionNotes": [
     {
-      "version": "string",
-      "changes": "Key changes / breaking changes in this version",
-      "deprecations": "Any deprecated features"
+      "version": "v1.31",
+      "changes": "Specific features: e.g. 'Added gateway API v1 support, new --enable-feature flag'",
+      "deprecations": "Specific deprecations: e.g. 'Removed --legacy-mode flag, PodSecurityPolicy no longer supported'",
+      "migrationSteps": "If upgrading from prior version requires action, list exact steps"
     }
   ],
-  "resolution": "2-3 sentences confirming what a successful setup looks like.",
+  "resolution": "What the user should see when everything is working (exact kubectl output patterns).",
   "difficulty": "beginner|intermediate|advanced",
-  "installMethods": ["cli", "helm", "kubectl", "terraform", "console", "operator"],
+  "estimatedMinutes": 15,
+  "installMethods": ["cli","helm","kubectl"],
   "prerequisites": {
     "kubernetes": ">=1.25",
-    "tools": ["kubectl", "helm"],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Brief prereq description"
+    "tools": ["kubectl","helm 3.x"],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Prerequisites sentence"
   },
-  "containerImages": ["registry/org/image:tag"],
+  "containerImages": ["registry/image:tag"],
   "skip": false
 }
 
-Rules:
-- Steps MUST have real commands — never "see the documentation"
-- Include the platform's CLI tool in prerequisites (gcloud, eksctl, az, oci, etc.)
-- For managed services: include cluster creation, node pool config, and connecting kubectl
-- For distributions: include installation on Linux nodes, join commands, and HA setup
-- For operators: include Helm install, CRD setup, and creating a CR instance
-- Pin versions — never use :latest
-- Include a verification step (kubectl cluster-info, node status, operator readiness)
-- Include at least 1 post-install configuration step (autoscaling, monitoring, RBAC)
-- "upgrade" must cover version-to-version upgrade paths with backup steps
-- "troubleshooting" must have 3-5 common issues with version-specific notes
-- "versionNotes" should cover at least the 2 most recent versions
-- Do NOT invent URLs or image names — only use what's in the provided context`
+STRICT RULES:
+1. STEPS: Minimum 4 steps for managed/distribution, 3 for operators/local. Each step MUST have a "commands" array with real commands — NEVER "see docs" or "visit website".
+2. COMMANDS: Pin every version. Use specific Helm chart versions (e.g. --version 4.10.1), not controller versions. Use release URLs with version tags, never /master/ or /main/ branch refs.
+3. MANAGED K8S: Must include (a) CLI install, (b) cluster create with version + node count + region, (c) kubeconfig setup, (d) verify nodes, (e) post-install (autoscaling/monitoring/RBAC), (f) costs warning.
+4. DISTRIBUTIONS: Must include (a) binary install, (b) init/bootstrap, (c) kubeconfig, (d) join worker nodes, (e) verify, (f) HA setup notes.
+5. OPERATORS: Must include (a) add Helm repo with CORRECT URL, (b) install CRDs if separate, (c) helm install with namespace + version, (d) create example CR, (e) verify the CR is ready.
+6. UNINSTALL: Must warn about data loss. For cloud: mention orphaned resources (load balancers, PVCs, DNS records). Minimum 2 steps.
+7. UPGRADE: Must include backup step, drain/cordon if needed, the upgrade command, post-upgrade verify. Minimum 3 steps.
+8. TROUBLESHOOTING: Minimum 4 real-world issues with exact error messages, not vague "check logs". Include version-specific bugs.
+9. VERSION NOTES: Be SPECIFIC — name the actual features/flags/APIs that changed. Never say "improved performance" without specifics.
+10. CLOUD CLI: For managed services, specify exact CLI + minimum version (e.g. "gcloud >= 450.0", "aws-cli >= 2.x + eksctl >= 0.170"). For operators that don't need one, set to "none".
+11. CONTAINER IMAGES: List the actual images deployed (e.g. "registry.k8s.io/ingress-nginx/controller:v1.10.1").
+12. ONLY use URLs and image names from the provided context or well-known registries (registry.k8s.io, ghcr.io, docker.io, quay.io). Do not guess.`
 
 function buildPlatformPrompt(platform, context) {
   const sections = [`# Platform install mission for: ${platform.displayName}`]
@@ -280,8 +288,8 @@ async function synthesizePlatformMission(platform, context) {
           { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.3,
-        max_tokens: 4000,
+        temperature: 0.2,
+        max_tokens: 6000,
         response_format: { type: 'json_object' },
       }),
     })
@@ -332,48 +340,107 @@ function applyQualityGate(mission) {
     return { pass: false, verdict: 'rejected', score: 0, issues: [`Security: malicious content — ${maliciousResult.matches.join(', ')}`] }
   }
 
-  // 3. Quality scoring
+  // 3. Base score from shared quality scorer
   try {
     const scoreResult = scoreMission(mission)
     score = scoreResult.score || 0
   } catch {
-    score = 50
+    score = 40
   }
 
-  // Platform-specific bonuses
   const steps = mission.mission?.steps || []
-  const stepsText = steps.map(s => s.description || '').join(' ')
-
-  // +10 for install/create command
-  if (/helm install|kubectl apply|gcloud container|eksctl create|az aks|oci ce|doctl kubernetes|k3s install|kubeadm init|snap install/i.test(stepsText)) {
-    score += 10
-  }
-
-  // +10 for verification step
-  if (/kubectl get|kubectl cluster-info|kubectl get nodes|health|status|ready/i.test(stepsText)) {
-    score += 10
-  }
-
-  // +5 for version references
-  if (/\d+\.\d+/i.test(stepsText)) score += 5
-
-  // +5 for each complete section
   const uninstall = mission.mission?.uninstall || []
   const upgrade = mission.mission?.upgrade || []
   const troubleshooting = mission.mission?.troubleshooting || []
-  if (uninstall.length >= 2) score += 5
-  if (upgrade.length >= 2) score += 5
-  if (troubleshooting.length >= 3) score += 5
-
-  // +5 for versionNotes
   const versionNotes = mission.mission?.versionNotes || []
-  if (versionNotes.length >= 1) score += 5
+  const platformType = mission.metadata?.platformType || 'operator'
+  const allText = JSON.stringify(mission.mission)
 
-  // +5 for platform-specific CLI
-  if (SAFE_CLI_COMMANDS.test(stepsText)) score += 5
+  // ── Bonuses (up to +40) ──
 
-  // Penalty for vague steps
-  if (/see the documentation|refer to docs|check the website/i.test(stepsText)) score -= 10
+  // Commands actually present in steps
+  const totalCmds = steps.reduce((n, s) => n + (s.commands?.length || 0), 0)
+  if (totalCmds >= 6) score += 10
+  else if (totalCmds >= 3) score += 5
+
+  // Version-pinned commands (helm --version, image:tag, release/vX.Y)
+  const versionPinned = (allText.match(/--version\s+[\w.]+|:v?\d+\.\d+\.\d+|releases\/(?:download\/)?v?\d+\.\d+/g) || []).length
+  if (versionPinned >= 3) score += 10
+  else if (versionPinned >= 1) score += 5
+
+  // Verification step (kubectl get, status check)
+  if (/kubectl get (nodes|pods|deploy|all|crd)|kubectl cluster-info|kubectl wait/i.test(allText)) score += 5
+
+  // Complete sections
+  if (uninstall.length >= 2) score += 5
+  if (upgrade.length >= 3) score += 5
+  if (troubleshooting.length >= 4) score += 5
+
+  // Specific versionNotes (not vague)
+  const specificNotes = versionNotes.filter(v =>
+    v.changes && !/improved (performance|stability)|various (improvements|fixes)/i.test(v.changes)
+  )
+  if (specificNotes.length >= 2) score += 5
+
+  // ── Penalties (up to -50) ──
+
+  // Too few steps
+  const minSteps = platformType === 'operator' || platformType === 'local' ? 3 : 4
+  if (steps.length < minSteps) {
+    score -= 15
+    issues.push(`Only ${steps.length} steps (min ${minSteps} for ${platformType})`)
+  }
+
+  // No commands at all
+  if (totalCmds === 0) {
+    score -= 20
+    issues.push('No executable commands in steps')
+  }
+
+  // Vague content
+  if (/see the documentation|refer to docs|check the website|visit the official/i.test(allText)) {
+    score -= 10
+    issues.push('Contains "see docs" instead of actual instructions')
+  }
+
+  // /master/ or /main/ branch URLs (fragile)
+  if (/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/(master|main)\//i.test(allText)) {
+    score -= 5
+    issues.push('Uses /master/ or /main/ branch URL (should pin to release tag)')
+  }
+
+  // :latest image tag
+  if (/:latest\b/.test(allText)) {
+    score -= 5
+    issues.push('Uses :latest image tag')
+  }
+
+  // Missing uninstall
+  if (uninstall.length === 0) {
+    score -= 10
+    issues.push('No uninstall section')
+  }
+
+  // Missing upgrade
+  if (upgrade.length === 0) {
+    score -= 10
+    issues.push('No upgrade section')
+  }
+
+  // Vague versionNotes
+  const vagueNotes = versionNotes.filter(v =>
+    v.changes && /^improved (performance|stability|security)/i.test(v.changes) && v.changes.length < 60
+  )
+  if (vagueNotes.length > 0) {
+    score -= 5
+    issues.push(`${vagueNotes.length} vague versionNotes (no specifics)`)
+  }
+
+  // Generic cloudCLI for managed services
+  if (['managed'].includes(platformType) && (!mission.prerequisites?.cloudCLI || /optional/i.test(mission.prerequisites.cloudCLI))) {
+    score -= 5
+    issues.push('Managed service missing specific cloudCLI requirement')
+  }
 
   score = Math.max(0, Math.min(100, score))
 
@@ -387,8 +454,83 @@ function applyQualityGate(mission) {
 }
 
 // ─── Build Mission JSON ──────────────────────────────────────────────
+
+/** Extract commands from a step — handles both new {cmd,note} format and legacy markdown */
+function extractCommands(step) {
+  // New format: commands array
+  if (Array.isArray(step.commands) && step.commands.length > 0) {
+    return step.commands.map(c => typeof c === 'string' ? c : c.cmd).filter(Boolean)
+  }
+  // Legacy: extract from markdown code blocks in description
+  const desc = step.description || ''
+  const matches = desc.match(/```(?:bash|console|shell|sh|yaml)?\n([\s\S]*?)```/g)
+  if (matches) {
+    return matches
+      .map(m => m.replace(/```(?:bash|console|shell|sh|yaml)?\n?/g, '').replace(/```$/g, '').trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+/** Build a rich description from step fields */
+function buildStepDescription(step) {
+  const parts = []
+  if (step.description) parts.push(step.description.replace(/```[\s\S]*?```/g, '').trim())
+
+  const cmds = extractCommands(step)
+  if (cmds.length > 0) {
+    parts.push('```bash')
+    for (const c of cmds) {
+      parts.push(c)
+    }
+    parts.push('```')
+  }
+
+  // Add command notes
+  if (Array.isArray(step.commands)) {
+    const notes = step.commands.filter(c => c.note).map(c => `> ${c.note}`)
+    if (notes.length) parts.push(notes.join('\n'))
+  }
+
+  return parts.filter(Boolean).join('\n\n')
+}
+
+/** Map troubleshooting to consistent format */
+function mapTroubleshooting(items) {
+  return (items || []).map(t => {
+    // New format has symptom/cause/fix; legacy has title/description
+    const title = t.symptom || t.title || 'Issue'
+    const parts = []
+    if (t.cause) parts.push(`**Cause:** ${t.cause}`)
+    if (t.fix) parts.push(`**Fix:**\n${t.fix}`)
+    if (t.versions && t.versions !== 'all') parts.push(`**Affected versions:** ${t.versions}`)
+    if (t.description) parts.push(t.description)
+    return {
+      title: String(title).slice(0, 200),
+      description: parts.length ? parts.join('\n\n') : String(t.description || t.fix || '').slice(0, 3000),
+    }
+  })
+}
+
 function buildMissionJson(platform, llmResult, context) {
   const slug = slugify(platform.name)
+
+  // Collect all commands for the resolution codeSnippets
+  const allCommands = (llmResult.steps || []).flatMap(s => extractCommands(s)).slice(0, 8)
+
+  // Determine cloudCLI — normalize "none" and generic fallbacks
+  let cloudCLI = llmResult.prerequisites?.cloudCLI
+  if (!cloudCLI || cloudCLI === 'none' || /optional/i.test(cloudCLI)) {
+    // Use platform catalog's known CLI
+    const cliMap = {
+      gke: 'gcloud >= 450.0', eks: 'aws-cli >= 2.x, eksctl >= 0.170',
+      aks: 'az >= 2.50', oke: 'oci >= 3.x', doks: 'doctl >= 1.100',
+      lke: 'linode-cli', iks: 'ibmcloud >= 2.x', vke: 'vultr-cli',
+      openshift: 'oc >= 4.14',
+    }
+    cloudCLI = cliMap[platform.name] || (platform.type === 'operator' ? undefined : cloudCLI)
+  }
+
   const mission = {
     version: 'kc-mission-v1',
     name: `platform-${slug}`,
@@ -400,39 +542,34 @@ function buildMissionJson(platform, llmResult, context) {
       description: llmResult.description || `Setup guide for ${platform.displayName}.`,
       type: 'deploy',
       status: 'completed',
+      estimatedMinutes: llmResult.estimatedMinutes || (platform.type === 'managed' ? 20 : platform.type === 'operator' ? 10 : 15),
       steps: (llmResult.steps || []).map(s => ({
         title: String(s.title || '').slice(0, 200),
-        description: String(s.description || '').slice(0, 3000),
+        description: buildStepDescription(s),
+        commands: extractCommands(s),
       })),
       uninstall: (llmResult.uninstall || []).map(s => ({
         title: String(s.title || '').slice(0, 200),
-        description: String(s.description || '').slice(0, 3000),
+        description: buildStepDescription(s),
+        commands: extractCommands(s),
       })),
       upgrade: (llmResult.upgrade || []).map(s => ({
         title: String(s.title || '').slice(0, 200),
-        description: String(s.description || '').slice(0, 3000),
+        description: buildStepDescription(s),
+        commands: extractCommands(s),
       })),
-      troubleshooting: (llmResult.troubleshooting || []).map(s => ({
-        title: String(s.title || '').slice(0, 200),
-        description: String(s.description || '').slice(0, 3000),
-      })),
+      troubleshooting: mapTroubleshooting(llmResult.troubleshooting),
       versionNotes: (llmResult.versionNotes || []).map(v => ({
         version: String(v.version || ''),
         changes: String(v.changes || ''),
         deprecations: String(v.deprecations || ''),
+        migrationSteps: v.migrationSteps ? String(v.migrationSteps) : undefined,
       })),
       resolution: {
         summary: typeof llmResult.resolution === 'string'
           ? llmResult.resolution
           : llmResult.resolution?.summary || `${platform.displayName} is installed and running.`,
-        codeSnippets: (llmResult.steps || [])
-          .map(s => s.description || '')
-          .flatMap(d => {
-            const matches = d.match(/```(?:bash|console|shell|yaml)?\n([\s\S]*?)```/g)
-            return matches ? matches.map(m => m.replace(/```(?:bash|console|shell|yaml)?\n?/g, '').replace(/```$/g, '').trim()) : []
-          })
-          .filter(Boolean)
-          .slice(0, 6),
+        codeSnippets: allCommands,
       },
     },
     metadata: {
@@ -446,8 +583,8 @@ function buildMissionJson(platform, llmResult, context) {
       platform: platform.name,
       platformType: platform.type,
       platformProvider: platform.provider,
-      platformVersions: platform.versions,
-      supportedK8sVersions: platform.k8sVersions,
+      platformVersions: llmResult.supportedVersions || platform.versions,
+      supportedK8sVersions: llmResult.supportedK8sVersions || platform.k8sVersions,
       cncfProjects: [],
       targetResourceKinds: ['Namespace', 'Deployment', 'Service'],
       difficulty: llmResult.difficulty || 'intermediate',
@@ -463,12 +600,13 @@ function buildMissionJson(platform, llmResult, context) {
     prerequisites: {
       kubernetes: llmResult.prerequisites?.kubernetes || '>=1.25',
       tools: llmResult.prerequisites?.tools || ['kubectl'],
-      cloudCLI: llmResult.prerequisites?.cloudCLI || undefined,
+      cloudCLI,
+      resources: llmResult.prerequisites?.resources || undefined,
       description: llmResult.prerequisites?.description || `Ensure you have the required CLI tools installed.`,
     },
     security: {
       scannedAt: new Date().toISOString(),
-      scannerVersion: 'platform-install-gen-1.0.0',
+      scannerVersion: 'platform-install-gen-2.0.0',
       sanitized: true,
       findings: [],
     },
