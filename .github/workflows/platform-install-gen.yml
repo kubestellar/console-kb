@@ -1,0 +1,248 @@
+name: Generate Platform Install Missions
+on:
+  schedule:
+    - cron: '0 6 * * 4'  # Weekly Thursday 6am UTC (offset from CNCF install on Wednesday)
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Comma-separated platform names (empty = all)'
+        required: false
+      batch_size:
+        description: 'Platforms per batch'
+        required: false
+        default: '20'
+      dry_run:
+        description: 'Dry run (no PR created)'
+        required: false
+        type: boolean
+        default: false
+      force_regenerate:
+        description: 'Overwrite existing missions'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      batch_count: ${{ steps.plan.outputs.batch_count }}
+      is_targeted: ${{ steps.plan.outputs.is_targeted }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plan batches
+        id: plan
+        run: |
+          cd scripts && npm ci --silent
+          BATCH_SIZE="${{ inputs.batch_size || '20' }}"
+          TARGET="${{ inputs.platforms || '' }}"
+
+          if [ -n "$TARGET" ]; then
+            COUNT=$(echo "$TARGET" | tr ',' '\n' | wc -l | tr -d ' ')
+            echo "is_targeted=true" >> "$GITHUB_OUTPUT"
+          else
+            COUNT=$(node --input-type=module -e "
+              import { K8S_PLATFORMS } from './k8s-platforms.mjs';
+              import { readdirSync, existsSync } from 'fs';
+              const dir = '../solutions/platform-install';
+              const existing = existsSync(dir) ? readdirSync(dir).filter(f=>f.endsWith('.json')).length : 0;
+              const toGen = K8S_PLATFORMS.length - existing;
+              console.log(Math.max(toGen, 0));
+            " 2>/dev/null || echo "40")
+            echo "is_targeted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          BATCHES=$(( (COUNT + BATCH_SIZE - 1) / BATCH_SIZE ))
+          BATCHES=$(( BATCHES > 3 ? 3 : BATCHES ))  # cap at 3 parallel
+          [ "$BATCHES" -lt 1 ] && BATCHES=1
+
+          # Build matrix JSON
+          INDICES="["
+          for i in $(seq 0 $((BATCHES - 1))); do
+            [ "$i" -gt 0 ] && INDICES="$INDICES,"
+            INDICES="$INDICES$i"
+          done
+          INDICES="$INDICES]"
+
+          echo "matrix=$INDICES" >> "$GITHUB_OUTPUT"
+          echo "batch_count=$BATCHES" >> "$GITHUB_OUTPUT"
+          echo "Planning: $COUNT platforms in $BATCHES batch(es) of $BATCH_SIZE"
+
+  generate:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        batch_index: ${{ fromJson(needs.plan.outputs.matrix) }}
+      max-parallel: 2
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: cd scripts && npm ci --silent
+
+      - name: Create solutions directory
+        run: mkdir -p solutions/platform-install
+
+      - name: Generate platform missions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LLM_TOKEN: ${{ secrets.GH_MODELS_PAT }}
+          TARGET_PLATFORMS: ${{ inputs.platforms || '' }}
+          BATCH_INDEX: ${{ matrix.batch_index }}
+          BATCH_SIZE: ${{ inputs.batch_size || '20' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          FORCE_REGENERATE: ${{ inputs.force_regenerate || 'false' }}
+        run: node scripts/generate-platform-missions.mjs
+
+      - name: Upload artifacts
+        if: ${{ inputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-missions-batch-${{ matrix.batch_index }}
+          path: |
+            solutions/platform-install/*.json
+            platform-report-*.md
+
+  collect:
+    needs: [plan, generate]
+    if: ${{ inputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: cd scripts && npm ci --silent
+
+      - name: Download all batch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: platform-missions-batch-*
+          merge-multiple: true
+
+      - name: Move mission files to solutions dir
+        run: |
+          mkdir -p solutions/platform-install
+          # Move any missions that ended up at repo root
+          find . -maxdepth 1 -name 'platform-*.json' -exec mv {} solutions/platform-install/ \;
+          echo "Platform missions:"
+          ls -la solutions/platform-install/platform-*.json 2>/dev/null | wc -l
+
+      - name: Schema validation
+        id: schema
+        run: |
+          ERRORS=0
+          for f in solutions/platform-install/platform-*.json; do
+            [ -f "$f" ] || continue
+            node --input-type=module -e "
+              import { validateMissionExport } from './scripts/scanner.mjs';
+              import { readFileSync } from 'fs';
+              const m = JSON.parse(readFileSync('$f','utf-8'));
+              const r = validateMissionExport(m);
+              if (!r.valid) { console.error('FAIL: $f', r.errors); process.exit(1); }
+            " || ERRORS=$((ERRORS + 1))
+          done
+          echo "schema_errors=$ERRORS" >> "$GITHUB_OUTPUT"
+          [ "$ERRORS" -gt 0 ] && echo "⚠️ $ERRORS schema errors" || echo "✅ All schemas valid"
+
+      - name: Security scan
+        id: security
+        run: |
+          BLOCKED=0
+          for f in solutions/platform-install/platform-*.json; do
+            [ -f "$f" ] || continue
+            node --input-type=module -e "
+              import { scanForSensitiveData, scanForMaliciousContent } from './scripts/scanner.mjs';
+              import { readFileSync } from 'fs';
+              const content = readFileSync('$f','utf-8');
+              const s = scanForSensitiveData(content);
+              const m = scanForMaliciousContent(content);
+              if (s.found || m.found) {
+                console.error('BLOCKED: $f', s.matches, m.matches);
+                process.exit(1);
+              }
+            " || {
+              echo "🚫 Removing blocked file: $f"
+              rm "$f"
+              BLOCKED=$((BLOCKED + 1))
+            }
+          done
+          echo "security_blocked=$BLOCKED" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild index
+        run: node scripts/build-index.mjs
+
+      - name: Collect reports
+        run: |
+          echo "# Platform Mission Generation — Collect Report" > collect-report.md
+          echo "" >> collect-report.md
+          echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> collect-report.md
+          echo "" >> collect-report.md
+
+          NEW_COUNT=$(ls solutions/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "## Results" >> collect-report.md
+          echo "- New platform missions: $NEW_COUNT" >> collect-report.md
+          echo "- Schema errors: ${{ steps.schema.outputs.schema_errors || '0' }}" >> collect-report.md
+          echo "- Security blocked: ${{ steps.security.outputs.security_blocked || '0' }}" >> collect-report.md
+          echo "" >> collect-report.md
+
+          # Append individual reports
+          for f in platform-report-*.md; do
+            [ -f "$f" ] && cat "$f" >> collect-report.md
+          done
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_COUNT=$(ls solutions/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
+          [ "$NEW_COUNT" -eq 0 ] && echo "No new missions, skipping PR" && exit 0
+
+          BRANCH="platform-install-gen-$(date +%Y%m%d)-$((RANDOM % 10000))"
+          git checkout -b "$BRANCH"
+          git add solutions/platform-install/ solutions/index.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "✨ Platform install mission generation $(date +%Y-%m-%d)
+
+          Generated $NEW_COUNT platform install missions.
+          Includes managed K8s services, distributions, and cluster operators."
+
+          git push origin "$BRANCH"
+
+          AVG_SCORE=$(node -e "
+            const fs = require('fs');
+            const path = 'solutions/platform-install';
+            const files = fs.readdirSync(path).filter(f=>f.startsWith('platform-')&&f.endsWith('.json'));
+            if (!files.length) { console.log(0); process.exit(); }
+            const scores = files.map(f => JSON.parse(fs.readFileSync(path+'/'+f,'utf-8')).metadata?.qualityScore || 0);
+            console.log(Math.round(scores.reduce((a,b)=>a+b,0)/scores.length));
+          ")
+
+          DRAFT_FLAG=""
+          [ "$AVG_SCORE" -lt 50 ] && DRAFT_FLAG="--draft"
+
+          gh pr create \
+            --title "✨ Platform install mission generation $(date +%Y-%m-%d)" \
+            --body "$(cat collect-report.md)" \
+            --base master \
+            $DRAFT_FLAG \
+            --label "platform-install,automated"
