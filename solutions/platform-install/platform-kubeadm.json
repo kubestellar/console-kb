@@ -6,90 +6,113 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure kubeadm (Kubernetes bootstrapper)",
-    "description": "Kubeadm is a tool designed to simplify the process of creating and managing Kubernetes clusters. It provides best-practice paths for bootstrapping a secure and minimal viable cluster, making it ideal for users who want to set up Kubernetes quickly and efficiently.",
+    "description": "Kubeadm is a tool designed to simplify the process of creating and managing Kubernetes clusters. It provides best-practice 'fast paths' for setting up a secure and minimal viable cluster. While it is user-friendly, it requires familiarity with Kubernetes concepts and may not cover all advanced configurations.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 30,
     "steps": [
       {
         "title": "Install Kubeadm",
-        "description": "Install kubeadm on your Linux nodes. For Ubuntu 22.04, use the following commands:\n```bash\nsudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\nsudo bash -c 'echo \"deb https://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list'\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00\nsudo apt-mark hold kubelet kubeadm kubectl\n```\nNote: Replace `1.31.0` with the specific version you wish to install."
+        "description": "This step installs the kubeadm binary on your system, which is necessary for bootstrapping the Kubernetes cluster.\n\n```bash\n\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\n\necho 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list\n\nsudo apt-get update\n\nsudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00\n\n```\n\n> Add Google Cloud public key for package verification.\n> Add Kubernetes APT repository.\n> Update the package list to include Kubernetes packages.\n> Install specific versions of kubeadm, kubelet, and kubectl.",
+        "commands": [
+          "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+          "echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
+          "sudo apt-get update",
+          "sudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00"
+        ]
       },
       {
-        "title": "Initialize the Control Plane",
-        "description": "Run the following command to initialize the Kubernetes control plane:\n```bash\nsudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16\n```\nAfter initialization, set up your kubeconfig:\n```bash\nmkdir -p $HOME/.kube\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n```"
+        "title": "Initialize the Kubernetes Control Plane",
+        "description": "This step initializes the control plane node of the Kubernetes cluster.\n\n```bash\n\nsudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16\n\n```\n\n> Initialize the cluster with Flannel pod network.",
+        "commands": [
+          "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16"
+        ]
       },
       {
-        "title": "Install a Pod Network",
-        "description": "Install a network add-on for your cluster. For Flannel, run:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml\n```"
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures kubectl to use the newly created cluster.\n\n```bash\n\nmkdir -p $HOME/.kube\n\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\n\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n\n```\n\n> Create the kube directory in the home folder.\n> Copy the admin config to the kube directory.\n> Change ownership of the config file.",
+        "commands": [
+          "mkdir -p $HOME/.kube",
+          "sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config",
+          "sudo chown $(id -u):$(id -g) $HOME/.kube/config"
+        ]
       },
       {
-        "title": "Join Worker Nodes",
-        "description": "On each worker node, run the join command provided at the end of the `kubeadm init` output. It looks like this:\n```bash\nkubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>\n```"
+        "title": "Install a Pod Network Add-on",
+        "description": "This step installs a network add-on to allow communication between pods.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml\n\n```\n\n> Install Flannel as the network add-on.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml"
+        ]
       },
       {
-        "title": "Verify the Cluster",
-        "description": "Check the status of your cluster:\n```bash\nkubectl cluster-info\nkubectl get nodes\n```"
-      },
-      {
-        "title": "Post-Install Configuration",
-        "description": "To enable the Horizontal Pod Autoscaler, run:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloud-provider/aws/examples/cluster-autoscaler-example.yaml\n```"
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks the status of the nodes in the cluster to ensure they are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes and their statuses.",
+        "commands": [
+          "kubectl get nodes"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Reset Kubeadm",
-        "description": "To remove Kubernetes and reset the node, run:\n```bash\nsudo kubeadm reset\nsudo rm -rf $HOME/.kube\n```"
+        "title": "Reset Kubeadm Configuration",
+        "description": "This step removes the Kubernetes cluster and all associated configurations. Data loss may occur, and orphaned resources may remain.\n\n```bash\n\nsudo kubeadm reset\n\nsudo rm -rf $HOME/.kube\n\n```\n\n> Reset the kubeadm configuration.\n> Remove kubeconfig directory.",
+        "commands": [
+          "sudo kubeadm reset",
+          "sudo rm -rf $HOME/.kube"
+        ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Kubernetes Cluster",
-        "description": "Before upgrading, backup your cluster configuration and data. To upgrade from v1.30 to v1.31, run:\n```bash\nsudo kubeadm upgrade plan\nsudo kubeadm upgrade apply v1.31.0\n```\nAfter upgrading, update your kubelet and kubectl:\n```bash\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubectl=1.31.0-00\nsudo systemctl daemon-reload\nsudo systemctl restart kubelet\n```\nVerify the upgrade:\n```bash\nkubectl get nodes\n```"
+        "description": "Backup the current cluster state, drain the node, upgrade the cluster, and verify the upgrade.\n\n```bash\n\nkubectl get nodes -o wide\n\nkubectl drain <node-name> --ignore-daemonsets\n\nsudo kubeadm upgrade plan\n\nsudo kubeadm upgrade apply v1.31.0\n\nkubectl uncordon <node-name>\n\nkubectl get nodes\n\n```\n\n> Check the current node status before upgrade.\n> Drain the node to prepare for upgrade.\n> Check available upgrades.\n> Apply the upgrade to the cluster.\n> Uncordon the node after upgrade.\n> Verify that all nodes are ready after upgrade.",
+        "commands": [
+          "kubectl get nodes -o wide",
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "sudo kubeadm upgrade plan",
+          "sudo kubeadm upgrade apply v1.31.0",
+          "kubectl uncordon <node-name>",
+          "kubectl get nodes"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Kubelet Not Starting",
-        "description": "If kubelet fails to start, check the logs:\n```bash\njournalctl -u kubelet\n```\nCommon issues include misconfigured CNI or insufficient resources."
+        "title": "Error: 'kubelet not running'",
+        "description": "**Cause:** Kubelet service may not be started or is failing.\n\n**Fix:**\nRun 'sudo systemctl start kubelet' to start the kubelet service."
       },
       {
-        "title": "Control Plane Node Not Ready",
-        "description": "If the control plane node shows as 'NotReady', check the status of the pods in the kube-system namespace:\n```bash\nkubectl get pods -n kube-system\n```\nLook for errors in the etcd or kube-apiserver pods."
+        "title": "Error: 'kubeadm init failed'",
+        "description": "**Cause:** Insufficient resources or incompatible OS configuration.\n\n**Fix:**\nEnsure minimum 2 vCPU and 4GB RAM per node, and check OS compatibility."
       },
       {
-        "title": "Network Issues",
-        "description": "If pods cannot communicate, ensure the network add-on is correctly installed and running:\n```bash\nkubectl get pods -n kube-system\n```\nCheck for any errors in the network plugin."
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** Network issues or incorrect image name.\n\n**Fix:**\nCheck network connectivity and verify the image name in the configuration."
       },
       {
-        "title": "Token Expired",
-        "description": "If you receive a token expired error when joining nodes, create a new token:\n```bash\nkubeadm token create --print-join-command\n```"
-      },
-      {
-        "title": "Kubeadm Upgrade Fails",
-        "description": "If the upgrade fails, check the logs for kubeadm:\n```bash\njournalctl -xeu kubelet\n```\nEnsure that your cluster is in a healthy state before attempting to upgrade."
+        "title": "Error: 'node not ready'",
+        "description": "**Cause:** Pod network add-on may not be installed or configured correctly.\n\n**Fix:**\nEnsure that the pod network add-on is installed and running correctly."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Improved performance and stability, new features for managing cluster resources.",
-        "deprecations": "Deprecated support for older CNI plugins."
-      },
-      {
-        "version": "v1.30",
-        "changes": "Enhanced security features and improved upgrade paths.",
-        "deprecations": "Deprecated certain flags in kubeadm init."
+        "changes": "Added support for new features like 'kubelet config file', improved upgrade process.",
+        "deprecations": "Deprecated 'kubeadm alpha' commands.",
+        "migrationSteps": "If upgrading from v1.30, ensure to review the new kubelet configuration options."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of Kubeadm results in a fully functional Kubernetes cluster with a control plane and worker nodes ready to deploy applications. You should be able to verify the cluster status and have a network add-on installed.",
+      "summary": "You should see the output of 'kubectl get nodes' showing all nodes in 'Ready' status.",
       "codeSnippets": [
-        "sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\nsudo bash -c 'echo \"deb https://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list'\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00\nsudo apt-mark hold kubelet kubeadm kubectl",
+        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+        "echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
+        "sudo apt-get update",
+        "sudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00",
         "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16",
-        "mkdir -p $HOME/.kube\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nsudo chown $(id -u):$(id -g) $HOME/.kube/config",
-        "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml",
-        "kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>",
-        "kubectl cluster-info\nkubectl get nodes"
+        "mkdir -p $HOME/.kube",
+        "sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config",
+        "sudo chown $(id -u):$(id -g) $HOME/.kube/config"
       ]
     }
   },
@@ -139,20 +162,21 @@
       "docs": "https://kubernetes.io/docs/reference/setup-tools/kubeadm/",
       "repo": "https://github.com/kubernetes/kubeadm"
     },
-    "qualityScore": 100
+    "qualityScore": 94
   },
   "prerequisites": {
-    "kubernetes": ">=1.29",
+    "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "kubeadm"
+      "kubelet"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure you have a Linux environment with sufficient resources to run a Kubernetes cluster."
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure your system meets the minimum resource requirements and has the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:09:28.865Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:15:39.710Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

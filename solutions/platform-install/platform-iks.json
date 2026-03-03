@@ -6,69 +6,118 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure IBM Cloud Kubernetes Service (IKS)",
-    "description": "IBM Cloud Kubernetes Service (IKS) is a managed Kubernetes service that simplifies the deployment and management of Kubernetes clusters on IBM Cloud. It is ideal for organizations looking to leverage Kubernetes without the overhead of managing the underlying infrastructure.",
+    "description": "IBM Cloud Kubernetes Service (IKS) is a managed Kubernetes offering that simplifies the deployment and management of Kubernetes clusters on IBM Cloud. It is ideal for users looking for a fully managed solution with integrated IBM Cloud services. Key trade-offs include reliance on IBM's infrastructure and potential costs associated with managed services.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Create an IBM Cloud Kubernetes Cluster",
-        "description": "Use the IBM Cloud CLI to create a Kubernetes cluster. Replace `<cluster-name>` and `<region>` with your desired values.\n\n```bash\nibmcloud ks cluster-create --name <cluster-name> --zone <region> --num-workers 3 --machine-type b3c.4x16\n```\n\nAfter the cluster is created, set the context for kubectl:\n\n```bash\nibmcloud ks cluster-config --cluster <cluster-name>\n```\n```\n\nThis command configures your local kubectl to connect to the new cluster."
+        "title": "Install the IBM Cloud CLI",
+        "description": "This step installs the IBM Cloud CLI, which is required to interact with IBM Cloud services.\n\n```bash\n\ncurl -sL https://clis.cloud.ibm.com/install/linux.sh | bash\n\n```\n\n> This command downloads and installs the IBM Cloud CLI on Linux.",
+        "commands": [
+          "curl -sL https://clis.cloud.ibm.com/install/linux.sh | bash"
+        ]
       },
       {
-        "title": "Verify Cluster Setup",
-        "description": "Check the cluster information and node status to ensure everything is running correctly.\n\n```bash\nkubectl cluster-info\nkubectl get nodes\n```\n\nEnsure all nodes are in 'Ready' status."
+        "title": "Login to IBM Cloud",
+        "description": "Authenticate your IBM Cloud account to manage resources.\n\n```bash\n\nibmcloud login\n\n```\n\n> You will be prompted to enter your IBM Cloud credentials.",
+        "commands": [
+          "ibmcloud login"
+        ]
       },
       {
-        "title": "Post-Install Configuration for Autoscaling",
-        "description": "Enable the Horizontal Pod Autoscaler (HPA) for your deployments. First, ensure metrics-server is installed:\n\n```bash\nkubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\n```\n\nThen, create an HPA for your deployment:\n\n```bash\nkubectl autoscale deployment <deployment-name> --cpu-percent=50 --min=1 --max=10\n```\n"
+        "title": "Create a Kubernetes Cluster",
+        "description": "This command creates a new Kubernetes cluster with the specified version and node count in a chosen region.\n\n```bash\n\nibmcloud ks cluster-create --name my-cluster --zone us-south-1 --kube-version 1.30 --num-nodes 3\n\n```\n\n> Replace 'my-cluster' with your desired cluster name.",
+        "commands": [
+          "ibmcloud ks cluster-create --name my-cluster --zone us-south-1 --kube-version 1.30 --num-nodes 3"
+        ]
+      },
+      {
+        "title": "Set up Kubeconfig",
+        "description": "This command configures your local environment to use the new Kubernetes cluster.\n\n```bash\n\nibmcloud ks cluster-config --cluster my-cluster\n\n```\n\n> This command sets the KUBECONFIG environment variable.",
+        "commands": [
+          "ibmcloud ks cluster-config --cluster my-cluster"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "Ensure that the nodes in your cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a status of 'Ready'.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Consider enabling autoscaling and monitoring for your cluster.\n\n```bash\n\nibmcloud ks cluster-update --cluster my-cluster --enable-autoscale\n\nibmcloud ks monitoring enable --cluster my-cluster\n\n```\n\n> This command enables autoscaling for your cluster.\n> This command enables monitoring for your cluster.",
+        "commands": [
+          "ibmcloud ks cluster-update --cluster my-cluster --enable-autoscale",
+          "ibmcloud ks monitoring enable --cluster my-cluster"
+        ]
       }
     ],
     "uninstall": [
       {
         "title": "Delete the Kubernetes Cluster",
-        "description": "To remove the Kubernetes cluster and all associated resources, use the following command:\n\n```bash\nibmcloud ks cluster-delete --cluster <cluster-name> --force\n```\n\nThis command will delete the cluster and all resources associated with it."
+        "description": "This command will remove the Kubernetes cluster and all associated resources, which may lead to data loss.\n\n```bash\n\nibmcloud ks cluster-delete --cluster my-cluster --force\n\n```\n\n> Use --force to skip confirmation.",
+        "commands": [
+          "ibmcloud ks cluster-delete --cluster my-cluster --force"
+        ]
+      },
+      {
+        "title": "Clean Up Orphaned Resources",
+        "description": "Check for and manually delete any orphaned resources such as load balancers or PVCs.\n\n```bash\n\nibmcloud resource service-instance-list\n\n```\n\n> Review and delete any remaining resources.",
+        "commands": [
+          "ibmcloud resource service-instance-list"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Kubernetes Cluster Version",
-        "description": "Before upgrading, ensure you have a backup of your workloads and configurations. You can use the following command to upgrade your cluster:\n\n```bash\nibmcloud ks cluster-update --cluster <cluster-name> --kubernetes-version 1.30\n```\n\nAfter the upgrade, verify the cluster status:\n\n```bash\nkubectl get nodes\n```\n\nIf you encounter issues, you can roll back to the previous version using the same command with the old version number."
+        "title": "Upgrade the Kubernetes Cluster",
+        "description": "Before upgrading, ensure you back up your data and configurations. After upgrading, verify the cluster status.\n\n```bash\n\nibmcloud ks cluster-backup --cluster my-cluster\n\nibmcloud ks cluster-update --cluster my-cluster --kube-version 1.31\n\nkubectl get nodes\n\n```\n\n> Backup your cluster before proceeding.\n> Upgrade to the latest Kubernetes version.\n> Verify that all nodes are in 'Ready' status after the upgrade.",
+        "commands": [
+          "ibmcloud ks cluster-backup --cluster my-cluster",
+          "ibmcloud ks cluster-update --cluster my-cluster --kube-version 1.31",
+          "kubectl get nodes"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Nodes Not Ready",
-        "description": "If any nodes are not in 'Ready' status, check the node conditions:\n\n```bash\nkubectl describe node <node-name>\n```\n\nLook for any issues in the events section. Common issues include insufficient resources or network problems."
+        "title": "Error: 'Unauthorized' when running ibmcloud commands",
+        "description": "**Cause:** This indicates that your IBM Cloud CLI session has expired or is not authenticated.\n\n**Fix:**\nRe-run 'ibmcloud login' to authenticate again."
       },
       {
-        "title": "kubectl Not Configured",
-        "description": "If kubectl commands fail, ensure that the context is set correctly:\n\n```bash\nibmcloud ks cluster-config --cluster <cluster-name>\n```\n\nThen, verify the context:\n\n```bash\nkubectl config current-context\n```\n"
+        "title": "Error: 'Cluster not found' when trying to access the cluster",
+        "description": "**Cause:** The specified cluster name may be incorrect or the cluster may have been deleted.\n\n**Fix:**\nCheck the cluster name and ensure it exists using 'ibmcloud ks clusters'."
       },
       {
-        "title": "HPA Not Scaling",
-        "description": "If the Horizontal Pod Autoscaler is not scaling as expected, ensure that metrics-server is running:\n\n```bash\nkubectl get pods -n kube-system\n```\n\nCheck the logs of the metrics-server pod for errors:\n\n```bash\nkubectl logs <metrics-server-pod-name> -n kube-system\n```\n"
+        "title": "Error: 'Insufficient quota' when creating a cluster",
+        "description": "**Cause:** Your IBM Cloud account may have reached its resource quota limits.\n\n**Fix:**\nReview your account quotas and delete unused resources or request a quota increase."
+      },
+      {
+        "title": "Error: 'Failed to connect to the cluster'",
+        "description": "**Cause:** This can occur if the kubeconfig is not set up correctly.\n\n**Fix:**\nRun 'ibmcloud ks cluster-config --cluster my-cluster' to set up kubeconfig correctly."
       }
     ],
     "versionNotes": [
       {
-        "version": "1.30",
-        "changes": "Introduced support for new node types and improved security features.",
-        "deprecations": "Deprecated support for Kubernetes 1.26."
-      },
-      {
-        "version": "1.29",
-        "changes": "Enhanced monitoring capabilities and improved autoscaling features.",
-        "deprecations": "No major deprecations."
+        "version": "v1.30",
+        "changes": "Added support for Kubernetes 1.30 features including new API versions and improved scheduling.",
+        "deprecations": "Deprecated certain legacy APIs that may affect existing deployments.",
+        "migrationSteps": "Review the release notes for any necessary changes to your configurations."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of IBM Cloud Kubernetes Service includes a running cluster with all nodes in 'Ready' status, kubectl configured correctly, and post-install configurations such as autoscaling enabled.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "ibmcloud ks cluster-create --name <cluster-name> --zone <region> --num-workers 3 --machine-type b3c.4x16",
-        "ibmcloud ks cluster-config --cluster <cluster-name>",
-        "kubectl cluster-info\nkubectl get nodes",
-        "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml",
-        "kubectl autoscale deployment <deployment-name> --cpu-percent=50 --min=1 --max=10"
+        "curl -sL https://clis.cloud.ibm.com/install/linux.sh | bash",
+        "ibmcloud login",
+        "ibmcloud ks cluster-create --name my-cluster --zone us-south-1 --kube-version 1.30 --num-nodes 3",
+        "ibmcloud ks cluster-config --cluster my-cluster",
+        "kubectl get nodes",
+        "ibmcloud ks cluster-update --cluster my-cluster --enable-autoscale",
+        "ibmcloud ks monitoring enable --cluster my-cluster"
       ]
     }
   },
@@ -84,9 +133,7 @@
     "platformType": "managed",
     "platformProvider": "IBM Cloud",
     "platformVersions": [
-      "1.28",
-      "1.29",
-      "1.30"
+      "v1.30"
     ],
     "supportedK8sVersions": [
       "1.28",
@@ -99,7 +146,7 @@
       "Deployment",
       "Service"
     ],
-    "difficulty": "intermediate",
+    "difficulty": "beginner",
     "issueTypes": [
       "installation",
       "configuration"
@@ -107,9 +154,7 @@
     "installMethods": [
       "cli"
     ],
-    "containerImages": [
-      "ibmcom/ibm-cloud-kubernetes-service:1.30"
-    ],
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://cloud.ibm.com/docs/containers",
       "repo": "https://github.com/IBM-Cloud/kube-samples"
@@ -122,12 +167,13 @@
       "kubectl",
       "ibmcloud"
     ],
-    "cloudCLI": "optional IBM Cloud CLI",
-    "description": "Ensure you have the IBM Cloud CLI installed and configured with your account."
+    "cloudCLI": "gcloud none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the IBM Cloud CLI and kubectl installed and configured."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:07:08.911Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:11:47.551Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

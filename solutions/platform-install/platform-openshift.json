@@ -6,77 +6,120 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Red Hat OpenShift Container Platform (OCP)",
-    "description": "Red Hat OpenShift Container Platform (OCP) is an enterprise Kubernetes distribution that provides a robust platform for developing and deploying containerized applications. It is ideal for organizations looking to leverage Kubernetes with additional features such as developer tools, enhanced security, and integrated CI/CD pipelines.",
+    "description": "Red Hat OpenShift Container Platform (OCP) is a comprehensive enterprise Kubernetes platform that provides developers and IT operations teams with a powerful platform for building, deploying, and managing containerized applications. It is ideal for organizations looking for a robust solution with integrated developer tools and enterprise-grade security. Key trade-offs include the complexity of installation and management compared to simpler Kubernetes distributions.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 30,
     "steps": [
       {
-        "title": "Install OpenShift CLI",
-        "description": "Download and install the OpenShift CLI (oc) for version 4.17. Use the following commands to download and install: \n```bash\ncurl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.17.0/openshift-client-linux-4.17.0.tar.gz\nsudo tar -xvf openshift-client-linux-4.17.0.tar.gz -C /usr/local/bin/ \nrm -f openshift-client-linux-4.17.0.tar.gz\n```"
+        "title": "Install the OpenShift CLI",
+        "description": "This step installs the OpenShift command-line interface (CLI) which is essential for interacting with your OpenShift cluster.\n\n```bash\n\ncurl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.17.0.tar.gz\n\ntar -xzf openshift-client-linux-4.17.0.tar.gz\n\nsudo mv oc kubectl /usr/local/bin/\n\n```\n\n> Download the OpenShift CLI for version 4.17.0.\n> Extract the downloaded tarball.\n> Move the binaries to a directory in your PATH.",
+        "commands": [
+          "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.17.0.tar.gz",
+          "tar -xzf openshift-client-linux-4.17.0.tar.gz",
+          "sudo mv oc kubectl /usr/local/bin/"
+        ]
       },
       {
-        "title": "Create an OpenShift Cluster",
-        "description": "Use the OpenShift Installer to create a new cluster. Run the following command: \n```bash\nopenshift-install create cluster --dir=<installation-directory> --log-level=info\n``` \nEnsure you have the necessary cloud credentials set up in the installation directory."
+        "title": "Create an OpenShift cluster",
+        "description": "This step creates a new OpenShift cluster with the specified version, node count, and region.\n\n```bash\n\nopenshift-install create cluster --dir=./cluster --log-level=info\n\n```\n\n> Replace './cluster' with your desired directory for installation.",
+        "commands": [
+          "openshift-install create cluster --dir=./cluster --log-level=info"
+        ]
       },
       {
-        "title": "Configure kubectl",
-        "description": "After the cluster is created, configure kubectl to connect to your OpenShift cluster: \n```bash\nexport KUBECONFIG=<installation-directory>/auth/kubeconfig\nkubectl cluster-info\n``` \nThis command should return the cluster information."
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig file to interact with the newly created OpenShift cluster.\n\n```bash\n\nexport KUBECONFIG=$(pwd)/cluster/auth/kubeconfig\n\n```\n\n> Set the KUBECONFIG environment variable to point to your cluster's kubeconfig.",
+        "commands": [
+          "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig"
+        ]
       },
       {
-        "title": "Verify Cluster Installation",
-        "description": "Verify that the cluster is up and running by checking the node status: \n```bash\nkubectl get nodes\n``` \nAll nodes should be in the 'Ready' state."
+        "title": "Verify cluster nodes",
+        "description": "This step checks the status of the nodes in your OpenShift cluster to ensure they are running correctly.\n\n```bash\n\noc get nodes\n\n```\n\n> You should see the nodes listed with a 'Ready' status.",
+        "commands": [
+          "oc get nodes"
+        ]
       },
       {
-        "title": "Post-Install Configuration",
-        "description": "Set up monitoring and autoscaling by enabling the Cluster Autoscaler: \n```bash\noc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler-operator.yaml\n``` \nThis will enable the autoscaler for your cluster."
+        "title": "Post-installation configuration",
+        "description": "This step includes setting up monitoring, autoscaling, and RBAC for your OpenShift cluster.\n\n```bash\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml\n\noc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)\n\n```\n\n> Apply the monitoring configuration.\n> Create a cluster role binding for the current user.",
+        "commands": [
+          "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml",
+          "oc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Remove OpenShift Cluster",
-        "description": "To uninstall the OpenShift cluster, run the following command: \n```bash\nopenshift-install destroy cluster --dir=<installation-directory> --log-level=info\n``` \nThis will remove all resources associated with the cluster."
+        "title": "Remove the OpenShift cluster",
+        "description": "This step will remove the OpenShift cluster and all associated resources, which may lead to data loss.\n\n```bash\n\nopenshift-install destroy cluster --dir=./cluster --log-level=info\n\n```\n\n> Ensure you have backups of any important data before proceeding.",
+        "commands": [
+          "openshift-install destroy cluster --dir=./cluster --log-level=info"
+        ]
+      },
+      {
+        "title": "Clean up orphaned resources",
+        "description": "This step removes any orphaned resources such as load balancers and persistent volumes.\n\n```bash\n\naws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}\n\n```\n\n> Replace with your cloud provider's commands if not using AWS.",
+        "commands": [
+          "aws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade OpenShift Cluster",
-        "description": "To upgrade from version 4.16 to 4.17, first ensure you have a backup of your cluster: \n```bash\noc adm must-gather --image=quay.io/openshift-release-dev/ocp-v4.0-art-dev:latest\n``` \nThen, update the cluster version by editing the ClusterVersion resource: \n```bash\noc edit clusterversion version\n``` \nChange the spec to the desired version: \n```yaml\nspec:\n  desired:\n    version: 4.17.0\n``` \nMonitor the upgrade process with: \n```bash\noc get clusterversion\n```"
+        "title": "Upgrade the OpenShift cluster",
+        "description": "Before upgrading, ensure you have a backup of your cluster and its resources.\n\n```bash\n\noc adm upgrade --to-image=<new-image>\n\noc get nodes\n\n```\n\n> Replace <new-image> with the desired version image.\n> Verify that all nodes are upgraded and in 'Ready' state.",
+        "commands": [
+          "oc adm upgrade --to-image=<new-image>",
+          "oc get nodes"
+        ]
+      },
+      {
+        "title": "Post-upgrade verification",
+        "description": "After the upgrade, verify that all components are functioning as expected.\n\n```bash\n\noc get pods --all-namespaces\n\n```\n\n> Check that all pods are running without issues.",
+        "commands": [
+          "oc get pods --all-namespaces"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Cluster Not Starting",
-        "description": "If the cluster fails to start, check the installation logs: \n```bash\ncat <installation-directory>/install.log\n``` \nLook for errors related to cloud provider configuration or resource limits."
+        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
+        "description": "**Cause:** This usually indicates an issue with the kubeconfig file or the cluster's API server certificate.\n\n**Fix:**\nEnsure your KUBECONFIG is set correctly and the cluster is running."
       },
       {
-        "title": "Node Not Ready",
-        "description": "If a node is not in 'Ready' state, check the node conditions: \n```bash\nkubectl describe node <node-name>\n``` \nLook for any conditions that indicate issues with the node."
+        "title": "Error: 'no nodes available in cluster'",
+        "description": "**Cause:** This indicates that the cluster nodes are not in a 'Ready' state.\n\n**Fix:**\nRun 'oc get nodes' to check the status and troubleshoot any issues."
       },
       {
-        "title": "oc CLI Commands Failing",
-        "description": "If oc commands are failing, ensure that your KUBECONFIG is set correctly: \n```bash\necho $KUBECONFIG\n``` \nIf it is not set, export it again using: \n```bash\nexport KUBECONFIG=<installation-directory>/auth/kubeconfig\n```"
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** This can occur if the image is not available in the specified registry.\n\n**Fix:**\nVerify the image name and ensure it is accessible from the cluster."
+      },
+      {
+        "title": "Error: 'Insufficient CPU or memory'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the pods.\n\n**Fix:**\nScale up the cluster or adjust resource requests for your workloads."
       }
     ],
     "versionNotes": [
       {
         "version": "4.17",
-        "changes": "Introduced support for Kubernetes 1.30, enhanced security features, and improved developer experience.",
-        "deprecations": "Deprecated the use of certain legacy APIs."
-      },
-      {
-        "version": "4.16",
-        "changes": "Added new monitoring capabilities and improved performance for large clusters.",
-        "deprecations": "Deprecated some older CLI commands."
+        "changes": "Introduced support for Kubernetes 1.30, enhanced security features, and improved developer experience tools.",
+        "deprecations": "Deprecated legacy authentication methods and certain APIs.",
+        "migrationSteps": "Review the deprecation notices and update your configurations accordingly."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of OpenShift should show all nodes in 'Ready' state and allow you to run kubectl commands without errors. The cluster should also be configured for autoscaling and monitoring.",
+      "summary": "You should see output similar to 'NAME STATUS ROLES AGE VERSION' with all nodes in 'Ready' state when running 'oc get nodes'.",
       "codeSnippets": [
-        "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.17.0/openshift-client-linux-4.17.0.tar.gz\nsudo tar -xvf openshift-client-linux-4.17.0.tar.gz -C /usr/local/bin/ \nrm -f openshift-client-linux-4.17.0.tar.gz",
-        "openshift-install create cluster --dir=<installation-directory> --log-level=info",
-        "export KUBECONFIG=<installation-directory>/auth/kubeconfig\nkubectl cluster-info",
-        "kubectl get nodes",
-        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler-operator.yaml"
+        "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.17.0.tar.gz",
+        "tar -xzf openshift-client-linux-4.17.0.tar.gz",
+        "sudo mv oc kubectl /usr/local/bin/",
+        "openshift-install create cluster --dir=./cluster --log-level=info",
+        "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig",
+        "oc get nodes",
+        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml",
+        "oc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)"
       ]
     }
   },
@@ -115,30 +158,30 @@
       "configuration"
     ],
     "installMethods": [
-      "cli",
-      "kubectl"
+      "cli"
     ],
     "containerImages": [
-      "registry.access.redhat.com/openshift4/ose:4.17"
+      "registry.redhat.io/openshift4/ose-operator:v4.17"
     ],
     "sourceUrls": {
       "docs": "https://docs.openshift.com/container-platform/latest/",
       "repo": "https://github.com/openshift/origin"
     },
-    "qualityScore": 100
+    "qualityScore": 99
   },
   "prerequisites": {
     "kubernetes": ">=1.27",
     "tools": [
       "kubectl",
-      "openshift-install"
+      "oc"
     ],
-    "cloudCLI": "gcloud, aws, az, or oci depending on your cloud provider",
-    "description": "Ensure you have the OpenShift CLI and kubectl installed, along with the necessary cloud provider CLI tools."
+    "cloudCLI": "oc >= 4.14",
+    "resources": "Minimum 4 vCPU, 16GB RAM per node",
+    "description": "Ensure you have the required tools and resources before starting the installation."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:07:57.675Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:12:49.275Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

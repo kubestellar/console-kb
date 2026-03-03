@@ -6,68 +6,111 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Rancher / RKE2",
-    "description": "Rancher is a complete container management platform that simplifies deploying and managing Kubernetes clusters across various environments. It's particularly useful for organizations looking to streamline their container orchestration and management processes.",
+    "description": "Rancher is a complete container management platform that simplifies the deployment and management of Kubernetes clusters. It is ideal for organizations looking to manage multiple Kubernetes clusters across different environments. Key trade-offs include the need for sufficient hardware resources and the complexity of managing multiple clusters.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 30,
     "steps": [
       {
-        "title": "Install Rancher Server",
-        "description": "Run the Rancher server using Docker. Ensure Docker is installed on your Linux node. Execute the following command:\n```bash\nsudo docker run -d --restart=unless-stopped -p 80:80 -p 443:443 --privileged rancher/rancher:v2.10.0\n```\nAfter the command completes, access Rancher by visiting `https://localhost` in your web browser."
+        "title": "Install the Rancher CLI",
+        "description": "This step installs the Rancher CLI, which is necessary for managing Rancher from the command line.\n\n```bash\n\ncurl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz\n\ntar -xzf rancher-darwin-amd64-v2.13.3.tar.gz\n\nsudo mv rancher /usr/local/bin/\n\n```\n\n> Download the Rancher CLI for macOS.\n> Extract the downloaded tarball.\n> Move the CLI to a directory in your PATH.",
+        "commands": [
+          "curl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz",
+          "tar -xzf rancher-darwin-amd64-v2.13.3.tar.gz",
+          "sudo mv rancher /usr/local/bin/"
+        ]
       },
       {
-        "title": "Connect kubectl to Rancher",
-        "description": "Once Rancher is running, you can configure `kubectl` to connect to your Rancher-managed clusters. First, get the kubeconfig file from Rancher:\n1. Log in to the Rancher UI.\n2. Navigate to the cluster you want to manage.\n3. Click on 'Kubeconfig File' to download it.\n4. Set the KUBECONFIG environment variable:\n```bash\nexport KUBECONFIG=path/to/downloaded/kubeconfig.yaml\n```\nVerify the connection:\n```bash\nkubectl cluster-info\n```"
+        "title": "Create a Kubernetes cluster",
+        "description": "This step creates a new Kubernetes cluster using RKE2 with the specified version and node count.\n\n```bash\n\ncurl -sfL https://get.rke2.io | sh -\n\nsudo systemctl enable rke2-server\n\nsudo systemctl start rke2-server\n\n```\n\n> Install RKE2 on the master node.\n> Enable the RKE2 server to start on boot.\n> Start the RKE2 server.",
+        "commands": [
+          "curl -sfL https://get.rke2.io | sh -",
+          "sudo systemctl enable rke2-server",
+          "sudo systemctl start rke2-server"
+        ]
       },
       {
-        "title": "Post-install Configuration",
-        "description": "Configure monitoring and autoscaling for your clusters. For example, to enable the Horizontal Pod Autoscaler, you can use the following command:\n```bash\nkubectl autoscale deployment your-deployment-name --cpu-percent=50 --min=1 --max=10\n```\nEnsure that metrics-server is installed in your cluster for HPA to function correctly."
+        "title": "Set up kubeconfig",
+        "description": "This step configures kubeconfig to access the newly created Kubernetes cluster.\n\n```bash\n\nsudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config\n\nsudo chown $(id -u):$(id -g) ~/.kube/config\n\n```\n\n> Copy the RKE2 kubeconfig to your home directory.\n> Change ownership of the kubeconfig file.",
+        "commands": [
+          "sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config",
+          "sudo chown $(id -u):$(id -g) ~/.kube/config"
+        ]
+      },
+      {
+        "title": "Verify cluster nodes",
+        "description": "This step verifies that the nodes in the cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes in the cluster to ensure they are ready.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "This step sets up monitoring and autoscaling for the cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-monitoring.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-autoscaler.yaml\n\n```\n\n> Install Rancher monitoring.\n> Install Rancher autoscaler.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-monitoring.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-autoscaler.yaml"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Remove Rancher Server",
-        "description": "To uninstall Rancher, stop and remove the Docker container:\n```bash\nsudo docker ps -a # to find the container ID\nsudo docker stop <container_id>\nsudo docker rm <container_id>\n```\nAdditionally, clean up any persistent storage if configured."
+        "title": "Uninstall Rancher",
+        "description": "This step removes Rancher and all associated resources. Be aware that this will lead to data loss.\n\n```bash\n\nkubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml\n\nsudo systemctl stop rke2-server\n\n```\n\n> Delete the Rancher deployment.\n> Stop the RKE2 server.",
+        "commands": [
+          "kubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml",
+          "sudo systemctl stop rke2-server"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Rancher Server",
-        "description": "To upgrade Rancher, first back up your data. You can create a backup by exporting the database. Then, pull the new version and run it:\n```bash\nsudo docker pull rancher/rancher:v2.10.0\nsudo docker run -d --restart=unless-stopped -p 80:80 -p 443:443 --privileged rancher/rancher:v2.10.0\n```\nVerify the upgrade by checking the Rancher UI and running:\n```bash\nkubectl get pods -n cattle-system\n```\nIf issues arise, you can roll back to the previous version by running the older image."
+        "title": "Upgrade Rancher",
+        "description": "Before upgrading, ensure you back up your data and verify the current state of the cluster.\n\n```bash\n\nkubectl get all --all-namespaces > backup-$(date +%F).yaml\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml\n\nkubectl get pods -n cattle-system\n\n```\n\n> Backup current resources.\n> Apply the new Rancher manifest.\n> Verify that all Rancher pods are running.",
+        "commands": [
+          "kubectl get all --all-namespaces > backup-$(date +%F).yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml",
+          "kubectl get pods -n cattle-system"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Rancher UI not accessible",
-        "description": "If the Rancher UI is not accessible, check if the Docker container is running:\n```bash\nsudo docker ps\n```\nIf it's not running, check the logs for errors:\n```bash\nsudo docker logs <container_id>\n```\nCommon issues include port conflicts or insufficient resources."
+        "title": "Error: 'Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused'",
+        "description": "**Cause:** The RKE2 server is not running or has failed to start.\n\n**Fix:**\nCheck the RKE2 server logs with 'sudo journalctl -u rke2-server -f' and restart the service if necessary."
       },
       {
-        "title": "kubectl not connecting to Rancher",
-        "description": "Ensure that the KUBECONFIG is set correctly. Run:\n```bash\necho $KUBECONFIG\n```\nIf it points to the wrong file, reset it. Also, verify that the kubeconfig file is valid and contains the correct cluster information."
+        "title": "Error: 'No resources found in default namespace'",
+        "description": "**Cause:** The Kubernetes cluster may not have any resources deployed.\n\n**Fix:**\nDeploy a sample application to verify the cluster is functioning."
       },
       {
-        "title": "Pods in CrashLoopBackOff",
-        "description": "If you see pods in a CrashLoopBackOff state, check the pod logs:\n```bash\nkubectl logs <pod_name>\n```\nCommon causes include misconfigurations in deployments or insufficient resources allocated to the pods."
+        "title": "Error: 'kubectl: command not found'",
+        "description": "**Cause:** kubectl is not installed or not in the PATH.\n\n**Fix:**\nInstall kubectl using 'curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/local/bin/'"
+      },
+      {
+        "title": "Error: 'Failed to connect to the API server'",
+        "description": "**Cause:** The kubeconfig file may not be set up correctly.\n\n**Fix:**\nEnsure the kubeconfig file is correctly copied and owned by the user with 'ls -l ~/.kube/config'."
       }
     ],
     "versionNotes": [
       {
-        "version": "2.10",
-        "changes": "Introduced support for Kubernetes 1.30, improved UI performance, and enhanced security features.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.27."
-      },
-      {
-        "version": "2.9",
-        "changes": "Added new monitoring capabilities and improved cluster management features.",
-        "deprecations": "Deprecated certain legacy APIs."
+        "version": "v2.13.3",
+        "changes": "Added support for Kubernetes v1.30, improved RBAC configurations, and enhanced monitoring capabilities.",
+        "deprecations": "Deprecated legacy API versions for certain resources.",
+        "migrationSteps": "If upgrading from v2.12.x, ensure to migrate any custom resource definitions to the new API versions."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of Rancher should allow you to access the Rancher UI at `https://localhost`, manage Kubernetes clusters, and utilize features like monitoring and autoscaling. Ensure that all components are running smoothly and that `kubectl` is configured correctly.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "sudo docker run -d --restart=unless-stopped -p 80:80 -p 443:443 --privileged rancher/rancher:v2.10.0",
-        "export KUBECONFIG=path/to/downloaded/kubeconfig.yaml",
-        "kubectl cluster-info",
-        "kubectl autoscale deployment your-deployment-name --cpu-percent=50 --min=1 --max=10"
+        "curl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz",
+        "tar -xzf rancher-darwin-amd64-v2.13.3.tar.gz",
+        "sudo mv rancher /usr/local/bin/",
+        "curl -sfL https://get.rke2.io | sh -",
+        "sudo systemctl enable rke2-server",
+        "sudo systemctl start rke2-server",
+        "sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config",
+        "sudo chown $(id -u):$(id -g) ~/.kube/config"
       ]
     }
   },
@@ -106,10 +149,10 @@
     ],
     "installMethods": [
       "cli",
-      "docker"
+      "kubectl"
     ],
     "containerImages": [
-      "rancher/rancher:v2.10.0"
+      "rancher/rancher:v2.13.3"
     ],
     "sourceUrls": {
       "docs": "https://ranchermanager.docs.rancher.com/",
@@ -121,14 +164,15 @@
     "kubernetes": ">=1.27",
     "tools": [
       "kubectl",
-      "docker"
+      "curl"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure Docker is installed and running on your Linux node."
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:07:54.322Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:13:19.294Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

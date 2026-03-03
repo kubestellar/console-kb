@@ -6,68 +6,120 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure DigitalOcean Kubernetes (DOKS)",
-    "description": "DigitalOcean Kubernetes (DOKS) is a managed Kubernetes service designed for simplicity and cost-effectiveness in container orchestration. It is ideal for developers and teams looking to deploy and manage Kubernetes clusters without the overhead of managing the underlying infrastructure.",
+    "description": "DigitalOcean Kubernetes (DOKS) is a managed Kubernetes service that simplifies the deployment and management of Kubernetes clusters. It is ideal for users looking for a cost-effective and user-friendly solution for container orchestration without the overhead of managing the underlying infrastructure. Key trade-offs include limited customization compared to self-managed solutions and potential vendor lock-in.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Create a DOKS Cluster",
-        "description": "Use the DigitalOcean CLI (doctl) to create a Kubernetes cluster. Replace `<cluster-name>`, `<region>`, and `<node-count>` with your desired values.\n\n```bash\n# Install doctl if you haven't already\nbrew install doctl\n\n# Authenticate with your DigitalOcean account\ndoctl auth init\n\n# Create the Kubernetes cluster\ndoctl k8s cluster create <cluster-name> --region <region> --node-pool \"name=default;size=s-2vcpu-4gb;count=<node-count>\"\n```\n\n**Note:** Ensure you select a region that supports your desired Kubernetes version."
+        "title": "Install the DigitalOcean CLI",
+        "description": "The DigitalOcean CLI (doctl) is required to interact with the DigitalOcean API and manage your Kubernetes clusters.\n\n```bash\n\ncurl -sL https://github.com/digitalocean/doctl/releases/download/v1.80.0/doctl-1.80.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin\n\nchmod +x /usr/local/bin/doctl\n\n```\n\n> This command downloads and installs the latest version of doctl.\n> Make the doctl binary executable.",
+        "commands": [
+          "curl -sL https://github.com/digitalocean/doctl/releases/download/v1.80.0/doctl-1.80.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin",
+          "chmod +x /usr/local/bin/doctl"
+        ]
       },
       {
-        "title": "Connect kubectl to the Cluster",
-        "description": "Once the cluster is created, configure kubectl to connect to it:\n\n```bash\n# Get the kubeconfig for your cluster\ndoctl k8s cluster kubeconfig save <cluster-name>\n\n# Verify kubectl is connected\ngkubectl cluster-info\n```\n"
+        "title": "Authenticate the CLI",
+        "description": "You need to authenticate doctl with your DigitalOcean account to manage resources.\n\n```bash\n\ndoctl auth init --access-token YOUR_DIGITALOCEAN_ACCESS_TOKEN\n\n```\n\n> Replace YOUR_DIGITALOCEAN_ACCESS_TOKEN with your actual token.",
+        "commands": [
+          "doctl auth init --access-token YOUR_DIGITALOCEAN_ACCESS_TOKEN"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster on DigitalOcean with the specified version and node count.\n\n```bash\n\ndoctl k8s cluster create my-cluster --version v1.30.0 --count 3 --region nyc1\n\n```\n\n> This creates a cluster named 'my-cluster' with 3 nodes in the NYC1 region.",
+        "commands": [
+          "doctl k8s cluster create my-cluster --version v1.30.0 --count 3 --region nyc1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures your local kubeconfig file to interact with your new cluster.\n\n```bash\n\ndoctl k8s cluster kubeconfig save my-cluster\n\n```\n\n> This command updates your kubeconfig file with the credentials for 'my-cluster'.",
+        "commands": [
+          "doctl k8s cluster kubeconfig save my-cluster"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "Ensure that the nodes in your cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes in your cluster and their statuses.",
+        "commands": [
+          "kubectl get nodes"
+        ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "Set up Horizontal Pod Autoscaler (HPA) for your deployments:\n\n```bash\n# Create a deployment (example)\nkubectl create deployment my-app --image=nginx\n\n# Expose the deployment\ngkubectl expose deployment my-app --port=80 --target-port=80\n\n# Enable HPA\ngkubectl autoscale deployment my-app --cpu-percent=50 --min=1 --max=10\n```\nVerify HPA is working:\n```bash\nkubectl get hpa\n```\n"
+        "description": "Consider enabling autoscaling and monitoring for your cluster to optimize resource usage.\n\n```bash\n\ndoctl k8s cluster update my-cluster --enable-autoscale\n\ndoctl k8s cluster update my-cluster --enable-monitoring\n\n```\n\n> This enables autoscaling for your cluster.\n> This enables monitoring for your cluster.",
+        "commands": [
+          "doctl k8s cluster update my-cluster --enable-autoscale",
+          "doctl k8s cluster update my-cluster --enable-monitoring"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Delete the DOKS Cluster",
-        "description": "To uninstall the DOKS cluster, run:\n\n```bash\ndoctl k8s cluster delete <cluster-name>\n```\nThis command will remove the cluster and all associated resources. Ensure you have backed up any necessary data before proceeding."
+        "title": "Delete the Kubernetes Cluster",
+        "description": "This step will remove the Kubernetes cluster and all associated resources, which may lead to data loss.\n\n```bash\n\ndoctl k8s cluster delete my-cluster --force\n\n```\n\n> Use --force to skip confirmation prompt.",
+        "commands": [
+          "doctl k8s cluster delete my-cluster --force"
+        ]
+      },
+      {
+        "title": "Remove DigitalOcean CLI",
+        "description": "Uninstall the DigitalOcean CLI if it is no longer needed.\n\n```bash\n\nrm /usr/local/bin/doctl\n\n```\n\n> This command removes the doctl binary from your system.",
+        "commands": [
+          "rm /usr/local/bin/doctl"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade DOKS Cluster",
-        "description": "To upgrade your DOKS cluster to a newer version, follow these steps:\n1. Check the current version:\n   ```bash\n   doctl k8s cluster get <cluster-name>\n   ```\n2. Upgrade the cluster:\n   ```bash\n   doctl k8s cluster upgrade <cluster-name> --version <new-version>\n   ```\n3. Verify the upgrade:\n   ```bash\n   kubectl get nodes\n   ```\n4. Backup your data before upgrading, especially if you are moving between major versions. Use tools like Velero for backup.\n5. If issues arise, you can roll back to the previous version using the same upgrade command with the old version number."
+        "title": "Upgrade the Kubernetes Cluster",
+        "description": "Before upgrading, ensure you have a backup of your workloads and configurations.\n\n```bash\n\nkubectl get all --all-namespaces -o yaml > backup.yaml\n\ndoctl k8s cluster upgrade my-cluster --version v1.31.0\n\nkubectl get nodes\n\n```\n\n> Backup all resources to a file.\n> This command upgrades the cluster to version 1.31.\n> Verify that all nodes are updated and ready.",
+        "commands": [
+          "kubectl get all --all-namespaces -o yaml > backup.yaml",
+          "doctl k8s cluster upgrade my-cluster --version v1.31.0",
+          "kubectl get nodes"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "kubectl not connecting to the cluster",
-        "description": "If kubectl cannot connect, ensure your kubeconfig is set up correctly. Run:\n```bash\ncat ~/.kube/config\n```\nCheck for the correct context and cluster name. If incorrect, re-run the kubeconfig command:\ndoctl k8s cluster kubeconfig save <cluster-name>."
+        "title": "Error: 'Unauthorized'",
+        "description": "**Cause:** This indicates that the authentication token is invalid or expired.\n\n**Fix:**\nRe-authenticate using 'doctl auth init --access-token YOUR_DIGITALOCEAN_ACCESS_TOKEN'."
       },
       {
-        "title": "Cluster status is 'Pending'",
-        "description": "If your cluster is stuck in 'Pending', check for resource availability in your selected region. Use:\n```bash\ndoctl k8s cluster get <cluster-name>\n```\nIf resources are insufficient, consider changing the region or adjusting node pool sizes."
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This may occur if the cluster is not fully provisioned or if there are network issues.\n\n**Fix:**\nWait a few minutes and retry the command. Check the cluster status with 'doctl k8s cluster get my-cluster'."
       },
       {
-        "title": "HPA not scaling",
-        "description": "If HPA is not scaling as expected, ensure your application is consuming CPU resources. Check with:\n```bash\nkubectl top pods\n```\nIf no metrics are reported, ensure Metrics Server is installed:\n```bash\nkubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\n```"
+        "title": "Error: 'No resources found'",
+        "description": "**Cause:** This indicates that there are no resources in the specified namespace.\n\n**Fix:**\nEnsure you are querying the correct namespace or create resources as needed."
+      },
+      {
+        "title": "Error: 'Insufficient quota'",
+        "description": "**Cause:** This indicates that your account has reached the resource limits set by DigitalOcean.\n\n**Fix:**\nCheck your account limits and either delete unused resources or upgrade your plan."
       }
     ],
     "versionNotes": [
       {
-        "version": "1.30",
-        "changes": "Improved performance and stability with enhanced autoscaling features.",
-        "deprecations": "Deprecated support for Kubernetes 1.24."
-      },
-      {
-        "version": "1.29",
-        "changes": "Introduced new node pool configurations and improved security features.",
-        "deprecations": "Deprecated legacy API versions for certain resources."
+        "version": "v1.31",
+        "changes": "Added support for Kubernetes 1.31 features including new API versions and improved resource management.",
+        "deprecations": "Deprecated certain legacy APIs that are no longer supported.",
+        "migrationSteps": "Ensure all workloads are compatible with the new API versions before upgrading."
       }
     ],
     "resolution": {
-      "summary": "A successful setup includes a running DOKS cluster with kubectl configured, and the ability to deploy applications with autoscaling enabled. Verify by checking the cluster status and deployed applications.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "# Install doctl if you haven't already\nbrew install doctl\n\n# Authenticate with your DigitalOcean account\ndoctl auth init\n\n# Create the Kubernetes cluster\ndoctl k8s cluster create <cluster-name> --region <region> --node-pool \"name=default;size=s-2vcpu-4gb;count=<node-count>\"",
-        "# Get the kubeconfig for your cluster\ndoctl k8s cluster kubeconfig save <cluster-name>\n\n# Verify kubectl is connected\ngkubectl cluster-info",
-        "# Create a deployment (example)\nkubectl create deployment my-app --image=nginx\n\n# Expose the deployment\ngkubectl expose deployment my-app --port=80 --target-port=80\n\n# Enable HPA\ngkubectl autoscale deployment my-app --cpu-percent=50 --min=1 --max=10",
-        "kubectl get hpa"
+        "curl -sL https://github.com/digitalocean/doctl/releases/download/v1.80.0/doctl-1.80.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin",
+        "chmod +x /usr/local/bin/doctl",
+        "doctl auth init --access-token YOUR_DIGITALOCEAN_ACCESS_TOKEN",
+        "doctl k8s cluster create my-cluster --version v1.30.0 --count 3 --region nyc1",
+        "doctl k8s cluster kubeconfig save my-cluster",
+        "kubectl get nodes",
+        "doctl k8s cluster update my-cluster --enable-autoscale",
+        "doctl k8s cluster update my-cluster --enable-monitoring"
       ]
     }
   },
@@ -83,9 +135,7 @@
     "platformType": "managed",
     "platformProvider": "DigitalOcean",
     "platformVersions": [
-      "1.28",
-      "1.29",
-      "1.30"
+      "v1.30"
     ],
     "supportedK8sVersions": [
       "1.28",
@@ -107,13 +157,13 @@
       "cli"
     ],
     "containerImages": [
-      "digitalocean/doks:1.30"
+      "registry.digitalocean.com/dok8s/dok8s:v1.30.0"
     ],
     "sourceUrls": {
       "docs": "https://docs.digitalocean.com/products/kubernetes/",
       "repo": "https://github.com/digitalocean/DOKS"
     },
-    "qualityScore": 98
+    "qualityScore": 100
   },
   "prerequisites": {
     "kubernetes": ">=1.28",
@@ -121,12 +171,13 @@
       "kubectl",
       "doctl"
     ],
-    "cloudCLI": "optional cloud CLI tool (doctl)",
-    "description": "Ensure you have an active DigitalOcean account and the doctl CLI installed."
+    "cloudCLI": "doctl >= 1.100",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools installed and your DigitalOcean account is set up."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:05:43.933Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:10:49.370Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

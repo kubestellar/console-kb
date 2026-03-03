@@ -6,65 +6,108 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Prometheus Operator / kube-prometheus-stack",
-    "description": "The Prometheus Operator simplifies the deployment and management of Prometheus monitoring stacks on Kubernetes. It is ideal for users looking to automate monitoring configurations and leverage Kubernetes-native resources for observability.",
+    "description": "The Prometheus Operator simplifies the deployment and management of Prometheus monitoring stacks on Kubernetes using custom resources. It is ideal for users who want a Kubernetes-native way to manage Prometheus and related components, but it requires understanding of Kubernetes CRDs. Key trade-offs include the need for familiarity with Kubernetes concepts and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Install the Prometheus Operator",
-        "description": "Use Helm to install the Prometheus Operator. Make sure to use version v0.77.0 for compatibility with Kubernetes 1.25+.\n\n```bash\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\nhelm repo update\nhelm install prometheus prometheus-community/kube-prometheus-stack --version 0.77.0\n```\n\nVerify the installation:\n```bash\nkubectl get pods -n default\nkubectl cluster-info\n```"
+        "title": "Add the Helm repository",
+        "description": "This step adds the Prometheus Operator Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\n\nhelm repo update\n\n```\n\n> This is the official repository for Prometheus Operator.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts",
+          "helm repo update"
+        ]
       },
       {
-        "title": "Configure Prometheus",
-        "description": "Create a custom resource definition (CRD) for Prometheus. Save the following YAML to a file named `prometheus.yaml`:\n\n```yaml\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: prometheus-example\nspec:\n  serviceAccountName: prometheus-example\n  replicas: 1\n  podMonitorSelector:\n    matchLabels:\n      app: my-app\n  resources:\n    requests:\n      cpu: 100m\n      memory: 512Mi\n```  \n\nApply the configuration:\n```bash\nkubectl apply -f prometheus.yaml\n```\n\nCheck the status:\n```bash\nkubectl get prometheus\n```"
+        "title": "Install the Custom Resource Definitions (CRDs)",
+        "description": "CRDs are necessary for the Prometheus Operator to function properly, as they define the custom resources it will manage.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml\n\n```\n\n> This command installs all required CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml"
+        ]
+      },
+      {
+        "title": "Install the kube-prometheus-stack",
+        "description": "This step installs the kube-prometheus-stack, which includes Prometheus, Alertmanager, and Grafana.\n\n```bash\n\nhelm install prometheus prometheus-community/kube-prometheus-stack --version 45.0.0 --namespace monitoring --create-namespace\n\n```\n\n> Replace '45.0.0' with the desired version.",
+        "commands": [
+          "helm install prometheus prometheus-community/kube-prometheus-stack --version 45.0.0 --namespace monitoring --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify the installation",
+        "description": "This step checks that the Prometheus Operator and its components are running correctly.\n\n```bash\n\nkubectl get pods -n monitoring\n\nkubectl get svc -n monitoring\n\n```\n\n> You should see pods for Prometheus, Alertmanager, and Grafana.\n> Check that the services are created and running.",
+        "commands": [
+          "kubectl get pods -n monitoring",
+          "kubectl get svc -n monitoring"
+        ]
+      },
+      {
+        "title": "Access Grafana",
+        "description": "This step provides instructions to access the Grafana dashboard for monitoring.\n\n```bash\n\nkubectl port-forward svc/prometheus-grafana -n monitoring 3000:80\n\necho 'Access Grafana at http://localhost:3000'\n\n```\n\n> This command forwards port 3000 on your local machine to Grafana.\n> Use this URL to access the Grafana dashboard.",
+        "commands": [
+          "kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80",
+          "echo 'Access Grafana at http://localhost:3000'"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall the Prometheus Operator",
-        "description": "To uninstall the Prometheus Operator and remove all associated resources, run:\n```bash\nhelm uninstall prometheus\nkubectl delete prometheus prometheus-example\n```"
+        "title": "Uninstall the kube-prometheus-stack",
+        "description": "This step removes the Prometheus Operator and all associated resources. Be aware that this will delete all monitoring data.\n\n```bash\n\nhelm uninstall prometheus --namespace monitoring\n\nkubectl delete namespace monitoring\n\n```\n\n> This command uninstalls the kube-prometheus-stack.\n> This command deletes the monitoring namespace and all resources within it.",
+        "commands": [
+          "helm uninstall prometheus --namespace monitoring",
+          "kubectl delete namespace monitoring"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade the Prometheus Operator",
-        "description": "To upgrade to a newer version (e.g., v0.77.0 to v0.76.0), first backup your existing Prometheus configuration:\n```bash\nkubectl get prometheus prometheus-example -o yaml > prometheus-backup.yaml\n```\n\nThen, upgrade using Helm:\n```bash\nhelm upgrade prometheus prometheus-community/kube-prometheus-stack --version 0.76.0\n```\n\nVerify the upgrade:\n```bash\nkubectl get pods -n default\nkubectl describe prometheus prometheus-example\n```"
+        "title": "Upgrade the kube-prometheus-stack",
+        "description": "Before upgrading, ensure you have a backup of your Prometheus data. This step will upgrade the stack to the latest version.\n\n```bash\n\nkubectl cp prometheus-prometheus-0:/prometheus /tmp/prometheus-backup\n\nhelm upgrade prometheus prometheus-community/kube-prometheus-stack --version 45.0.0 --namespace monitoring\n\nkubectl get pods -n monitoring\n\n```\n\n> Backup Prometheus data.\n> Replace '45.0.0' with the desired version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl cp prometheus-prometheus-0:/prometheus /tmp/prometheus-backup",
+          "helm upgrade prometheus prometheus-community/kube-prometheus-stack --version 45.0.0 --namespace monitoring",
+          "kubectl get pods -n monitoring"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Prometheus pod not starting",
-        "description": "If the Prometheus pod is not starting, check the logs:\n```bash\nkubectl logs <prometheus-pod-name>\n```\n\nCommon issues include insufficient resources or misconfigured CRDs. Ensure your cluster has enough CPU and memory allocated."
+        "title": "Error: 'Error: unable to recognize \"\": no matches for kind \"Prometheus\" in version \"monitoring.coreos.com/v1\"'",
+        "description": "**Cause:** This indicates that the CRDs were not installed correctly.\n\n**Fix:**\nReapply the CRDs using 'kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml'."
       },
       {
-        "title": "Alerts not firing",
-        "description": "If alerts are not firing, verify the Alertmanager configuration:\n```bash\nkubectl get alertmanager\nkubectl describe alertmanager <alertmanager-name>\n```\n\nMake sure that the alerting rules are correctly defined and that the Alertmanager is reachable."
+        "title": "Error: 'Error: unable to connect to the server: dial tcp 10.0.0.1:443: i/o timeout'",
+        "description": "**Cause:** This suggests that your Kubernetes cluster is not reachable.\n\n**Fix:**\nCheck your kubeconfig and ensure your cluster is running."
       },
       {
-        "title": "ServiceMonitor not discovering targets",
-        "description": "If ServiceMonitor is not discovering targets, check the labels on your services:\n```bash\nkubectl get svc --show-labels\n```\n\nEnsure that the ServiceMonitor selector matches the labels of the services you want to monitor."
+        "title": "Grafana dashboard shows 'Data source not found'",
+        "description": "**Cause:** This indicates that the Prometheus data source is not configured correctly.\n\n**Fix:**\nEnsure that the Prometheus service is running and configured in Grafana."
+      },
+      {
+        "title": "Prometheus pod is in CrashLoopBackOff state.",
+        "description": "**Cause:** This can occur due to insufficient resources or misconfiguration.\n\n**Fix:**\nCheck the logs with 'kubectl logs <prometheus-pod-name> -n monitoring' and adjust resource limits if necessary."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.77.0",
-        "changes": "Improved stability and performance enhancements.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.25."
-      },
-      {
-        "version": "v0.76.0",
-        "changes": "Added new features for alerting and Grafana dashboards.",
-        "deprecations": "Removed deprecated CRDs from previous versions."
+        "version": "v0.89.0",
+        "changes": "Added support for new Prometheus API features, improved Grafana dashboards.",
+        "deprecations": "Deprecated certain legacy configurations in favor of new CRD specifications.",
+        "migrationSteps": "If upgrading from v0.76 or earlier, review the new CRD specifications and adjust your configurations accordingly."
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the Prometheus Operator running with the Prometheus instance configured and ready to monitor your Kubernetes cluster. You should be able to access the Prometheus UI and see metrics being collected.",
+      "summary": "You should see all Prometheus, Alertmanager, and Grafana pods running in the 'monitoring' namespace with 'Running' status when everything is working.",
       "codeSnippets": [
-        "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts\nhelm repo update\nhelm install prometheus prometheus-community/kube-prometheus-stack --version 0.77.0",
-        "kubectl get pods -n default\nkubectl cluster-info",
-        "apiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: prometheus-example\nspec:\n  serviceAccountName: prometheus-example\n  replicas: 1\n  podMonitorSelector:\n    matchLabels:\n      app: my-app\n  resources:\n    requests:\n      cpu: 100m\n      memory: 512Mi",
-        "kubectl apply -f prometheus.yaml",
-        "kubectl get prometheus"
+        "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml",
+        "helm install prometheus prometheus-community/kube-prometheus-stack --version 45.0.0 --namespace monitoring --create-namespace",
+        "kubectl get pods -n monitoring",
+        "kubectl get svc -n monitoring",
+        "kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80",
+        "echo 'Access Grafana at http://localhost:3000'"
       ]
     }
   },
@@ -85,7 +128,9 @@
       "v0.77"
     ],
     "supportedK8sVersions": [
-      "1.25+"
+      "1.25",
+      "1.26",
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -99,12 +144,12 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
-      "kubectl"
+      "helm"
     ],
     "containerImages": [
-      "quay.io/prometheus/alertmanager:v0.24.0",
-      "quay.io/prometheus/prometheus:v2.34.0"
+      "docker.io/prometheus/prometheus:v2.36.0",
+      "docker.io/prometheus/alertmanager:v0.24.0",
+      "docker.io/grafana/grafana:v8.5.0"
     ],
     "sourceUrls": {
       "docs": "https://prometheus-operator.dev/",
@@ -116,14 +161,14 @@
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure that you have a Kubernetes cluster running and that kubectl and Helm are installed and configured."
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:08:59.994Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:18:00.374Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

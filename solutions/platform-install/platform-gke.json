@@ -6,72 +6,114 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Google Kubernetes Engine (GKE)",
-    "description": "Google Kubernetes Engine (GKE) is a managed Kubernetes service that simplifies the deployment, management, and scaling of containerized applications using Kubernetes. It is ideal for users looking to leverage Kubernetes without the overhead of managing the underlying infrastructure.",
+    "description": "Google Kubernetes Engine (GKE) is a managed Kubernetes service that simplifies the deployment, management, and scaling of containerized applications using Kubernetes. It is ideal for users who want to leverage Kubernetes without the operational overhead of managing the underlying infrastructure. Key trade-offs include reliance on Google Cloud services and potential costs associated with resource usage.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
+        "title": "Install the Google Cloud SDK",
+        "description": "The Google Cloud SDK provides the gcloud command-line tool to manage GKE resources.\n\n```bash\n\ncurl https://sdk.cloud.google.com | bash\n\nexec -l $SHELL\n\ngcloud init\n\n```\n\n> This command installs the Google Cloud SDK.\n> Refresh the shell to access gcloud commands.\n> Initialize the gcloud environment and authenticate.",
+        "commands": [
+          "curl https://sdk.cloud.google.com | bash",
+          "exec -l $SHELL",
+          "gcloud init"
+        ]
+      },
+      {
         "title": "Create a GKE Cluster",
-        "description": "Use the Google Cloud CLI to create a GKE cluster. Replace `YOUR_PROJECT_ID` and `YOUR_REGION` with your actual project ID and desired region.\n```bash\ngcloud container clusters create my-cluster --project=YOUR_PROJECT_ID --region=YOUR_REGION --cluster-version=1.31 --num-nodes=3\n```"
+        "description": "This step creates a GKE cluster with the specified Kubernetes version and node count.\n\n```bash\n\ngcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31\n\n```\n\n> Replace 'my-gke-cluster' with your desired cluster name.",
+        "commands": [
+          "gcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31"
+        ]
       },
       {
-        "title": "Connect kubectl to the Cluster",
-        "description": "After the cluster is created, configure kubectl to use the new cluster.\n```bash\ngcloud container clusters get-credentials my-cluster --region=YOUR_REGION --project=YOUR_PROJECT_ID\n```"
+        "title": "Set Up kubeconfig",
+        "description": "This command configures kubectl to use the newly created GKE cluster.\n\n```bash\n\ngcloud container clusters get-credentials my-gke-cluster --zone us-central1-a\n\n```\n\n> This command updates kubeconfig to point to your GKE cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a"
+        ]
       },
       {
-        "title": "Verify Cluster Setup",
-        "description": "Check the cluster information and node status to ensure everything is running correctly.\n```bash\nkubectl cluster-info\nkubectl get nodes\n```"
+        "title": "Verify Cluster Nodes",
+        "description": "This command checks the status of the nodes in the GKE cluster.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes in 'Ready' status.",
+        "commands": [
+          "kubectl get nodes"
+        ]
       },
       {
-        "title": "Post-Install Configuration: Enable Autoscaling",
-        "description": "Enable cluster autoscaler for node pools to automatically adjust the number of nodes based on workload.\n```bash\ngcloud container clusters update my-cluster --enable-autoscaling --min-nodes=1 --max-nodes=5 --region=YOUR_REGION\n```"
+        "title": "Post-Install Configuration",
+        "description": "Set up autoscaling and monitoring for your GKE cluster.\n\n```bash\n\ngcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a\n\ngcloud container clusters update my-gke-cluster --enable-stackdriver --zone us-central1-a\n\n```\n\n> Enables cluster autoscaling.\n> Enables monitoring with Stackdriver.",
+        "commands": [
+          "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a",
+          "gcloud container clusters update my-gke-cluster --enable-stackdriver --zone us-central1-a"
+        ]
       }
     ],
     "uninstall": [
       {
         "title": "Delete the GKE Cluster",
-        "description": "To remove the GKE cluster and all associated resources, run:\n```bash\ngcloud container clusters delete my-cluster --region=YOUR_REGION --quiet\n```"
+        "description": "This command deletes the GKE cluster and all associated resources, which may lead to data loss.\n\n```bash\n\ngcloud container clusters delete my-gke-cluster --zone us-central1-a --quiet\n\n```\n\n> Use --quiet to skip confirmation prompts.",
+        "commands": [
+          "gcloud container clusters delete my-gke-cluster --zone us-central1-a --quiet"
+        ]
+      },
+      {
+        "title": "Clean Up Orphaned Resources",
+        "description": "This command helps to identify and delete any orphaned resources such as load balancers or persistent volumes.\n\n```bash\n\ngcloud compute addresses list\n\n```\n\n> Check for any static IPs that may need to be deleted.",
+        "commands": [
+          "gcloud compute addresses list"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade GKE Cluster Version",
-        "description": "To upgrade your GKE cluster to a new version, first check the available versions:\n```bash\ngcloud container get-server-config --region=YOUR_REGION\n```\nThen upgrade the cluster:\n```bash\ngcloud container clusters upgrade my-cluster --master --cluster-version=1.31 --region=YOUR_REGION\n```\nBackup your resources and configurations before upgrading. To rollback, you can downgrade using the same command with the previous version."
+        "title": "Upgrade the GKE Cluster",
+        "description": "Backup your workloads, upgrade the cluster, and verify the upgrade.\n\n```bash\n\nkubectl get all --all-namespaces -o yaml > backup.yaml\n\ngcloud container clusters upgrade my-gke-cluster --cluster-version 1.31 --zone us-central1-a\n\nkubectl get nodes\n\n```\n\n> Backup all resources in the cluster.\n> Upgrade the cluster to the specified version.\n> Verify that all nodes are in 'Ready' status after the upgrade.",
+        "commands": [
+          "kubectl get all --all-namespaces -o yaml > backup.yaml",
+          "gcloud container clusters upgrade my-gke-cluster --cluster-version 1.31 --zone us-central1-a",
+          "kubectl get nodes"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "kubectl command fails with 'context not found'",
-        "description": "This usually indicates that kubectl is not configured to use the correct context. Run:\n```bash\ngcloud container clusters get-credentials my-cluster --region=YOUR_REGION --project=YOUR_PROJECT_ID\n```"
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** This can occur if kubeconfig is not set up correctly.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a' to update kubeconfig."
       },
       {
-        "title": "Node status shows 'NotReady'",
-        "description": "Check the node conditions using:\n```bash\nkubectl describe nodes\n```\nLook for any issues in the events section. Common causes include insufficient resources or network issues."
+        "title": "Error: 'Insufficient resources available'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the pods.\n\n**Fix:**\nCheck node status with 'kubectl get nodes' and consider scaling the cluster."
       },
       {
-        "title": "Pods stuck in 'Pending' state",
-        "description": "This may indicate insufficient resources in the cluster. Check the resource requests of your pods and ensure your node pool has enough capacity. You can also enable cluster autoscaling."
+        "title": "Error: 'Unauthorized'",
+        "description": "**Cause:** This indicates that the user does not have the necessary permissions.\n\n**Fix:**\nEnsure that your Google Cloud account has the required IAM roles for GKE."
+      },
+      {
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that the pod is failing to start due to an application error.\n\n**Fix:**\nCheck pod logs with 'kubectl logs <pod-name>' to diagnose the issue."
       }
     ],
     "versionNotes": [
       {
-        "version": "1.31",
-        "changes": "Introduced improved security features and enhanced monitoring capabilities.",
-        "deprecations": "Deprecated legacy API versions for certain resources."
-      },
-      {
-        "version": "1.30",
-        "changes": "Added support for new node types and improved performance for large clusters.",
-        "deprecations": "Deprecated certain flags in the gcloud CLI."
+        "version": "v1.31",
+        "changes": "Added support for new GKE features such as Autopilot mode and improved workload identity.",
+        "deprecations": "Deprecated legacy cluster autoscaler; use the new version instead.",
+        "migrationSteps": "If upgrading from 1.30, ensure that all workloads are compatible with the new features."
       }
     ],
     "resolution": {
-      "summary": "A successful setup includes a running GKE cluster with nodes in 'Ready' status and kubectl configured to interact with the cluster. You should also have enabled any necessary post-install configurations such as autoscaling.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "gcloud container clusters create my-cluster --project=YOUR_PROJECT_ID --region=YOUR_REGION --cluster-version=1.31 --num-nodes=3",
-        "gcloud container clusters get-credentials my-cluster --region=YOUR_REGION --project=YOUR_PROJECT_ID",
-        "kubectl cluster-info\nkubectl get nodes",
-        "gcloud container clusters update my-cluster --enable-autoscaling --min-nodes=1 --max-nodes=5 --region=YOUR_REGION"
+        "curl https://sdk.cloud.google.com | bash",
+        "exec -l $SHELL",
+        "gcloud init",
+        "gcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31",
+        "gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a",
+        "kubectl get nodes",
+        "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a",
+        "gcloud container clusters update my-gke-cluster --enable-stackdriver --zone us-central1-a"
       ]
     }
   },
@@ -87,10 +129,8 @@
     "platformType": "managed",
     "platformProvider": "Google Cloud",
     "platformVersions": [
-      "1.28",
-      "1.29",
-      "1.30",
-      "1.31"
+      "v1.30",
+      "v1.31"
     ],
     "supportedK8sVersions": [
       "1.28",
@@ -110,8 +150,7 @@
       "configuration"
     ],
     "installMethods": [
-      "cli",
-      "console"
+      "cli"
     ],
     "containerImages": [
       "gcr.io/google-containers/pause:3.5"
@@ -125,15 +164,16 @@
   "prerequisites": {
     "kubernetes": ">=1.25",
     "tools": [
-      "gcloud",
-      "kubectl"
+      "kubectl",
+      "gcloud >= 450.0"
     ],
-    "cloudCLI": "gcloud",
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
     "description": "Ensure you have the Google Cloud SDK installed and authenticated."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:06:48.936Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:08:59.839Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

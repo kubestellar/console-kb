@@ -6,73 +6,105 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Kind (Kubernetes in Docker)",
-    "description": "Kind (Kubernetes in Docker) is a tool for running local Kubernetes clusters using Docker containers. It is primarily designed for testing Kubernetes itself but can also be used for local development or CI workflows.",
+    "description": "Kind (Kubernetes in Docker) is a tool for running local Kubernetes clusters using Docker container nodes. It is primarily designed for testing Kubernetes itself but can also be used for local development or CI. The key trade-off is that it runs in a single-node Docker environment, which may not fully replicate a production cluster's behavior.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Install Kind",
-        "description": "Install Kind using Go. Ensure you have Go 1.16+ installed. Run the following command to install Kind version v0.31.0:\n```bash\ngo install sigs.k8s.io/kind@v0.31.0\n```\nIf you prefer a binary, download the appropriate binary for your OS:\n\nFor Linux (AMD64):\n```bash\n[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64\nchmod +x ./kind\nsudo mv ./kind /usr/local/bin/kind\n```\n\nFor macOS (Intel):\n```bash\n[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-darwin-amd64\nchmod +x ./kind\nmv ./kind /some-dir-in-your-PATH/kind\n```\n\nFor Windows:\n```powershell\ncurl.exe -Lo kind-windows-amd64.exe https://kind.sigs.k8s.io/dl/v0.31.0/kind-windows-amd64\nMove-Item .\\"
+        "description": "This step installs the Kind binary on your local machine, allowing you to create and manage Kubernetes clusters.\n\n```bash\n\n[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-amd64\n\n[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-arm64\n\nchmod +x ./kind\n\nsudo mv ./kind /usr/local/bin/kind\n\n```\n\n> For AMD64 / x86_64 architecture\n> For ARM64 architecture\n> Make the Kind binary executable\n> Move Kind to a directory in your PATH",
+        "commands": [
+          "[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-amd64",
+          "[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-arm64",
+          "chmod +x ./kind",
+          "sudo mv ./kind /usr/local/bin/kind"
+        ]
       },
       {
         "title": "Create a Kubernetes Cluster",
-        "description": "Once Kind is installed, create a Kubernetes cluster with the following command:\n```bash\nkind create cluster --image kindest/node:v1.31.0\n```\nThis will create a cluster using Kubernetes version 1.31.0. You can verify the cluster creation by running:\n```bash\nkubectl cluster-info\n```"
+        "description": "This step creates a new Kubernetes cluster using Kind with the specified Kubernetes version.\n\n```bash\n\nkind create cluster --image kindest/node:v1.31.0\n\n```\n\n> Creates a cluster with Kubernetes version 1.31.0",
+        "commands": [
+          "kind create cluster --image kindest/node:v1.31.0"
+        ]
       },
       {
-        "title": "Verify Cluster Status",
-        "description": "Check the status of the nodes in your cluster:\n```bash\nkubectl get nodes\n```\nEnsure all nodes are in 'Ready' status."
+        "title": "Set Up Kubeconfig",
+        "description": "This step ensures that your kubeconfig is set up to interact with the newly created Kind cluster.\n\n```bash\n\nexport KUBECONFIG=$(kind get kubeconfig-path --name=\n\n```\n\n> Set the KUBECONFIG environment variable to point to the Kind cluster's kubeconfig",
+        "commands": [
+          "export KUBECONFIG=$(kind get kubeconfig-path --name="
+        ]
       },
       {
-        "title": "Post-Install Configuration",
-        "description": "To enable autoscaling, you can deploy the metrics server:\n```bash\nkubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\n```\nThen, enable the Horizontal Pod Autoscaler (HPA) for your deployments."
+        "title": "Verify Cluster Nodes",
+        "description": "This step verifies that the nodes in the Kind cluster are running and ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> Check the status of the nodes in the cluster",
+        "commands": [
+          "kubectl get nodes"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Delete the Kubernetes Cluster",
-        "description": "To remove the cluster created by Kind, run:\n```bash\nkind delete cluster\n```\nThis will clean up all resources associated with the cluster."
+        "title": "Delete the Kind Cluster",
+        "description": "This step removes the Kind cluster and all associated resources. Be aware that this will delete all workloads and data in the cluster.\n\n```bash\n\nkind delete cluster\n\n```\n\n> Delete the Kind cluster",
+        "commands": [
+          "kind delete cluster"
+        ]
+      },
+      {
+        "title": "Remove Kind Binary",
+        "description": "This step removes the Kind binary from your system. Ensure you no longer need it before proceeding.\n\n```bash\n\nsudo rm /usr/local/bin/kind\n\n```\n\n> Remove the Kind binary from the PATH",
+        "commands": [
+          "sudo rm /usr/local/bin/kind"
+        ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Kind",
-        "description": "To upgrade Kind to a newer version, first uninstall the current version:\n```bash\nkind delete cluster\n```\nThen, install the new version:\n```bash\ngo install sigs.k8s.io/kind@v0.31.0\n```\nVerify the installation:\n```bash\nkind version\n```\nBackup any necessary configurations before upgrading."
+        "description": "Before upgrading, ensure you back up any important data in your clusters. This step upgrades Kind to the latest version.\n\n```bash\n\ncurl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-amd64\n\nchmod +x ./kind\n\nsudo mv ./kind /usr/local/bin/kind\n\n```\n\n> Download the latest Kind binary\n> Make the new Kind binary executable\n> Replace the old Kind binary with the new one",
+        "commands": [
+          "curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-amd64",
+          "chmod +x ./kind",
+          "sudo mv ./kind /usr/local/bin/kind"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Cluster Fails to Start",
-        "description": "If the cluster fails to start, check Docker's status:\n```bash\ndocker ps -a\n```\nEnsure Docker is running and has enough resources allocated (CPU, Memory)."
+        "title": "Error: 'kind: command not found'",
+        "description": "**Cause:** The Kind binary is not in your PATH.\n\n**Fix:**\nEnsure that /usr/local/bin is in your PATH or move the Kind binary to a directory that is."
       },
       {
-        "title": "kubectl Command Not Found",
-        "description": "If you encounter 'kubectl: command not found', ensure that kubectl is installed and available in your PATH. Install it using:\n```bash\ncurl -LO \"https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl\"\nchmod +x ./kubectl\nsudo mv ./kubectl /usr/local/bin/kubectl\n```"
+        "title": "Error: 'failed to create cluster: failed to start the cluster'",
+        "description": "**Cause:** Docker may not be running or there are insufficient resources.\n\n**Fix:**\nStart Docker and ensure you have enough resources allocated (minimum 2 vCPU, 4GB RAM)."
       },
       {
-        "title": "Node Not Ready",
-        "description": "If a node shows 'NotReady', check the logs for the kubelet:\n```bash\ndocker logs <node-name>\n```\nLook for any errors related to networking or resource allocation."
+        "title": "Error: 'kubelet is unhealthy'",
+        "description": "**Cause:** The Kubernetes components may not have started correctly.\n\n**Fix:**\nCheck the logs of the Kind cluster using 'kind logs' and troubleshoot any errors."
+      },
+      {
+        "title": "Error: 'unable to connect to the server'",
+        "description": "**Cause:** The kubeconfig may not be set correctly or the cluster is not running.\n\n**Fix:**\nRun 'kind get kubeconfig-path' to verify the kubeconfig path and ensure the cluster is running."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.25.0",
-        "changes": "Improved cluster creation speed and stability.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.25."
-      },
-      {
-        "version": "v0.24.0",
-        "changes": "Introduced support for Kubernetes 1.29.",
-        "deprecations": "Deprecated certain flags in the CLI."
+        "version": "v0.31.0",
+        "changes": "Added support for Kubernetes 1.31, improved error messages.",
+        "deprecations": "None",
+        "migrationSteps": "No specific migration steps are required for this version."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of Kind results in a running local Kubernetes cluster that can be accessed via kubectl. You should be able to deploy applications and test Kubernetes features locally.",
+      "summary": "You should see the output of 'kubectl get nodes' showing the nodes in the cluster with a status of 'Ready'.",
       "codeSnippets": [
-        "go install sigs.k8s.io/kind@v0.31.0",
-        "[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64\nchmod +x ./kind\nsudo mv ./kind /usr/local/bin/kind",
-        "[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-darwin-amd64\nchmod +x ./kind\nmv ./kind /some-dir-in-your-PATH/kind",
+        "[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-amd64",
+        "[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-$(uname)-arm64",
+        "chmod +x ./kind",
+        "sudo mv ./kind /usr/local/bin/kind",
         "kind create cluster --image kindest/node:v1.31.0",
-        "kubectl cluster-info",
+        "export KUBECONFIG=$(kind get kubeconfig-path --name=",
         "kubectl get nodes"
       ]
     }
@@ -89,8 +121,7 @@
     "platformType": "local",
     "platformProvider": "Kubernetes SIG",
     "platformVersions": [
-      "v0.24",
-      "v0.25"
+      "v0.31.0"
     ],
     "supportedK8sVersions": [
       "1.29",
@@ -121,17 +152,17 @@
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.25",
+    "kubernetes": "none",
     "tools": [
-      "kubectl",
-      "go"
+      "docker"
     ],
     "cloudCLI": "none",
-    "description": "Ensure Docker is installed and running, and Go is installed for Kind installation."
+    "resources": "Minimum 2 vCPU, 4GB RAM",
+    "description": "Ensure Docker is installed and running on your machine."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:08:19.898Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:16:37.220Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

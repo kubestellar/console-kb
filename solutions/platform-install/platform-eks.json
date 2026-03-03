@@ -6,73 +6,112 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Amazon Elastic Kubernetes Service (EKS)",
-    "description": "Amazon Elastic Kubernetes Service (EKS) is a managed Kubernetes service that simplifies the process of running Kubernetes on AWS without needing to install and operate your own control plane or nodes. It's ideal for users looking for a scalable and secure Kubernetes solution integrated with AWS services.",
+    "description": "Amazon Elastic Kubernetes Service (EKS) is a managed Kubernetes service that simplifies the process of running Kubernetes on AWS. It is ideal for users who want to leverage AWS's infrastructure while maintaining control over their Kubernetes clusters. Key trade-offs include reliance on AWS services and potential costs associated with resource usage.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 30,
     "steps": [
       {
+        "title": "Install the AWS CLI",
+        "description": "The AWS CLI is required to interact with AWS services, including EKS.\n\n```bash\n\npip install awscli --upgrade --user\n\n```\n\n> Install the AWS CLI using pip.",
+        "commands": [
+          "pip install awscli --upgrade --user"
+        ]
+      },
+      {
         "title": "Create an EKS Cluster",
-        "description": "Use the AWS CLI to create an EKS cluster. Replace `<your-cluster-name>` and `<your-region>` with your desired values. Ensure you have the AWS CLI configured with the necessary permissions.\n\n```bash\naws eks create-cluster --name <your-cluster-name> --region <your-region> --kubernetes-version 1.31 --role-arn arn:aws:iam::<your-account-id>:role/EKS-ClusterRole --resources-vpc-config subnetIds=<subnet-1,subnet-2>,securityGroupIds=<sg-id>\n```\n\nMake sure to replace the placeholders with your actual values."
+        "description": "This command creates an EKS cluster with the specified Kubernetes version and node count.\n\n```bash\n\naws eks create-cluster --name my-cluster --kubernetes-version 1.31 --role-arn arn:aws:iam::YOUR_ACCOUNT_ID:role/EKS-Cluster-Role --resources-vpc-config subnetIds=subnet-12345678,subnet-87654321\n\n```\n\n> Replace YOUR_ACCOUNT_ID with your actual AWS account ID.",
+        "commands": [
+          "aws eks create-cluster --name my-cluster --kubernetes-version 1.31 --role-arn arn:aws:iam::YOUR_ACCOUNT_ID:role/EKS-Cluster-Role --resources-vpc-config subnetIds=subnet-12345678,subnet-87654321"
+        ]
       },
       {
-        "title": "Configure kubectl",
-        "description": "After the cluster is created, configure kubectl to connect to your new EKS cluster:\n\n```bash\naws eks update-kubeconfig --name <your-cluster-name> --region <your-region>\n```\n\nVerify the connection with:\n```bash\nkubectl cluster-info\n```"
+        "title": "Update kubeconfig",
+        "description": "This command updates your kubeconfig file to allow kubectl to interact with your new EKS cluster.\n\n```bash\n\naws eks update-kubeconfig --name my-cluster\n\n```\n\n> This sets up your kubeconfig to point to the new cluster.",
+        "commands": [
+          "aws eks update-kubeconfig --name my-cluster"
+        ]
       },
       {
-        "title": "Install the EKS Add-ons",
-        "description": "Install necessary add-ons like CoreDNS and VPC CNI:\n\n```bash\naws eks create-addon --cluster-name <your-cluster-name> --addon-name coredns --service-account-role-arn arn:aws:iam::<your-account-id>:role/EKS-AddonRole\naws eks create-addon --cluster-name <your-cluster-name> --addon-name vpc-cni\n```"
-      },
-      {
-        "title": "Verify Cluster and Node Status",
-        "description": "Check the status of your nodes and ensure they are ready:\n\n```bash\nkubectl get nodes\n```"
+        "title": "Verify Cluster Nodes",
+        "description": "This command checks the status of the nodes in your EKS cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a status of 'Ready'.",
+        "commands": [
+          "kubectl get nodes"
+        ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "Set up Cluster Autoscaler for your EKS cluster:\n\n```bash\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler.yaml\n```"
+        "description": "Set up monitoring and autoscaling for your EKS cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml\n\n```\n\n> This installs the cluster autoscaler.\n> This installs the metrics server for monitoring.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml"
+        ]
       }
     ],
     "uninstall": [
       {
         "title": "Delete the EKS Cluster",
-        "description": "To uninstall EKS, delete the cluster and associated resources:\n\n```bash\naws eks delete-cluster --name <your-cluster-name> --region <your-region>\n```"
+        "description": "This command deletes the EKS cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\naws eks delete-cluster --name my-cluster\n\n```",
+        "commands": [
+          "aws eks delete-cluster --name my-cluster"
+        ]
+      },
+      {
+        "title": "Clean Up Orphaned Resources",
+        "description": "This command ensures that any orphaned resources such as load balancers and PVCs are removed.\n\n```bash\n\naws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}\n\n```",
+        "commands": [
+          "aws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade EKS Cluster",
-        "description": "To upgrade your EKS cluster to a newer version, first check the current version and then initiate the upgrade:\n\n```bash\naws eks describe-cluster --name <your-cluster-name> --query 'cluster.version'\naws eks update-cluster-version --name <your-cluster-name> --kubernetes-version 1.31 --region <your-region>\n```\n\nBackup your data before upgrading. Use:\n```bash\nkubectl get all --all-namespaces -o yaml > backup.yaml\n```\n\nRollback if necessary by reverting to the previous version using:\n```bash\naws eks update-cluster-version --name <your-cluster-name> --kubernetes-version <previous-version> --region <your-region>\n```"
+        "title": "Upgrade the EKS Cluster",
+        "description": "Backup your current cluster, cordon and drain nodes, upgrade the cluster, and verify the upgrade.\n\n```bash\n\nkubectl get nodes -o wide\n\nkubectl cordon <node-name>\n\nkubectl drain <node-name> --ignore-daemonsets\n\naws eks update-cluster-version --name my-cluster --kubernetes-version 1.31\n\nkubectl get nodes\n\n```\n\n> Backup current node information.\n> Replace <node-name> with the name of your node.\n> Replace <node-name> with the name of your node.\n> This upgrades the cluster to version 1.31.\n> Verify that nodes are updated and in 'Ready' state.",
+        "commands": [
+          "kubectl get nodes -o wide",
+          "kubectl cordon <node-name>",
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "aws eks update-cluster-version --name my-cluster --kubernetes-version 1.31",
+          "kubectl get nodes"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Cluster Not Accessible",
-        "description": "If you cannot access your cluster, check your kubeconfig and IAM permissions:\n```bash\naws eks update-kubeconfig --name <your-cluster-name> --region <your-region>\n``` Ensure your IAM role has the necessary permissions."
+        "title": "Error: Unable to connect to the server: x509: certificate signed by unknown authority",
+        "description": "**Cause:** This indicates that the kubeconfig is not correctly configured or the cluster is not reachable.\n\n**Fix:**\nRun 'aws eks update-kubeconfig --name my-cluster' to refresh your kubeconfig."
       },
       {
-        "title": "Node Not Ready",
-        "description": "If nodes are not in 'Ready' state, check the events:\n```bash\nkubectl describe nodes <node-name>\n``` Look for any errors related to networking or IAM roles."
+        "title": "Error: no nodes available in cluster",
+        "description": "**Cause:** This usually means that the nodes are not in a 'Ready' state.\n\n**Fix:**\nCheck the node status with 'kubectl get nodes' and troubleshoot any issues."
       },
       {
-        "title": "Add-on Installation Failure",
-        "description": "If an add-on fails to install, check the logs:\n```bash\nkubectl logs -n kube-system <addon-pod-name>\n``` Ensure that the add-on version is compatible with Kubernetes 1.31."
+        "title": "Error: Cluster is not found",
+        "description": "**Cause:** This indicates that the cluster name is incorrect or the cluster does not exist.\n\n**Fix:**\nVerify the cluster name with 'aws eks list-clusters' and ensure you are using the correct name."
+      },
+      {
+        "title": "Error: AccessDeniedException: User is not authorized to perform: eks:DescribeCluster",
+        "description": "**Cause:** This indicates that the IAM user does not have the required permissions.\n\n**Fix:**\nEnsure that the IAM user has the necessary permissions to access EKS."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.25.0",
-        "changes": "Introduced support for Kubernetes 1.31, improved IAM role configurations.",
-        "deprecations": "Deprecated older IAM roles for EKS cluster management."
+        "version": "v1.31",
+        "changes": "Added support for Kubernetes 1.31, improved integration with AWS services.",
+        "deprecations": "Deprecated support for Kubernetes versions below 1.28.",
+        "migrationSteps": "If upgrading from 1.30, ensure that all custom resources are compatible with the new version."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of Amazon EKS should result in a fully functional Kubernetes cluster with nodes in a 'Ready' state, accessible via kubectl, and configured with necessary add-ons for operational efficiency.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "aws eks create-cluster --name <your-cluster-name> --region <your-region> --kubernetes-version 1.31 --role-arn arn:aws:iam::<your-account-id>:role/EKS-ClusterRole --resources-vpc-config subnetIds=<subnet-1,subnet-2>,securityGroupIds=<sg-id>",
-        "aws eks update-kubeconfig --name <your-cluster-name> --region <your-region>",
-        "kubectl cluster-info",
-        "aws eks create-addon --cluster-name <your-cluster-name> --addon-name coredns --service-account-role-arn arn:aws:iam::<your-account-id>:role/EKS-AddonRole\naws eks create-addon --cluster-name <your-cluster-name> --addon-name vpc-cni",
+        "pip install awscli --upgrade --user",
+        "aws eks create-cluster --name my-cluster --kubernetes-version 1.31 --role-arn arn:aws:iam::YOUR_ACCOUNT_ID:role/EKS-Cluster-Role --resources-vpc-config subnetIds=subnet-12345678,subnet-87654321",
+        "aws eks update-kubeconfig --name my-cluster",
         "kubectl get nodes",
-        "kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler.yaml"
+        "kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml"
       ]
     }
   },
@@ -88,10 +127,8 @@
     "platformType": "managed",
     "platformProvider": "AWS",
     "platformVersions": [
-      "1.28",
-      "1.29",
-      "1.30",
-      "1.31"
+      "v1.30",
+      "v1.31"
     ],
     "supportedK8sVersions": [
       "1.28",
@@ -111,30 +148,30 @@
       "configuration"
     ],
     "installMethods": [
-      "cli",
-      "kubectl"
+      "cli"
     ],
     "containerImages": [
-      "amazon/eks-distro-kubernetes:v1.31.0"
+      "amazon/amazon-eks-ami:v1.31"
     ],
     "sourceUrls": {
       "docs": "https://docs.aws.amazon.com/eks/",
       "repo": "https://github.com/aws/eks-anywhere"
     },
-    "qualityScore": 100
+    "qualityScore": 99
   },
   "prerequisites": {
     "kubernetes": ">=1.28",
     "tools": [
-      "aws-cli",
-      "kubectl"
+      "kubectl",
+      "awscli >= 2.x"
     ],
-    "cloudCLI": "aws",
-    "description": "Ensure AWS CLI is configured with appropriate permissions to create and manage EKS resources."
+    "cloudCLI": "aws-cli >= 2.x",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the AWS CLI and kubectl installed and configured."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:07:14.580Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-03T13:09:25.688Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }
