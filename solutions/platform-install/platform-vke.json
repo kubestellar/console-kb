@@ -1,0 +1,141 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-vke",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Vultr Kubernetes Engine (VKE)",
+    "description": "Vultr Kubernetes Engine (VKE) is a managed Kubernetes service that simplifies the deployment and management of Kubernetes clusters on Vultr's infrastructure. It is ideal for users looking for a hassle-free Kubernetes experience with integrated Vultr features.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Use the Vultr CLI to create a new Kubernetes cluster. Replace `<region>` and `<plan>` with your desired values.\n```bash\nvultr-cli k8s create --region <region> --plan <plan> --k8s-version 1.30\n```"
+      },
+      {
+        "title": "Configure kubectl",
+        "description": "After the cluster is created, configure kubectl to connect to your new cluster. Replace `<cluster-id>` with your actual cluster ID.\n```bash\nvultr-cli k8s config <cluster-id> --output kubeconfig.yaml\nexport KUBECONFIG=$(pwd)/kubeconfig.yaml\nkubectl cluster-info\n```"
+      },
+      {
+        "title": "Install Vultr Cloud Controller Manager",
+        "description": "Download and apply the necessary YAML files for the Vultr Cloud Controller Manager. Ensure you replace `<region-id>` and `<api-key>` with your actual Vultr region ID and API key.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/secret.yml\nkubectl apply -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/v0.16.0.yml\n```"
+      },
+      {
+        "title": "Verify Installation",
+        "description": "Check the status of the Vultr Cloud Controller Manager pods to ensure they are running.\n```bash\nkubectl get pods -n kube-system | grep vultr-cloud-controller-manager\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Set up autoscaling for your cluster. Ensure the metrics server is installed and then configure the Horizontal Pod Autoscaler (HPA).\n```bash\nkubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\nkubectl autoscale deployment <deployment-name> --cpu-percent=50 --min=1 --max=10\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Kubernetes Cluster",
+        "description": "Use the Vultr CLI to delete the Kubernetes cluster. Replace `<cluster-id>` with your actual cluster ID.\n```bash\nvultr-cli k8s delete <cluster-id>\n```"
+      },
+      {
+        "title": "Clean Up Resources",
+        "description": "Ensure all resources related to the Vultr Cloud Controller Manager are removed.\n```bash\nkubectl delete -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/v0.16.0.yml\nkubectl delete -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/secret.yml\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade the Vultr Cloud Controller Manager",
+        "description": "Before upgrading, back up your current configuration. Then, apply the new version YAML. Replace `v0.16.0` with the new version if necessary.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/v0.16.0.yml\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods Not Starting",
+        "description": "If the Vultr Cloud Controller Manager pods are not starting, check the logs for errors.\n```bash\nkubectl logs <pod-name> -n kube-system\n``` Ensure that your API key and region ID are correctly set in the secret."
+      },
+      {
+        "title": "kubectl Not Connecting",
+        "description": "If kubectl cannot connect to the cluster, verify your kubeconfig file.\n```bash\ncat $KUBECONFIG\n``` Make sure it points to the correct cluster and that the credentials are valid."
+      },
+      {
+        "title": "LoadBalancer Not Provisioned",
+        "description": "If a LoadBalancer service is not being provisioned, ensure that the Vultr Cloud Controller Manager is running and check the service configuration.\n```bash\nkubectl describe service <service-name>\n``` Look for events indicating provisioning issues."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.16.0",
+        "changes": "Improved integration with Vultr features and enhanced stability.",
+        "deprecations": "No deprecated features in this version."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup will have a running Kubernetes cluster on Vultr with the Vultr Cloud Controller Manager installed and configured. You should be able to deploy applications and utilize Vultr's cloud features seamlessly.",
+      "codeSnippets": [
+        "vultr-cli k8s create --region <region> --plan <plan> --k8s-version 1.30",
+        "vultr-cli k8s config <cluster-id> --output kubeconfig.yaml\nexport KUBECONFIG=$(pwd)/kubeconfig.yaml\nkubectl cluster-info",
+        "kubectl apply -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/secret.yml\nkubectl apply -f https://raw.githubusercontent.com/vultr/vultr-cloud-controller-manager/master/docs/releases/v0.16.0.yml",
+        "kubectl get pods -n kube-system | grep vultr-cloud-controller-manager",
+        "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\nkubectl autoscale deployment <deployment-name> --cpu-percent=50 --min=1 --max=10"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "managed",
+      "managed-k8s",
+      "vultr"
+    ],
+    "platform": "vke",
+    "platformType": "managed",
+    "platformProvider": "Vultr",
+    "platformVersions": [
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "vultr/vultr-cloud-controller-manager:v0.16.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.vultr.com/docs/vultr-kubernetes-engine/",
+      "repo": "https://github.com/vultr/vultr-cloud-controller-manager"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "vultr-cli"
+    ],
+    "cloudCLI": "optional Vultr CLI tool",
+    "description": "Ensure you have the Vultr CLI installed and configured with your API key."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:07:32.827Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

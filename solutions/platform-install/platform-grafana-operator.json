@@ -1,0 +1,146 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-grafana-operator",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Grafana Operator",
+    "description": "The Grafana Operator simplifies the management of Grafana instances, dashboards, and datasources using Kubernetes custom resources. It's ideal for users who prefer GitOps workflows or need to manage multiple Grafana instances efficiently.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install Grafana Operator using Helm",
+        "description": "Deploy the Grafana Operator in your cluster using Helm. Ensure you have Helm installed and configured. Run the following command:\n```bash\nhelm repo add grafana https://grafana.github.io/helm-charts\nhelm repo update\nhelm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.0\n```\nVerify the installation by checking the operator's status:\n```bash\nkubectl get pods -n default -l app.kubernetes.io/name=grafana-operator\n```"
+      },
+      {
+        "title": "Deploy Grafana Instance",
+        "description": "Create a Grafana instance using a custom resource. Save the following YAML to a file named `grafana-instance.yaml`:\n```yaml\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\n  labels:\n    dashboards: \"grafana\"\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: secret\n```\nApply the configuration:\n```bash\nkubectl apply -f grafana-instance.yaml\n```\nCheck the status:\n```bash\nkubectl get grafana\n```"
+      },
+      {
+        "title": "Deploy a Sample Dashboard",
+        "description": "Create a sample dashboard using a custom resource. Save the following YAML to a file named `sample-dashboard.yaml`:\n```yaml\napiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: sample-dashboard\nspec:\n  resyncPeriod: 30s\n  instanceSelector:\n    matchLabels:\n      dashboards: \"grafana\"\n  json: >\n    {\n      \"title\": \"Simple Dashboard\",\n      \"timezone\": \"browser\",\n      \"refresh\": \"5s\",\n      \"panels\": [],\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      }\n    }\n```\nApply the dashboard configuration:\n```bash\nkubectl apply -f sample-dashboard.yaml\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Configure RBAC for Grafana. Create a Role and RoleBinding to allow access:\n```yaml\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: default\n  name: grafana-role\nrules:\n- apiGroups: [\"*\"]\n  resources: [\"*\"]\n  verbs: [\"get\", \"list\", \"watch\", \"create\", \"update\", \"delete\"]\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: grafana-role-binding\n  namespace: default\nsubjects:\n- kind: User\n  name: your-username\n  apiGroup: rbac.authorization.k8s.io\nroleRef:\n  kind: Role\n  name: grafana-role\n  apiGroup: rbac.authorization.k8s.io\n```\nApply the RBAC configuration:\n```bash\nkubectl apply -f rbac-config.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Grafana Operator",
+        "description": "Remove the Grafana Operator and its resources. Run the following command:\n```bash\nhelm uninstall grafana-operator\n```\nClean up any remaining custom resources:\n```bash\nkubectl delete grafana --all\nkubectl delete grafanadashboard --all\n```\nVerify that all resources are removed:\n```bash\nkubectl get all -l app.kubernetes.io/name=grafana-operator\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Grafana Operator",
+        "description": "To upgrade the Grafana Operator, first check the current version:\n```bash\nhelm list\n```\nBackup your current Grafana instances and dashboards:\n```bash\nkubectl get grafana -o yaml > grafana-backup.yaml\nkubectl get grafanadashboard -o yaml > dashboards-backup.yaml\n```\nUpgrade the operator using Helm:\n```bash\nhelm upgrade grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.0\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n default -l app.kubernetes.io/name=grafana-operator\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Grafana Operator Pod Not Starting",
+        "description": "If the Grafana Operator pod is not starting, check the logs:\n```bash\nkubectl logs <pod-name> -n default\n```\nCommon issues include missing permissions or incorrect configurations. Ensure that the service account has the necessary RBAC permissions."
+      },
+      {
+        "title": "Grafana Instance Not Accessible",
+        "description": "If you cannot access your Grafana instance, verify the service:\n```bash\nkubectl get svc -l app.kubernetes.io/name=grafana\n```\nEnsure that the service type is set to LoadBalancer or NodePort for external access."
+      },
+      {
+        "title": "Dashboard Not Loading",
+        "description": "If the dashboard is not loading, check the GrafanaDashboard resource:\n```bash\nkubectl describe grafanadashboard sample-dashboard\n```\nLook for errors in the JSON configuration or issues with the Grafana instance."
+      },
+      {
+        "title": "RBAC Issues",
+        "description": "If you encounter RBAC errors, ensure that your Role and RoleBinding are correctly configured. Check the logs for permission denied errors and adjust the RBAC settings accordingly."
+      },
+      {
+        "title": "Resource Quota Exceeded",
+        "description": "If you receive errors about resource quotas, check the resource usage:\n```bash\nkubectl describe quota\n```\nAdjust your resource requests/limits or increase the quota in your namespace."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v5.12",
+        "changes": "Improved support for Grafana dashboards and data sources management.",
+        "deprecations": "Deprecated the old API version for GrafanaDashboard."
+      },
+      {
+        "version": "v5.11",
+        "changes": "Added new features for better integration with Kubernetes RBAC.",
+        "deprecations": "None."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup includes a running Grafana Operator, accessible Grafana instances, and functioning dashboards. You should be able to manage Grafana resources using Kubernetes custom resources.",
+      "codeSnippets": [
+        "helm repo add grafana https://grafana.github.io/helm-charts\nhelm repo update\nhelm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.0",
+        "kubectl get pods -n default -l app.kubernetes.io/name=grafana-operator",
+        "apiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\n  labels:\n    dashboards: \"grafana\"\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: secret",
+        "kubectl apply -f grafana-instance.yaml",
+        "kubectl get grafana",
+        "apiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: sample-dashboard\nspec:\n  resyncPeriod: 30s\n  instanceSelector:\n    matchLabels:\n      dashboards: \"grafana\"\n  json: >\n    {\n      \"title\": \"Simple Dashboard\",\n      \"timezone\": \"browser\",\n      \"refresh\": \"5s\",\n      \"panels\": [],\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      }\n    }"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "observability-operator",
+      "grafana-labs"
+    ],
+    "platform": "grafana-operator",
+    "platformType": "operator",
+    "platformProvider": "Grafana Labs",
+    "platformVersions": [
+      "v5.10",
+      "v5.11",
+      "v5.12"
+    ],
+    "supportedK8sVersions": [
+      "1.25+"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm",
+      "kubectl"
+    ],
+    "containerImages": [
+      "ghcr.io/grafana/helm-charts/grafana-operator:5.22.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://grafana.github.io/grafana-operator/",
+      "repo": "https://github.com/grafana/grafana-operator"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
+    "description": "Ensure you have a Kubernetes cluster running version 1.25 or higher, and Helm installed for package management."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:09:37.977Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

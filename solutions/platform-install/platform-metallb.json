@@ -1,0 +1,135 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-metallb",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure MetalLB (Bare-metal Load Balancer)",
+    "description": "MetalLB is a load-balancer implementation for bare metal Kubernetes clusters, utilizing standard routing protocols. It is ideal for on-premises Kubernetes setups where cloud load balancers are not available.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install MetalLB using Helm",
+        "description": "First, add the MetalLB Helm repository and install MetalLB. Ensure you are using Helm version 3.5.0 or later. Run the following commands:\n```bash\nhelm repo add metallb https://metallb.github.io/metallb\nhelm repo update\nhelm install metallb metallb/metallb --version v0.15.3\n```"
+      },
+      {
+        "title": "Configure MetalLB with Layer 2 mode",
+        "description": "Create a ConfigMap to configure MetalLB. Replace the IP range with your own available IPs:\n```bash\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    layer2:\n      addresses:\n      - 192.168.1.200-192.168.1.250\nEOF\n```"
+      },
+      {
+        "title": "Verify MetalLB installation",
+        "description": "Check that MetalLB pods are running and ready:\n```bash\nkubectl get pods -n metallb-system\nkubectl get svc -n metallb-system\n```"
+      },
+      {
+        "title": "Post-install configuration for LoadBalancer service",
+        "description": "Create a sample LoadBalancer service to test MetalLB:\n```bash\nkubectl expose deployment your-deployment --type=LoadBalancer --name=your-service\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall MetalLB",
+        "description": "To uninstall MetalLB, run the following command:\n```bash\nhelm uninstall metallb\n``` Then, delete the ConfigMap if it was created:\n```bash\nkubectl delete configmap config -n metallb-system\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade MetalLB to v0.15",
+        "description": "Before upgrading, ensure you backup your current configuration:\n```bash\nkubectl get configmap config -n metallb-system -o yaml > metallb-config-backup.yaml\n```\nTo upgrade to v0.15.3, run:\n```bash\nhelm upgrade metallb metallb/metallb --version v0.15.3\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n metallb-system\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "MetalLB pods are not starting",
+        "description": "Check the logs of the MetalLB pods for errors:\n```bash\nkubectl logs -n metallb-system -l app=metallb\n```\nCommon issues include misconfiguration in the ConfigMap or insufficient permissions."
+      },
+      {
+        "title": "LoadBalancer service not getting an external IP",
+        "description": "Ensure that the IP range defined in the ConfigMap is within the subnet of your network. Check the service status:\n```bash\nkubectl get svc your-service\n```"
+      },
+      {
+        "title": "MetalLB not responding to ARP requests",
+        "description": "Verify that your network is configured to allow ARP broadcasts. Check the MetalLB logs for ARP-related messages:\n```bash\nkubectl logs -n metallb-system -l app=metallb | grep ARP\n```"
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.15",
+        "changes": "Introduced support for additional IP address management features and improved stability.",
+        "deprecations": "Deprecated the old configuration format in favor of a new structured format."
+      },
+      {
+        "version": "v0.14",
+        "changes": "Initial support for Layer 2 mode and basic service functionalities.",
+        "deprecations": "No deprecated features."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup of MetalLB will have the MetalLB pods running in the 'metallb-system' namespace and LoadBalancer services successfully receiving external IPs from the configured range.",
+      "codeSnippets": [
+        "helm repo add metallb https://metallb.github.io/metallb\nhelm repo update\nhelm install metallb metallb/metallb --version v0.15.3",
+        "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    layer2:\n      addresses:\n      - 192.168.1.200-192.168.1.250\nEOF",
+        "kubectl get pods -n metallb-system\nkubectl get svc -n metallb-system",
+        "kubectl expose deployment your-deployment --type=LoadBalancer --name=your-service"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "networking-operator",
+      "metallb"
+    ],
+    "platform": "metallb",
+    "platformType": "operator",
+    "platformProvider": "MetalLB",
+    "platformVersions": [
+      "v0.14",
+      "v0.15"
+    ],
+    "supportedK8sVersions": [
+      "1.25+"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "metallb/controller:v0.15.3",
+      "metallb/speaker:v0.15.3"
+    ],
+    "sourceUrls": {
+      "docs": "https://metallb.universe.tf/",
+      "repo": "https://github.com/metallb/metallb"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "none",
+    "description": "Ensure you have a running Kubernetes cluster and access to it via kubectl."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:08:05.028Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

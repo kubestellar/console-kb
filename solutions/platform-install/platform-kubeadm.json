@@ -1,0 +1,159 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kubeadm",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure kubeadm (Kubernetes bootstrapper)",
+    "description": "Kubeadm is a tool designed to simplify the process of creating and managing Kubernetes clusters. It provides best-practice paths for bootstrapping a secure and minimal viable cluster, making it ideal for users who want to set up Kubernetes quickly and efficiently.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install Kubeadm",
+        "description": "Install kubeadm on your Linux nodes. For Ubuntu 22.04, use the following commands:\n```bash\nsudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\nsudo bash -c 'echo \"deb https://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list'\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00\nsudo apt-mark hold kubelet kubeadm kubectl\n```\nNote: Replace `1.31.0` with the specific version you wish to install."
+      },
+      {
+        "title": "Initialize the Control Plane",
+        "description": "Run the following command to initialize the Kubernetes control plane:\n```bash\nsudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16\n```\nAfter initialization, set up your kubeconfig:\n```bash\nmkdir -p $HOME/.kube\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n```"
+      },
+      {
+        "title": "Install a Pod Network",
+        "description": "Install a network add-on for your cluster. For Flannel, run:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml\n```"
+      },
+      {
+        "title": "Join Worker Nodes",
+        "description": "On each worker node, run the join command provided at the end of the `kubeadm init` output. It looks like this:\n```bash\nkubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>\n```"
+      },
+      {
+        "title": "Verify the Cluster",
+        "description": "Check the status of your cluster:\n```bash\nkubectl cluster-info\nkubectl get nodes\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "To enable the Horizontal Pod Autoscaler, run:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloud-provider/aws/examples/cluster-autoscaler-example.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Reset Kubeadm",
+        "description": "To remove Kubernetes and reset the node, run:\n```bash\nsudo kubeadm reset\nsudo rm -rf $HOME/.kube\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kubernetes Cluster",
+        "description": "Before upgrading, backup your cluster configuration and data. To upgrade from v1.30 to v1.31, run:\n```bash\nsudo kubeadm upgrade plan\nsudo kubeadm upgrade apply v1.31.0\n```\nAfter upgrading, update your kubelet and kubectl:\n```bash\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubectl=1.31.0-00\nsudo systemctl daemon-reload\nsudo systemctl restart kubelet\n```\nVerify the upgrade:\n```bash\nkubectl get nodes\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Kubelet Not Starting",
+        "description": "If kubelet fails to start, check the logs:\n```bash\njournalctl -u kubelet\n```\nCommon issues include misconfigured CNI or insufficient resources."
+      },
+      {
+        "title": "Control Plane Node Not Ready",
+        "description": "If the control plane node shows as 'NotReady', check the status of the pods in the kube-system namespace:\n```bash\nkubectl get pods -n kube-system\n```\nLook for errors in the etcd or kube-apiserver pods."
+      },
+      {
+        "title": "Network Issues",
+        "description": "If pods cannot communicate, ensure the network add-on is correctly installed and running:\n```bash\nkubectl get pods -n kube-system\n```\nCheck for any errors in the network plugin."
+      },
+      {
+        "title": "Token Expired",
+        "description": "If you receive a token expired error when joining nodes, create a new token:\n```bash\nkubeadm token create --print-join-command\n```"
+      },
+      {
+        "title": "Kubeadm Upgrade Fails",
+        "description": "If the upgrade fails, check the logs for kubeadm:\n```bash\njournalctl -xeu kubelet\n```\nEnsure that your cluster is in a healthy state before attempting to upgrade."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.31",
+        "changes": "Improved performance and stability, new features for managing cluster resources.",
+        "deprecations": "Deprecated support for older CNI plugins."
+      },
+      {
+        "version": "v1.30",
+        "changes": "Enhanced security features and improved upgrade paths.",
+        "deprecations": "Deprecated certain flags in kubeadm init."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup of Kubeadm results in a fully functional Kubernetes cluster with a control plane and worker nodes ready to deploy applications. You should be able to verify the cluster status and have a network add-on installed.",
+      "codeSnippets": [
+        "sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\nsudo bash -c 'echo \"deb https://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list'\nsudo apt-get update\nsudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00\nsudo apt-mark hold kubelet kubeadm kubectl",
+        "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16",
+        "mkdir -p $HOME/.kube\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nsudo chown $(id -u):$(id -g) $HOME/.kube/config",
+        "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel.yml",
+        "kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>",
+        "kubectl cluster-info\nkubectl get nodes"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "distribution",
+      "distribution",
+      "kubernetes"
+    ],
+    "platform": "kubeadm",
+    "platformType": "distribution",
+    "platformProvider": "Kubernetes",
+    "platformVersions": [
+      "v1.29",
+      "v1.30",
+      "v1.31"
+    ],
+    "supportedK8sVersions": [
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "k8s.gcr.io/kube-apiserver:v1.31.0",
+      "k8s.gcr.io/kube-controller-manager:v1.31.0",
+      "k8s.gcr.io/kube-scheduler:v1.31.0",
+      "k8s.gcr.io/kube-proxy:v1.31.0",
+      "k8s.gcr.io/pause:3.6"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/reference/setup-tools/kubeadm/",
+      "repo": "https://github.com/kubernetes/kubeadm"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "kubectl",
+      "kubeadm"
+    ],
+    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
+    "description": "Ensure you have a Linux environment with sufficient resources to run a Kubernetes cluster."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:09:28.865Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

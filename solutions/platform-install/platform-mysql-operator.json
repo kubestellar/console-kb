@@ -1,0 +1,146 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-mysql-operator",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure MySQL Operator for Kubernetes (Oracle)",
+    "description": "The MySQL Operator for Kubernetes simplifies the management of MySQL InnoDB Cluster setups within Kubernetes, automating tasks such as deployment, upgrades, and backups. It is ideal for users looking to leverage MySQL in a cloud-native environment.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Deploy Custom Resource Definitions (CRDs)",
+        "description": "First, apply the Custom Resource Definitions necessary for the MySQL Operator. Use the following command:\n```sh\nkubectl apply -f https://raw.githubusercontent.com/mysql/mysql-operator/9.0/deploy/deploy-crds.yaml\n```"
+      },
+      {
+        "title": "Deploy MySQL Operator",
+        "description": "Next, deploy the MySQL Operator using the manifest file:\n```sh\nkubectl apply -f https://raw.githubusercontent.com/mysql/mysql-operator/9.0/deploy/deploy-operator.yaml\n```\nVerify that the operator is running:\n```sh\nkubectl get deployment -n mysql-operator mysql-operator\n```"
+      },
+      {
+        "title": "Create MySQL Root User Secret",
+        "description": "Create a secret for the MySQL root user credentials:\n```sh\nkubectl create secret generic mypwds \\\n        --from-literal=rootUser=root \\\n        --from-literal=rootHost=% \\\n        --from-literal=rootPassword=\"sakila\"\n```"
+      },
+      {
+        "title": "Define MySQL InnoDB Cluster",
+        "description": "Create a YAML file (e.g., `mycluster.yaml`) to define your MySQL InnoDB Cluster:\n```yaml\napiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: \"8.4\"\n```\nThen apply it:\n```sh\nkubectl apply -f mycluster.yaml\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Set up monitoring for your MySQL cluster using Prometheus. Create a ServiceMonitor:\n```yaml\napiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nmetadata:\n  name: mysql-monitor\n  labels:\n    app: mysql\nspec:\n  selector:\n    matchLabels:\n      app: mysql\n  endpoints:\n  - port: mysql\n    interval: 30s\n```"
+      },
+      {
+        "title": "Verify Installation",
+        "description": "Check the cluster information and node status:\n```sh\nkubectl cluster-info\nkubectl get nodes\nkubectl get innodbclusters\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove MySQL Operator",
+        "description": "To uninstall the MySQL Operator, first delete the InnoDB Cluster and then the operator and CRDs:\n```sh\nkubectl delete -f mycluster.yaml\nkubectl delete -f https://raw.githubusercontent.com/mysql/mysql-operator/9.0/deploy/deploy-operator.yaml\nkubectl delete -f https://raw.githubusercontent.com/mysql/mysql-operator/9.0/deploy/deploy-crds.yaml\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade MySQL Operator",
+        "description": "To upgrade from version 8.4 to 9.0, first back up your data and configurations. Check the operator's current version:\n```sh\nkubectl get deployment -n mysql-operator mysql-operator -o=jsonpath='{.spec.template.spec.containers[:1].image}'\n```\nThen apply the new operator version:\n```sh\nkubectl apply -f https://raw.githubusercontent.com/mysql/mysql-operator/9.0/deploy/deploy-operator.yaml\n```\nVerify the new version is running:\n```sh\nkubectl get deployment -n mysql-operator mysql-operator\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Operator Not Running",
+        "description": "If the MySQL Operator is not running, check the logs:\n```sh\nkubectl logs -n mysql-operator deployment/mysql-operator\n```\nEnsure that your Kubernetes version is compatible and that all required CRDs are applied."
+      },
+      {
+        "title": "InnoDB Cluster Not Starting",
+        "description": "If the InnoDB Cluster fails to start, check the secret for correct credentials:\n```sh\nkubectl get secret mypwds -o yaml\n```\nEnsure the root password is correct and that the secret is correctly referenced in your cluster definition."
+      },
+      {
+        "title": "Resource Quotas Exceeded",
+        "description": "If you encounter resource quota issues, check the current resource usage:\n```sh\nkubectl describe quota -n mysql-operator\n```\nAdjust your resource requests/limits in the InnoDB Cluster spec accordingly."
+      },
+      {
+        "title": "Version Mismatch",
+        "description": "If you see errors related to version mismatches, ensure that the MySQL version specified in your InnoDB Cluster matches the operator's capabilities. Update the version in your cluster definition if necessary."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "9.0",
+        "changes": "Introduced support for new MySQL features and improved backup mechanisms.",
+        "deprecations": "Deprecated support for MySQL versions below 8.0."
+      },
+      {
+        "version": "8.4",
+        "changes": "Initial release with basic functionalities for managing MySQL clusters.",
+        "deprecations": "No deprecations in this version."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup includes a running MySQL Operator, a configured InnoDB Cluster, and verification of the cluster's health and accessibility. You should be able to manage MySQL instances through Kubernetes seamlessly.",
+      "codeSnippets": [
+        "Verify that the operator is running:",
+        "apiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: \"8.4\"",
+        "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nmetadata:\n  name: mysql-monitor\n  labels:\n    app: mysql\nspec:\n  selector:\n    matchLabels:\n      app: mysql\n  endpoints:\n  - port: mysql\n    interval: 30s"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "data-operator",
+      "oracle/mysql"
+    ],
+    "platform": "mysql-operator",
+    "platformType": "operator",
+    "platformProvider": "Oracle/MySQL",
+    "platformVersions": [
+      "8.4",
+      "9.0"
+    ],
+    "supportedK8sVersions": [
+      "1.25+"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "kubectl",
+      "helm"
+    ],
+    "containerImages": [
+      "mysql/mysql-operator:9.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://dev.mysql.com/doc/mysql-operator/en/",
+      "repo": "https://github.com/mysql/mysql-operator"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
+    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:06:07.894Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

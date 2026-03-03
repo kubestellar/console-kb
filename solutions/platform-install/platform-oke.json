@@ -1,0 +1,141 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-oke",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Oracle Container Engine for Kubernetes (OKE)",
+    "description": "Oracle Container Engine for Kubernetes (OKE) is a managed Kubernetes service that simplifies the deployment and management of Kubernetes clusters on Oracle Cloud Infrastructure. It is ideal for organizations looking to leverage Kubernetes without the overhead of managing the underlying infrastructure.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Use the Oracle Cloud CLI to create a Kubernetes cluster. Replace placeholders with your actual values.\n\n```bash\noci ce cluster create --compartment-id <your_compartment_id> --name <your_cluster_name> --vcn-id <your_vcn_id> --kubernetes-version 1.30.1 --node-pool-configuration '[{\"name\":\"nodepool1\",\"nodeShape\":\"VM.Standard2.1\",\"nodeShapeConfig\":{\"ocpus\":1,\"memoryInGBs\":1},\"initialNodeCount\":3}]'\n```\n\nEnsure that you have the necessary IAM policies in place for your compartment."
+      },
+      {
+        "title": "Configure kubectl",
+        "description": "After creating the cluster, configure kubectl to connect to it:\n\n```bash\noci ce cluster create-kubeconfig --cluster-id <your_cluster_id> --file $HOME/.kube/config --region <your_region> --token-version 2.0.0\n```\n\nVerify the connection:\n```bash\nkubectl cluster-info\n```"
+      },
+      {
+        "title": "Install OCI Cloud Controller Manager",
+        "description": "Deploy the OCI Cloud Controller Manager using Helm. First, add the Oracle Helm repository:\n\n```bash\nhelm repo add oracle https://oracle.github.io/oci-cloud-controller-manager\nhelm repo update\n```\n\nThen install the controller manager:\n```bash\nhelm install oci-cloud-controller-manager oracle/oci-cloud-controller-manager --namespace kube-system --set provider-config=provider-config-example.yaml\n```\n\nEnsure the controller is running:\n```bash\nkubectl get pods -n kube-system\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Configure autoscaling for your node pool:\n\n```bash\noci ce node-pool update --node-pool-id <your_node_pool_id> --management-config '{\"autoScale\":true,\"minNodes\":1,\"maxNodes\":5}'\n```\n\nYou can also set up monitoring using Oracle Cloud Monitoring services."
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Delete the Kubernetes Cluster",
+        "description": "To uninstall the OKE cluster, use the following command:\n\n```bash\noci ce cluster delete --cluster-id <your_cluster_id> --force\n```\n\nThis will remove the cluster and associated resources. Ensure to clean up any remaining resources in your compartment."
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kubernetes Version",
+        "description": "To upgrade your OKE cluster to a newer version, first check the current version:\n\n```bash\noci ce cluster get --cluster-id <your_cluster_id>\n```\n\nThen, initiate the upgrade:\n```bash\noci ce cluster update --cluster-id <your_cluster_id> --kubernetes-version 1.30.1\n```\n\nBefore upgrading, ensure you have backed up any critical data. After the upgrade, verify the cluster status:\n```bash\nkubectl get nodes\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "kubectl not connecting to the cluster",
+        "description": "If kubectl cannot connect, ensure your kubeconfig is correctly set up. Check the context:\n```bash\nkubectl config current-context\n```\nIf necessary, regenerate the kubeconfig using:\n```bash\noci ce cluster create-kubeconfig --cluster-id <your_cluster_id> --file $HOME/.kube/config --region <your_region> --token-version 2.0.0\n```"
+      },
+      {
+        "title": "OCI Cloud Controller Manager not running",
+        "description": "If the OCI Cloud Controller Manager pod is not running, check the logs:\n```bash\nkubectl logs -n kube-system <pod_name>\n```\nEnsure that the provider configuration file is correctly set up and that the necessary IAM policies are in place."
+      },
+      {
+        "title": "Node pool scaling issues",
+        "description": "If nodes are not scaling as expected, check the node pool configuration:\n```bash\noci ce node-pool get --node-pool-id <your_node_pool_id>\n```\nEnsure that the min and max nodes are set correctly and that there are no resource constraints in your compartment."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.30.1",
+        "changes": "Introduced support for new node shapes and improved performance metrics.",
+        "deprecations": "Deprecated the use of older Kubernetes versions below 1.28."
+      },
+      {
+        "version": "v1.29.2",
+        "changes": "Enhanced security features and added support for additional OCI regions.",
+        "deprecations": "Removed support for legacy authentication methods."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup of OKE includes a running Kubernetes cluster, configured kubectl access, and the OCI Cloud Controller Manager deployed and operational. You should be able to manage your workloads seamlessly on Oracle Cloud Infrastructure.",
+      "codeSnippets": [
+        "oci ce cluster create --compartment-id <your_compartment_id> --name <your_cluster_name> --vcn-id <your_vcn_id> --kubernetes-version 1.30.1 --node-pool-configuration '[{\"name\":\"nodepool1\",\"nodeShape\":\"VM.Standard2.1\",\"nodeShapeConfig\":{\"ocpus\":1,\"memoryInGBs\":1},\"initialNodeCount\":3}]'",
+        "oci ce cluster create-kubeconfig --cluster-id <your_cluster_id> --file $HOME/.kube/config --region <your_region> --token-version 2.0.0",
+        "kubectl cluster-info",
+        "helm repo add oracle https://oracle.github.io/oci-cloud-controller-manager\nhelm repo update",
+        "helm install oci-cloud-controller-manager oracle/oci-cloud-controller-manager --namespace kube-system --set provider-config=provider-config-example.yaml",
+        "kubectl get pods -n kube-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "managed",
+      "managed-k8s",
+      "oracle-cloud"
+    ],
+    "platform": "oke",
+    "platformType": "managed",
+    "platformProvider": "Oracle Cloud",
+    "platformVersions": [
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "oracle/oci-cloud-controller-manager:v1.33.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.oracle.com/en-us/iaas/Content/ContEng/home.htm",
+      "repo": "https://github.com/oracle/oci-cloud-controller-manager"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "oci-cli",
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "oci",
+    "description": "Ensure you have the OCI CLI installed and configured with the necessary permissions."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:05:17.897Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

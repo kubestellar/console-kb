@@ -1,0 +1,134 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-strimzi-kafka-operator",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Strimzi Kafka Operator",
+    "description": "Strimzi Kafka Operator allows you to run Apache Kafka clusters on Kubernetes or OpenShift, providing a simple way to manage Kafka instances and their configurations. It's ideal for organizations looking to leverage Kafka's messaging capabilities in a cloud-native environment.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install Strimzi Kafka Operator",
+        "description": "Use Helm to install the Strimzi Kafka Operator. Make sure you have Helm installed and configured. Run the following commands:\n\n```bash\n# Add the Strimzi Helm repository\nhelm repo add strimzi https://strimzi.io/charts\nhelm repo update\n\n# Install the Strimzi Kafka Operator (version 0.44)\nhelm install strimzi-kafka-operator strimzi/strimzi-kafka-operator --version 0.44.0 --namespace kafka --create-namespace\n```\n\nVerify the installation:\n```bash\nkubectl get pods -n kafka\n```"
+      },
+      {
+        "title": "Create a Kafka Cluster",
+        "description": "Create a Kafka cluster by applying a custom resource definition (CRD). Create a file named `kafka-cluster.yaml` with the following content:\n\n```yaml\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    version: \"3.4.0\"\n    replicas: 3\n    listeners:\n      plain:\n        authentication:\n          type: tls\n      tls:\n        authentication:\n          type: tls\n    storage:\n      type: persistent-claim\n      size: 10Gi\n      class: standard\n  zookeeper:\n    replicas: 3\n    storage:\n      type: persistent-claim\n      size: 10Gi\n      class: standard\n```\n\nApply the configuration:\n```bash\nkubectl apply -f kafka-cluster.yaml\n```\n\nVerify the Kafka cluster:\n```bash\nkubectl get kafka -n kafka\n```"
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Configure Kafka to enable monitoring and autoscaling. For monitoring, you can integrate with Prometheus and Grafana. To enable autoscaling, modify the Kafka CR:\n\n```yaml\nspec:\n  kafka:\n    ...\n    metrics:\n      enabled: true\n    autoscaling:\n      enabled: true\n      minReplicas: 3\n      maxReplicas: 10\n```\n\nApply the updated configuration:\n```bash\nkubectl apply -f kafka-cluster.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Strimzi Kafka Operator",
+        "description": "To uninstall the Strimzi Kafka Operator and clean up resources, run the following commands:\n\n```bash\n# Delete the Kafka cluster\nkubectl delete kafka my-cluster -n kafka\n\n# Uninstall the Helm release\nhelm uninstall strimzi-kafka-operator -n kafka\n\n# Optionally, delete the namespace\nkubectl delete namespace kafka\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Strimzi Kafka Operator",
+        "description": "To upgrade the Strimzi Kafka Operator from version 0.43 to 0.44, follow these steps:\n\n1. Backup your current Kafka cluster configuration:\n   ```bash\n   kubectl get kafka my-cluster -n kafka -o yaml > kafka-backup.yaml\n   ```\n2. Upgrade the Helm release:\n   ```bash\n   helm upgrade strimzi-kafka-operator strimzi/strimzi-kafka-operator --version 0.44.0 -n kafka\n   ```\n3. Verify the upgrade:\n   ```bash\n   kubectl get pods -n kafka\n   ```\n4. If issues arise, rollback to the previous version:\n   ```bash\n   helm rollback strimzi-kafka-operator -n kafka\n   ```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Kafka Pod CrashLoopBackOff",
+        "description": "If you encounter a CrashLoopBackOff error with Kafka pods, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n kafka\n```\nCommon issues include misconfiguration in the Kafka CR or insufficient resources. Ensure your storage class is correctly set up."
+      },
+      {
+        "title": "Zookeeper Not Ready",
+        "description": "If Zookeeper pods are not in a ready state, check the pod status:\n```bash\nkubectl get pods -n kafka\n```\nEnsure that the storage class allows for persistent volumes and that the Zookeeper configuration in the Kafka CR is correct."
+      },
+      {
+        "title": "Helm Upgrade Fails",
+        "description": "If the Helm upgrade fails, check for existing resources that may conflict with the new version. Use:\n```bash\nhelm history strimzi-kafka-operator -n kafka\n```\nYou may need to manually delete conflicting resources before retrying the upgrade."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.44",
+        "changes": "Improved metrics support and enhanced autoscaling features.",
+        "deprecations": "Deprecated support for Kafka versions below 2.8."
+      },
+      {
+        "version": "0.43",
+        "changes": "Introduced support for Kafka 3.3 and improved Helm chart configurations.",
+        "deprecations": "Deprecated the old metrics API."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup of the Strimzi Kafka Operator includes a running Kafka cluster with all pods in the 'Running' state and the ability to produce and consume messages. Monitoring and autoscaling should also be configured correctly.",
+      "codeSnippets": [
+        "# Add the Strimzi Helm repository\nhelm repo add strimzi https://strimzi.io/charts\nhelm repo update\n\n# Install the Strimzi Kafka Operator (version 0.44)\nhelm install strimzi-kafka-operator strimzi/strimzi-kafka-operator --version 0.44.0 --namespace kafka --create-namespace",
+        "kubectl get pods -n kafka",
+        "apiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    version: \"3.4.0\"\n    replicas: 3\n    listeners:\n      plain:\n        authentication:\n          type: tls\n      tls:\n        authentication:\n          type: tls\n    storage:\n      type: persistent-claim\n      size: 10Gi\n      class: standard\n  zookeeper:\n    replicas: 3\n    storage:\n      type: persistent-claim\n      size: 10Gi\n      class: standard",
+        "kubectl apply -f kafka-cluster.yaml",
+        "kubectl get kafka -n kafka",
+        "spec:\n  kafka:\n    ...\n    metrics:\n      enabled: true\n    autoscaling:\n      enabled: true\n      minReplicas: 3\n      maxReplicas: 10"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "data-operator",
+      "strimzi"
+    ],
+    "platform": "strimzi-kafka-operator",
+    "platformType": "operator",
+    "platformProvider": "Strimzi",
+    "platformVersions": [
+      "0.42",
+      "0.43",
+      "0.44"
+    ],
+    "supportedK8sVersions": [
+      "1.25+"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm",
+      "kubectl"
+    ],
+    "containerImages": [
+      "registry/strimzi/strimzi-kafka-operator:0.44.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://strimzi.io/documentation/",
+      "repo": "https://github.com/strimzi/strimzi-kafka-operator"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
+    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T12:05:20.918Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
