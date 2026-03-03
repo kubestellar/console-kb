@@ -1,0 +1,131 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-argocd-operator",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Argo CD Operator",
+    "description": "The Argo CD Operator simplifies the management of Argo CD instances on Kubernetes, enabling GitOps workflows. It is ideal for teams looking to automate their continuous delivery processes using Git as the source of truth.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install Argo CD Operator",
+        "description": "Create the necessary resources for the Argo CD Operator. First, apply the CatalogSource, OperatorGroup, and Subscription YAML files to your cluster:\n\n```bash\nkubectl apply -f catalog_source.yaml\nkubectl apply -f operator_group.yaml\nkubectl apply -f subscription.yaml\n```\n\nEnsure you are using the correct version of the operator by checking the image in the CatalogSource. For v0.12, use the image `quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92`."
+      },
+      {
+        "title": "Verify Installation",
+        "description": "Check if the Argo CD Operator is running correctly:\n\n```bash\nkubectl get pods -n olm\nkubectl get subscriptions -n olm\nkubectl get catalogsources -n olm\n```\n\nYou should see the operator pod in a Running state."
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "After installation, configure RBAC for Argo CD. Create a role and role binding:\n\n```yaml\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: argocd\n  name: argocd-role\nrules:\n- apiGroups: ['*']\n  resources: ['*']\n  verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: argocd-role-binding\n  namespace: argocd\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: argocd-role\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: argocd\n```\n\nApply the configuration:\n```bash\nkubectl apply -f rbac.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Argo CD Operator",
+        "description": "To uninstall the Argo CD Operator, delete the Subscription, OperatorGroup, and CatalogSource:\n\n```bash\nkubectl delete subscription argocd-operator -n olm\nkubectl delete operatorgroup argocd-operator -n olm\nkubectl delete catalogsource argocd-catalog -n olm\n```\n\nAdditionally, clean up any Argo CD instances created by the operator:\n```bash\nkubectl delete argocd <argocd-instance-name> -n <namespace>\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Argo CD Operator",
+        "description": "To upgrade the Argo CD Operator to a newer version, first ensure you have a backup of your existing Argo CD configurations. Then, update the Subscription YAML to point to the new version:\n\n1. Edit the `subscription.yaml` to change the `name` field to the new version, e.g., `argocd-operator.v0.12.0`.\n2. Apply the updated Subscription:\n```bash\nkubectl apply -f subscription.yaml\n```\n3. Verify the upgrade:\n```bash\nkubectl get pods -n olm\n```\n\nIf you encounter issues, you can roll back by reverting the Subscription YAML to the previous version and reapplying it."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Operator Pod Not Starting",
+        "description": "If the Argo CD Operator pod is not starting, check the logs for errors:\n```bash\nkubectl logs <operator-pod-name> -n olm\n```\nCommon issues may include insufficient permissions or missing CRDs. Ensure that all required CRDs are installed."
+      },
+      {
+        "title": "Argo CD Instance Not Responding",
+        "description": "If your Argo CD instance is not responding, check the status of the Argo CD services:\n```bash\nkubectl get svc -n argocd\n```\nEnsure that the services are up and running. If not, check the logs of the Argo CD pods for any errors."
+      },
+      {
+        "title": "RBAC Issues",
+        "description": "If you encounter permission errors, verify your RBAC configuration. Check the role and role binding:\n```bash\nkubectl get role -n argocd\nkubectl get rolebinding -n argocd\n```\nEnsure that the service account used by the Argo CD Operator has the necessary permissions."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.12",
+        "changes": "Improved support for multi-cluster deployments and enhanced logging capabilities.",
+        "deprecations": "Deprecated the old RBAC model in favor of a more flexible policy model."
+      },
+      {
+        "version": "v0.11",
+        "changes": "Introduced support for custom resource definitions (CRDs) for better management of Argo CD resources.",
+        "deprecations": "Removed legacy API endpoints."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful setup of the Argo CD Operator will have the operator running in the `olm` namespace, with all required resources deployed. You should be able to create and manage Argo CD instances seamlessly.",
+      "codeSnippets": [
+        "kubectl apply -f catalog_source.yaml\nkubectl apply -f operator_group.yaml\nkubectl apply -f subscription.yaml",
+        "kubectl get pods -n olm\nkubectl get subscriptions -n olm\nkubectl get catalogsources -n olm",
+        "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: argocd\n  name: argocd-role\nrules:\n- apiGroups: ['*']\n  resources: ['*']\n  verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: argocd-role-binding\n  namespace: argocd\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: argocd-role\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: argocd",
+        "kubectl apply -f rbac.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "gitops-operator",
+      "argo-project"
+    ],
+    "platform": "argocd-operator",
+    "platformType": "operator",
+    "platformProvider": "Argo Project",
+    "platformVersions": [
+      "v0.10",
+      "v0.11",
+      "v0.12"
+    ],
+    "supportedK8sVersions": [
+      "1.25+"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "kubectl"
+    ],
+    "containerImages": [
+      "quay.io/argoprojlabs/argocd-operator-registry:v0.12"
+    ],
+    "sourceUrls": {
+      "docs": "https://argocd-operator.readthedocs.io/",
+      "repo": "https://github.com/argoproj-labs/argocd-operator"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
+    "description": "Ensure you have a Kubernetes cluster running with the necessary permissions to deploy operators."
+  },
+  "security": {
+    "scannedAt": "2026-03-03T02:10:05.784Z",
+    "scannerVersion": "platform-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
