@@ -1,0 +1,128 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-benchmark",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Run llm-d Benchmark Workload",
+    "description": "Run inference benchmarks against a deployed llm-d stack using the inference-perf tool. Supports multiple benchmark templates for different well-lit paths (inference scheduling, P/D disaggregation, wide EP, precise prefix cache). Results include latency metrics (TTFT, TPOT, ITL), throughput, and standardized benchmark reports.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Ensure llm-d stack is deployed",
+        "description": "You must have a deployed llm-d inference stack from one of the well-lit path guides:\n- [Inference Scheduling](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling)\n- [P/D Disaggregation](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation)\n- [Wide EP with LWS](https://github.com/llm-d/llm-d/tree/main/guides/wide-ep-lws)\n- [Precise Prefix Cache](https://github.com/llm-d/llm-d/tree/main/guides/precise-prefix-cache-aware)"
+      },
+      {
+        "title": "Install prerequisites",
+        "description": "Install required tools:\n- `yq` (v4+)\n- `timeout` utility (macOS: `brew install coreutils`)\n\nDownload the benchmark runner script:\n```bash\ncurl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh\nchmod u+x run_only.sh\n```"
+      },
+      {
+        "title": "Create a PVC for benchmark results",
+        "description": "Create a PersistentVolumeClaim with RWX access mode (200Gi recommended):\n```bash\nexport BENCHMARK_PVC=\"workload-pvc\"\ncat <<YAML | kubectl -n ${NAMESPACE} apply -f -\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: ${BENCHMARK_PVC}\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 200Gi\nYAML\n```"
+      },
+      {
+        "title": "Select and configure benchmark template",
+        "description": "Download the appropriate benchmark template for your deployment:\n```bash\n# For inference-scheduling:\ncurl -LJO https://raw.githubusercontent.com/llm-d/llm-d/main/guides/benchmark/inference_scheduling_guide_template.yaml\n\n# For P/D disaggregation:\ncurl -LJO https://raw.githubusercontent.com/llm-d/llm-d/main/guides/benchmark/pd_template.yaml\n\n# For precise prefix cache:\ncurl -LJO https://raw.githubusercontent.com/llm-d/llm-d/main/guides/benchmark/precise_template.yaml\n```\n\nConfigure the template:\n```bash\nexport NAMESPACE=<your-namespace>\nexport BENCHMARK_PVC=workload-pvc\nexport GATEWAY_SVC=<your-gateway-service-name>\nenvsubst < <template>.yaml > config.yaml\n```"
+      },
+      {
+        "title": "Run the benchmark",
+        "description": "Execute the benchmark:\n```bash\n./run_only.sh -c config.yaml\n```\n\nThe script launches a `llmdbench-harness-launcher` pod that runs inference-perf with multiple stages at different request rates. Progress is displayed in the terminal."
+      },
+      {
+        "title": "Review benchmark results",
+        "description": "Results are stored on the PVC under `/requests/inference-perf_<experiment_ID>_<workload>_<model>/`. Key output files include:\n- `summary_lifecycle_metrics.json` — overall metrics summary\n- Per-stage YAML reports with latency percentiles (TTFT, TPOT, ITL)\n- Throughput metrics (requests/sec, tokens/sec)\n\nAccess results via the launcher pod:\n```bash\nkubectl exec -it llmdbench-harness-launcher -n ${NAMESPACE} -- ls /requests/\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful benchmark run completes all stages and produces result files on the PVC including latency metrics, throughput numbers, and standardized benchmark reports in YAML format.",
+      "codeSnippets": [
+        "curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh\nchmod u+x run_only.sh",
+        "envsubst < inference_scheduling_guide_template.yaml > config.yaml",
+        "./run_only.sh -c config.yaml"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove benchmark pod and PVC",
+        "description": "Delete the benchmark launcher pod and storage:\n```bash\nkubectl delete pod llmdbench-harness-launcher -n ${NAMESPACE}\nkubectl delete pvc ${BENCHMARK_PVC} -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Clean up local files",
+        "description": "Remove downloaded scripts and configs:\n```bash\nrm -f run_only.sh config.yaml *_template.yaml\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update benchmark tooling",
+        "description": "Download the latest version of the benchmark runner:\n```bash\ncurl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh\nchmod u+x run_only.sh\n```\n\nDownload updated benchmark templates from the latest llm-d release."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Benchmark pod stuck in Pending",
+        "description": "The PVC may not have a matching PersistentVolume. Verify your storage class supports RWX access:\n```bash\nkubectl describe pvc ${BENCHMARK_PVC} -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Gateway service not found",
+        "description": "Ensure `GATEWAY_SVC` matches the exact service name in your namespace:\n```bash\nkubectl get svc -n ${NAMESPACE}\n```\n\nCommon names: `infra-inference-scheduling-inference-gateway-istio`, `infra-pd-inference-gateway-istio`."
+      },
+      {
+        "title": "Benchmark failures at high request rates",
+        "description": "Request failures at high rates may indicate the stack is saturated. This is expected behavior — the benchmark sweeps through increasing rates to find the maximum throughput. Review per-stage results to identify the sustainable throughput ceiling."
+      },
+      {
+        "title": "timeout command not found (macOS)",
+        "description": "On macOS, install the timeout utility:\n```bash\nbrew install coreutils\n```"
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "benchmark",
+      "inference-perf",
+      "performance",
+      "latency",
+      "throughput",
+      "testing"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Pod",
+      "PersistentVolumeClaim",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "kubectl",
+      "script"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/benchmark",
+      "repo": "https://github.com/llm-d/llm-d-benchmark"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "kubectl",
+      "yq",
+      "curl"
+    ],
+    "description": "A deployed llm-d inference stack, a PersistentVolumeClaim with RWX access (200Gi recommended), and the yq YAML processor (v4+)."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

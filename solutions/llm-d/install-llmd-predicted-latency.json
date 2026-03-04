@@ -1,0 +1,137 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-predicted-latency",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Predicted Latency Scheduling",
+    "description": "Deploy the experimental predicted latency based load balancing feature for llm-d. The Endpoint Picker (EPP) integrates with in-pod latency predictor sidecars that continuously learn from live traffic, estimating p90 TTFT and TPOT for each candidate pod. An SLO scorer compares predictions against per-request SLOs for intelligent routing. Requires building custom EPP and sidecar images from an experimental branch.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install the Inference Gateway Extension",
+        "description": "Follow the official Gateway API Inference Extension installation:\nhttps://gateway-api-inference-extension.sigs.k8s.io/guides/\n\nEnsure you have Docker/BuildKit and access to a container registry."
+      },
+      {
+        "title": "Build the custom EPP image",
+        "description": "Clone and build the EPP from the experimental branch:\n```bash\ngit clone https://github.com/kubernetes-sigs/gateway-api-inference-extension.git\ncd gateway-api-inference-extension\ngit checkout slo-prediction-experimental\n\nexport IMG=\"<your-registry>/epp:slo-prediction-$(git rev-parse --short HEAD)\"\ndocker build -t \"$IMG\" -f Dockerfile .\ndocker push \"$IMG\"\n```"
+      },
+      {
+        "title": "Build the latency predictor sidecars",
+        "description": "Build the training and prediction sidecar images from the same experimental branch:\n```bash\n# See: https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental/latencypredictor-v1\n```\n\nBuild and push training server and prediction server images to your registry."
+      },
+      {
+        "title": "Configure the plugins ConfigMap",
+        "description": "Create the `plugins-config` ConfigMap with both `default` and `slo` scheduling profiles:\n```yaml\napiVersion: inference.networking.x-k8s.io/v1alpha1\nkind: EndpointPickerConfig\nplugins:\n  - type: queue-scorer\n  - type: kv-cache-utilization-scorer\n  - type: prefix-cache-scorer\n  - type: slo-request-tracker\n  - type: slo-scorer\n  - type: slo-aware-profile-handler\n  - type: max-score-picker\n\nschedulingProfiles:\n  - name: default\n    plugins:\n      - pluginRef: slo-request-tracker\n      - pluginRef: prefix-cache-scorer\n      - pluginRef: queue-scorer\n      - pluginRef: kv-cache-utilization-scorer\n      - pluginRef: max-score-picker\n  - name: slo\n    plugins:\n      - pluginRef: prefix-cache-scorer\n        weight: 0\n      - pluginRef: slo-request-tracker\n      - pluginRef: slo-scorer\n      - pluginRef: max-score-picker\n```"
+      },
+      {
+        "title": "Deploy the InferencePool with sidecars",
+        "description": "Apply your InferencePool/EPP manifest with:\n- EPP container with `--enable-latency-predictor` flag\n- Training sidecar (port 8000)\n- Three prediction sidecars (ports 8001, 8002, 8003)\n- ConfigMaps for `latency-predictor-config` and `prediction-server-config`\n\nSee the [example manifest](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/slo-prediction-experimental/config/manifests/inferencepool-resources-lp.yaml) for reference."
+      },
+      {
+        "title": "Verify the deployment",
+        "description": "Check all containers are running:\n```bash\nkubectl get pods\n```\n\nVerify health endpoints:\n```bash\n# Training sidecar\ncurl http://<pod-ip>:8000/readyz\n\n# Prediction sidecars\ncurl http://<pod-ip>:8001/readyz\ncurl http://<pod-ip>:8002/readyz\ncurl http://<pod-ip>:8003/readyz\n```"
+      },
+      {
+        "title": "Test SLO-aware routing",
+        "description": "Send requests with SLO headers to trigger predicted latency scheduling:\n```bash\ncurl -v $GW_IP/v1/completions \\\n  -H 'Content-Type: application/json' \\\n  -H 'x-prediction-based-scheduling: true' \\\n  -H 'x-slo-ttft-ms: 200' \\\n  -H 'x-slo-tpot-ms: 50' \\\n  -d '{\"model\": \"meta-llama/Llama-3.1-8B-Instruct\", \"prompt\": \"Hello\", \"max_tokens\": 200, \"stream\": \"true\"}'\n```\n\nThe final SSE frame includes both predictions and actuals for validation."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows all EPP and sidecar containers running. SLO-aware requests return predictions alongside actuals in the response. EPP logs at verbosity -v=4 show profile selection, candidate scoring, and pod picking based on predicted latency.",
+      "codeSnippets": [
+        "git checkout slo-prediction-experimental",
+        "docker build -t \"$IMG\" -f Dockerfile .",
+        "curl -v $GW_IP/v1/completions -H 'x-prediction-based-scheduling: true' -H 'x-slo-ttft-ms: 200' -H 'x-slo-tpot-ms: 50'"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove the deployment",
+        "description": "Follow the cleanup instructions from the [Inference Gateway Extension guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/#cleanup).\n\nDelete the InferencePool, ConfigMaps, and supporting resources."
+      },
+      {
+        "title": "Clean up container images",
+        "description": "Remove the custom EPP and sidecar images from your container registry if no longer needed."
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Pull latest experimental branch",
+        "description": "```bash\ncd gateway-api-inference-extension\ngit pull origin slo-prediction-experimental\n```"
+      },
+      {
+        "title": "Rebuild and redeploy images",
+        "description": "Rebuild EPP and sidecar images with updated code, push to registry, and update the deployment manifests with new image tags."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Prediction sidecars not ready",
+        "description": "Check sidecar logs and readiness endpoints:\n```bash\nkubectl logs <epp-pod> -c prediction-server-1\ncurl http://<pod-ip>:8001/readyz\n```\n\nPrediction sidecars need training data before they can make predictions. Allow time for the training sidecar to collect samples."
+      },
+      {
+        "title": "Predictions inaccurate initially",
+        "description": "The XGBoost models need sufficient training data (minimum 100 samples). Initial predictions may be inaccurate. The training sidecar retrains every second by default (`LATENCY_RETRAINING_INTERVAL_SEC=1`)."
+      },
+      {
+        "title": "Scaling limits at high QPS",
+        "description": "Each prediction sidecar sustains approximately 300 QPS. Total prediction load grows with both cluster QPS and pod count. Scale prediction servers horizontally if needed."
+      },
+      {
+        "title": "Only streaming mode supported",
+        "description": "The predictor requires `\"stream\": \"true\"` in the request body. Non-streaming requests will not produce training data or predictions."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "scheduling",
+      "latency-prediction",
+      "slo",
+      "experimental",
+      "xgboost",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "ConfigMap"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "kubectl",
+      "docker"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/predicted-latency-based-scheduling",
+      "repo": "https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "kubectl",
+      "docker",
+      "git"
+    ],
+    "description": "A Kubernetes cluster with GPU support, the Gateway API Inference Extension installed, Docker/BuildKit for building custom images, and access to a container registry. Only streaming workloads are supported."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

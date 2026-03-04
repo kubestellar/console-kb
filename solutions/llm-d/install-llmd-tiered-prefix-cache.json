@@ -1,0 +1,127 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-tiered-prefix-cache",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Tiered Prefix Cache Offloading",
+    "description": "Configure prefix cache offloading for llm-d deployments to extend cache capacity beyond GPU HBM. Supports multiple storage tiers: CPU RAM (recommended first tier), local disk, shared/remote storage (CephFS, GCP Lustre, IBM Storage Scale), and P2P cache sharing. Tiered caching avoids recomputation of KV tensors and SSM states, improving TTFT and throughput while reducing cost.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Deploy a base llm-d stack",
+        "description": "Tiered prefix cache is an addon to existing llm-d deployments. First deploy one of the well-lit paths:\n- [Inference Scheduling](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling)\n- [P/D Disaggregation](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation)\n- [Precise Prefix Cache Routing](https://github.com/llm-d/llm-d/tree/main/guides/precise-prefix-cache-aware)"
+      },
+      {
+        "title": "Enable CPU RAM offloading (recommended first tier)",
+        "description": "CPU RAM offloading is recommended as the first cache tier because:\n- Little operational overhead\n- Much larger capacity than GPU HBM\n- CPU-to-accelerator transfer is faster than recomputation\n\nFollow the [CPU offloading guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache/cpu) to configure CPU RAM as a cache tier in your existing helmfile values."
+      },
+      {
+        "title": "Configure local disk offloading (optional second tier)",
+        "description": "Local disk increases cache capacity but is slower than CPU RAM. Consider this when:\n- Your workload can tolerate additional latency\n- Local disk capacity is sufficient\n\nFollow the [storage offloading guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache/storage) to configure local disk as a storage backend."
+      },
+      {
+        "title": "Configure shared storage offloading (optional tier)",
+        "description": "Shared storage provides:\n- Extended capacity independent of deployment size\n- Cross-node cache sharing between replicas\n- Fast scale-up (new nodes reuse existing cache)\n- Persistence across restarts and failures\n\nSupported storage systems: CephFS, GCP Lustre, IBM Storage Scale, and any vLLM-compatible storage connector.\n\nFollow the [storage offloading guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache/storage)."
+      },
+      {
+        "title": "Apply configuration changes",
+        "description": "After updating your helmfile values with cache tier configuration, re-apply:\n```bash\nhelmfile apply -n ${NAMESPACE}\n```\n\nThe cache tiers are configured in the model service values and take effect on pod restart."
+      },
+      {
+        "title": "Verify cache offloading",
+        "description": "Check model service pod logs to verify cache offloading is active:\n```bash\nkubectl logs -l app.kubernetes.io/component=modelservice -n ${NAMESPACE} --tail=100 | grep -i cache\n```\n\nMonitor cache hit rates through the monitoring stack to validate improved performance."
+      }
+    ],
+    "resolution": {
+      "summary": "Successful configuration shows cache offloading active in model service logs. Recommended tier order: HBM (always) > CPU RAM > local disk or shared storage. Multiple tiers can be combined for optimal cache performance.",
+      "codeSnippets": [
+        "helmfile apply -n ${NAMESPACE}",
+        "kubectl logs -l app.kubernetes.io/component=modelservice -n ${NAMESPACE} --tail=100 | grep -i cache"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove cache tier configuration",
+        "description": "Edit your helmfile values to remove or disable cache offloading settings, then re-apply:\n```bash\nhelmfile apply -n ${NAMESPACE}\n```\n\nPods will restart without cache offloading enabled."
+      },
+      {
+        "title": "Clean up shared storage resources",
+        "description": "If using shared storage, remove any PersistentVolumeClaims or storage-specific resources:\n```bash\nkubectl get pvc -n ${NAMESPACE}\nkubectl delete pvc <cache-pvc-name> -n ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update cache configuration",
+        "description": "Modify cache tier settings in your helmfile values (e.g., increase CPU RAM allocation, add new storage tier)."
+      },
+      {
+        "title": "Re-apply with updated configuration",
+        "description": "```bash\nhelmfile apply -n ${NAMESPACE}\n```\n\nMonitor cache performance after changes to validate improvement."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "CPU offloading not activating",
+        "description": "Verify the CPU offloading configuration is correctly set in model service values. Check that sufficient CPU RAM is available on the nodes:\n```bash\nkubectl describe node <node-name> | grep -A 5 memory\n```"
+      },
+      {
+        "title": "Shared storage latency too high",
+        "description": "If shared storage adds too much latency, consider:\n1. Using a faster storage backend (NVMe-backed, RDMA-capable)\n2. Increasing the CPU RAM tier size to reduce shared storage access frequency\n3. Enabling GPU Direct Storage (GDS) if supported by your storage system"
+      },
+      {
+        "title": "Cache hit rate low despite offloading",
+        "description": "Low hit rates may indicate:\n- Cache capacity is still too small for your workload\n- Workload has low prefix overlap between requests\n- Consider enabling [precise prefix cache routing](https://github.com/llm-d/llm-d/tree/main/guides/precise-prefix-cache-aware) for better cache-aware scheduling"
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "vllm",
+      "prefix-cache",
+      "kv-cache",
+      "offloading",
+      "cpu-ram",
+      "shared-storage",
+      "configuration"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "ConfigMap",
+      "PersistentVolumeClaim"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl"
+    ],
+    "description": "An existing llm-d deployment (any well-lit path). For CPU offloading: nodes with sufficient CPU RAM. For shared storage: a compatible storage system (CephFS, GCP Lustre, IBM Storage Scale, etc.)."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

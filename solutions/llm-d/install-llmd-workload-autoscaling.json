@@ -1,0 +1,147 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-workload-autoscaling",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Workload Variant Autoscaler (WVA)",
+    "description": "Deploy the Workload Variant Autoscaler (WVA) for dynamic autoscaling of llm-d inference deployments. WVA adjusts replica counts based on inference server saturation, optimizing resource utilization and reducing tail latency. Supports full installation (llm-d stack + WVA) or WVA-only mode connecting to an existing deployment. Requires Prometheus with HTTPS.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Prepare prerequisites",
+        "description": "Ensure you have:\n1. Kubernetes cluster (v1.31+) with GPU support\n2. Gateway control plane deployed (Istio)\n3. Prometheus monitoring stack with HTTPS support\n\n**Platform-specific Prometheus setup:**\n- **OpenShift:** Enable User Workload Monitoring\n- **GKE:** Install in-cluster Prometheus (GMP lacks HTTP API)\n- **Kind/Minikube:** Install Prometheus with TLS configuration\n\nSee [monitoring documentation](https://github.com/llm-d/llm-d/tree/main/docs/monitoring) for details."
+      },
+      {
+        "title": "Create namespace and HuggingFace token",
+        "description": "```bash\nexport NAMESPACE=llm-d-autoscaler\nkubectl create namespace ${NAMESPACE}\n\nkubectl create secret generic llm-d-hf-token \\\n  --from-literal=HF_TOKEN=<your-hf-token> \\\n  -n ${NAMESPACE}\n```\n\n**For OpenShift only:**\n```bash\nkubectl label namespace ${NAMESPACE} openshift.io/user-monitoring=true --overwrite\n```"
+      },
+      {
+        "title": "Configure WVA values",
+        "description": "Edit `workload-autoscaling/values.yaml` with platform-specific settings:\n\n**OpenShift:**\n```yaml\nwva:\n  prometheus:\n    monitoringNamespace: openshift-user-workload-monitoring\n    baseURL: \"https://thanos-querier.openshift-monitoring.svc.cluster.local:9091\"\n    tls:\n      insecureSkipVerify: true\n```\n\n**GKE:**\n```yaml\nwva:\n  prometheus:\n    monitoringNamespace: llm-d-monitoring\n    baseURL: \"http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090\"\n```\n\n**Accelerator type:**\n```yaml\nva:\n  accelerator: L40S  # or A100, H100, Intel-Max-1550\n```"
+      },
+      {
+        "title": "Install WVA CRDs",
+        "description": "Install the VariantAutoscaling CRD before deploying:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.0/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml\nkubectl get crd variantautoscalings.llmd.ai\n```"
+      },
+      {
+        "title": "Install WVA with llm-d stack",
+        "description": "**Option A: Full installation** (llm-d stack + WVA):\n```bash\ncd guides/workload-autoscaling\nhelmfile apply -n ${NAMESPACE}\n```\n\n**Option B: WVA-only** (connect to existing deployment):\n```bash\nexport LLMD_NAMESPACE=llm-d-inference-scheduler\nexport LLMD_RELEASE_NAME_POSTFIX=inference-scheduling\nexport WVA_NAMESPACE=llm-d-autoscaler\ncd guides/workload-autoscaling\nhelmfile apply -e wva-only -n ${WVA_NAMESPACE}\n```"
+      },
+      {
+        "title": "Install Prometheus Adapter",
+        "description": "Install Prometheus Adapter **after** WVA (which creates the required `prometheus-ca` ConfigMap):\n\n```bash\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\nhelm repo update\nexport MON_NS=${MON_NS:-llm-d-monitoring}\n\ncurl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \\\n  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.0/config/samples/prometheus-adapter-values.yaml\n\nhelm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \\\n  --version 5.2.0 -n ${MON_NS} --create-namespace \\\n  -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml\n```\n\nSee the guide for OpenShift-specific and Kind/HTTPS-specific adapter configuration."
+      },
+      {
+        "title": "Verify end-to-end installation",
+        "description": "```bash\nexport NAMESPACE=${NAMESPACE:-llm-d-autoscaler}\nexport MON_NS=${MON_NS:-llm-d-monitoring}\n\nkubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter\nkubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/name=workload-variant-autoscaler\n\n# Verify metrics and HPA\nkubectl get --raw \"/apis/external.metrics.k8s.io/v1beta1/namespaces/${NAMESPACE}/inferno_desired_replicas\" | jq\nkubectl get hpa -n ${NAMESPACE}\nkubectl get variantautoscalings -n ${NAMESPACE}\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation shows the WVA controller, Prometheus adapter, and HPA all running. The `inferno_desired_replicas` external metric should be available, and the HPA should be scaling the inference deployment based on saturation metrics.",
+      "codeSnippets": [
+        "kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.0/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml",
+        "helmfile apply -n ${NAMESPACE}",
+        "helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter --version 5.2.0 -n ${MON_NS}",
+        "kubectl get hpa -n ${NAMESPACE}"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove WVA stack",
+        "description": "**Full installation:**\n```bash\ncd guides/workload-autoscaling\nhelmfile destroy -n ${NAMESPACE:-llm-d-autoscaler}\n```\n\n**WVA-only:**\n```bash\nhelmfile destroy -e wva-only -n ${NAMESPACE:-llm-d-autoscaler}\n```"
+      },
+      {
+        "title": "Remove Prometheus Adapter",
+        "description": "```bash\nhelm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}\n```\n\nThe llm-d stack continues operating without autoscaling after WVA removal."
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Check for breaking changes",
+        "description": "**v0.5.0 breaking change:** The `scaleTargetRef` field is now required in VariantAutoscaling CRD. Existing resources must be updated before upgrading.\n\nCheck existing resources:\n```bash\nkubectl get variantautoscalings -A\n```"
+      },
+      {
+        "title": "Update CRDs first",
+        "description": "```bash\nkubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.0/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml\n```"
+      },
+      {
+        "title": "Update existing VariantAutoscaling resources",
+        "description": "Add the required `scaleTargetRef` to each resource:\n```bash\nkubectl edit variantautoscaling <name> -n <namespace>\n```\n\nAdd:\n```yaml\nspec:\n  scaleTargetRef:\n    kind: Deployment\n    name: <your-deployment-name>\n```"
+      },
+      {
+        "title": "Apply the upgrade",
+        "description": "```bash\ncd guides/workload-autoscaling\nhelmfile apply -n ${NAMESPACE:-llm-d-autoscaler}\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "WVA cannot connect to Prometheus",
+        "description": "WVA requires HTTPS for Prometheus connections. Verify Prometheus is accessible with TLS:\n```bash\nkubectl logs -l app.kubernetes.io/name=workload-variant-autoscaler -n ${NAMESPACE} --tail=50\n```\n\nFor Kind/Minikube, ensure TLS is configured on Prometheus (see Step 2 in the guide)."
+      },
+      {
+        "title": "External metrics not available",
+        "description": "If `inferno_desired_replicas` metric is not found:\n```bash\nkubectl get --raw \"/apis/external.metrics.k8s.io/v1beta1\" | jq\n```\n\nVerify Prometheus Adapter is running and configured correctly:\n```bash\nkubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter\nkubectl logs -l app.kubernetes.io/name=prometheus-adapter -n ${MON_NS} --tail=50\n```"
+      },
+      {
+        "title": "HPA not scaling",
+        "description": "Check HPA status and events:\n```bash\nkubectl describe hpa -n ${NAMESPACE}\n```\n\nVerify the VariantAutoscaling resource has a valid `scaleTargetRef` (required in v0.5.0+)."
+      },
+      {
+        "title": "Scale-to-zero not working",
+        "description": "VariantAutoscalings without `scaleTargetRef` cannot scale to zero even with HPAScaleToZero enabled. Update the resource to include the target deployment reference."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "autoscaling",
+      "wva",
+      "hpa",
+      "prometheus",
+      "saturation",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "HorizontalPodAutoscaler",
+      "CustomResourceDefinition"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile",
+      "helm"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/workload-autoscaling",
+      "repo": "https://github.com/llm-d-incubation/workload-variant-autoscaler"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.31",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster (v1.31+) with GPU support, Prometheus with HTTPS, Gateway API with Istio, and either an existing llm-d Inference Scheduling deployment or GPU resources for a fresh full installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
