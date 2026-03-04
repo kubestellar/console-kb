@@ -1,0 +1,144 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-precise-prefix-cache",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Precise Prefix Cache Routing",
+    "description": "Deploy the precise prefix cache aware routing feature for llm-d, which uses vLLM KV-Events data to pull up-to-date prefix cache status directly from serving instances. This eliminates the need for additional indexing services and increases cache hit rate at high throughput compared to the approximate prefix cache scorer used in the standard inference scheduling path.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install prerequisite client tools",
+        "description": "Ensure you have:\n- `helm` (v3+)\n- `helmfile` (v0.169+)\n- `kubectl` (v1.29+)\n- `yq` (v4+)\n\nSee the [client setup guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup)."
+      },
+      {
+        "title": "Configure cluster and prerequisites",
+        "description": "Ensure your cluster has:\n1. 16 GPUs (8 replicas x 2 GPUs each) — NVIDIA or Intel XPU supported\n2. Gateway API CRDs and a gateway provider deployed\n3. Monitoring stack installed\n\nSee [infrastructure prerequisites](https://github.com/llm-d/llm-d/tree/main/guides/prereq/infrastructure)."
+      },
+      {
+        "title": "Create namespace and HuggingFace token secret",
+        "description": "```bash\nexport NAMESPACE=llm-d-precise\nkubectl create namespace ${NAMESPACE}\n\nkubectl create secret generic llm-d-hf-token \\\n  --from-literal=HF_TOKEN=<your-hf-token> \\\n  -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Deploy the stack",
+        "description": "```bash\ncd guides/precise-prefix-cache-aware\nhelmfile apply -n ${NAMESPACE}\n```\n\n**Pod Discovery Mode** (experimental, for active-active multi-scheduler):\n```bash\nPOD_DISCOVERY=true helmfile apply -n ${NAMESPACE}\n```\n\n**Intel XPU deployment:**\n```bash\nhelmfile apply -e xpu -n ${NAMESPACE}\n```\n\n**For specific gateway providers:**\n```bash\nhelmfile apply -e kgateway -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Install HTTPRoute",
+        "description": "**For Istio or kgateway:**\n```bash\nkubectl apply -f httproute.yaml -n ${NAMESPACE}\n```\n\n**For GKE:**\n```bash\nkubectl apply -f httproute.gke.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check Helm releases:\n```bash\nhelm list -n ${NAMESPACE}\n```\n\nExpected: `gaie-kv-events`, `infra-kv-events`, `ms-kv-events` all deployed.\n\nVerify pods:\n```bash\nkubectl get all -n ${NAMESPACE}\n```\n\nExpected: 1 EPP pod (with KV-Events ZMQ endpoint on port 5600), 1 gateway pod, 8 model service decode pods."
+      },
+      {
+        "title": "Test precise prefix cache scoring",
+        "description": "Send an inference request, then repeat it to verify cache scoring:\n```bash\nkubectl port-forward -n ${NAMESPACE} service/infra-kv-events-inference-gateway-istio 8000:80\n\ncurl -s http://localhost:8000/v1/completions \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"model\": \"Qwen/Qwen3-32B\", \"prompt\": \"Hello world\", \"max_tokens\": 50}' | jq\n```\n\nCheck scorer logs (repeat the request to see non-zero scores):\n```bash\nkubectl logs -l inferencepool=gaie-kv-events-epp -n ${NAMESPACE} --tail 100 | grep \"Calculated score\" | grep \"precise-prefix-cache-scorer\"\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows 3 Helm releases (gaie-kv-events, infra-kv-events, ms-kv-events) and all pods running. The precise prefix cache scorer returns non-zero scores for repeated requests with shared prefixes, indicating cache hits.",
+      "codeSnippets": [
+        "helmfile apply -n ${NAMESPACE}",
+        "kubectl apply -f httproute.yaml -n ${NAMESPACE}",
+        "helm list -n ${NAMESPACE}",
+        "kubectl logs -l inferencepool=gaie-kv-events-epp -n ${NAMESPACE} --tail 100 | grep \"precise-prefix-cache-scorer\""
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove HTTPRoute",
+        "description": "```bash\nkubectl delete -f httproute.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Destroy the helmfile deployment",
+        "description": "```bash\nhelmfile destroy -n ${NAMESPACE}\n```\n\nOr uninstall manually:\n```bash\nhelm uninstall infra-kv-events -n ${NAMESPACE}\nhelm uninstall gaie-kv-events -n ${NAMESPACE}\nhelm uninstall ms-kv-events -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Clean up namespace",
+        "description": "```bash\nkubectl delete namespace ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update llm-d version",
+        "description": "Update the llm-d version in your helmfile configuration."
+      },
+      {
+        "title": "Apply the upgrade",
+        "description": "```bash\nhelmfile apply -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify cache scoring",
+        "description": "After upgrade, test that precise prefix cache scoring still works by sending repeated requests and checking scorer logs."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Scorer always returns score 0",
+        "description": "Score 0 is expected for the first request with a given prefix. Send the same request again — the second time should show non-zero scores for the pod that cached the KV blocks. Logs only appear for unique requests."
+      },
+      {
+        "title": "KV-Events not being received",
+        "description": "Verify the EPP service exposes port 5600 for ZMQ:\n```bash\nkubectl get svc -n ${NAMESPACE} | grep epp\n```\n\nCheck EPP logs for KV-Event connection issues:\n```bash\nkubectl logs -l inferencepool=gaie-kv-events-epp -n ${NAMESPACE} --tail=50\n```"
+      },
+      {
+        "title": "Pod Discovery Mode issues",
+        "description": "In pod discovery mode, each vLLM pod publishes on `tcp://*:5557`. Verify the port is accessible:\n```bash\nkubectl describe pod <vllm-pod> -n ${NAMESPACE} | grep 5557\n```\n\nEnsure network policies allow communication between EPP and vLLM pods."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "vllm",
+      "gpu",
+      "prefix-cache",
+      "kv-events",
+      "precise-routing",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "HTTPRoute",
+      "Gateway"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile",
+      "helm"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/precise-prefix-cache-aware",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster with 16 GPUs (NVIDIA or Intel XPU, configurable to fewer), Gateway API CRDs, a gateway provider, monitoring stack, and a HuggingFace token."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

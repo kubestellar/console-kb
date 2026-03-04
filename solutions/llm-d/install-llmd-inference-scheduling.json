@@ -1,0 +1,145 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-inference-scheduling",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Intelligent Inference Scheduling",
+    "description": "Deploy the recommended out-of-the-box scheduling configuration for vLLM deployments using llm-d. This well-lit path reduces tail latency and increases throughput through load-aware and approximate prefix-cache-aware balancing. Defaults to 16 GPUs (8 replicas x 2 GPUs each) but supports fewer accelerators, CPU-only mode, and multiple hardware backends (NVIDIA, AMD, Intel XPU, Intel Gaudi, TPU).",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install prerequisite client tools",
+        "description": "Ensure you have the required client tools installed:\n- `helm` (v3+)\n- `helmfile` (v0.169+)\n- `kubectl` (v1.29+)\n- `yq` (v4+)\n\nSee the [client setup guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup) for detailed instructions."
+      },
+      {
+        "title": "Configure Gateway API and infrastructure",
+        "description": "Ensure your cluster has:\n1. Sufficient GPU resources (16 GPUs default, or fewer with modified values)\n2. Gateway API CRDs installed\n3. A gateway provider deployed (Istio is the default)\n4. The monitoring stack installed\n\nSee the [infrastructure prerequisites](https://github.com/llm-d/llm-d/tree/main/guides/prereq/infrastructure) and [gateway provider guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/gateway-provider)."
+      },
+      {
+        "title": "Create namespace and HuggingFace token secret",
+        "description": "Create a namespace for the deployment and add your HuggingFace token:\n```bash\nexport NAMESPACE=llm-d-inference-scheduler\nkubectl create namespace ${NAMESPACE}\n\n# Create the HuggingFace token secret\nkubectl create secret generic llm-d-hf-token \\\n  --from-literal=HF_TOKEN=<your-hf-token> \\\n  -n ${NAMESPACE}\n```\n\n**Note:** Shorter namespace names are recommended to avoid Linux hostname length limitations (64 chars max)."
+      },
+      {
+        "title": "Deploy the stack with helmfile",
+        "description": "Navigate to the guide directory and deploy:\n```bash\ncd guides/inference-scheduling\nhelmfile apply -n ${NAMESPACE}\n```\n\n**For CPU-only deployment:**\n```bash\nhelmfile apply -e cpu -n ${NAMESPACE}\n```\n\n**For specific gateway providers:**\n```bash\nhelmfile apply -e kgateway -n ${NAMESPACE}\n```\n\n**For specific hardware backends:**\n```bash\nhelmfile apply -e amd -n ${NAMESPACE}   # AMD GPUs\nhelmfile apply -e xpu -n ${NAMESPACE}   # Intel XPU\nhelmfile apply -e hpu -n ${NAMESPACE}   # Intel Gaudi\nhelmfile apply -e gke_tpu -n ${NAMESPACE}  # Google TPU\n```"
+      },
+      {
+        "title": "Install HTTPRoute",
+        "description": "Apply the HTTPRoute for your gateway provider:\n\n**For Istio or kgateway:**\n```bash\nkubectl apply -f httproute.yaml -n ${NAMESPACE}\n```\n\n**For GKE:**\n```bash\nkubectl apply -f httproute.gke.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that all 3 Helm releases are deployed:\n```bash\nhelm list -n ${NAMESPACE}\n```\n\nExpected releases: `gaie-inference-scheduling`, `infra-inference-scheduling`, `ms-inference-scheduling`.\n\nVerify all pods are running:\n```bash\nkubectl get all -n ${NAMESPACE}\n```\n\nYou should see the EPP pod, gateway pod, and 8 model service decode pods (default configuration)."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows 3 Helm releases (gaie, infra, ms) in deployed status and all pods running. The stack is ready to serve inference requests through the gateway endpoint.",
+      "codeSnippets": [
+        "export NAMESPACE=llm-d-inference-scheduler\nkubectl create namespace ${NAMESPACE}",
+        "helmfile apply -n ${NAMESPACE}",
+        "kubectl apply -f httproute.yaml -n ${NAMESPACE}",
+        "helm list -n ${NAMESPACE}",
+        "kubectl get all -n ${NAMESPACE}"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove the HTTPRoute",
+        "description": "Delete the HTTPRoute for your gateway provider:\n```bash\nkubectl delete -f httproute.yaml -n ${NAMESPACE}\n```\n\nFor GKE:\n```bash\nkubectl delete -f httproute.gke.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Destroy the helmfile deployment",
+        "description": "Remove all Helm releases using helmfile:\n```bash\nhelmfile destroy -n ${NAMESPACE}\n```\n\nOr uninstall manually:\n```bash\nhelm uninstall infra-inference-scheduling -n ${NAMESPACE} --ignore-not-found\nhelm uninstall gaie-inference-scheduling -n ${NAMESPACE}\nhelm uninstall ms-inference-scheduling -n ${NAMESPACE}\n```\n\n**Note:** If you used `$RELEASE_NAME_POSTFIX`, replace release names accordingly: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX`, `ms-$RELEASE_NAME_POSTFIX`."
+      },
+      {
+        "title": "Clean up namespace",
+        "description": "Delete the namespace if no longer needed:\n```bash\nkubectl delete namespace ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update llm-d version",
+        "description": "Update the llm-d version in your helmfile configuration following the [version selection guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup#llm-d-version)."
+      },
+      {
+        "title": "Apply the upgrade",
+        "description": "Re-run helmfile apply to upgrade in place:\n```bash\nhelmfile apply -n ${NAMESPACE}\n```\n\nHelmfile will perform a diff and apply only the changes."
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Confirm the new versions are deployed:\n```bash\nhelm list -n ${NAMESPACE}\nkubectl get pods -n ${NAMESPACE}\n```\n\nCheck that all pods have restarted with the new images and are in Running state."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in Pending due to insufficient GPU resources",
+        "description": "If model service pods are stuck in Pending, your cluster may not have enough GPUs. Check node resources:\n```bash\nkubectl describe nodes | grep -A 5 'nvidia.com/gpu'\n```\n\nReduce replica count in `ms-inference-scheduling/values.yaml` (e.g., `replicas: 2` for 2 GPUs)."
+      },
+      {
+        "title": "Pod hostname too long causing startup failures",
+        "description": "Long namespace names combined with release names can exceed the 64-character Linux hostname limit. Use a shorter namespace name or set `RELEASE_NAME_POSTFIX`:\n```bash\nRELEASE_NAME_POSTFIX=inf helmfile apply -n llm-d\n```"
+      },
+      {
+        "title": "Gateway not routing traffic",
+        "description": "Verify the HTTPRoute is applied and the gateway is ready:\n```bash\nkubectl get httproute -n ${NAMESPACE}\nkubectl get gateway -n ${NAMESPACE}\n```\n\nEnsure the gateway service has an external IP or is port-forwarded."
+      },
+      {
+        "title": "Model loading failures",
+        "description": "Check model service pod logs for HuggingFace authentication or download errors:\n```bash\nkubectl logs -l app.kubernetes.io/component=modelservice -n ${NAMESPACE} --tail=100\n```\n\nVerify the `llm-d-hf-token` secret exists and contains a valid token."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "vllm",
+      "gpu",
+      "scheduling",
+      "load-balancing",
+      "prefix-cache",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "HTTPRoute",
+      "Gateway"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile",
+      "helm"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster with GPU support (16 GPUs default, configurable), Gateway API CRDs, a gateway provider (Istio/kgateway/GKE), monitoring stack, and a HuggingFace token for model access."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

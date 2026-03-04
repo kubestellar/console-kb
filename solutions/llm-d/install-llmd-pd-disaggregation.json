@@ -1,0 +1,145 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-pd-disaggregation",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Prefill/Decode Disaggregation",
+    "description": "Deploy GPT-OSS-120B using vLLM's Prefill/Decode disaggregation with NIXL for KV-cache transfer. P/D disaggregation separates prefill and decode phases onto specialized workers, reducing inter-token latency and improving interactivity for large models with long input sequences. Validated on 8xH200 clusters with InfiniBand and RoCE networking.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install prerequisite client tools",
+        "description": "Ensure you have the required client tools installed:\n- `helm` (v3+)\n- `helmfile` (v0.169+)\n- `kubectl` (v1.29+)\n- `yq` (v4+)\n\nSee the [client setup guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup)."
+      },
+      {
+        "title": "Prepare cluster with RDMA networking",
+        "description": "Ensure your cluster has:\n1. 8 NVIDIA GPUs (H200 recommended) with RDMA via InfiniBand or RoCE between all pods\n2. Gateway API CRDs and a gateway provider deployed\n3. The monitoring stack installed\n\n**For Intel HPU:** Requires Intel Gaudi2/3 with at least 2 cards.\n\nSee [infrastructure prerequisites](https://github.com/llm-d/llm-d/tree/main/guides/prereq/infrastructure)."
+      },
+      {
+        "title": "Create namespace and HuggingFace token secret",
+        "description": "```bash\nexport NAMESPACE=llm-d-pd\nkubectl create namespace ${NAMESPACE}\n\nkubectl create secret generic llm-d-hf-token \\\n  --from-literal=HF_TOKEN=<your-hf-token> \\\n  -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Deploy the P/D stack",
+        "description": "```bash\ncd guides/pd-disaggregation\nhelmfile apply -n ${NAMESPACE}\n```\n\n**For Intel HPU deployments:**\n```bash\nhelmfile apply -e hpu -n ${NAMESPACE}\n```\n\n**For specific gateway providers:**\n```bash\nhelmfile apply -e kgateway -n ${NAMESPACE}\n```\n\nThis deploys 4 TP=1 Prefill workers and 1 TP=4 Decode worker for `openai/gpt-oss-120b`."
+      },
+      {
+        "title": "Install HTTPRoute",
+        "description": "**For Istio or kgateway:**\n```bash\nkubectl apply -f httproute.yaml -n ${NAMESPACE}\n```\n\n**For GKE:**\n```bash\nkubectl apply -f httproute.gke.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check Helm releases:\n```bash\nhelm list -n ${NAMESPACE}\n```\n\nExpected: `gaie-pd`, `infra-pd`, `ms-pd` all in deployed status.\n\nVerify pods:\n```bash\nkubectl get all -n ${NAMESPACE}\n```\n\nExpected: 1 EPP pod, 1 gateway pod, 4 prefill pods, 1 decode pod (with 2 containers for NIXL sidecar)."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows 3 Helm releases and all pods running including 4 prefill workers (TP=1) and 1 decode worker (TP=4) with NIXL KV-cache transfer enabled via RDMA.",
+      "codeSnippets": [
+        "export NAMESPACE=llm-d-pd\nkubectl create namespace ${NAMESPACE}",
+        "helmfile apply -n ${NAMESPACE}",
+        "kubectl apply -f httproute.yaml -n ${NAMESPACE}",
+        "helm list -n ${NAMESPACE}"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove HTTPRoute",
+        "description": "```bash\nkubectl delete -f httproute.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Destroy the helmfile deployment",
+        "description": "```bash\nhelmfile destroy -n ${NAMESPACE}\n```\n\nOr uninstall manually:\n```bash\nhelm uninstall ms-pd -n ${NAMESPACE}\nhelm uninstall gaie-pd -n ${NAMESPACE}\nhelm uninstall infra-pd -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Clean up namespace",
+        "description": "```bash\nkubectl delete namespace ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update llm-d version",
+        "description": "Update the llm-d version in your helmfile configuration following the [version selection guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup#llm-d-version)."
+      },
+      {
+        "title": "Apply the upgrade",
+        "description": "```bash\nhelmfile apply -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "```bash\nhelm list -n ${NAMESPACE}\nkubectl get pods -n ${NAMESPACE}\n```\n\nConfirm all pods restarted with new images and NIXL connections are healthy."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "NIXL KV-cache transfer failures",
+        "description": "If decode pods show transfer errors, verify RDMA networking:\n```bash\nkubectl logs -l app.kubernetes.io/component=modelservice-decode -n ${NAMESPACE} --tail=100\n```\n\nCheck that InfiniBand or RoCE is correctly configured between all pods. The decode pod should have 2 containers (vLLM + NIXL sidecar)."
+      },
+      {
+        "title": "Prefill/Decode ratio imbalance",
+        "description": "If prefill workers are saturated while decode is idle (or vice versa), adjust the xPyD ratio. Edit the model service values to change the number of prefill vs decode replicas based on your ISL/OSL ratio."
+      },
+      {
+        "title": "Model too large for available GPUs",
+        "description": "GPT-OSS-120B requires significant GPU memory. Ensure your GPUs have sufficient VRAM. For H200 GPUs, 8 cards provide adequate memory with TP=4 decode and TP=1 prefill workers."
+      },
+      {
+        "title": "Selective PD tuning",
+        "description": "For short prompts where P/D overhead exceeds benefit, enable selective PD by setting the `threshold` value in the `pd-profile-handler` plugin:\n```bash\ncat gaie-pd/values.yaml | yq '.inferenceExtension.pluginsCustomConfig.\"pd-config.yaml\"'\n```"
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "vllm",
+      "gpu",
+      "prefill-decode",
+      "disaggregation",
+      "nixl",
+      "rdma",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "HTTPRoute",
+      "Gateway"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile",
+      "helm"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster with 8 NVIDIA GPUs (H200 recommended), RDMA networking (InfiniBand or RoCE) between all pods, Gateway API CRDs, a gateway provider, monitoring stack, and a HuggingFace token."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

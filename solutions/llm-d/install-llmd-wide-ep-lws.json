@@ -1,0 +1,150 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-wide-ep-lws",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Wide Expert Parallelism with LeaderWorkerSet",
+    "description": "Deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation with NIXL in a wide expert parallel pattern using LeaderWorkerSets (LWS). This configuration uses DP=16 for both prefill and decode workers across 32 GPUs. Validated on 32xH200 and 32xB200 clusters with InfiniBand or RoCE networking on GKE and CoreWeave.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install prerequisite client tools",
+        "description": "Ensure you have:\n- `helm` (v3+)\n- `helmfile` (v0.169+)\n- `kubectl` (v1.29+)\n- `yq` (v4+)\n\nSee the [client setup guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup)."
+      },
+      {
+        "title": "Prepare cluster with RDMA and LeaderWorkerSet",
+        "description": "This guide requires:\n1. 32 NVIDIA H200 or B200 GPUs with InfiniBand or RoCE RDMA networking\n2. Full mesh network connectivity (DeepEP requires All-to-All RDMA; rail-only connectivity will fail)\n3. [LeaderWorkerSet controller v0.7.0+](https://github.com/llm-d/llm-d/tree/main/guides/prereq/infrastructure#optional-install-leaderworkerset-for-multi-host-inference) installed\n4. Gateway API CRDs and a gateway provider\n5. Monitoring stack\n\nSee [infrastructure prerequisites](https://github.com/llm-d/llm-d/tree/main/guides/prereq/infrastructure)."
+      },
+      {
+        "title": "Create namespace and HuggingFace token secret",
+        "description": "```bash\nexport NAMESPACE=llm-d-wide-ep\nkubectl create namespace ${NAMESPACE}\n\nkubectl create secret generic llm-d-hf-token \\\n  --from-literal=HF_TOKEN=<your-hf-token> \\\n  -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Deploy model servers with kustomize",
+        "description": "Navigate to the guide directory and deploy for your platform:\n```bash\ncd guides/wide-ep-lws/\n```\n\n**GKE (H200):**\n```bash\nkubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}\n```\n\n**GKE (B200):**\n```bash\nkubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}\n```\n\n**CoreWeave:**\n```bash\nkubectl apply -k ./manifests/modelserver/coreweave -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Deploy InferencePool",
+        "description": "Install the InferencePool Helm chart for your gateway provider:\n\n**GKE:**\n```bash\nhelm install llm-d-infpool \\\n  -n ${NAMESPACE} \\\n  -f ./manifests/inferencepool.values.yaml \\\n  --set \"provider.name=gke\" \\\n  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \\\n  --version v1.3.0\n```\n\n**Istio:**\n```bash\nhelm install llm-d-infpool \\\n  -n ${NAMESPACE} \\\n  -f ./manifests/inferencepool.values.yaml \\\n  --set \"provider.name=istio\" \\\n  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \\\n  --version v1.3.0\n```"
+      },
+      {
+        "title": "Deploy Gateway and HTTPRoute",
+        "description": "Deploy using the gateway recipe:\n```bash\n# See the gateway recipe guide for your provider\n# https://github.com/llm-d/llm-d/tree/main/guides/recipes/gateway\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check Helm releases:\n```bash\nhelm list -n ${NAMESPACE}\n```\n\nExpected: `llm-d-infpool` in deployed status.\n\nVerify resources:\n```bash\nkubectl get all -n ${NAMESPACE}\n```\n\nExpected: EPP deployment, gateway deployment, decode StatefulSets (leader + workers), prefill StatefulSets (leader + workers).\n\n**Note:** vLLM API servers take 7-10 minutes to start up for this configuration."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows the InferencePool Helm release, gateway, EPP, and LeaderWorkerSet-managed decode and prefill pods all running. Each set uses DP=16 parallelism across 32 GPUs.",
+      "codeSnippets": [
+        "kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}",
+        "helm install llm-d-infpool -n ${NAMESPACE} -f ./manifests/inferencepool.values.yaml --set \"provider.name=gke\" oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool --version v1.3.0",
+        "helm list -n ${NAMESPACE}",
+        "kubectl get all -n ${NAMESPACE}"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove InferencePool and model servers",
+        "description": "```bash\nhelm uninstall llm-d-infpool -n ${NAMESPACE}\nkubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Remove Gateway resources",
+        "description": "```bash\nkubectl delete -k ../recipes/gateway/<your-provider> -n ${NAMESPACE}\n```\n\nReplace `<your-provider>` with your gateway recipe directory (gke-l7-regional-external-managed, istio, kgateway, etc.)."
+      },
+      {
+        "title": "Clean up namespace",
+        "description": "```bash\nkubectl delete namespace ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update manifests to new version",
+        "description": "Pull the latest llm-d repository and update the kustomize manifests and InferencePool chart version."
+      },
+      {
+        "title": "Apply updated model servers",
+        "description": "```bash\nkubectl apply -k ./manifests/modelserver/<platform> -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Upgrade InferencePool",
+        "description": "```bash\nhelm upgrade llm-d-infpool \\\n  -n ${NAMESPACE} \\\n  -f ./manifests/inferencepool.values.yaml \\\n  --set \"provider.name=<your-provider>\" \\\n  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \\\n  --version <new-version>\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "LeaderWorkerSet pods not scheduling",
+        "description": "Verify the LWS controller is installed and running:\n```bash\nkubectl get pods -n lws-system\n```\n\nEnsure version v0.7.0+ is installed. Check that nodes have the required GPU resources and RDMA capabilities."
+      },
+      {
+        "title": "RDMA connectivity failures between pods",
+        "description": "DeepEP requires All-to-All RDMA connectivity. Rail-only connectivity (where NICs can only communicate with matching NIC IDs on other hosts) will fail. Verify full mesh network connectivity:\n```bash\nkubectl logs <decode-pod> -n ${NAMESPACE} --tail=100\n```"
+      },
+      {
+        "title": "Long startup time",
+        "description": "vLLM API servers take 7-10 minutes to start with this configuration due to the large model size and parallel initialization. Monitor startup progress:\n```bash\nkubectl logs -f <pod-name> -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Out of memory errors",
+        "description": "DeepSeek-R1-0528 is a very large model. Ensure all 32 GPUs are available with sufficient VRAM. Check pod resource requests match the available GPU memory on your nodes."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "vllm",
+      "gpu",
+      "expert-parallelism",
+      "leaderworkerset",
+      "deepseek",
+      "rdma",
+      "wide-ep",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "StatefulSet",
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "LeaderWorkerSet"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm",
+      "kustomize",
+      "kubectl"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/wide-ep-lws",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster with 32 NVIDIA H200 or B200 GPUs, InfiniBand or RoCE RDMA networking with full mesh connectivity, LeaderWorkerSet controller v0.7.0+, Gateway API CRDs, a gateway provider, monitoring stack, and a HuggingFace token."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

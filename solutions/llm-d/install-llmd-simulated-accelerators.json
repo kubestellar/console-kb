@@ -1,0 +1,135 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-llmd-simulated-accelerators",
+  "missionClass": "install",
+  "author": "llm-d",
+  "authorGithub": "llm-d",
+  "mission": {
+    "title": "Install llm-d Simulated Accelerators",
+    "description": "Deploy the llm-d accelerator simulator for CPU-only testing without real GPUs. The simulator mimics vLLM inference behavior, enabling validation of Kubernetes autoscaling, inference scheduling, and system behavior in wide or dense configurations on CPU-only machines.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Install prerequisite client tools",
+        "description": "Ensure you have:\n- `helm` (v3+)\n- `helmfile` (v0.169+)\n- `kubectl` (v1.29+)\n- `yq` (v4+)\n\nSee the [client setup guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/client-setup).\n\n**Note:** No HuggingFace token is needed — the simulator stubs the vLLM server."
+      },
+      {
+        "title": "Configure Gateway API",
+        "description": "Ensure your cluster has Gateway API CRDs installed and a gateway provider deployed.\n\nSee the [gateway provider guide](https://github.com/llm-d/llm-d/tree/main/guides/prereq/gateway-provider)."
+      },
+      {
+        "title": "Create namespace",
+        "description": "```bash\nexport NAMESPACE=llm-d-sim\nkubectl create namespace ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Deploy the simulator stack",
+        "description": "```bash\ncd guides/simulated-accelerators\nhelmfile apply -n ${NAMESPACE}\n```\n\n**For specific gateway providers:**\n```bash\nhelmfile apply -e kgateway -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Install HTTPRoute",
+        "description": "**For Istio or kgateway:**\n```bash\nkubectl apply -f httproute.yaml -n ${NAMESPACE}\n```\n\n**For GKE:**\n```bash\nkubectl apply -f httproute.gke.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check Helm releases:\n```bash\nhelm list -n ${NAMESPACE}\n```\n\nExpected: `gaie-sim`, `infra-sim`, `ms-sim` all in deployed status.\n\nVerify pods:\n```bash\nkubectl get all -n ${NAMESPACE}\n```\n\nExpected: 1 EPP pod, 1 gateway pod, 3 decode pods, 1 prefill pod."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows 3 Helm releases (gaie-sim, infra-sim, ms-sim) and all simulator pods running without any GPU resources. The stack accepts inference requests and returns simulated responses.",
+      "codeSnippets": [
+        "export NAMESPACE=llm-d-sim\nkubectl create namespace ${NAMESPACE}",
+        "helmfile apply -n ${NAMESPACE}",
+        "kubectl apply -f httproute.yaml -n ${NAMESPACE}",
+        "helm list -n ${NAMESPACE}"
+      ]
+    },
+    "uninstall": [
+      {
+        "title": "Remove HTTPRoute",
+        "description": "```bash\nkubectl delete -f httproute.yaml -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Destroy the helmfile deployment",
+        "description": "```bash\nhelmfile destroy -n ${NAMESPACE}\n```\n\nOr uninstall manually:\n```bash\nhelm uninstall infra-sim -n ${NAMESPACE}\nhelm uninstall gaie-sim -n ${NAMESPACE}\nhelm uninstall ms-sim -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Clean up namespace",
+        "description": "```bash\nkubectl delete namespace ${NAMESPACE}\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Update llm-d version",
+        "description": "Update the llm-d version in your helmfile configuration."
+      },
+      {
+        "title": "Apply the upgrade",
+        "description": "```bash\nhelmfile apply -n ${NAMESPACE}\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "```bash\nhelm list -n ${NAMESPACE}\nkubectl get pods -n ${NAMESPACE}\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Simulator pods not responding to inference requests",
+        "description": "Check simulator pod logs:\n```bash\nkubectl logs -l app.kubernetes.io/component=modelservice -n ${NAMESPACE} --tail=100\n```\n\nVerify the HTTPRoute is applied and the gateway service is accessible."
+      },
+      {
+        "title": "Testing autoscaling with the simulator",
+        "description": "The simulator is ideal for testing Kubernetes autoscaling (HPA/KEDA) behavior. Combine with the [Workload Autoscaling guide](https://github.com/llm-d/llm-d/tree/main/guides/workload-autoscaling) using `simulated-accelerators` as the base deployment. Note: saturation-based scaling does not require GPU node patching."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "llm-d",
+      "inference",
+      "simulator",
+      "cpu-only",
+      "testing",
+      "no-gpu",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "InferencePool",
+      "HTTPRoute",
+      "Gateway"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helmfile",
+      "helm"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "docs": "https://github.com/llm-d/llm-d/tree/main/guides/simulated-accelerators",
+      "repo": "https://github.com/llm-d/llm-d"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.29",
+    "tools": [
+      "helm",
+      "helmfile",
+      "kubectl",
+      "yq"
+    ],
+    "description": "A Kubernetes cluster (no GPUs required), Gateway API CRDs, a gateway provider, and the monitoring stack."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T00:00:00.000Z",
+    "scannerVersion": "llm-d-kb-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
