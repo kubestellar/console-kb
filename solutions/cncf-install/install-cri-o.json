@@ -1,0 +1,143 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-cri-o",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Cri O on Kubernetes",
+    "description": "CRI-O is an Open Container Initiative-based implementation of the Kubernetes Container Runtime Interface, providing a lightweight and efficient container runtime for Kubernetes. Installing CRI-O allows you to run containers in a Kubernetes environment with enhanced performance and compatibility.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the CRI-O repository",
+        "description": "Add the CRI-O Helm repository to your local Helm setup with the following command:\n```bash\nhelm repo add cri-o https://charts.cri-o.io\nhelm repo update\n```"
+      },
+      {
+        "title": "Install CRI-O using Helm",
+        "description": "Install CRI-O version 1.35.1 in the `kube-system` namespace:\n```bash\nhelm install crio cri-o/cri-o --namespace kube-system --create-namespace --version v1.35.1\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the CRI-O pods are running:\n```bash\nkubectl get pods -n kube-system\n```"
+      },
+      {
+        "title": "Configure resource limits for CRI-O",
+        "description": "Edit the CRI-O deployment to set resource limits:\n```bash\nkubectl edit deployment crio -n kube-system\n``` \nAdd the following under `spec.template.spec.containers.resources`:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n```"
+      },
+      {
+        "title": "Set up RBAC for CRI-O",
+        "description": "Apply the necessary RBAC permissions for CRI-O:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/cri-o/cri-o/main/examples/rbac.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the CRI-O Helm release with the following command:\n```bash\nhelm uninstall crio --namespace kube-system\n```"
+      },
+      {
+        "title": "Clean up CRDs and resources",
+        "description": "Remove any CRDs associated with CRI-O:\n```bash\nkubectl delete crd $(kubectl get crd | grep cri-o | awk '{print $1}')\n```"
+      },
+      {
+        "title": "Delete the namespace",
+        "description": "Remove the `kube-system` namespace if it is no longer needed:\n```bash\nkubectl delete namespace kube-system\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current configuration and state of CRI-O:\n```bash\nkubectl get all -n kube-system -o yaml > crio-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Update the CRI-O Helm repository to ensure you have the latest charts:\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade CRI-O",
+        "description": "Upgrade CRI-O to the latest version (v1.35.1) with:\n```bash\nhelm upgrade crio cri-o/cri-o --namespace kube-system --version v1.35.1\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check that the CRI-O pods are running the new version:\n```bash\nkubectl get pods -n kube-system\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in Pending state",
+        "description": "If pods are stuck in a Pending state, check the events for the namespace:\n```bash\nkubectl describe pod <pod-name> -n kube-system\n``` \nEnsure that there are sufficient resources available in the cluster."
+      },
+      {
+        "title": "CRI-O service not starting",
+        "description": "If the CRI-O service fails to start, check the logs:\n```bash\nkubectl logs <crio-pod-name> -n kube-system\n``` \nLook for errors related to configuration or resource limits."
+      },
+      {
+        "title": "Networking issues with containers",
+        "description": "If containers cannot communicate, verify the network configuration:\n```bash\nkubectl get pods -n kube-system -o wide\n``` \nEnsure that the correct network policies are applied."
+      },
+      {
+        "title": "Container runtime errors",
+        "description": "Check for runtime errors in the CRI-O logs:\n```bash\njournalctl -u crio\n``` \nLook for specific error messages that indicate what might be wrong."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of CRI-O will have the CRI-O pods running in the `kube-system` namespace without any errors. You should be able to deploy and manage containers using Kubernetes with CRI-O as the container runtime.",
+      "codeSnippets": [
+        "helm repo add cri-o https://charts.cri-o.io\nhelm repo update",
+        "helm install crio cri-o/cri-o --namespace kube-system --create-namespace --version v1.35.1",
+        "kubectl get pods -n kube-system",
+        "kubectl edit deployment crio -n kube-system",
+        "resources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "runtime",
+      "graduated"
+    ],
+    "cncfProjects": [
+      "cri-o"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "graduated",
+    "projectVersion": "v1.35.1",
+    "containerImages": [
+      "registry.k8s.io/cri-o/crio:v1.35.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://cri-o.io",
+      "repo": "https://github.com/cri-o/cri-o"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure that you have a Kubernetes cluster and the Helm and kubectl tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T06:14:29.031Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

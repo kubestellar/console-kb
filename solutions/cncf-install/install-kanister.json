@@ -1,0 +1,146 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-kanister",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kanister on Kubernetes",
+    "description": "Kanister is an extensible framework for application-level data management on Kubernetes, designed to simplify data protection workflows. Installing Kanister allows you to efficiently manage backup, restore, and data operations across various storage solutions in a Kubernetes environment.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the Kanister Helm repository",
+        "description": "Add the official Kanister Helm repository to your local Helm configuration with the following command:\n```bash\nhelm repo add kanister https://charts.kanister.io\nhelm repo update\n```"
+      },
+      {
+        "title": "Install Kanister using Helm",
+        "description": "Install Kanister in your Kubernetes cluster with the following command, creating a namespace called 'kanister':\n```bash\nhelm install kanister kanister/fdb-instance --namespace kanister --create-namespace --version 0.118.0\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the Kanister pods are running correctly:\n```bash\nkubectl get pods --namespace kanister\n```"
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Kanister deployment by editing the values.yaml file and applying it:\n```bash\nkubectl edit deployment kanister --namespace kanister\n# Add resource limits under spec.containers.resources\n```"
+      },
+      {
+        "title": "Set up RBAC for Kanister",
+        "description": "Create a Role and RoleBinding to ensure Kanister has the necessary permissions:\n```bash\nkubectl create role kanister-role --verb=get,list,watch,create,update,delete --resource=pods --namespace kanister\nkubectl create rolebinding kanister-rolebinding --role=kanister-role --serviceaccount=kanister:default --namespace kanister\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Kanister Helm release",
+        "description": "Uninstall the Kanister release from your Kubernetes cluster:\n```bash\nhelm uninstall kanister --namespace kanister\n```"
+      },
+      {
+        "title": "Clean up Custom Resource Definitions (CRDs)",
+        "description": "Remove any CRDs that were created during the installation:\n```bash\nkubectl delete crd $(kubectl get crd | grep kanister.io | awk '{print $1}')\n```"
+      },
+      {
+        "title": "Delete the Kanister namespace",
+        "description": "Delete the namespace used for Kanister to clean up any remaining resources:\n```bash\nkubectl delete namespace kanister\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Before upgrading, back up your current configurations and data:\n```bash\nkubectl get all --namespace kanister -o yaml > kanister-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Ensure you have the latest version of the Kanister Helm chart:\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Kanister",
+        "description": "Upgrade your Kanister installation to the latest version:\n```bash\nhelm upgrade kanister kanister/fdb-instance --namespace kanister --version 0.118.0\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check the status of the Kanister pods to ensure they are running the new version:\n```bash\nkubectl get pods --namespace kanister\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in Pending state",
+        "description": "If your Kanister pods are stuck in Pending, check for insufficient resources:\n```bash\nkubectl describe pod <pod-name> --namespace kanister\n# Look for events indicating resource issues\n```"
+      },
+      {
+        "title": "Helm release not found",
+        "description": "If you encounter an error stating the Helm release is not found, ensure you are using the correct namespace:\n```bash\nhelm list --namespace kanister\n```"
+      },
+      {
+        "title": "CRDs not available",
+        "description": "If you cannot find the Kanister CRDs, verify they were installed correctly:\n```bash\nkubectl get crd | grep kanister.io\n```"
+      },
+      {
+        "title": "Insufficient permissions",
+        "description": "If you receive permission errors, check your RBAC configuration:\n```bash\nkubectl get rolebinding --namespace kanister\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of Kanister will result in all pods running in the 'kanister' namespace, with no errors reported in the pod logs. You should also be able to access the Kanister APIs for managing data operations.",
+      "codeSnippets": [
+        "helm repo add kanister https://charts.kanister.io\nhelm repo update",
+        "helm install kanister kanister/fdb-instance --namespace kanister --create-namespace --version 0.118.0",
+        "kubectl get pods --namespace kanister",
+        "kubectl edit deployment kanister --namespace kanister\n# Add resource limits under spec.containers.resources",
+        "kubectl create role kanister-role --verb=get,list,watch,create,update,delete --resource=pods --namespace kanister\nkubectl create rolebinding kanister-rolebinding --role=kanister-role --serviceaccount=kanister:default --namespace kanister"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "app-definition",
+      "sandbox"
+    ],
+    "cncfProjects": [
+      "kanister"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "Namespace",
+      "Serviceaccount"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "sandbox",
+    "projectVersion": "0.118.0",
+    "containerImages": [
+      "kanisterio/foundationdb:6.2.20"
+    ],
+    "sourceUrls": {
+      "docs": "https://kanister.io",
+      "repo": "https://github.com/kanisterio/kanister",
+      "helm": "https://github.com/kanisterio/kanister/tree/main/helm/fdb-instance/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have Helm and kubectl installed and configured to interact with your Kubernetes cluster."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T06:17:04.221Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-etcd",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Etcd on Kubernetes",
+    "description": "etcd is a distributed reliable key-value store designed for critical data in distributed systems. Installing etcd allows you to leverage its high availability, security, and performance for your applications.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the Helm repository",
+        "description": "Add the official etcd Helm chart repository to your Helm configuration.\n```bash\nhelm repo add etcd https://charts.etcd.io\nhelm repo update\n```"
+      },
+      {
+        "title": "Install etcd using Helm",
+        "description": "Install etcd with a specified version and create a namespace if it doesn't exist.\n```bash\nhelm install etcd etcd/etcd --version 3.6.8 --namespace etcd --create-namespace\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the etcd pods are running successfully.\n```bash\nkubectl get pods --namespace etcd\n```"
+      },
+      {
+        "title": "Configure resource limits",
+        "description": "Set resource limits for the etcd deployment to ensure it runs efficiently.\n```bash\nkubectl patch deployment etcd --namespace etcd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"250m\",\"memory\":\"256Mi\"}}}]'\n```"
+      },
+      {
+        "title": "Set up TLS for secure communication",
+        "description": "To enable TLS for etcd, create a secret with your certificates and update the deployment accordingly.\n```bash\nkubectl create secret tls etcd-tls --cert=path/to/etcd.crt --key=path/to/etcd.key --namespace etcd\nkubectl patch deployment etcd --namespace etcd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/args/-\", \"value\": \"--cert-file=/etc/ssl/etcd/etcd.crt\"},{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/args/-\", \"value\": \"--key-file=/etc/ssl/etcd/etcd.key\"}]'\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the etcd release from your cluster.\n```bash\nhelm uninstall etcd --namespace etcd\n```"
+      },
+      {
+        "title": "Delete the etcd namespace",
+        "description": "Remove the namespace created for etcd to clean up resources.\n```bash\nkubectl delete namespace etcd\n```"
+      },
+      {
+        "title": "Clean up CRDs if necessary",
+        "description": "If any Custom Resource Definitions were created, delete them as well.\n```bash\nkubectl delete crd etcds.etcd.io\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current etcd data",
+        "description": "Before upgrading, back up the current etcd data to avoid data loss.\n```bash\nETCDCTL_API=3 etcdctl snapshot save snapshot.db --endpoints=https://<etcd-endpoint>:2379 --cert=path/to/etcd.crt --key=path/to/etcd.key --cacert=path/to/ca.crt\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Ensure you have the latest version of the etcd Helm chart.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade etcd to the latest version",
+        "description": "Perform the upgrade to the specified version.\n```bash\nhelm upgrade etcd etcd/etcd --version 3.6.8 --namespace etcd\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check that the etcd pods are running the new version.\n```bash\nkubectl get pods --namespace etcd\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in Pending state",
+        "description": "If your etcd pods are stuck in Pending, check for resource availability in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace etcd\n``` \nEnsure that there are enough resources (CPU/memory) available in the cluster."
+      },
+      {
+        "title": "etcd not starting due to configuration errors",
+        "description": "Check the logs of the etcd pod for any configuration-related errors.\n```bash\nkubectl logs <pod-name> --namespace etcd\n``` \nCorrect any misconfigurations in the Helm values or deployment settings."
+      },
+      {
+        "title": "TLS connection issues",
+        "description": "If you encounter TLS errors, verify that the certificates are correctly mounted and valid.\n```bash\nkubectl describe secret etcd-tls --namespace etcd\n``` \nEnsure that the paths to the certificates in the deployment match the mounted secrets."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of etcd will have the pods running in the 'Running' state and responding to requests. You can verify this by checking the pod status and ensuring that the etcd service is accessible.",
+      "codeSnippets": [
+        "helm repo add etcd https://charts.etcd.io\nhelm repo update",
+        "helm install etcd etcd/etcd --version 3.6.8 --namespace etcd --create-namespace",
+        "kubectl get pods --namespace etcd",
+        "kubectl patch deployment etcd --namespace etcd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"250m\",\"memory\":\"256Mi\"}}}]'",
+        "kubectl create secret tls etcd-tls --cert=path/to/etcd.crt --key=path/to/etcd.key --namespace etcd\nkubectl patch deployment etcd --namespace etcd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/args/-\", \"value\": \"--cert-file=/etc/ssl/etcd/etcd.crt\"},{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/args/-\", \"value\": \"--key-file=/etc/ssl/etcd/etcd.key\"}]'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "orchestration",
+      "graduated"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Secret",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "graduated",
+    "projectVersion": "v3.6.8",
+    "containerImages": [
+      "gcr.io/etcd-io/etcd:v3.6.8"
+    ],
+    "sourceUrls": {
+      "docs": "https://etcd.io",
+      "repo": "https://github.com/etcd-io/etcd"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have a Kubernetes cluster running and Helm installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T06:15:04.710Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
