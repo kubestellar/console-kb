@@ -1,0 +1,139 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-koordinator",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Koordinator on Kubernetes",
+    "description": "Koordinator is a QoS-based scheduling system designed to optimize the layout and status of workloads in Kubernetes, enhancing resource utilization and performance. Installing Koordinator allows you to improve the management of microservices, web services, and batch jobs in your Kubernetes cluster.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the Koordinator Helm repository",
+        "description": "Add the official Koordinator Helm chart repository to your Helm configuration.\n```bash\nhelm repo add koordinator https://charts.koordinator.sh\nhelm repo update\n```"
+      },
+      {
+        "title": "Install Koordinator using Helm",
+        "description": "Install Koordinator in the `koordinator-system` namespace, creating it if it doesn't exist.\n```bash\nhelm install koordinator koordinator/koordinator --namespace koordinator-system --create-namespace --version v1.7.0\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check if the Koordinator pods are running successfully in the `koordinator-system` namespace.\n```bash\nkubectl get pods -n koordinator-system\n```"
+      },
+      {
+        "title": "Configure resource limits for Koordinator",
+        "description": "Apply resource limits to the Koordinator deployment to ensure optimal performance.\n```bash\nkubectl patch deployment koordinator -n koordinator-system --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
+      },
+      {
+        "title": "Set up RBAC for Koordinator",
+        "description": "Ensure that the necessary RBAC permissions are granted for Koordinator to function properly.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/koordinator-sh/koordinator/main/deploy/rbac.yaml\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the Koordinator release from your cluster.\n```bash\nhelm uninstall koordinator --namespace koordinator-system\n```"
+      },
+      {
+        "title": "Clean up CRDs",
+        "description": "Delete the Custom Resource Definitions (CRDs) created by Koordinator.\n```bash\nkubectl delete crd $(kubectl get crd | grep koordinator.sh | awk '{print $1}')\n```"
+      },
+      {
+        "title": "Remove the Koordinator namespace",
+        "description": "Delete the `koordinator-system` namespace to clean up any remaining resources.\n```bash\nkubectl delete namespace koordinator-system\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current configuration and state of Koordinator before upgrading.\n```bash\nkubectl get all -n koordinator-system -o yaml > koordinator-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Ensure that your Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Koordinator",
+        "description": "Upgrade your existing Koordinator installation to the latest version.\n```bash\nhelm upgrade koordinator koordinator/koordinator --namespace koordinator-system --version v1.7.0\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check the status of the Koordinator pods to ensure they are running the new version.\n```bash\nkubectl get pods -n koordinator-system\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in Pending state",
+        "description": "If Koordinator pods are stuck in Pending, check for resource availability in the cluster.\n```bash\nkubectl describe pod <pod-name> -n koordinator-system\n```"
+      },
+      {
+        "title": "Koordinator service not reachable",
+        "description": "If the Koordinator service is not reachable, verify the service configuration and endpoints.\n```bash\nkubectl get svc -n koordinator-system\nkubectl describe svc koordinator -n koordinator-system\n```"
+      },
+      {
+        "title": "High CPU usage in Koordinator pods",
+        "description": "If you notice high CPU usage, check the resource limits and requests configured for the Koordinator deployment.\n```bash\nkubectl top pods -n koordinator-system\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of Koordinator will have all pods running in the `koordinator-system` namespace, and you will be able to access its services. Resource limits and RBAC configurations will be applied correctly, ensuring optimal performance.",
+      "codeSnippets": [
+        "helm repo add koordinator https://charts.koordinator.sh\nhelm repo update",
+        "helm install koordinator koordinator/koordinator --namespace koordinator-system --create-namespace --version v1.7.0",
+        "kubectl get pods -n koordinator-system",
+        "kubectl patch deployment koordinator -n koordinator-system --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'",
+        "kubectl apply -f https://raw.githubusercontent.com/koordinator-sh/koordinator/main/deploy/rbac.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "app-definition",
+      "sandbox"
+    ],
+    "cncfProjects": [
+      "koordinator"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "sandbox",
+    "projectVersion": "v1.7.0",
+    "containerImages": [
+      "registry/koordinator/koordinator:v1.7.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://koordinator.sh",
+      "repo": "https://github.com/koordinator-sh/koordinator"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, and have Helm and kubectl installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-04T06:16:31.099Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
