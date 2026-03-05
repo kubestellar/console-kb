@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Cartography on Kubernetes",
-    "description": "Cartography is a Python tool that consolidates infrastructure assets and their relationships in an intuitive graph view powered by a Neo4j database. Installing Cartography allows you to explore and automate security scenarios, helping to identify risks and improve security posture.",
+    "description": "Cartography is a Python tool that consolidates infrastructure assets and their relationships in an intuitive graph view powered by a Neo4j database. Installing Cartography allows you to visualize and manage your infrastructure's security risks effectively.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Cartography Helm repository",
-        "description": "Add the official Cartography Helm repository to your Helm configuration:\n```bash\nhelm repo add cartography https://cartography-cncf.github.io/cartography/charts\nhelm repo update\n```"
+        "title": "Create a namespace for Cartography",
+        "description": "First, create a dedicated namespace for Cartography to keep your resources organized. Run the following command:\n```bash\nkubectl create namespace cartography\n```"
       },
       {
-        "title": "Install Cartography using Helm",
-        "description": "Install Cartography in a new namespace called 'cartography':\n```bash\nhelm install cartography cartography/cartography --namespace cartography --create-namespace --version 0.130.0\n```"
+        "title": "Deploy the Neo4j database",
+        "description": "Deploy Neo4j, which is required for Cartography to function. Use the following command to apply the Neo4j deployment:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/cartography-cncf/cartography/main/deploy/neo4j-deployment.yaml --namespace cartography\n```"
+      },
+      {
+        "title": "Deploy Cartography",
+        "description": "Now, deploy Cartography itself. Use the following command to apply the Cartography deployment:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/cartography-cncf/cartography/main/deploy/cartography-deployment.yaml --namespace cartography\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the Cartography pods are running:\n```bash\nkubectl get pods --namespace cartography\n```"
+        "description": "Check if the Cartography and Neo4j pods are running successfully:\n```bash\nkubectl get pods --namespace cartography\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "Update the Cartography deployment to set resource limits:\n```bash\nkubectl set resources deployment cartography --namespace cartography --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
+        "title": "Port-forward to access the Cartography web interface",
+        "description": "To access the Cartography web interface, port-forward the service:\n```bash\nkubectl port-forward svc/cartography --namespace cartography 8080:80\n```"
       },
       {
-        "title": "Access the Cartography web interface",
-        "description": "Port-forward the Cartography service to access the web interface:\n```bash\nkubectl port-forward service/cartography --namespace cartography 8080:80\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Cartography deployment. Edit the deployment with:\n```bash\nkubectl edit deployment cartography --namespace cartography\n``` \nAdd resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will have the Cartography pods running and accessible via the web interface at http://localhost:8080. You should also see the resource limits applied to the deployment.",
-      "codeSnippets": [
-        "helm repo add cartography https://cartography-cncf.github.io/cartography/charts\nhelm repo update",
-        "helm install cartography cartography/cartography --namespace cartography --create-namespace --version 0.130.0",
-        "kubectl get pods --namespace cartography",
-        "kubectl set resources deployment cartography --namespace cartography --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
-        "kubectl port-forward service/cartography --namespace cartography 8080:80"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Cartography Helm release from the cluster using the following command:\n```bash\nhelm uninstall cartography --namespace cartography\n```"
+        "title": "Remove the Cartography deployment",
+        "description": "First, delete the Cartography deployment with:\n```bash\nkubectl delete deployment cartography --namespace cartography\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with Cartography:\n```bash\nkubectl delete crd cartography --namespace cartography\nkubectl delete pvc --all --namespace cartography\n```"
+        "title": "Remove the Neo4j deployment",
+        "description": "Next, delete the Neo4j deployment with:\n```bash\nkubectl delete deployment neo4j --namespace cartography\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the Cartography namespace and verify that it has been removed:\n```bash\nkubectl delete namespace cartography\nkubectl get namespaces\n```"
+        "title": "Clean up the namespace",
+        "description": "Finally, delete the Cartography namespace to remove all associated resources:\n```bash\nkubectl delete namespace cartography\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of Cartography by exporting the existing configuration:\n```bash\nkubectl get all --namespace cartography -o yaml > cartography-backup.yaml\n```"
+        "description": "Before upgrading, back up your Neo4j database. You can use the following command:\n```bash\nkubectl exec -it <neo4j-pod-name> --namespace cartography neo4j-admin dump --to=/var/lib/neo4j/dump/backup.dump\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade Cartography to the latest version:\n```bash\nhelm repo update\nhelm upgrade cartography cartography/cartography --namespace cartography --version 0.140.0\n```"
+        "title": "Update the deployment manifests",
+        "description": "Fetch the latest version of the Cartography deployment YAML file and update your local copy:\n```bash\ncurl -O https://raw.githubusercontent.com/cartography-cncf/cartography/main/deploy/cartography-deployment.yaml\n```"
+      },
+      {
+        "title": "Upgrade the deployment",
+        "description": "Apply the updated deployment manifest:\n```bash\nkubectl apply -f cartography-deployment.yaml --namespace cartography\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check if the Cartography pods are running with the new version:\n```bash\nkubectl get pods --namespace cartography\n```"
+        "description": "Check the status of the pods to ensure the upgrade was successful:\n```bash\nkubectl get pods --namespace cartography\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Cartography pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace cartography\n```\nInvestigate the logs for any configuration issues or missing dependencies."
+        "title": "Pods stuck in Pending state",
+        "description": "If your pods are stuck in Pending, check for resource availability:\n```bash\nkubectl describe pod <pod-name> --namespace cartography\n``` \nEnsure that your cluster has enough resources to schedule the pods."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Cartography web interface, ensure the service is running:\n```bash\nkubectl get svc --namespace cartography\n```\nIf the service is not running, check the deployment status:\n```bash\nkubectl get deployments --namespace cartography\n```"
+        "title": "Neo4j not starting",
+        "description": "If the Neo4j pod is not starting, check the logs for errors:\n```bash\nkubectl logs <neo4j-pod-name> --namespace cartography\n``` \nLook for any configuration issues or missing environment variables."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter issues related to insufficient resources, check the resource usage:\n```bash\nkubectl top pods --namespace cartography\n```\nConsider adjusting the resource limits or requests in the deployment."
-      },
-      {
-        "title": "Helm release not found",
-        "description": "If you receive an error stating the Helm release is not found, verify the release name and namespace:\n```bash\nhelm list --namespace cartography\n```\nEnsure that the release name 'cartography' exists in the specified namespace."
+        "title": "Cartography web interface not accessible",
+        "description": "If you can't access the Cartography web interface, ensure the port-forward command is running and check the service:\n```bash\nkubectl get svc --namespace cartography\n``` \nMake sure the service is correctly configured and running."
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Cartography will have both the Cartography and Neo4j pods running in the 'cartography' namespace. You should be able to access the Cartography web interface via port 8080.",
+      "codeSnippets": [
+        "kubectl create namespace cartography",
+        "kubectl apply -f https://raw.githubusercontent.com/cartography-cncf/cartography/main/deploy/neo4j-deployment.yaml --namespace cartography",
+        "kubectl apply -f https://raw.githubusercontent.com/cartography-cncf/cartography/main/deploy/cartography-deployment.yaml --namespace cartography",
+        "kubectl get pods --namespace cartography",
+        "kubectl port-forward svc/cartography --namespace cartography 8080:80"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -104,18 +108,18 @@
       "Service",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
-    "projectVersion": "0.130.0",
+    "projectVersion": "0.132.0",
     "containerImages": [
-      "ghcr.io/cartography-cncf/cartography:0.130.0"
+      "ghcr.io/cartography-cncf/cartography:0.132.0"
     ],
     "sourceUrls": {
       "docs": "https://cartography.dev",
@@ -126,13 +130,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl installed."
   },
   "security": {
-    "scannedAt": "2026-03-01T08:24:40.719Z",
+    "scannedAt": "2026-03-05T22:28:15.162Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

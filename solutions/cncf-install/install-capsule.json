@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Capsule on Kubernetes",
-    "description": "Capsule is a multi-tenancy and policy-based framework for Kubernetes that simplifies the management of multiple namespaces within a single cluster. By using Capsule, you can efficiently group namespaces into tenants and enforce policies, making it easier to manage resources and security across your Kubernetes environment.",
+    "description": "Capsule is a multi-tenancy and policy-based framework for Kubernetes, designed to simplify the management of multiple namespaces within a single cluster. By using Capsule, you can efficiently manage resources and policies across different tenants, reducing the complexity of cluster sprawl.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Capsule Helm repository",
-        "description": "First, add the Capsule Helm chart repository to your Helm configuration. This allows you to install the Capsule Operator using Helm.\n```bash\nhelm repo add capsule https://ghcr.io/projectcapsule/charts\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the Capsule Helm chart repository to your local Helm configuration.\n```bash\nhelm repo add capsule https://projectcapsule.github.io/charts\nhelm repo update\n```"
       },
       {
         "title": "Install the Capsule Operator",
-        "description": "Next, install the Capsule Operator in a dedicated namespace. This command will create the namespace if it doesn't already exist.\n```bash\nhelm install capsule capsule/capsule --namespace capsule-system --create-namespace --version 0.12.4\n```"
+        "description": "Install the Capsule Operator using Helm, specifying the desired namespace (e.g., `capsule-system`).\n```bash\nhelm install capsule capsule/capsule --namespace capsule-system --create-namespace --version 0.12.4\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Capsule Operator pod is running successfully. This command will list all pods in the capsule-system namespace.\n```bash\nkubectl get pods --namespace capsule-system\n```"
+        "description": "Check that the Capsule pods are running correctly.\n```bash\nkubectl get pods -n capsule-system\n```"
       },
       {
-        "title": "Configure resource limits for the Capsule Operator",
-        "description": "To ensure that the Capsule Operator has appropriate resource limits, you can edit the values.yaml file or pass resource limits directly during installation. Here’s an example of how to set resource limits:\n```bash\nhelm upgrade capsule capsule/capsule --namespace capsule-system --set global.jobs.resources.limits.cpu=500m --set global.jobs.resources.limits.memory=512Mi\n```"
+        "title": "Configure resource limits and RBAC",
+        "description": "Set up resource limits and RBAC policies as needed for your environment. This can be done by modifying the values.yaml file or applying custom configurations.\n```bash\n# Example of applying a resource limit\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: LimitRange\nmetadata:\n  name: example-limits\n  namespace: your-namespace\nspec:\n  limits:\n  - default:\n      cpu: 500m\n      memory: 512Mi\n    defaultRequest:\n      cpu: 250m\n      memory: 256Mi\n    type: Container\nEOF\n```"
       },
       {
-        "title": "Set up RBAC for Capsule",
-        "description": "Ensure that the necessary Role-Based Access Control (RBAC) permissions are in place for the Capsule Operator. You can apply the following RBAC configuration:\n```bash\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: capsule-role\nrules:\n- apiGroups: ['']\n  resources: ['pods', 'pods/log']\n  verbs: ['get', 'list', 'watch']\nEOF\n```"
+        "title": "Set up monitoring (optional)",
+        "description": "Integrate monitoring solutions like Prometheus or Grafana to keep track of the Capsule performance and resource usage.\n```bash\n# Example command to deploy Prometheus\nkubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/master/bundle.yaml\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Capsule will result in the Capsule Operator running in the 'capsule-system' namespace, with its pods in a 'Running' state. You should also have resource limits configured and RBAC permissions set up for the operator.",
-      "codeSnippets": [
-        "helm repo add capsule https://ghcr.io/projectcapsule/charts\nhelm repo update",
-        "helm install capsule capsule/capsule --namespace capsule-system --create-namespace --version 0.12.4",
-        "kubectl get pods --namespace capsule-system",
-        "helm upgrade capsule capsule/capsule --namespace capsule-system --set global.jobs.resources.limits.cpu=500m --set global.jobs.resources.limits.memory=512Mi",
-        "kubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: capsule-role\nrules:\n- apiGroups: ['']\n  resources: ['pods', 'pods/log']\n  verbs: ['get', 'list', 'watch']\nEOF"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Capsule Operator Helm release from the cluster. This will remove the deployment and associated resources created by the Helm chart."
+        "description": "Uninstall the Capsule release from your cluster.\n```bash\nhelm uninstall capsule --namespace capsule-system\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent resources associated with Capsule to ensure a clean uninstallation."
+        "title": "Clean up CRDs and resources",
+        "description": "Remove any Custom Resource Definitions (CRDs) associated with Capsule.\n```bash\nkubectl delete crd tenants.capsule.clastix.io\nkubectl delete crd namespaces.capsule.clastix.io\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the namespace used for Capsule and verify that all resources have been removed."
+        "title": "Remove the namespace",
+        "description": "Delete the Capsule namespace to clean up any remaining resources.\n```bash\nkubectl delete namespace capsule-system\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of the Capsule installation to prevent data loss."
+        "description": "Before upgrading, back up the current state of your Capsule installation.\n```bash\nkubectl get all -n capsule-system -o yaml > capsule-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Capsule Operator to the latest version. Replace '0.12.5' with the desired version if needed."
+        "title": "Update the Helm repository",
+        "description": "Update the Helm repository to ensure you have the latest charts.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade the Capsule installation",
+        "description": "Upgrade the Capsule installation to the latest version.\n```bash\nhelm upgrade capsule capsule/capsule --namespace capsule-system --version 0.12.4\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Capsule Operator pod is running the new version successfully. This command will list all pods in the capsule-system namespace."
+        "description": "Check that the Capsule pods are running the new version correctly.\n```bash\nkubectl get pods -n capsule-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Capsule Operator pods are in a CrashLoopBackOff state, check the logs for errors. This may indicate a misconfiguration or resource issue."
+        "title": "Pods stuck in Pending",
+        "description": "If the Capsule pods are stuck in Pending, check for insufficient resources in your cluster.\n```bash\nkubectl describe pod <pod-name> -n capsule-system\n```"
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If the Helm upgrade fails due to a version conflict, ensure that the version specified is compatible with the existing installation. You can check the current version with:"
+        "title": "Failed to create Tenant",
+        "description": "If you encounter issues creating a Tenant, verify your RBAC permissions.\n```bash\nkubectl get clusterrolebindings | grep capsule\n```"
       },
       {
-        "title": "RBAC permissions issues",
-        "description": "If you encounter RBAC permission errors, verify that the necessary roles and bindings are correctly configured. Check the current RBAC settings with:"
+        "title": "CrashLoopBackOff errors",
+        "description": "If you see CrashLoopBackOff errors, check the pod logs for more details.\n```bash\nkubectl logs <pod-name> -n capsule-system\n```"
       },
       {
-        "title": "Namespace not found",
-        "description": "If you receive an error indicating that the namespace 'capsule-system' does not exist, ensure that the namespace was created successfully during installation. You can check existing namespaces with:"
+        "title": "Resource quota exceeded",
+        "description": "If you receive resource quota errors, check the resource limits set for your namespaces.\n```bash\nkubectl get resourcequotas -n <namespace>\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Capsule will have the Capsule Operator running in the `capsule-system` namespace, with all necessary pods in the Running state. You can manage multiple tenants effectively using the Capsule framework.",
+      "codeSnippets": [
+        "helm repo add capsule https://projectcapsule.github.io/charts\nhelm repo update",
+        "helm install capsule capsule/capsule --namespace capsule-system --create-namespace --version 0.12.4",
+        "kubectl get pods -n capsule-system",
+        "# Example of applying a resource limit\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: LimitRange\nmetadata:\n  name: example-limits\n  namespace: your-namespace\nspec:\n  limits:\n  - default:\n      cpu: 500m\n      memory: 512Mi\n    defaultRequest:\n      cpu: 250m\n      memory: 256Mi\n    type: Container\nEOF",
+        "# Example command to deploy Prometheus\nkubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/master/bundle.yaml"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -100,8 +104,7 @@
       "capsule"
     ],
     "targetResourceKinds": [
-      "Namespace",
-      "Clusterrole"
+      "Namespace"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -114,12 +117,12 @@
     "maturity": "sandbox",
     "projectVersion": "v0.12.4",
     "containerImages": [
-      "ghcr.io/projectcapsule/capsule:v0.12.4"
+      "registry/org/image:tag"
     ],
     "sourceUrls": {
       "docs": "https://projectcapsule.dev/",
       "repo": "https://github.com/projectcapsule/capsule",
-      "helm": "https://github.com/projectcapsule/capsule/tree/main/charts/capsule/"
+      "helm": "https://projectcapsule.github.io/charts"
     },
     "qualityScore": 100
   },
@@ -129,10 +132,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, and that Helm and kubectl are installed on your local machine."
+    "description": "Ensure you have Kubernetes cluster access and Helm installed."
   },
   "security": {
-    "scannedAt": "2026-03-01T07:50:13.688Z",
+    "scannedAt": "2026-03-05T22:27:37.674Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

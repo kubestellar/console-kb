@@ -6,87 +6,83 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Cadence Workflow on Kubernetes",
-    "description": "Cadence is a distributed, scalable, durable, and highly available orchestration engine designed to execute asynchronous long-running business logic. Installing Cadence allows you to build and run scalable workflows efficiently, making it ideal for complex business processes.",
+    "description": "Cadence is a distributed, scalable, durable, and highly available orchestration engine designed to execute asynchronous long-running business logic in a resilient manner. Installing Cadence allows you to manage complex workflows effectively and leverage its powerful features for your applications.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Cadence Helm repository",
-        "description": "Add the official Cadence Helm chart repository to your Helm configuration.\n```bash\nhelm repo add cadence https://cadence-workflow.github.io/charts\nhelm repo update\n```"
+        "title": "Create a namespace for Cadence",
+        "description": "Set up a dedicated namespace for Cadence to keep resources organized.\n```bash\nkubectl create namespace cadence\n```"
       },
       {
-        "title": "Install Cadence using Helm",
-        "description": "Install Cadence in a new namespace called 'cadence'. This command will deploy the Cadence server and its dependencies.\n```bash\nhelm install cadence cadence/cadence --namespace cadence --create-namespace --version v1.4.0\n```"
+        "title": "Deploy Cadence backend components",
+        "description": "Apply the Cadence deployment configurations to your cluster. Ensure you have the necessary configurations for your database (Cassandra/MySQL/PostgreSQL).\n```bash\nkubectl apply -f https://raw.githubusercontent.com/cadence-workflow/cadence/main/deploy/kubernetes/cadence.yaml --namespace cadence\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check that all Cadence pods are running successfully in the 'cadence' namespace.\n```bash\nkubectl get pods --namespace cadence\n```"
+        "title": "Verify Cadence deployment",
+        "description": "Check if all Cadence pods are running successfully.\n```bash\nkubectl get pods --namespace cadence\n```"
+      },
+      {
+        "title": "Expose Cadence UI",
+        "description": "Set up port forwarding to access the Cadence UI from your local machine.\n```bash\nkubectl port-forward svc/cadence-frontend 8088:8088 --namespace cadence\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Update the Cadence deployment to set resource limits for the Cadence server pods. This step ensures that your Cadence instance has the necessary resources allocated.\n```bash\nkubectl patch deployment cadence --namespace cadence --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
-      },
-      {
-        "title": "Access the Cadence Web UI",
-        "description": "Port forward the Cadence Web UI service to access it from your local machine.\n```bash\nkubectl port-forward svc/cadence-web --namespace cadence 8088:8088\n```"
+        "description": "Edit the deployment to set resource limits for the Cadence components.\n```bash\nkubectl edit deployment cadence-server --namespace cadence\n# Add resource limits under spec.containers.resources:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will have Cadence running with all pods in the 'cadence' namespace in a 'Running' state. You can access the Cadence Web UI at http://localhost:8088 to manage and monitor your workflows.",
-      "codeSnippets": [
-        "helm repo add cadence https://cadence-workflow.github.io/charts\nhelm repo update",
-        "helm install cadence cadence/cadence --namespace cadence --create-namespace --version v1.4.0",
-        "kubectl get pods --namespace cadence",
-        "kubectl patch deployment cadence --namespace cadence --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'",
-        "kubectl port-forward svc/cadence-web --namespace cadence 8088:8088"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Cadence Helm release to remove the deployment and its associated resources from the cluster."
+        "title": "Remove Cadence deployment",
+        "description": "Delete the Cadence resources from your cluster.\n```bash\nkubectl delete -f https://raw.githubusercontent.com/cadence-workflow/cadence/main/deploy/kubernetes/cadence.yaml --namespace cadence\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation."
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'cadence' namespace and verify that all resources have been removed."
+        "title": "Clean up the namespace",
+        "description": "Remove the Cadence namespace to clean up all associated resources.\n```bash\nkubectl delete namespace cadence\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of your Cadence deployment to ensure you can restore it if needed."
+        "description": "Before upgrading, ensure you have a backup of your Cadence data and configurations.\n```bash\n# Backup your database (e.g., Cassandra, MySQL, PostgreSQL) as per your database's backup procedure.\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and run the upgrade command to apply the latest changes."
+        "title": "Update deployment configuration",
+        "description": "Fetch the latest Cadence deployment configuration.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/cadence-workflow/cadence/main/deploy/kubernetes/cadence.yaml --namespace cadence\n```"
       },
       {
-        "title": "Verify the upgrade",
-        "description": "Check that all Cadence pods are running successfully after the upgrade to ensure the process completed without issues."
+        "title": "Verify upgrade",
+        "description": "Check the status of the Cadence pods to ensure they are running the new version.\n```bash\nkubectl get pods --namespace cadence\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "This issue occurs when a pod fails to start repeatedly. Check the pod logs to diagnose the problem using the following command:\n```bash\nkubectl logs <pod-name> --namespace cadence\n```"
+        "title": "Pods stuck in Pending state",
+        "description": "This may indicate insufficient resources in your cluster. Check the resource requests and limits.\n```bash\nkubectl describe pod <pod-name> --namespace cadence\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Cadence Web UI, ensure that the port forwarding is set up correctly. You can check the service status with:\n```bash\nkubectl get svc --namespace cadence\n```"
+        "title": "Cadence UI not accessible",
+        "description": "Ensure that the port forwarding command is running and check the service status.\n```bash\nkubectl get svc --namespace cadence\n```"
       },
       {
-        "title": "Insufficient resources",
-        "description": "If the Cadence pods are not starting due to resource constraints, check the resource limits and requests set in the deployment:\n```bash\nkubectl describe deployment cadence --namespace cadence\n```"
+        "title": "Database connection issues",
+        "description": "Verify that your database is running and accessible from the Cadence pods.\n```bash\nkubectl logs <cadence-server-pod-name> --namespace cadence\n```"
       },
       {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade command fails, check the error message for clues. You can also check the current Helm release status with:\n```bash\nhelm status cadence --namespace cadence\n```"
+        "title": "High memory usage",
+        "description": "Check the resource limits and consider increasing them if necessary.\n```bash\nkubectl top pods --namespace cadence\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Cadence will have all pods running in the 'cadence' namespace, and you should be able to access the Cadence UI at http://localhost:8088. Additionally, workflows can be triggered and monitored through the UI.",
+      "codeSnippets": [
+        "kubectl create namespace cadence",
+        "kubectl apply -f https://raw.githubusercontent.com/cadence-workflow/cadence/main/deploy/kubernetes/cadence.yaml --namespace cadence",
+        "kubectl get pods --namespace cadence",
+        "kubectl port-forward svc/cadence-frontend 8088:8088 --namespace cadence",
+        "kubectl edit deployment cadence-server --namespace cadence\n# Add resource limits under spec.containers.resources:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\""
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -101,7 +97,6 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
       "Namespace"
     ],
     "difficulty": "intermediate",
@@ -110,12 +105,12 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.4.0",
     "containerImages": [
-      "ubercadence/cli:v1.4.0"
+      "ubercadence/server:v1.4.0"
     ],
     "sourceUrls": {
       "docs": "https://cadenceworkflow.io",
@@ -126,13 +121,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and both Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
   },
   "security": {
-    "scannedAt": "2026-03-01T07:33:59.502Z",
+    "scannedAt": "2026-03-05T22:27:20.545Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

@@ -6,87 +6,95 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Backstage on Kubernetes",
-    "description": "Backstage is an open framework for building developer portals, providing a centralized software catalog that helps teams manage their microservices and infrastructure effectively. Installing Backstage allows you to streamline your development environment and enhance productivity across your organization.",
+    "description": "Backstage is an open framework for building developer portals that helps organizations manage their software catalog and streamline development processes. Installing Backstage allows teams to unify their infrastructure tooling and enhance productivity.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Backstage Helm repository",
-        "description": "Add the official Backstage Helm chart repository to your Helm configuration.\n```bash\nhelm repo add backstage https://charts.backstage.io\nhelm repo update\n```"
+        "title": "Clone the Backstage repository",
+        "description": "Start by cloning the Backstage repository to your local machine. This will allow you to customize your Backstage instance as needed.\n```bash\ngit clone https://github.com/backstage/backstage.git\ncd backstage\n```"
       },
       {
-        "title": "Install Backstage using Helm",
-        "description": "Install Backstage in a new namespace called 'backstage' using the specified version.\n```bash\nhelm install backstage backstage/backstage --version 1.48.3 --namespace backstage --create-namespace\n```"
+        "title": "Install dependencies",
+        "description": "Install the necessary dependencies using Yarn. This step ensures that all required packages are available for your Backstage instance.\n```bash\nyarn install\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check if the Backstage pods are running successfully.\n```bash\nkubectl get pods --namespace backstage\n```"
+        "title": "Build the Backstage application",
+        "description": "Build the Backstage application to prepare it for deployment. This step compiles the application and prepares it for running in a Kubernetes environment.\n```bash\nyarn build\n```"
+      },
+      {
+        "title": "Deploy Backstage to Kubernetes",
+        "description": "Apply the Kubernetes manifests to deploy Backstage. Make sure to replace `<namespace>` with your desired namespace.\n```bash\nkubectl apply -f k8s/ --namespace <namespace> --create-namespace\n```"
+      },
+      {
+        "title": "Verify the deployment",
+        "description": "Check the status of the Backstage pods to ensure they are running correctly. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl get pods --namespace <namespace>\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Update the Backstage deployment to set resource limits for the containers.\n```bash\nkubectl set resources deployment/backstage --namespace backstage --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
-      },
-      {
-        "title": "Access Backstage",
-        "description": "Port-forward the Backstage service to access it locally.\n```bash\nkubectl port-forward service/backstage --namespace backstage 7007:80\n```"
+        "description": "Edit the deployment to set resource limits for the Backstage pods. This helps ensure that your application runs efficiently within your Kubernetes cluster.\n```bash\nkubectl edit deployment backstage --namespace <namespace>\n# Add resource limits under spec.containers:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will show the Backstage pods in a Running state when you check with `kubectl get pods`. You will also be able to access Backstage locally at http://localhost:7007.",
-      "codeSnippets": [
-        "helm repo add backstage https://charts.backstage.io\nhelm repo update",
-        "helm install backstage backstage/backstage --version 1.48.3 --namespace backstage --create-namespace",
-        "kubectl get pods --namespace backstage",
-        "kubectl set resources deployment/backstage --namespace backstage --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
-        "kubectl port-forward service/backstage --namespace backstage 7007:80"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Backstage release using Helm to remove the deployment and associated resources from the cluster."
+        "title": "Delete the Backstage deployment",
+        "description": "Remove the Backstage deployment from your Kubernetes cluster. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl delete deployment backstage --namespace <namespace>\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation."
+        "title": "Clean up associated resources",
+        "description": "Delete any associated services and persistent volume claims (PVCs) created during the installation. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl delete service backstage --namespace <namespace>\nkubectl delete pvc --all --namespace <namespace>\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'backstage' namespace and verify that all resources have been cleaned up."
+        "title": "Remove the namespace",
+        "description": "If you created a new namespace for Backstage, you can delete it to clean up your Kubernetes environment. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl delete namespace <namespace>\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of your Backstage installation."
+        "description": "Before upgrading, back up your current Backstage configuration and data. This ensures you can restore your system if needed.\n```bash\nkubectl get all --namespace <namespace> -o yaml > backup-backstage.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and run the upgrade command to install the latest version of Backstage."
+        "title": "Pull the latest changes",
+        "description": "Fetch the latest changes from the Backstage repository to get the newest version.\n```bash\ngit pull origin main\n```"
+      },
+      {
+        "title": "Rebuild the Backstage application",
+        "description": "Rebuild the application to ensure all new changes are compiled and ready for deployment.\n```bash\nyarn build\n```"
+      },
+      {
+        "title": "Redeploy Backstage",
+        "description": "Apply the updated Kubernetes manifests to redeploy Backstage. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl apply -f k8s/ --namespace <namespace>\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check the status of the Backstage pods to ensure that the upgrade was successful."
+        "description": "Check the status of the Backstage pods to ensure they are running the new version correctly. Replace `<namespace>` with your chosen namespace.\n```bash\nkubectl get pods --namespace <namespace>\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "This issue occurs when a pod fails to start repeatedly. Check the logs of the pod to diagnose the issue."
+        "title": "Pods stuck in Pending state",
+        "description": "If your Backstage pods are stuck in Pending, check for insufficient resources in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace <namespace>\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access Backstage, ensure that the service is running and that the port-forward command is set up correctly."
+        "title": "Backstage not accessible",
+        "description": "If you cannot access Backstage, ensure that the service is correctly configured and the port is exposed.\n```bash\nkubectl get service --namespace <namespace>\n```"
       },
       {
-        "title": "Insufficient resources error",
-        "description": "If you encounter resource allocation errors, verify that your cluster has enough resources available for Backstage."
-      },
-      {
-        "title": "Failed to pull image",
-        "description": "This error indicates that the container image cannot be pulled. Check your image repository credentials and network connectivity."
+        "title": "Error in application logs",
+        "description": "If you encounter errors in the application, check the logs for more details.\n```bash\nkubectl logs <pod-name> --namespace <namespace>\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Backstage will have all pods running without errors, and you will be able to access the Backstage interface through the configured service. Ensure that resource limits are set appropriately for optimal performance.",
+      "codeSnippets": [
+        "git clone https://github.com/backstage/backstage.git\ncd backstage",
+        "yarn install",
+        "kubectl apply -f k8s/ --namespace <namespace> --create-namespace",
+        "kubectl get pods --namespace <namespace>",
+        "kubectl edit deployment backstage --namespace <namespace>\n# Add resource limits under spec.containers:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\""
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -101,22 +109,19 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "incubating",
-    "projectVersion": "v1.48.3",
-    "containerImages": [
-      "backstage/backstage:v1.48.3"
-    ],
+    "projectVersion": "v1.48.4",
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://backstage.io/",
       "repo": "https://github.com/backstage/backstage"
@@ -126,13 +131,14 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "git",
+      "yarn"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and have installed Helm and kubectl on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and the necessary tools installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-02-28T23:45:54.825Z",
+    "scannedAt": "2026-03-05T22:11:32.913Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

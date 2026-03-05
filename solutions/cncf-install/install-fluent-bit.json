@@ -6,87 +6,87 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Fluent Bit (Fluentd) on Kubernetes",
-    "description": "Fluent Bit is a lightweight and high-performance telemetry agent designed to collect, process, and forward logs, metrics, and traces from any source to any destination. Installing Fluent Bit allows you to efficiently manage your observability data with minimal resource usage.",
+    "description": "Fluent Bit is a fast and lightweight telemetry agent designed to collect, process, and forward logs, metrics, and traces from any source to any destination. Installing Fluent Bit allows you to efficiently manage your observability data with minimal resource usage.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Fluent Bit Helm repository",
-        "description": "First, add the Fluent Bit Helm repository to your local Helm configuration to access the latest charts.\n```bash\nhelm repo add fluent https://fluent.github.io/fluent-bithelm/\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the Fluent Bit Helm chart repository to your Helm configuration.\n```bash\nhelm repo add fluent https://fluent.github.io/helm-charts\nhelm repo update\n```"
       },
       {
-        "title": "Install Fluent Bit using Helm",
-        "description": "Now, install Fluent Bit in your Kubernetes cluster using Helm. This command will create a new namespace called 'fluent-bit' and deploy Fluent Bit there.\n```bash\nhelm install fluent-bit fluent/fluent-bit --namespace fluent-bit --create-namespace --version v4.2.3\n```"
+        "title": "Install Fluent Bit",
+        "description": "Install Fluent Bit using Helm, specifying the namespace and version.\n```bash\nhelm install fluent-bit fluent/fluent-bit --namespace logging --create-namespace --version 0.56.0\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the Fluent Bit pods are running successfully in the 'fluent-bit' namespace.\n```bash\nkubectl get pods --namespace fluent-bit\n```"
+        "description": "Check that the Fluent Bit pods are running successfully.\n```bash\nkubectl get pods --namespace logging\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "To ensure Fluent Bit runs efficiently, configure resource limits by editing the Helm release. This example sets limits for CPU and memory.\n```bash\nhelm upgrade fluent-bit fluent/fluent-bit --namespace fluent-bit --set resources.limits.cpu=100m --set resources.limits.memory=128Mi\n```"
+        "description": "Update the Fluent Bit configuration to set resource limits for the deployment.\n```bash\nkubectl patch deployment fluent-bit --namespace logging --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"100m\", \"memory\": \"128Mi\"}, \"requests\": {\"cpu\": \"50m\", \"memory\": \"64Mi\"}}}]'\n```"
       },
       {
         "title": "Expose metrics for monitoring",
-        "description": "To enable monitoring, expose the internal metrics over HTTP/Prometheus by modifying the configuration. You can do this by setting the service type to 'NodePort'.\n```bash\nhelm upgrade fluent-bit fluent/fluent-bit --namespace fluent-bit --set service.type=NodePort\n```"
+        "description": "Set up a service to expose Fluent Bit metrics for monitoring.\n```bash\nkubectl expose deployment fluent-bit --namespace logging --type=ClusterIP --name=fluent-bit-metrics --port=2020\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Fluent Bit will show the pods running in the 'fluent-bit' namespace. You should also be able to access the metrics endpoint for monitoring purposes.",
-      "codeSnippets": [
-        "helm repo add fluent https://fluent.github.io/fluent-bithelm/\nhelm repo update",
-        "helm install fluent-bit fluent/fluent-bit --namespace fluent-bit --create-namespace --version v4.2.3",
-        "kubectl get pods --namespace fluent-bit",
-        "helm upgrade fluent-bit fluent/fluent-bit --namespace fluent-bit --set resources.limits.cpu=100m --set resources.limits.memory=128Mi",
-        "helm upgrade fluent-bit fluent/fluent-bit --namespace fluent-bit --set service.type=NodePort"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "To cleanly remove the Fluent Bit deployment, use the following command to uninstall the Helm release from the 'fluent-bit' namespace.\n```bash\nhelm uninstall fluent-bit --namespace fluent-bit\n```"
+        "description": "Uninstall Fluent Bit from your cluster.\n```bash\nhelm uninstall fluent-bit --namespace logging\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "If there are any Custom Resource Definitions (CRDs) or persistent volume claims (PVCs) created by Fluent Bit, remove them using the following commands:\n```bash\nkubectl delete crd fluentbit.fluentbit.io\nkubectl delete pvc --all --namespace fluent-bit\n```"
+        "title": "Clean up CRDs and resources",
+        "description": "Remove any custom resources created by Fluent Bit.\n```bash\nkubectl delete crd fluentbit.fluentbit.io\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Finally, delete the 'fluent-bit' namespace to clean up any remaining resources. Verify that the namespace has been removed:\n```bash\nkubectl delete namespace fluent-bit\nkubectl get namespaces\n```"
+        "title": "Delete the namespace",
+        "description": "Remove the logging namespace if it's no longer needed.\n```bash\nkubectl delete namespace logging\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up the current configuration and state of Fluent Bit. You can do this by exporting the current values:\n```bash\nhelm get values fluent-bit --namespace fluent-bit > fluent-bit-backup-values.yaml\n```"
+        "description": "Export the current configuration and state of Fluent Bit.\n```bash\nkubectl get all --namespace logging -o yaml > fluent-bit-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then upgrade Fluent Bit to the desired version (e.g., v4.3.0):\n```bash\nhelm repo update\nhelm upgrade fluent-bit fluent/fluent-bit --namespace fluent-bit --version v4.3.0\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure your Helm repository is up to date.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Fluent Bit",
+        "description": "Upgrade Fluent Bit to the latest version available in the Helm repository.\n```bash\nhelm upgrade fluent-bit fluent/fluent-bit --namespace logging --version 0.56.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, check the status of the Fluent Bit pods to ensure they are running the new version:\n```bash\nkubectl get pods --namespace fluent-bit\n```"
+        "description": "Check that the Fluent Bit pods are running the new version successfully.\n```bash\nkubectl get pods --namespace logging\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Fluent Bit pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace fluent-bit\n```\nCommon issues may include misconfigurations in the input or output settings."
-      },
-      {
-        "title": "High CPU or memory usage",
-        "description": "If you notice high resource usage, check the resource limits set for Fluent Bit. You can view the current resource usage with:\n```bash\nkubectl top pods --namespace fluent-bit\n```\nConsider adjusting the resource limits in your Helm upgrade command."
-      },
-      {
-        "title": "No logs being collected",
-        "description": "If Fluent Bit is not collecting logs, verify the input configuration. Check the configuration with:\n```bash\nkubectl describe configmap fluent-bit-config --namespace fluent-bit\n```\nEnsure the input source is correctly defined and accessible."
+        "description": "This issue may occur if there is a misconfiguration in Fluent Bit. Check the logs of the pod for errors.\n```bash\nkubectl logs <pod-name> --namespace logging\n```"
       },
       {
         "title": "Metrics not exposed",
-        "description": "If you cannot access the metrics, ensure that the service type is set to NodePort. Check the service configuration with:\n```bash\nkubectl get svc --namespace fluent-bit\n```\nIf necessary, reapply the service configuration with the correct settings."
+        "description": "If metrics are not accessible, ensure the service is correctly set up and the port is correct.\n```bash\nkubectl get svc --namespace logging\n```"
+      },
+      {
+        "title": "High resource usage",
+        "description": "If Fluent Bit is consuming too many resources, consider adjusting the resource limits in the deployment.\n```bash\nkubectl describe deployment fluent-bit --namespace logging\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Fluent Bit will have all pods running without errors, and you will be able to access the metrics service. Configuration changes can be applied as needed to optimize performance.",
+      "codeSnippets": [
+        "helm repo add fluent https://fluent.github.io/helm-charts\nhelm repo update",
+        "helm install fluent-bit fluent/fluent-bit --namespace logging --create-namespace --version 0.56.0",
+        "kubectl get pods --namespace logging",
+        "kubectl patch deployment fluent-bit --namespace logging --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"100m\", \"memory\": \"128Mi\"}, \"requests\": {\"cpu\": \"50m\", \"memory\": \"64Mi\"}}}]'",
+        "kubectl expose deployment fluent-bit --namespace logging --type=ClusterIP --name=fluent-bit-metrics --port=2020"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -102,10 +102,11 @@
       "fluent-bit"
     ],
     "targetResourceKinds": [
+      "Deployment",
       "Service",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -120,7 +121,8 @@
     ],
     "sourceUrls": {
       "docs": "https://fluentbit.io",
-      "repo": "https://github.com/fluent/fluent-bit"
+      "repo": "https://github.com/fluent/fluent-bit",
+      "helm": "https://fluent.github.io/helm-charts"
     },
     "qualityScore": 100
   },
@@ -130,10 +132,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Ensure you have Helm and kubectl installed and configured to interact with your Kubernetes cluster."
   },
   "security": {
-    "scannedAt": "2026-02-28T22:42:00.359Z",
+    "scannedAt": "2026-03-05T22:14:29.740Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

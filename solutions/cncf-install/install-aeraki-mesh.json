@@ -6,83 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Aeraki Mesh on Kubernetes",
-    "description": "Aeraki is a service mesh that allows you to manage any layer-7 protocols, providing advanced traffic management capabilities for microservices. Installing Aeraki enables you to enhance your service mesh with support for various protocols beyond just HTTP.",
+    "description": "Aeraki is a service mesh that allows you to manage any layer-7 protocols, enhancing the capabilities of microservices. Installing Aeraki enables you to handle diverse traffic types beyond just HTTP, making your service mesh more versatile.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Aeraki Helm repository",
-        "description": "First, add the Aeraki Helm chart repository to your Helm configuration.\n```bash\nhelm repo add aeraki https://charts.aeraki.net\nhelm repo update\n```"
+        "title": "Clone the Aeraki repository",
+        "description": "Start by cloning the Aeraki repository to your local machine to access the necessary configuration files.\n```bash\ngit clone https://github.com/aeraki-mesh/aeraki.git\ncd aeraki\n```"
       },
       {
-        "title": "Install Aeraki using Helm",
-        "description": "Now, install Aeraki in a new namespace called 'aeraki'.\n```bash\nhelm install aeraki aeraki/aeraki --namespace aeraki --create-namespace --version 1.4.1\n```"
+        "title": "Deploy Aeraki using kubectl",
+        "description": "Apply the Aeraki manifests to your Kubernetes cluster. Ensure you are in the `aeraki` directory where the manifests are located.\n```bash\nkubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Aeraki pods are running successfully.\n```bash\nkubectl get pods --namespace aeraki\n```"
+        "description": "Check that the Aeraki pods are running successfully in the `aeraki-system` namespace.\n```bash\nkubectl get pods -n aeraki-system\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "To ensure optimal performance, configure resource limits for the Aeraki deployment. Edit the deployment with:\n```bash\nkubectl edit deployment aeraki --namespace aeraki\n```\nThen add resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
+        "description": "Edit the Aeraki deployment to set resource limits for the containers. This helps ensure that the pods have the necessary resources allocated.\n```bash\nkubectl edit deployment aeraki -n aeraki-system\n# Add the following under spec.containers:\n# resources:\n#   requests:\n#     cpu: \"100m\"\n#     memory: \"128Mi\"\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n```"
+      },
+      {
+        "title": "Set up monitoring",
+        "description": "Integrate monitoring by deploying Prometheus and Grafana to visualize Aeraki metrics. Follow the specific instructions in the Aeraki documentation for setting this up."
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Aeraki will have the Aeraki pods running in the 'aeraki' namespace. You can verify this by running the command to check the pods, which should show them in a 'Running' state.",
-      "codeSnippets": [
-        "helm repo add aeraki https://charts.aeraki.net\nhelm repo update",
-        "helm install aeraki aeraki/aeraki --namespace aeraki --create-namespace --version 1.4.1",
-        "kubectl get pods --namespace aeraki",
-        "kubectl edit deployment aeraki --namespace aeraki",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Aeraki release from the Kubernetes cluster using Helm. This will remove the deployment and associated resources managed by Helm.\n```bash\nhelm uninstall aeraki --namespace aeraki\n```"
+        "title": "Remove the Aeraki deployment",
+        "description": "Delete the Aeraki deployment and any associated resources in the `aeraki-system` namespace.\n```bash\nkubectl delete -f deploy/aeraki.yaml --namespace aeraki-system\nkubectl delete namespace aeraki-system\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that may have been created during the installation. This ensures that all resources are cleaned up.\n```bash\nkubectl delete crd $(kubectl get crd | grep aeraki | awk '{print $1}')\nkubectl delete pvc --all --namespace aeraki\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'aeraki' namespace to clean up any remaining resources. Verify that the namespace has been removed successfully.\n```bash\nkubectl delete namespace aeraki\nkubectl get namespaces\n```"
+        "title": "Clean up remaining resources",
+        "description": "Ensure that all resources related to Aeraki are removed from the cluster.\n```bash\nkubectl delete all --all -n aeraki-system\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of the Aeraki installation. This can be done by exporting the current configuration and resources.\n```bash\nkubectl get all --namespace aeraki -o yaml > aeraki-backup.yaml\n```"
+        "description": "Before upgrading, back up the current Aeraki configuration and any custom resources.\n```bash\nkubectl get all -n aeraki-system -o yaml > aeraki-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then upgrade the Aeraki installation to the desired version.\n```bash\nhelm repo update\nhelm upgrade aeraki aeraki/aeraki --namespace aeraki --version 1.5.0\n```"
+        "title": "Update the Aeraki manifests",
+        "description": "Pull the latest changes from the Aeraki repository to get the updated manifests.\n```bash\ngit pull origin master\n```"
+      },
+      {
+        "title": "Upgrade the Aeraki deployment",
+        "description": "Apply the updated manifests to upgrade Aeraki in your cluster.\n```bash\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, check that the Aeraki pods are running with the new version and that the deployment is successful.\n```bash\nkubectl get pods --namespace aeraki\n```"
+        "description": "Check that the Aeraki pods are running the new version successfully.\n```bash\nkubectl get pods -n aeraki-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If Aeraki pods are in a CrashLoopBackOff state, check the logs for the specific pod to diagnose the issue.\n```bash\nkubectl logs <pod-name> --namespace aeraki\n```"
-      },
-      {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If the Helm upgrade fails due to a version conflict, ensure that the version specified is available in the repository. You can check available versions with:\n```bash\nhelm search repo aeraki/aeraki --versions\n```"
+        "title": "Pods not starting",
+        "description": "If the Aeraki pods are not starting, check the pod status and logs for errors.\n```bash\nkubectl get pods -n aeraki-system\nkubectl logs <pod-name> -n aeraki-system\n```"
       },
       {
         "title": "Service not reachable",
-        "description": "If services managed by Aeraki are not reachable, verify that the service endpoints are correctly configured and that the necessary network policies are in place.\n```bash\nkubectl get svc --namespace aeraki\nkubectl describe svc <service-name> --namespace aeraki\n```"
+        "description": "If services managed by Aeraki are not reachable, verify the service configuration and network policies.\n```bash\nkubectl get svc -n aeraki-system\nkubectl describe svc <service-name> -n aeraki-system\n```"
       },
       {
-        "title": "Insufficient resources allocated",
-        "description": "If Aeraki pods are failing due to insufficient resources, check the resource limits and requests configured in the deployment. Adjust them as necessary.\n```bash\nkubectl get deployment aeraki --namespace aeraki -o yaml\n```"
+        "title": "High resource usage",
+        "description": "If Aeraki pods are consuming too many resources, check the resource limits and adjust them accordingly.\n```bash\nkubectl top pods -n aeraki-system\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Aeraki will result in all pods running in the `aeraki-system` namespace without errors. You will be able to manage various layer-7 protocols effectively within your service mesh.",
+      "codeSnippets": [
+        "git clone https://github.com/aeraki-mesh/aeraki.git\ncd aeraki",
+        "kubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system",
+        "kubectl get pods -n aeraki-system",
+        "kubectl edit deployment aeraki -n aeraki-system\n# Add the following under spec.containers:\n# resources:\n#   requests:\n#     cpu: \"100m\"\n#     memory: \"128Mi\"\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\""
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -99,18 +98,18 @@
       "Deployment",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "1.4.1",
     "containerImages": [
-      "registry/org/image:tag"
+      "registry/aeraki/aeraki:1.4.1"
     ],
     "sourceUrls": {
       "docs": "https://www.aeraki.net",
@@ -121,13 +120,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-03-01T05:10:51.304Z",
+    "scannedAt": "2026-03-05T22:24:47.672Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

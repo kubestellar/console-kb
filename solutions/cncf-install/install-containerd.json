@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Containerd on Kubernetes",
-    "description": "containerd is an industry-standard container runtime that manages the complete lifecycle of containers on a host system. Installing containerd allows you to run and manage containers efficiently in your Kubernetes environment.",
+    "description": "containerd is an industry-standard container runtime designed for simplicity, robustness, and portability. It manages the complete container lifecycle, making it essential for running containers efficiently in various environments.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the containerd Helm repository",
-        "description": "Add the official containerd Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add containerd https://charts.containerd.io\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the Wiremind Helm repository to your local Helm setup to access the containerd-registry-config chart.\n```bash\nhelm repo add wiremind https://wiremind.github.io/wiremind-helm-charts\nhelm repo update\n```"
       },
       {
         "title": "Install containerd using Helm",
-        "description": "Install containerd in your Kubernetes cluster using the following command:\n```bash\nhelm install containerd containerd/containerd --version v2.2.1 --namespace containerd --create-namespace\n```"
+        "description": "Install the containerd-registry-config chart in a new namespace called 'containerd'.\n```bash\nhelm install containerd-registry-config wiremind/containerd-registry-config --namespace containerd --create-namespace --version 0.1.0\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the containerd pods are running successfully:\n```bash\nkubectl get pods --namespace containerd\n```"
+        "description": "Check if the pods are running successfully in the 'containerd' namespace.\n```bash\nkubectl get pods -n containerd\n```"
       },
       {
-        "title": "Configure resource limits for containerd",
-        "description": "Set resource limits for the containerd deployment to ensure it runs efficiently:\n```bash\nkubectl patch deployment containerd -n containerd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
+        "title": "Configure resource limits",
+        "description": "Edit the deployment to set resource limits for the containerd pods.\n```bash\nkubectl edit deployment containerd-registry-config -n containerd\n# Add resource limits under spec.containers:\n# resources:\n#   limits:\n#     cpu: 500m\n#     memory: 512Mi\n```"
       },
       {
-        "title": "Set up port forwarding for containerd",
-        "description": "Forward a local port to the containerd service to access it:\n```bash\nkubectl port-forward service/containerd -n containerd 8000:80\n```"
+        "title": "Set up RBAC for security",
+        "description": "Create a Role and RoleBinding to allow the containerd service account to access necessary resources.\n```bash\nkubectl create role containerd-role --verb=get,list,watch --resource=pods --namespace=containerd\nkubectl create rolebinding containerd-rolebinding --role=containerd-role --serviceaccount=containerd:default --namespace=containerd\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of containerd will show the containerd pods running in the 'containerd' namespace. You can access the service through port forwarding and ensure that resource limits are applied correctly.",
-      "codeSnippets": [
-        "helm repo add containerd https://charts.containerd.io\nhelm repo update",
-        "helm install containerd containerd/containerd --version v2.2.1 --namespace containerd --create-namespace",
-        "kubectl get pods --namespace containerd",
-        "kubectl patch deployment containerd -n containerd --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'",
-        "kubectl port-forward service/containerd -n containerd 8000:80"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the containerd Helm release from your Kubernetes cluster using the following command:\n```bash\nhelm uninstall containerd --namespace containerd\n```"
+        "description": "Uninstall the containerd-registry-config Helm release from the 'containerd' namespace.\n```bash\nhelm uninstall containerd-registry-config --namespace containerd\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with containerd:\n```bash\nkubectl delete pvc --all --namespace containerd\nkubectl delete crd $(kubectl get crd | grep containerd | awk '{print $1}')\n```"
+        "title": "Clean up CRDs and resources",
+        "description": "Delete any Custom Resource Definitions (CRDs) and other resources created during installation.\n```bash\nkubectl delete crd containerdregistryconfigs.wiremind.io\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the containerd namespace and verify that it has been removed:\n```bash\nkubectl delete namespace containerd\nkubectl get namespaces\n```"
+        "title": "Remove the namespace",
+        "description": "Delete the 'containerd' namespace to clean up all resources associated with the installation.\n```bash\nkubectl delete namespace containerd\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of the containerd installation:\n```bash\nhelm get values containerd --namespace containerd > containerd-backup.yaml\n```"
+        "description": "Before upgrading, back up the current configuration and state of the containerd installation.\n```bash\nkubectl get all -n containerd -o yaml > containerd-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the containerd release to the latest version:\n```bash\nhelm repo update\nhelm upgrade containerd containerd/containerd --version v2.3.0 --namespace containerd\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure that you have the latest version of the Helm chart available.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade the Helm release",
+        "description": "Upgrade the containerd-registry-config Helm release to the latest version.\n```bash\nhelm upgrade containerd-registry-config wiremind/containerd-registry-config --namespace containerd --version 0.1.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the containerd pods are running the new version successfully:\n```bash\nkubectl get pods --namespace containerd\n```"
+        "description": "Check the status of the pods to ensure they are running the new version.\n```bash\nkubectl get pods -n containerd\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the containerd pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace containerd\n```\nLook for any error messages that indicate what might be wrong with the configuration or resources."
+        "title": "Pods stuck in Pending state",
+        "description": "If pods are not starting, check for resource availability in the cluster.\n```bash\nkubectl describe pod <pod-name> -n containerd\nkubectl get nodes\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the containerd service, ensure that the port forwarding is set up correctly:\n```bash\nkubectl port-forward service/containerd -n containerd 8000:80\n```\nAlso, verify that the service is running:\n```bash\nkubectl get svc --namespace containerd\n```"
+        "title": "CrashLoopBackOff error",
+        "description": "If a pod is crashing, check the logs for errors.\n```bash\nkubectl logs <pod-name> -n containerd\n```"
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter issues related to insufficient resources, check the resource limits and requests set for the containerd deployment:\n```bash\nkubectl describe deployment containerd -n containerd\n```\nAdjust the resource limits if necessary."
+        "title": "Helm release not found",
+        "description": "If you encounter an error stating the Helm release is not found, ensure you are using the correct namespace.\n```bash\nhelm list --namespace containerd\n```"
       },
       {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade command fails, check the error message for details. You can roll back to the previous version using:\n```bash\nhelm rollback containerd <revision-number> --namespace containerd\n```\nList the revisions with:\n```bash\nhelm history containerd --namespace containerd\n```"
+        "title": "RBAC permission errors",
+        "description": "If you see permission denied errors, verify that the RBAC roles and bindings are correctly set up.\n```bash\nkubectl get rolebindings -n containerd\nkubectl get roles -n containerd\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of containerd will result in running pods in the 'containerd' namespace, with all configurations applied. You can verify the installation by checking the status of the pods and ensuring they are in the 'Running' state.",
+      "codeSnippets": [
+        "helm repo add wiremind https://wiremind.github.io/wiremind-helm-charts\nhelm repo update",
+        "helm install containerd-registry-config wiremind/containerd-registry-config --namespace containerd --create-namespace --version 0.1.0",
+        "kubectl get pods -n containerd",
+        "kubectl edit deployment containerd-registry-config -n containerd\n# Add resource limits under spec.containers:\n# resources:\n#   limits:\n#     cpu: 500m\n#     memory: 512Mi",
+        "kubectl create role containerd-role --verb=get,list,watch --resource=pods --namespace=containerd\nkubectl create rolebinding containerd-rolebinding --role=containerd-role --serviceaccount=containerd:default --namespace=containerd"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -102,7 +106,8 @@
     "targetResourceKinds": [
       "Deployment",
       "Service",
-      "Namespace"
+      "Namespace",
+      "Serviceaccount"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -119,7 +124,8 @@
     ],
     "sourceUrls": {
       "docs": "https://containerd.io",
-      "repo": "https://github.com/containerd/containerd"
+      "repo": "https://github.com/containerd/containerd",
+      "helm": "https://wiremind.github.io/wiremind-helm-charts"
     },
     "qualityScore": 100
   },
@@ -129,10 +135,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-02-28T14:50:03.117Z",
+    "scannedAt": "2026-03-05T22:13:34.160Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

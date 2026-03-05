@@ -6,87 +6,83 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Envoy on Kubernetes",
-    "description": "Envoy is a cloud-native high-performance edge, middle, and service proxy that helps manage communication between microservices. Installing Envoy allows you to leverage its advanced features for load balancing, service discovery, and observability in your Kubernetes environment.",
+    "description": "Envoy is a cloud-native high-performance edge/middle/service proxy that helps manage microservices traffic efficiently. Installing Envoy allows you to leverage its advanced features for load balancing, service discovery, and observability in your Kubernetes environment.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Envoy Helm repository",
-        "description": "Add the official Envoy Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add envoy https://envoyproxy.github.io/envoy\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the official Helm repository for Envoy to your Helm client.\n```bash\nhelm repo add envoy https://cloudnativeapp.github.io/charts/curated\nhelm repo update\n```"
       },
       {
         "title": "Install Envoy using Helm",
-        "description": "Install Envoy in a new namespace called 'envoy-system' with the following command:\n```bash\nhelm install envoy envoy/envoy --namespace envoy-system --create-namespace --version v1.37.0\n```"
+        "description": "Install Envoy in your Kubernetes cluster with the specified version and create a namespace if it doesn't exist.\n```bash\nhelm install envoy envoy/envoy --namespace envoy --create-namespace --version 1.5.0\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Envoy pods are running successfully with the following command:\n```bash\nkubectl get pods --namespace envoy-system\n```"
+        "description": "Check that the Envoy pods are running successfully.\n```bash\nkubectl get pods --namespace envoy\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Update the Envoy deployment to set resource limits. Use the following command to edit the deployment:\n```bash\nkubectl edit deployment envoy --namespace envoy-system\n```\nIn the editor, add the following under 'spec.containers.resources':\n```yaml\nresources:\n  limits:\n    cpu: 500m\n    memory: 512Mi\n  requests:\n    cpu: 250m\n    memory: 256Mi\n```"
+        "description": "Set resource limits for the Envoy deployment to ensure it runs efficiently.\n```bash\nkubectl patch deployment envoy --namespace envoy -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"envoy\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"}}}]}}}}' \n```"
       },
       {
         "title": "Set up port forwarding for access",
-        "description": "To access the Envoy service, set up port forwarding with the following command:\n```bash\nkubectl port-forward service/envoy --namespace envoy-system 8080:80\n```"
+        "description": "Forward a local port to the Envoy service to access it from your local machine.\n```bash\nkubectl port-forward svc/envoy --namespace envoy 8080:80\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Envoy will show the Envoy pods in the 'envoy-system' namespace as running. You can access the Envoy service through port 8080 on your local machine.",
-      "codeSnippets": [
-        "helm repo add envoy https://envoyproxy.github.io/envoy\nhelm repo update",
-        "helm install envoy envoy/envoy --namespace envoy-system --create-namespace --version v1.37.0",
-        "kubectl get pods --namespace envoy-system",
-        "kubectl edit deployment envoy --namespace envoy-system",
-        "resources:\n  limits:\n    cpu: 500m\n    memory: 512Mi\n  requests:\n    cpu: 250m\n    memory: 256Mi"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Envoy release from the Kubernetes cluster using Helm with the following command:\n```bash\nhelm uninstall envoy --namespace envoy-system\n```"
+        "description": "Uninstall the Envoy release from your Kubernetes cluster.\n```bash\nhelm uninstall envoy --namespace envoy\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation. Use the following commands:\n```bash\nkubectl delete crd <crd-name>\nkubectl delete pvc --all --namespace envoy-system\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'envoy-system' namespace and verify that it has been removed:\n```bash\nkubectl delete namespace envoy-system\nkubectl get namespaces\n```"
+        "title": "Clean up CRDs and resources",
+        "description": "Remove any custom resources and configurations associated with Envoy.\n```bash\nkubectl delete all --all --namespace envoy\nkubectl delete namespace envoy\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of the Envoy installation by exporting the configuration:\n```bash\nkubectl get all --namespace envoy-system -o yaml > envoy-backup.yaml\n```"
+        "description": "Export the current configuration and resources for backup purposes.\n```bash\nkubectl get all --namespace envoy -o yaml > envoy-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Envoy installation to the latest version:\n```bash\nhelm repo update\nhelm upgrade envoy envoy/envoy --namespace envoy-system --version v1.38.0\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure your Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Envoy",
+        "description": "Upgrade the Envoy installation to the latest version available in the repository.\n```bash\nhelm upgrade envoy envoy/envoy --namespace envoy --version 1.5.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Envoy pods are running the new version successfully:\n```bash\nkubectl get pods --namespace envoy-system\n```"
+        "description": "Check the status of the Envoy pods to confirm the upgrade was successful.\n```bash\nkubectl get pods --namespace envoy\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Envoy pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace envoy-system\n``` \nLook for any configuration issues or missing dependencies."
+        "title": "Pods stuck in Pending state",
+        "description": "If your Envoy pods are stuck in a Pending state, check for resource availability in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace envoy\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If the Envoy service is not reachable, verify that the port forwarding is set up correctly:\n```bash\nkubectl get svc --namespace envoy-system\n``` \nEnsure that the correct service name and port are being used for port forwarding."
+        "title": "Envoy service not reachable",
+        "description": "If you cannot access the Envoy service, verify that the service is correctly configured and the port forwarding is set up.\n```bash\nkubectl get svc --namespace envoy\n```"
       },
       {
-        "title": "High resource usage",
-        "description": "If Envoy is consuming too many resources, check the resource limits and requests set in the deployment:\n```bash\nkubectl describe deployment envoy --namespace envoy-system\n``` \nAdjust the resource limits if necessary."
-      },
-      {
-        "title": "Configuration changes not applied",
-        "description": "If changes made to the Envoy configuration are not reflected, ensure that the deployment has been updated:\n```bash\nkubectl rollout status deployment/envoy --namespace envoy-system\n``` \nIf necessary, redeploy the configuration."
+        "title": "High memory usage",
+        "description": "If you notice high memory usage, consider adjusting the resource limits set for the Envoy deployment.\n```bash\nkubectl top pod --namespace envoy\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Envoy will result in running pods in the 'envoy' namespace, accessible via the specified port. You should also see the Envoy service responding to requests as expected.",
+      "codeSnippets": [
+        "helm repo add envoy https://cloudnativeapp.github.io/charts/curated\nhelm repo update",
+        "helm install envoy envoy/envoy --namespace envoy --create-namespace --version 1.5.0",
+        "kubectl get pods --namespace envoy",
+        "kubectl patch deployment envoy --namespace envoy -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"envoy\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"}}}]}}}}'",
+        "kubectl port-forward svc/envoy --namespace envoy 8080:80"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -104,7 +100,7 @@
       "Service",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -119,7 +115,8 @@
     ],
     "sourceUrls": {
       "docs": "https://www.envoyproxy.io",
-      "repo": "https://github.com/envoyproxy/envoy"
+      "repo": "https://github.com/envoyproxy/envoy",
+      "helm": "https://cloudnativeapp.github.io/charts/curated"
     },
     "qualityScore": 100
   },
@@ -129,10 +126,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and have installed Helm and kubectl on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and both Helm and kubectl installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-02-28T14:25:28.160Z",
+    "scannedAt": "2026-03-05T22:11:09.939Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

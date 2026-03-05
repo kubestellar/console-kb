@@ -6,87 +6,83 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Dalec on Kubernetes",
-    "description": "Dalec is a project aimed at providing a declarative format for building system packages and containers with a focus on supply chain security. Installing Dalec allows you to produce secure packages and containers efficiently using simple configurations.",
+    "description": "Dalec is a project aimed at providing a declarative format for building system packages and containers with a focus on supply chain security. You would install it to produce secure packages and containers efficiently.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Dalec Helm repository",
-        "description": "Add the Dalec Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add dalec https://project-dalec.github.io/dalec/charts\nhelm repo update\n```"
+        "title": "Clone the Dalec repository",
+        "description": "Start by cloning the Dalec repository to your local machine using the following command:\n```bash\ngit clone https://github.com/project-dalec/dalec.git\ncd dalec\n```"
       },
       {
-        "title": "Install Dalec using Helm",
-        "description": "Install Dalec in the 'dalec' namespace (it will be created if it doesn't exist) with the following command:\n```bash\nhelm install dalec dalec/dalec --namespace dalec --create-namespace --version v0.20.3\n```"
+        "title": "Build the Dalec container image",
+        "description": "Use Docker to build the Dalec container image from the Dockerfile provided in the repository:\n```bash\ndocker build -t dalec:v0.20.3 .\n```"
+      },
+      {
+        "title": "Run the Dalec container",
+        "description": "Run the Dalec container to verify that it is working correctly:\n```bash\ndocker run --rm dalec:v0.20.3 --help\n```"
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "You may want to configure resource limits for the Dalec container by creating a Kubernetes deployment. First, create a deployment YAML file:\n```yaml\nyaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: dalec\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: dalec\n  template:\n    metadata:\n      labels:\n        app: dalec\n    spec:\n      containers:\n      - name: dalec\n        image: dalec:v0.20.3\n        resources:\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"\n``` \nThen apply it using:\n```bash\nkubectl apply -f deployment.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Dalec pods are running successfully:\n```bash\nkubectl get pods --namespace dalec\n```"
-      },
-      {
-        "title": "Configure resource limits",
-        "description": "To ensure optimal performance, configure resource limits for the Dalec deployment. Edit the deployment with:\n```bash\nkubectl edit deployment dalec --namespace dalec\n``` \nThen add the following under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
-      },
-      {
-        "title": "Set up port forwarding for access",
-        "description": "To access the Dalec service, set up port forwarding:\n```bash\nkubectl port-forward svc/dalec --namespace dalec 8080:80\n``` \nYou can now access Dalec at http://localhost:8080."
+        "description": "Check that the Dalec pod is running successfully:\n```bash\nkubectl get pods\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Dalec will show the pods running when you execute `kubectl get pods --namespace dalec`. You can also access the Dalec service through port forwarding, confirming that the installation was successful.",
-      "codeSnippets": [
-        "helm repo add dalec https://project-dalec.github.io/dalec/charts\nhelm repo update",
-        "helm install dalec dalec/dalec --namespace dalec --create-namespace --version v0.20.3",
-        "kubectl get pods --namespace dalec",
-        "kubectl edit deployment dalec --namespace dalec",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Dalec release from the 'dalec' namespace using the following command:\n```bash\nhelm uninstall dalec --namespace dalec\n```"
+        "title": "Delete the Dalec deployment",
+        "description": "Remove the Dalec deployment from your Kubernetes cluster:\n```bash\nkubectl delete deployment dalec\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims associated with Dalec:\n```bash\nkubectl delete crd $(kubectl get crd | grep dalec | awk '{print $1}')\nkubectl delete pvc --all --namespace dalec\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'dalec' namespace and verify it has been removed:\n```bash\nkubectl delete namespace dalec\nkubectl get namespaces | grep dalec\n```"
+        "title": "Remove the Dalec container image",
+        "description": "If you want to clean up the local Docker environment, remove the Dalec image:\n```bash\ndocker rmi dalec:v0.20.3\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of Dalec:\n```bash\nhelm get values dalec --namespace dalec > dalec-backup-values.yaml\n```"
+        "description": "Before upgrading, ensure you have a backup of your current deployment configuration:\n```bash\nkubectl get deployment dalec -o yaml > dalec-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade Dalec to the latest version:\n```bash\nhelm repo update\nhelm upgrade dalec dalec/dalec --namespace dalec --version v0.21.0\n```"
+        "title": "Build the new version of Dalec",
+        "description": "Build the new version of the Dalec container image:\n```bash\ndocker build -t dalec:v0.20.3 .\n```"
+      },
+      {
+        "title": "Update the deployment",
+        "description": "Update the deployment to use the new image version:\n```bash\nkubectl set image deployment/dalec dalec=dalec:v0.20.3\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Dalec pods are running the new version successfully:\n```bash\nkubectl get pods --namespace dalec\n```"
+        "description": "Check that the upgraded Dalec pod is running successfully:\n```bash\nkubectl get pods\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Dalec pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace dalec\n``` \nLook for any error messages that indicate what might be wrong."
+        "title": "Pod is not starting",
+        "description": "If the Dalec pod is not starting, check the pod logs for errors:\n```bash\nkubectl logs <pod-name>\n``` \nCommon issues may include missing dependencies or incorrect configurations."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Dalec service, ensure the port forwarding is set up correctly:\n```bash\nkubectl port-forward svc/dalec --namespace dalec 8080:80\n``` \nAlso, check the service status:\n```bash\nkubectl get svc --namespace dalec\n```"
+        "title": "Image pull errors",
+        "description": "If you encounter image pull errors, ensure that the image name and tag are correct. You can check the available images with:\n```bash\ndocker images\n```"
       },
       {
-        "title": "Insufficient resources",
-        "description": "If the pods are not starting due to resource issues, check the resource requests and limits:\n```bash\nkubectl describe deployment dalec --namespace dalec\n``` \nAdjust the resource limits if necessary."
-      },
-      {
-        "title": "Helm release not found",
-        "description": "If you encounter an error stating that the Helm release is not found, verify the release name and namespace:\n```bash\nhelm list --namespace dalec\n``` \nEnsure you are using the correct release name 'dalec'."
+        "title": "Resource limits exceeded",
+        "description": "If the pod is crashing due to resource limits, consider increasing the memory or CPU limits in the deployment YAML and redeploying:\n```bash\nkubectl edit deployment dalec\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation will have the Dalec pod running without errors, and you will be able to access its features through the container. Verify the pod status and logs to ensure everything is functioning correctly.",
+      "codeSnippets": [
+        "git clone https://github.com/project-dalec/dalec.git\ncd dalec",
+        "docker build -t dalec:v0.20.3 .",
+        "docker run --rm dalec:v0.20.3 --help",
+        "yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: dalec\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: dalec\n  template:\n    metadata:\n      labels:\n        app: dalec\n    spec:\n      containers:\n      - name: dalec\n        image: dalec:v0.20.3\n        resources:\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"",
+        "kubectl apply -f deployment.yaml"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -100,22 +96,20 @@
       "dalec"
     ],
     "targetResourceKinds": [
-      "Deployment",
-      "Service",
-      "Namespace"
+      "Deployment"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "docker"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.20.3",
     "containerImages": [
-      "registry/org/image:tag"
+      "dalec:v0.20.3"
     ],
     "sourceUrls": {
       "docs": "https://project-dalec.github.io/dalec/",
@@ -126,13 +120,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "docker"
     ],
-    "description": "Ensure you have Kubernetes cluster access and have installed Helm and kubectl."
+    "description": "Ensure Docker is installed and running on your machine."
   },
   "security": {
-    "scannedAt": "2026-03-01T11:53:50.734Z",
+    "scannedAt": "2026-03-05T22:33:09.370Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

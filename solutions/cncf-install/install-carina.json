@@ -6,91 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Carina on Kubernetes",
-    "description": "Carina is a high-performance, ops-free local storage solution for Kubernetes, designed specifically for cloud-native databases. Installing Carina allows you to leverage its capabilities for efficient storage management and low-latency performance in your Kubernetes environment.",
+    "description": "Carina is a high-performance, ops-free local storage solution for Kubernetes, designed to simplify storage management for cloud-native databases. Installing Carina allows you to leverage Kubernetes-native storage resources while benefiting from low-latency and efficient storage capabilities.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Carina Helm repository",
-        "description": "Add the Carina Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add carina https://carina-io.github.io/charts\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the Carina Helm chart repository to your local Helm configuration with the following command:\n```bash\nhelm repo add carina https://mgaber7.github.io\nhelm repo update\n```"
       },
       {
-        "title": "Install Carina using Helm",
-        "description": "Install Carina with the following command, creating a namespace called 'carina' if it doesn't exist:\n```bash\nhelm install carina carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0\n```"
+        "title": "Install the Carina CSI driver",
+        "description": "Install the Carina CSI driver using Helm with the following command:\n```bash\nhelm install carina-csi-driver carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Carina pods are running successfully:\n```bash\nkubectl get pods --namespace carina\n```"
+        "description": "Check that the Carina pods are running successfully:\n```bash\nkubectl get pods -n carina\n```"
       },
       {
-        "title": "Configure resource limits for Carina components",
-        "description": "Update the Helm release to set resource limits for the Carina CSI driver components:\n```bash\nhelm upgrade carina carina/carina-csi-driver --namespace carina --set controller.resources.limits.cpu=200m --set controller.resources.limits.memory=500Mi\n```"
-      },
-      {
-        "title": "Set up RBAC for Carina",
-        "description": "Ensure that the necessary RBAC permissions are created by upgrading the Helm release:\n```bash\nhelm upgrade carina carina/carina-csi-driver --namespace carina --set rbac.create=true\n```"
-      },
-      {
-        "title": "Check Carina health status",
-        "description": "Use port-forwarding to access the health check endpoint:\n```bash\nkubectl port-forward svc/csi-carina-controller --namespace carina 8080:8080\n# Then visit http://localhost:8080/healthz in your browser to check the health status.\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Carina CSI driver by editing the Helm values:\n```bash\nhelm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --set controller.resources.csiProvisioner.limits.cpu=200m --set controller.resources.csiProvisioner.limits.memory=500Mi\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Carina will result in the Carina pods running in the 'carina' namespace. You can verify the health of the installation by accessing the health check endpoint and ensuring that all components are operational.",
-      "codeSnippets": [
-        "helm repo add carina https://carina-io.github.io/charts\nhelm repo update",
-        "helm install carina carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0",
-        "kubectl get pods --namespace carina",
-        "helm upgrade carina carina/carina-csi-driver --namespace carina --set controller.resources.limits.cpu=200m --set controller.resources.limits.memory=500Mi",
-        "helm upgrade carina carina/carina-csi-driver --namespace carina --set rbac.create=true"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Carina Helm release to remove the deployment from your cluster. This will delete all associated resources managed by Helm.\n```bash\nhelm uninstall carina --namespace carina\n```"
+        "description": "Uninstall the Carina CSI driver with the following command:\n```bash\nhelm uninstall carina-csi-driver --namespace carina\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation. This ensures that all resources are removed from the cluster.\n```bash\nkubectl delete crd $(kubectl get crd | grep carina | awk '{print $1}')\nkubectl delete pvc --all --namespace carina\n```"
+        "title": "Clean up CRDs",
+        "description": "Remove the Custom Resource Definitions (CRDs) associated with Carina:\n```bash\nkubectl delete crd logicvolumes.carina.storage.io\nkubectl delete crd nodestorageresources.carina.storage.io\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'carina' namespace to clean up any remaining resources. Verify that the namespace has been removed successfully.\n```bash\nkubectl delete namespace carina\nkubectl get namespaces\n```"
+        "title": "Remove the namespace",
+        "description": "Delete the Carina namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace carina\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current state of your Carina installation. You can do this by exporting the current configuration.\n```bash\nhelm get values carina --namespace carina > carina-backup.yaml\n```"
+        "description": "Before upgrading, back up the current configuration and state:\n```bash\nkubectl get all -n carina -o yaml > carina-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then upgrade the Carina installation to the desired version.\n```bash\nhelm repo update\nhelm upgrade carina carina/carina-csi-driver --namespace carina --version v0.12.0\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure your Helm repository is up to date:\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade the Carina CSI driver",
+        "description": "Upgrade the Carina CSI driver to the latest version:\n```bash\nhelm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --version v0.11.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check the status of the Carina pods to ensure they are running the new version without issues.\n```bash\nkubectl get pods --namespace carina\n```"
+        "description": "Check that the upgraded Carina pods are running successfully:\n```bash\nkubectl get pods -n carina\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If you see that the Carina pods are in a CrashLoopBackOff state, check the logs of the affected pod for errors.\n```bash\nkubectl logs <pod-name> --namespace carina\n```"
+        "title": "Pods stuck in Pending state",
+        "description": "If your Carina pods are stuck in the Pending state, check for insufficient resources or scheduling issues:\n```bash\nkubectl describe pod <pod-name> -n carina\n```"
       },
       {
-        "title": "Persistent Volume Claims not bound",
-        "description": "If PVCs are not bound, ensure that the storage class is correctly configured and available. Check the PVC status with:\n```bash\nkubectl get pvc --namespace carina\n```"
+        "title": "Pods in CrashLoopBackOff",
+        "description": "If your Carina pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n carina\n```"
       },
       {
-        "title": "Health check endpoint returns error",
-        "description": "If the health check endpoint is returning an error, verify that the Carina controller is running and check its logs for any issues.\n```bash\nkubectl logs deployment/csi-carina-controller --namespace carina\n```"
-      },
-      {
-        "title": "RBAC permissions issues",
-        "description": "If you encounter permission errors, ensure that the RBAC roles and bindings are correctly set up. Check the roles with:\n```bash\nkubectl get roles --namespace carina\nkubectl get rolebindings --namespace carina\n```"
+        "title": "Failed to provision volume",
+        "description": "If volume provisioning fails, check the events for the PVC:\n```bash\nkubectl describe pvc <pvc-name> -n <namespace>\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Carina will have all pods running in the 'carina' namespace without errors. You can verify this by checking the pod status and ensuring they are in the 'Running' state.",
+      "codeSnippets": [
+        "helm repo add carina https://mgaber7.github.io\nhelm repo update",
+        "helm install carina-csi-driver carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0",
+        "kubectl get pods -n carina",
+        "helm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --set controller.resources.csiProvisioner.limits.cpu=200m --set controller.resources.csiProvisioner.limits.memory=500Mi"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -106,7 +97,7 @@
     "targetResourceKinds": [
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -118,17 +109,12 @@
     "projectVersion": "v0.14.0",
     "containerImages": [
       "registry.cn-hangzhou.aliyuncs.com/carina/carina-scheduler:v0.11.0",
-      "registry.cn-hangzhou.aliyuncs.com/carina/carina:v0.11.0",
-      "registry.cn-hangzhou.aliyuncs.com/carina/livenessprobe:v2.7.0",
-      "registry.cn-hangzhou.aliyuncs.com/carina/csi-provisioner:v2.2.2",
-      "registry.cn-hangzhou.aliyuncs.com/carina/csi-resizer:v1.5.0",
-      "registry.cn-hangzhou.aliyuncs.com/carina/csi-node-driver-registrar:v2.5.1",
-      "registry.cn-hangzhou.aliyuncs.com/carina/busybox:1.28"
+      "registry.cn-hangzhou.aliyuncs.com/carina/carina:v0.11.0"
     ],
     "sourceUrls": {
       "docs": "https://carina-io.github.io",
       "repo": "https://github.com/carina-io/carina",
-      "helm": "https://github.com/carina-io/carina/tree/main/charts/"
+      "helm": "https://mgaber7.github.io"
     },
     "qualityScore": 100
   },
@@ -138,10 +124,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or later, and that Helm and kubectl are installed and configured on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and have installed Helm and kubectl."
   },
   "security": {
-    "scannedAt": "2026-03-01T08:07:18.574Z",
+    "scannedAt": "2026-03-05T22:27:54.140Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

@@ -6,85 +6,81 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Confidential Containers on Kubernetes",
-    "description": "Confidential Containers is an open-source community project that leverages Trusted Execution Environments (TEEs) to enhance the security of containers and protect sensitive data in cloud-native applications. Installing it allows you to enforce application security requirements while maintaining transparency in deploying unmodified containers.",
+    "description": "Confidential Containers is an open-source community focused on leveraging Trusted Execution Environments (TEEs) to enhance the security of containers and data, enabling cloud-native confidential computing. Installing it allows you to enforce application security requirements and deploy unmodified containers securely.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Confidential Containers Helm repository",
-        "description": "First, add the Helm chart repository for Confidential Containers to your Helm client. This will allow you to install the necessary components easily.\n\n```bash\nhelm repo add confidential-containers https://confidential-containers.github.io/charts\nhelm repo update\n```"
+        "title": "Clone the repository",
+        "description": "Clone the Confidential Containers repository to your local machine using the following command:\n```bash\ngit clone https://github.com/confidential-containers/confidential-containers.git\ncd confidential-containers\n```"
       },
       {
-        "title": "Install the Confidential Containers Helm chart",
-        "description": "Now, install the Confidential Containers chart with the specified version and create a namespace for it.\n\n```bash\nhelm install confidential-containers confidential-containers/confidential-containers --version v0.17.0 --namespace confidential --create-namespace\n```"
+        "title": "Apply the Kubernetes manifests",
+        "description": "Deploy the necessary resources by applying the Kubernetes manifests provided in the repository:\n```bash\nkubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/config.yaml\nkubectl apply -f deploy/deployment.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the pods are running successfully in the confidential namespace.\n\n```bash\nkubectl get pods --namespace confidential\n```"
+        "description": "Check that the pods are running correctly:\n```bash\nkubectl get pods -n confidential-containers\n```"
       },
       {
         "title": "Post-install configuration",
-        "description": "Configure resource limits for the Confidential Containers deployment to ensure optimal performance and resource utilization.\n\n```bash\nkubectl set resources deployment confidential-containers --namespace confidential --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
+        "description": "Configure resource limits for the deployment to ensure optimal performance. Edit the deployment YAML file to include resource limits and requests:\n```bash\nkubectl edit deployment <deployment-name> -n confidential-containers\n# Add resource limits under spec.containers\n```"
       },
       {
-        "title": "Set up RBAC for security",
-        "description": "Create a Role and RoleBinding to ensure that the Confidential Containers can operate with the least privilege necessary.\n\n```bash\nkubectl create role confidential-containers-role --verb=get,list,watch --resource=pods --namespace=confidential\nkubectl create rolebinding confidential-containers-rolebinding --role=confidential-containers-role --serviceaccount=confidential:default --namespace=confidential\n```"
+        "title": "Set up monitoring",
+        "description": "Integrate monitoring by deploying a monitoring solution like Prometheus. You can use the following command to deploy Prometheus:\n```bash\nkubectl apply -f monitoring/prometheus.yaml\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Confidential Containers release using Helm.\n\n```bash\nhelm uninstall confidential-containers --namespace confidential\n```"
+        "title": "Remove the Kubernetes resources",
+        "description": "Delete the deployment and associated resources using the following commands:\n```bash\nkubectl delete -f deploy/deployment.yaml\nkubectl delete -f deploy/config.yaml\nkubectl delete -f deploy/namespace.yaml\n```"
       },
       {
-        "title": "Clean up CRDs and resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) that were installed with the release.\n\n```bash\nkubectl delete crd confidentialcontainers.confidentialcontainers.io\n```"
-      },
-      {
-        "title": "Delete the namespace",
-        "description": "Finally, delete the namespace used for the installation to clean up all associated resources.\n\n```bash\nkubectl delete namespace confidential\n```"
+        "title": "Clean up any remaining resources",
+        "description": "Ensure all resources are removed by checking for any lingering pods or services:\n```bash\nkubectl get all -n confidential-containers\nkubectl delete namespace confidential-containers\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of the deployment.\n\n```bash\nkubectl get all --namespace confidential -o yaml > backup-confidential-containers.yaml\n```"
+        "description": "Before upgrading, back up your current configuration and data:\n```bash\nkubectl get all -n confidential-containers -o yaml > backup.yaml\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Update the Helm repository to ensure you have the latest charts available.\n\n```bash\nhelm repo update\n```"
+        "title": "Update the repository",
+        "description": "Pull the latest changes from the repository to get the updated manifests:\n```bash\ngit pull origin main\n```"
       },
       {
-        "title": "Upgrade the Confidential Containers installation",
-        "description": "Upgrade the installation to the latest version available in the Helm repository.\n\n```bash\nhelm upgrade confidential-containers confidential-containers/confidential-containers --version v0.17.0 --namespace confidential\n```"
+        "title": "Upgrade the deployment",
+        "description": "Apply the updated manifests to upgrade your installation:\n```bash\nkubectl apply -f deploy/deployment.yaml\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check the status of the pods to ensure they are running the new version.\n\n```bash\nkubectl get pods --namespace confidential\n```"
+        "description": "Check that the upgraded pods are running:\n```bash\nkubectl get pods -n confidential-containers\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If your pods are stuck in Pending, check for resource availability in your cluster.\n\n```bash\nkubectl describe pod <pod-name> --namespace confidential\n``` \nEnsure that there are enough resources available in the cluster or adjust the resource requests in your deployment."
+        "title": "Pods not starting",
+        "description": "If pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n confidential-containers\n``` \nLook for any error messages that indicate what might be wrong."
       },
       {
-        "title": "CrashLoopBackOff errors",
-        "description": "If you see CrashLoopBackOff errors, check the logs of the affected pod to diagnose the issue.\n\n```bash\nkubectl logs <pod-name> --namespace confidential\n``` \nLook for any application errors or misconfigurations."
+        "title": "Insufficient resources",
+        "description": "If you encounter errors related to insufficient resources, check the resource requests and limits:\n```bash\nkubectl describe deployment <deployment-name> -n confidential-containers\n``` \nAdjust the resource limits in the deployment YAML as necessary."
       },
       {
         "title": "Service not reachable",
-        "description": "If the service is not reachable, verify that the service is correctly configured and the endpoints are available.\n\n```bash\nkubectl get svc --namespace confidential\nkubectl describe svc <service-name> --namespace confidential\n``` \nEnsure that the service type and ports are correctly set."
+        "description": "If the service is not reachable, check the service configuration:\n```bash\nkubectl get svc -n confidential-containers\nkubectl describe svc <service-name> -n confidential-containers\n``` \nEnsure that the service type is correctly set (e.g., ClusterIP, NodePort)."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Confidential Containers will result in all pods running without errors in the 'confidential' namespace. You should also be able to access the deployed services as intended.",
+      "summary": "A successful installation will have all pods running in the 'confidential-containers' namespace, and you will be able to access the deployed services as expected. Ensure that monitoring is set up to track the health of your deployment.",
       "codeSnippets": [
-        "helm repo add confidential-containers https://confidential-containers.github.io/charts\nhelm repo update",
-        "helm install confidential-containers confidential-containers/confidential-containers --version v0.17.0 --namespace confidential --create-namespace",
-        "kubectl get pods --namespace confidential",
-        "kubectl set resources deployment confidential-containers --namespace confidential --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
-        "kubectl create role confidential-containers-role --verb=get,list,watch --resource=pods --namespace=confidential\nkubectl create rolebinding confidential-containers-rolebinding --role=confidential-containers-role --serviceaccount=confidential:default --namespace=confidential"
+        "git clone https://github.com/confidential-containers/confidential-containers.git\ncd confidential-containers",
+        "kubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/config.yaml\nkubectl apply -f deploy/deployment.yaml",
+        "kubectl get pods -n confidential-containers",
+        "kubectl edit deployment <deployment-name> -n confidential-containers\n# Add resource limits under spec.containers",
+        "kubectl apply -f monitoring/prometheus.yaml"
       ]
     }
   },
@@ -101,9 +97,7 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
-      "Namespace",
-      "Serviceaccount"
+      "Namespace"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -111,13 +105,11 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.17.0",
-    "containerImages": [
-      "confidentialcontainers/coco:v0.17.0"
-    ],
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://confidentialcontainers.org/",
       "repo": "https://github.com/confidential-containers/confidential-containers"
@@ -127,13 +119,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, and have Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-03-02T20:01:48.705Z",
+    "scannedAt": "2026-03-05T22:30:15.562Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

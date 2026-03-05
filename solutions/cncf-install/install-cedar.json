@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Cedar on Kubernetes",
-    "description": "Cedar is a language for writing and enforcing authorization policies in your applications. By installing Cedar, you can leverage its expressive and performant capabilities to manage fine-grained permissions effectively.",
+    "description": "Cedar is a language for writing and enforcing authorization policies in applications. It allows you to specify fine-grained permissions, enabling your applications to authorize access requests efficiently and securely.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Cedar Helm repository",
-        "description": "Add the Cedar Helm repository to your local Helm configuration to access the Cedar charts.\n```bash\nhelm repo add cedar https://charts.cedarpolicy.com\nhelm repo update\n```"
+        "title": "Clone the Cedar repository",
+        "description": "Clone the Cedar repository to your local machine using the following command:\n```bash\ngit clone https://github.com/cedar-policy/cedar.git\ncd cedar\n```\n"
       },
       {
-        "title": "Install Cedar using Helm",
-        "description": "Install Cedar in your Kubernetes cluster using Helm. This command will create a new namespace called 'cedar' and deploy Cedar in it.\n```bash\nhelm install cedar cedar/cedar --namespace cedar --create-namespace --version v4.9.1\n```"
+        "title": "Build the Cedar project",
+        "description": "Build the Cedar project using Cargo, the Rust package manager:\n```bash\ncargo build --release\n```\n"
       },
       {
-        "title": "Verify the Cedar installation",
-        "description": "Check if the Cedar pods are running successfully in the 'cedar' namespace.\n```bash\nkubectl get pods --namespace cedar\n```"
+        "title": "Create a Kubernetes deployment for Cedar",
+        "description": "Create a Kubernetes deployment using the following manifest. Save it as `cedar-deployment.yaml`:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: cedar\n  namespace: cedar\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: cedar\n  template:\n    metadata:\n      labels:\n        app: cedar\n    spec:\n      containers:\n      - name: cedar\n        image: your-docker-registry/cedar:4.9.1\n        ports:\n        - containerPort: 8080\n```\nThen apply the manifest:\n```bash\nkubectl apply -f cedar-deployment.yaml --create-namespace\n```\n"
       },
       {
-        "title": "Configure resource limits for Cedar",
-        "description": "Edit the Cedar deployment to set resource limits for better performance management.\n```bash\nkubectl edit deployment cedar --namespace cedar\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     memory: \"512Mi\"\n#     cpu: \"500m\"\n```"
+        "title": "Expose Cedar service",
+        "description": "Expose the Cedar deployment as a service:\n```bash\nkubectl expose deployment cedar --type=LoadBalancer --name=cedar-service --namespace=cedar\n```\n"
       },
       {
-        "title": "Set up RBAC for Cedar",
-        "description": "Create a Role and RoleBinding to allow access to Cedar's resources.\n```bash\nkubectl create role cedar-role --verb=get,list,watch --resource=pods --namespace cedar\nkubectl create rolebinding cedar-role-binding --role=cedar-role --serviceaccount=default:default --namespace cedar\n```"
+        "title": "Verify the installation",
+        "description": "Check if the Cedar pod is running:\n```bash\nkubectl get pods --namespace=cedar\n```\nYou should see a pod with the name `cedar-<hash>` in the Running state."
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Cedar deployment by editing the `cedar-deployment.yaml` file to include resource limits:\n```yaml\nresources:\n  requests:\n    memory: \"128Mi\"\n    cpu: \"500m\"\n  limits:\n    memory: \"256Mi\"\n    cpu: \"1\"\n```\nThen reapply the manifest:\n```bash\nkubectl apply -f cedar-deployment.yaml --namespace=cedar\n```\n"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Cedar will show the Cedar pods running in the 'cedar' namespace. You will also have configured resource limits and RBAC for secure access management.",
-      "codeSnippets": [
-        "helm repo add cedar https://charts.cedarpolicy.com\nhelm repo update",
-        "helm install cedar cedar/cedar --namespace cedar --create-namespace --version v4.9.1",
-        "kubectl get pods --namespace cedar",
-        "kubectl edit deployment cedar --namespace cedar\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     memory: \"512Mi\"\n#     cpu: \"500m\"",
-        "kubectl create role cedar-role --verb=get,list,watch --resource=pods --namespace cedar\nkubectl create rolebinding cedar-role-binding --role=cedar-role --serviceaccount=default:default --namespace cedar"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Cedar release from your Kubernetes cluster using Helm. This will remove the deployment and associated resources created by the Helm chart."
+        "title": "Delete the Cedar service",
+        "description": "Remove the Cedar service with the following command:\n```bash\nkubectl delete service cedar-service --namespace=cedar\n```\n"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volumes that were created during the installation. This ensures that all resources are cleaned up."
+        "title": "Delete the Cedar deployment",
+        "description": "Remove the Cedar deployment using:\n```bash\nkubectl delete deployment cedar --namespace=cedar\n```\n"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'cedar' namespace to remove any remaining resources. Verify that the namespace has been deleted successfully."
+        "title": "Delete the Cedar namespace",
+        "description": "Clean up by deleting the Cedar namespace:\n```bash\nkubectl delete namespace cedar\n```\n"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of your Cedar installation. You can use the following command to export the current configuration."
+        "title": "Backup current Cedar deployment",
+        "description": "Export the current configuration of the Cedar deployment:\n```bash\nkubectl get deployment cedar --namespace=cedar -o yaml > cedar-backup.yaml\n```\n"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Cedar Helm repository and run the upgrade command to upgrade Cedar to the latest version."
+        "title": "Update the Cedar image version",
+        "description": "Edit the `cedar-deployment.yaml` file to update the image version to the latest (e.g., `your-docker-registry/cedar:4.9.1`)."
+      },
+      {
+        "title": "Upgrade the Cedar deployment",
+        "description": "Reapply the updated deployment manifest:\n```bash\nkubectl apply -f cedar-deployment.yaml --namespace=cedar\n```\n"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check if the Cedar pods are running the new version successfully in the 'cedar' namespace after the upgrade."
+        "description": "Check the status of the Cedar pod after the upgrade:\n```bash\nkubectl get pods --namespace=cedar\n```\nEnsure the pod is running with the new version."
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Cedar pods are stuck in CrashLoopBackOff, check the logs for errors. Use the following command to view the logs of a specific pod."
+        "title": "Cedar pod is not starting",
+        "description": "Check the logs of the Cedar pod to diagnose the issue:\n```bash\nkubectl logs <pod-name> --namespace=cedar\n```\nCommon issues may include incorrect image name or insufficient resources."
       },
       {
-        "title": "Cedar service not responding",
-        "description": "If the Cedar service is not responding, ensure that the service is correctly configured and that the pods are running. Use the following command to check the service status."
+        "title": "Service not reachable",
+        "description": "Verify if the service is correctly set up:\n```bash\nkubectl get services --namespace=cedar\n```\nEnsure the service type is LoadBalancer and check the external IP."
       },
       {
-        "title": "RBAC permissions issues",
-        "description": "If you encounter permission denied errors, verify that the RBAC roles and bindings are correctly set up. Use the following command to list the roles in the 'cedar' namespace."
-      },
-      {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If pods are being killed due to out of memory (OOMKilled), consider adjusting the resource limits set for Cedar. Use the following command to edit the deployment."
+        "title": "Cedar deployment is crashing",
+        "description": "Check the status of the pods:\n```bash\nkubectl describe pod <pod-name> --namespace=cedar\n```\nLook for events indicating crashes or restarts."
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation will have the Cedar pod running in the `cedar` namespace, and the service will be accessible. You can verify the deployment and service status using the provided commands.",
+      "codeSnippets": [
+        "git clone https://github.com/cedar-policy/cedar.git\ncd cedar",
+        "cargo build --release",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: cedar\n  namespace: cedar\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: cedar\n  template:\n    metadata:\n      labels:\n        app: cedar\n    spec:\n      containers:\n      - name: cedar\n        image: your-docker-registry/cedar:4.9.1\n        ports:\n        - containerPort: 8080",
+        "kubectl apply -f cedar-deployment.yaml --create-namespace",
+        "kubectl expose deployment cedar --type=LoadBalancer --name=cedar-service --namespace=cedar"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -102,21 +106,20 @@
     "targetResourceKinds": [
       "Deployment",
       "Service",
-      "Namespace",
-      "Serviceaccount"
+      "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v4.9.1",
     "containerImages": [
-      "registry/org/image:tag"
+      "your-docker-registry/cedar:4.9.1"
     ],
     "sourceUrls": {
       "docs": "https://www.cedarpolicy.com",
@@ -127,13 +130,14 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "git",
+      "cargo"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-01T09:16:16.210Z",
+    "scannedAt": "2026-03-05T22:28:48.242Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []
