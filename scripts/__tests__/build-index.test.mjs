@@ -35,6 +35,9 @@ metadata:
         targetResourceKinds: ['ClusterRole', 'RoleBinding'],
         cncfProjects: [],
         difficulty: 'advanced',
+        maturity: 'graduated',
+        qualityScore: 85,
+        projectVersion: '2.1.0',
       }
     }));
 
@@ -87,5 +90,23 @@ metadata:
   it('should include count in index', async () => {
     const index = await buildIndex();
     expect(index.count).toBe(index.missions.length);
+  });
+
+  it('should include versioning metadata when present', async () => {
+    const index = await buildIndex();
+    const rbac = index.missions.find(m => m.title === 'Fix RBAC Denied Errors');
+    expect(rbac).toBeDefined();
+    expect(rbac.maturity).toBe('graduated');
+    expect(rbac.qualityScore).toBe(85);
+    expect(rbac.projectVersion).toBe('2.1.0');
+  });
+
+  it('should omit versioning metadata when absent', async () => {
+    const index = await buildIndex();
+    const crash = index.missions.find(m => m.title === 'Fix CrashLoopBackOff');
+    expect(crash).toBeDefined();
+    expect(crash.maturity).toBeUndefined();
+    expect(crash.qualityScore).toBeUndefined();
+    expect(crash.projectVersion).toBeUndefined();
   });
 });

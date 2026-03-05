@@ -41,7 +41,7 @@ function extractMetadata(content, filePath) {
     const author = data.author || 'KubeStellar Bot';
     const authorGithub = data.authorGithub || 'kubestellar';
     
-    return {
+    const entry = {
       path: relPath,
       title: data.title || data.mission?.title || '',
       description: (data.description || data.mission?.description || '').slice(0, 200),
@@ -58,6 +58,13 @@ function extractMetadata(content, filePath) {
       type: data.type || data.mission?.type || 'troubleshoot',
       installMethods: data.metadata?.installMethods || [],
     };
+
+    // Include versioning metadata when present in the mission file
+    if (data.metadata?.projectVersion) entry.projectVersion = data.metadata.projectVersion;
+    if (data.metadata?.maturity) entry.maturity = data.metadata.maturity;
+    if (data.metadata?.qualityScore != null) entry.qualityScore = data.metadata.qualityScore;
+
+    return entry;
   } catch (e) {
     console.warn(`Skipping ${relPath}: ${e.message}`);
     return null;
