@@ -6,85 +6,84 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Tokenetes on Kubernetes",
-    "description": "Tokenetes is an open source Transaction Tokens (TraTs) Service that allows for the management and deployment of transaction tokens. Installing Tokenetes enables you to utilize its features for handling transaction tokens in your applications.",
+    "description": "Tokenetes is an open source Transaction Tokens (TraTs) Service — an implementation of the IETF OAuth Transaction Tokens draft specification. It enables secure propagation of identity and context across microservices via transaction tokens. Tokenetes uses SPIRE for workload identity and requires tconfigd for managing TraT configurations.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Tokenetes Helm repository",
-        "description": "First, add the Tokenetes Helm chart repository to your local Helm configuration:\n```bash\nhelm repo add tokenetes https://charts.tokenetes.io\nhelm repo update\n```"
+        "title": "Install tconfigd (prerequisite)",
+        "description": "Tokenetes requires tconfigd to be installed first. tconfigd manages Transaction Token (TraT) configurations as Kubernetes custom resources. Follow the tconfigd installation instructions from the Tokenetes documentation:\n```bash\n# Clone the tokenetes repository\ngit clone https://github.com/tokenetes/tokenetes.git\ncd tokenetes\n```\nRefer to the [tconfigd documentation](https://tokenetes.io/docs) for detailed setup instructions, as tconfigd must be running in the `tokenetes-system` namespace before deploying the Tokenetes service."
       },
       {
-        "title": "Install Tokenetes using Helm",
-        "description": "Now, install the Tokenetes service using Helm. This command will create a namespace called 'tokenetes' and deploy the service:\n```bash\nhelm install tokenetes tokenetes/tokenetes --version v1.0.1 --namespace tokenetes --create-namespace\n```"
+        "title": "Configure the Tokenetes manifests",
+        "description": "Before deploying, update the Kubernetes manifest files in the `kubernetes/` directory with your environment-specific values:\n\n1. Replace `[your-namespace]` with your target namespace in all YAML files\n2. Replace `[your-trust-domain]` with your SPIRE trust domain\n3. Update the SPIRE agent socket path in `tokenetes-deployment.yaml` if your SPIRE agent socket is not at the default location (`/run/spire/sockets`)\n\n```bash\n# Create the target namespace\nkubectl create namespace <your-namespace>\n```"
+      },
+      {
+        "title": "Deploy the Tokenetes service",
+        "description": "Apply the Kubernetes manifests from the `kubernetes/` directory in order:\n```bash\nkubectl apply -f kubernetes/tokenetes-service-account.yaml\nkubectl apply -f kubernetes/tokenetes-deployment.yaml\nkubectl apply -f kubernetes/tokenetes-service.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the Tokenetes pods are running correctly:\n```bash\nkubectl get pods --namespace tokenetes\n```"
+        "description": "Confirm that tconfigd is running in the tokenetes-system namespace and the Tokenetes service pods are running in your application namespace:\n```bash\n# Check tconfigd\nkubectl get pod -n tokenetes-system\n\n# Check Tokenetes service\nkubectl get pod -n <your-namespace> | grep tokenetes\n\n# Check all deployments and services\nkubectl get deployments,svc -n <your-namespace>\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "To ensure that the Tokenetes service has appropriate resource limits, you can edit the deployment:\n```bash\nkubectl edit deployment tokenetes --namespace tokenetes\n```\nIn the editor, add resource limits under the container spec:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
-      },
-      {
-        "title": "Access the Tokenetes service",
-        "description": "To access the Tokenetes service, you can set up port forwarding:\n```bash\nkubectl port-forward svc/tokenetes --namespace tokenetes 8080:80\n```\nYou can now access the service at http://localhost:8080."
+        "title": "Verify TraT configuration",
+        "description": "List and inspect the deployed Transaction Token (TraT) custom resources:\n```bash\n# List all TraTs in your namespace\nkubectl get trats -n <your-namespace>\n\n# Describe a specific TraT for details\nkubectl describe trats/<trat-name> -n <your-namespace>\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will show the Tokenetes pods in a running state when you execute `kubectl get pods --namespace tokenetes`. You will also be able to access the service via port forwarding at http://localhost:8080.",
+      "summary": "A successful installation will show tconfigd running in the tokenetes-system namespace and Tokenetes service pods running in your application namespace. You can verify TraT configurations with `kubectl get trats -n <your-namespace>`.",
       "codeSnippets": [
-        "helm repo add tokenetes https://charts.tokenetes.io\nhelm repo update",
-        "helm install tokenetes tokenetes/tokenetes --version v1.0.1 --namespace tokenetes --create-namespace",
-        "kubectl get pods --namespace tokenetes",
-        "kubectl edit deployment tokenetes --namespace tokenetes",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
+        "git clone https://github.com/tokenetes/tokenetes.git",
+        "kubectl apply -f kubernetes/tokenetes-service-account.yaml\nkubectl apply -f kubernetes/tokenetes-deployment.yaml\nkubectl apply -f kubernetes/tokenetes-service.yaml",
+        "kubectl get pod -n tokenetes-system\nkubectl get pod -n <your-namespace> | grep tokenetes",
+        "kubectl get trats -n <your-namespace>"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "To cleanly remove the Tokenetes release, use the following command to uninstall it from the cluster:\n```bash\nhelm uninstall tokenetes --namespace tokenetes\n```"
+        "title": "Delete Tokenetes resources",
+        "description": "Remove the Tokenetes deployment, service, and service account from your namespace:\n```bash\nkubectl delete -f kubernetes/tokenetes-service.yaml\nkubectl delete -f kubernetes/tokenetes-deployment.yaml\nkubectl delete -f kubernetes/tokenetes-service-account.yaml\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "After uninstalling the release, you should clean up any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created. Run the following commands:\n```bash\nkubectl delete crd $(kubectl get crd | grep tokenetes | awk '{print $1}')\nkubectl delete pvc --all --namespace tokenetes\n```"
+        "title": "Clean up CRDs and TraT resources",
+        "description": "Remove any Transaction Token custom resources and CRDs that were created:\n```bash\nkubectl delete trats --all -n <your-namespace>\nkubectl delete crd $(kubectl get crd | grep tokenetes | awk '{print $1}')\n```"
       },
       {
         "title": "Remove namespace and verify",
-        "description": "Finally, remove the 'tokenetes' namespace and verify that it has been deleted:\n```bash\nkubectl delete namespace tokenetes\nkubectl get namespaces\n```"
+        "description": "If you created a dedicated namespace for Tokenetes, remove it:\n```bash\nkubectl delete namespace <your-namespace>\nkubectl get namespaces\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up the current state of your Tokenetes installation. You can use the following command to export the current configuration:\n```bash\nhelm get values tokenetes --namespace tokenetes > tokenetes-backup.yaml\n```"
+        "title": "Pull the latest manifests",
+        "description": "Update your local clone of the Tokenetes repository to get the latest Kubernetes manifests:\n```bash\ncd tokenetes\ngit pull origin main\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Tokenetes release to the latest version:\n```bash\nhelm repo update\nhelm upgrade tokenetes tokenetes/tokenetes --version v1.1.0 --namespace tokenetes\n```"
+        "title": "Re-apply the manifests",
+        "description": "After updating the manifests with your environment-specific values, re-apply them:\n```bash\nkubectl apply -f kubernetes/tokenetes-service-account.yaml\nkubectl apply -f kubernetes/tokenetes-deployment.yaml\nkubectl apply -f kubernetes/tokenetes-service.yaml\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, verify that the Tokenetes pods are running the new version:\n```bash\nkubectl get pods --namespace tokenetes\n```"
+        "description": "Confirm the updated pods are running:\n```bash\nkubectl get pods -n <your-namespace>\nkubectl describe deployment tokenetes -n <your-namespace>\n```"
       }
     ],
     "troubleshooting": [
       {
+        "title": "tconfigd not running",
+        "description": "Tokenetes requires tconfigd to be installed and running. Verify it is in the tokenetes-system namespace:\n```bash\nkubectl get pod -n tokenetes-system\nkubectl logs <tconfigd-pod-name> -n tokenetes-system\n```\nIf tconfigd is not running, follow the tconfigd installation instructions from the Tokenetes documentation before deploying the Tokenetes service."
+      },
+      {
         "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Tokenetes pods are in a CrashLoopBackOff state, check the logs for more information:\n```bash\nkubectl logs <pod-name> --namespace tokenetes\n``` \nLook for any error messages that could indicate configuration issues or missing dependencies."
+        "description": "If the Tokenetes pods are in CrashLoopBackOff, check the logs for configuration issues:\n```bash\nkubectl logs <pod-name> -n <your-namespace>\n```\nCommon causes include: missing or incorrect SPIRE agent socket path, tconfigd not running, or incorrect trust domain configuration."
       },
       {
-        "title": "Service not accessible",
-        "description": "If you cannot access the Tokenetes service, ensure that the port forwarding is set up correctly. Verify the service status:\n```bash\nkubectl get svc --namespace tokenetes\n``` \nIf the service is not running, check the deployment for issues."
+        "title": "SPIRE agent socket not found",
+        "description": "If logs show errors about the SPIRE agent socket, verify the hostPath in the deployment matches your SPIRE agent socket location:\n```bash\nkubectl describe deployment tokenetes -n <your-namespace>\n```\nThe default path is `/run/spire/sockets`. Update the `spire-agent-socket` volume's `hostPath.path` in `tokenetes-deployment.yaml` if your setup differs."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter errors related to insufficient resources, check the resource limits and requests set for the deployment:\n```bash\nkubectl describe deployment tokenetes --namespace tokenetes\n``` \nAdjust the resource limits in the deployment if necessary."
-      },
-      {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade fails, check for any error messages in the command output. You can also view the current release status:\n```bash\nhelm status tokenetes --namespace tokenetes\n``` \nIf needed, you can rollback to the previous version using:\n```bash\nhelm rollback tokenetes <revision-number> --namespace tokenetes\n```"
+        "title": "TraT resources not created",
+        "description": "If `kubectl get trats` returns no resources, ensure tconfigd is running and the TraT CRD is installed:\n```bash\nkubectl get crd | grep tokenetes\nkubectl get pod -n tokenetes-system\n```\nIf the CRD is missing, tconfigd may not have been installed correctly."
       }
     ]
   },
@@ -93,7 +92,7 @@
       "installation",
       "configuration",
       "cncf",
-      "app-definition",
+      "security",
       "sandbox"
     ],
     "cncfProjects": [
@@ -102,21 +101,22 @@
     "targetResourceKinds": [
       "Deployment",
       "Service",
+      "ServiceAccount",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
-    "projectVersion": "v1.0.1",
+    "projectVersion": "latest",
     "containerImages": [],
     "sourceUrls": {
-      "docs": "http://tokenetes.io/",
+      "docs": "https://tokenetes.io/",
       "repo": "https://github.com/tokenetes/tokenetes"
     },
     "qualityScore": 100
@@ -124,13 +124,13 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "git"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "You need a Kubernetes cluster running version 1.24 or higher with SPIRE installed for workload identity. kubectl and git must be installed on your local machine. tconfigd must be deployed before installing the Tokenetes service."
   },
   "security": {
-    "scannedAt": "2026-03-02T02:42:09.196Z",
+    "scannedAt": "2026-03-05T21:42:00.000Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []
