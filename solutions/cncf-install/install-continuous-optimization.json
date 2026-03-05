@@ -6,87 +6,83 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Continuous Optimization on Kubernetes",
-    "description": "Kraken is a chaos and resiliency testing tool for Kubernetes that helps improve performance under failure conditions. Installing Kraken allows you to simulate failures in your Kubernetes cluster to ensure it can withstand turbulent conditions.",
+    "description": "Krkn is a chaos and resiliency testing tool for Kubernetes that helps improve performance under failure conditions. By injecting deliberate failures into your Kubernetes clusters, it allows you to assess and enhance their resilience.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Kraken Helm repository",
-        "description": "First, add the Kraken Helm repository to your local Helm setup with the following command:\n```bash\nhelm repo add krkn https://krkn-chaos.github.io/krkn-helm/\nhelm repo update\n```"
+        "title": "Clone the repository",
+        "description": "Start by cloning the Krkn repository to your local machine using the following command:\n```bash\ngit clone https://github.com/krkn-chaos/krkn.git\ncd krkn\n```"
       },
       {
-        "title": "Install Kraken using Helm",
-        "description": "Now, install Kraken in your Kubernetes cluster using Helm. Replace `<namespace>` with your desired namespace:\n```bash\nhelm install krkn krkn/krkn --namespace <namespace> --create-namespace --version v5.0.0\n```"
+        "title": "Deploy Krkn using kubectl",
+        "description": "Apply the Kubernetes manifests provided in the repository to deploy Krkn. Ensure you are in the cloned repository directory:\n```bash\nkubectl apply -f deploy/krkn-deployment.yaml --create-namespace --namespace krkn\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check if the Kraken pods are running successfully:\n```bash\nkubectl get pods --namespace <namespace>\n```"
+        "title": "Verify the deployment",
+        "description": "Check if the Krkn pods are running successfully:\n```bash\nkubectl get pods --namespace krkn\n```"
       },
       {
-        "title": "Configure resource limits for Kraken",
-        "description": "To ensure Kraken operates efficiently, you may want to set resource limits. Edit the deployment:\n```bash\nkubectl edit deployment krkn --namespace <namespace>\n```\nAdd resource limits under the `spec.containers` section:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Krkn deployment to ensure it runs efficiently:\n```bash\nkubectl set resources deployment krkn --namespace krkn --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
       },
       {
-        "title": "Set up RBAC for Kraken",
-        "description": "Create a Role and RoleBinding to grant Kraken the necessary permissions:\n```bash\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: <namespace>\n  name: krkn-role\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/log\"]\n  verbs: [\"get\", \"list\", \"watch\"]\nEOF\n\nkubectl create rolebinding krkn-rolebinding --role=krkn-role --serviceaccount=<namespace>:default --namespace=<namespace>\n```"
+        "title": "Access the Krkn service",
+        "description": "If you need to access the Krkn service, you can port-forward it to your local machine:\n```bash\nkubectl port-forward service/krkn --namespace krkn 8080:80\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Kraken will show the Kraken pods running in your specified namespace. You should also have resource limits and RBAC configured to ensure optimal performance and security.",
-      "codeSnippets": [
-        "helm repo add krkn https://krkn-chaos.github.io/krkn-helm/\nhelm repo update",
-        "helm install krkn krkn/krkn --namespace <namespace> --create-namespace --version v5.0.0",
-        "kubectl get pods --namespace <namespace>",
-        "kubectl edit deployment krkn --namespace <namespace>",
-        "resources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Kraken release from your Kubernetes cluster using Helm. This will remove all associated resources except for CRDs and persistent volumes.\n```bash\nhelm uninstall krkn --namespace <namespace>\n```"
+        "title": "Remove the Krkn deployment",
+        "description": "To uninstall Krkn, first delete the deployment:\n```bash\nkubectl delete -f deploy/krkn-deployment.yaml --namespace krkn\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent resources that were created during the installation. This ensures a clean removal of Kraken from your cluster.\n```bash\nkubectl delete crd krkns.krkn.io\nkubectl delete pvc --all --namespace <namespace>\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "If you created a new namespace for Kraken, you can delete it along with all its resources. Verify that the namespace has been removed successfully.\n```bash\nkubectl delete namespace <namespace>\nkubectl get namespaces\n```"
+        "title": "Clean up the namespace",
+        "description": "Remove the Krkn namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace krkn\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up the current configuration and state of Kraken. You can export the current Helm release configuration.\n```bash\nhelm get values krkn --namespace <namespace> > krkn-backup.yaml\n```"
+        "description": "Before upgrading, back up the current state of your Krkn deployment:\n```bash\nkubectl get all --namespace krkn -o yaml > krkn-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then upgrade Kraken to the desired version. Replace `<new-version>` with the version you want to upgrade to.\n```bash\nhelm repo update\nhelm upgrade krkn krkn/krkn --namespace <namespace> --version <new-version>\n```"
+        "title": "Update the repository",
+        "description": "Pull the latest changes from the repository to get the latest version:\n```bash\ngit pull origin main\n```"
+      },
+      {
+        "title": "Upgrade the deployment",
+        "description": "Apply the updated manifests to upgrade your Krkn deployment:\n```bash\nkubectl apply -f deploy/krkn-deployment.yaml --namespace krkn\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After upgrading, check that the Kraken pods are running with the new version. This ensures that the upgrade was successful.\n```bash\nkubectl get pods --namespace <namespace>\n```"
+        "description": "Check the status of the Krkn pods after the upgrade:\n```bash\nkubectl get pods --namespace krkn\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Kraken pods are in a CrashLoopBackOff state, check the logs for any errors that might indicate the cause of the failure.\n```bash\nkubectl logs <pod-name> --namespace <namespace>\n```"
+        "title": "Pods not starting",
+        "description": "If the Krkn pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace krkn\n``` \nLook for any error messages that indicate what might be wrong."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you receive errors related to insufficient resources, ensure that your cluster has enough CPU and memory available. You can check the resource usage with:\n```bash\nkubectl top pods --namespace <namespace>\n```"
+        "title": "Service not accessible",
+        "description": "If you cannot access the Krkn service, ensure the service is running:\n```bash\nkubectl get service --namespace krkn\n``` \nIf the service is not running, check the deployment and pod status."
       },
       {
-        "title": "RBAC permissions issues",
-        "description": "If Kraken is unable to perform actions due to RBAC permissions, verify that the Role and RoleBinding are correctly set up. You can check the current roles with:\n```bash\nkubectl get role --namespace <namespace>\nkubectl get rolebinding --namespace <namespace>\n```"
-      },
-      {
-        "title": "Helm release not found",
-        "description": "If you encounter an error stating that the Helm release is not found, ensure that you are using the correct namespace and release name. List all releases in the namespace with:\n```bash\nhelm list --namespace <namespace>\n```"
+        "title": "Resource limits causing OOMKilled",
+        "description": "If your pods are being OOMKilled, consider adjusting the resource limits:\n```bash\nkubectl describe pod <pod-name> --namespace krkn\n``` \nCheck the memory usage and adjust the limits accordingly."
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Krkn will result in the Krkn pods running without errors and the service being accessible. You can verify this by checking the pod status and accessing the service through port-forwarding.",
+      "codeSnippets": [
+        "git clone https://github.com/krkn-chaos/krkn.git\ncd krkn",
+        "kubectl apply -f deploy/krkn-deployment.yaml --create-namespace --namespace krkn",
+        "kubectl get pods --namespace krkn",
+        "kubectl set resources deployment krkn --namespace krkn --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
+        "kubectl port-forward service/krkn --namespace krkn 8080:80"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -102,8 +98,7 @@
     "targetResourceKinds": [
       "Deployment",
       "Service",
-      "Namespace",
-      "Serviceaccount"
+      "Namespace"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -111,12 +106,12 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v5.0.0",
     "containerImages": [
-      "krkn/krkn:v5.0.0"
+      "krknchaos/krkn:v5.0.0"
     ],
     "sourceUrls": {
       "docs": "https://github.com/krkn-chaos/krkn",
@@ -127,13 +122,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl installed to interact with it."
   },
   "security": {
-    "scannedAt": "2026-03-01T11:30:33.827Z",
+    "scannedAt": "2026-03-05T22:32:34.435Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

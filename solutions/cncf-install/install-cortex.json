@@ -6,87 +6,83 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Cortex on Kubernetes",
-    "description": "Cortex is a horizontally scalable, highly available, multi-tenant long-term storage solution for Prometheus and OpenTelemetry Metrics. Installing Cortex allows you to efficiently manage and store metrics data across multiple sources in a cluster environment.",
+    "description": "Cortex is a horizontally scalable, highly available, multi-tenant long-term storage solution for Prometheus and OpenTelemetry Metrics. Installing Cortex allows you to efficiently manage and store your metrics data across multiple sources in a single cluster.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Cortex Helm repository",
-        "description": "Add the official Cortex Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add cortex https://cortexmetrics.io/helm-charts\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the Cortex Helm chart repository to your Helm configuration.\n```bash\nhelm repo add cortex https://cortexproject.github.io/cortex-helm-chart\nhelm repo update\n```"
       },
       {
         "title": "Install Cortex using Helm",
-        "description": "Deploy Cortex to your Kubernetes cluster using Helm. This command installs Cortex in the 'cortex' namespace:\n```bash\nhelm install cortex cortex/cortex --version v1.20.1 --namespace cortex --create-namespace\n```"
+        "description": "Install Cortex in a new namespace called 'cortex'.\n```bash\nhelm install cortex cortex/cortex --namespace cortex --create-namespace --version 3.2.0\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the Cortex pods are running successfully:\n```bash\nkubectl get pods --namespace cortex\n```"
+        "description": "Check that all Cortex pods are running successfully.\n```bash\nkubectl get pods --namespace cortex\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Set resource limits for the Cortex deployment by editing the Helm release configuration:\n```bash\nhelm upgrade cortex cortex/cortex --set resources.limits.cpu=500m --set resources.limits.memory=512Mi --namespace cortex\n```"
+        "description": "Set resource limits for the Cortex deployment to ensure it runs efficiently.\n```bash\nkubectl patch deployment cortex -n cortex -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"cortex\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}}]}}}}' \n```"
       },
       {
-        "title": "Set up monitoring",
-        "description": "Enable monitoring for Cortex by configuring Prometheus to scrape metrics from the Cortex service. Modify your Prometheus configuration to include:\n```yaml\n- job_name: 'cortex'\n  static_configs:\n    - targets: ['cortex:9090']\n```"
+        "title": "Set up port forwarding for access",
+        "description": "Forward a local port to the Cortex service to access it.\n```bash\nkubectl port-forward service/cortex -n cortex 8080:80\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Cortex will show the Cortex pods running in the 'cortex' namespace. You can also verify that Prometheus is scraping metrics from the Cortex service as configured.",
-      "codeSnippets": [
-        "helm repo add cortex https://cortexmetrics.io/helm-charts\nhelm repo update",
-        "helm install cortex cortex/cortex --version v1.20.1 --namespace cortex --create-namespace",
-        "kubectl get pods --namespace cortex",
-        "helm upgrade cortex cortex/cortex --set resources.limits.cpu=500m --set resources.limits.memory=512Mi --namespace cortex",
-        "- job_name: 'cortex'\n  static_configs:\n    - targets: ['cortex:9090']"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Cortex release from the Kubernetes cluster using Helm. This command will remove all resources associated with the release in the specified namespace:\n```bash\nhelm uninstall cortex --namespace cortex\n```"
+        "description": "Uninstall the Cortex Helm release from the cluster.\n```bash\nhelm uninstall cortex --namespace cortex\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) that were created during the installation. This command will delete the CRDs associated with Cortex:\n```bash\nkubectl delete crd cortex.*\n```\nAdditionally, clean up any persistent volume claims (PVCs) if they were created:\n```bash\nkubectl delete pvc --all --namespace cortex\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'cortex' namespace to clean up any remaining resources. Verify that the namespace has been removed:\n```bash\nkubectl delete namespace cortex\nkubectl get namespaces\n```"
+        "title": "Clean up the namespace",
+        "description": "Delete the Cortex namespace to remove all associated resources.\n```bash\nkubectl delete namespace cortex\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current state of the Cortex deployment. You can do this by exporting the current configuration:\n```bash\nhelm get values cortex --namespace cortex > cortex-backup.yaml\n```"
+        "description": "Export the current configuration and data for Cortex before upgrading.\n```bash\nkubectl get all --namespace cortex -o yaml > cortex-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then upgrade the Cortex release to the desired version:\n```bash\nhelm repo update\nhelm upgrade cortex cortex/cortex --version v1.21.0 --namespace cortex\n```"
+        "title": "Update the Helm repository",
+        "description": "Make sure the Helm repository is up to date.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Cortex",
+        "description": "Upgrade the Cortex installation to the latest version.\n```bash\nhelm upgrade cortex cortex/cortex --namespace cortex --version 3.2.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, check the status of the Cortex pods to ensure they are running the new version:\n```bash\nkubectl get pods --namespace cortex\n```"
+        "description": "Check that all Cortex pods are running successfully after the upgrade.\n```bash\nkubectl get pods --namespace cortex\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Cortex pods are in a CrashLoopBackOff state, check the logs for the failing pod to diagnose the issue:\n```bash\nkubectl logs <pod-name> --namespace cortex\n```\nCommon causes include misconfiguration or insufficient resources."
+        "description": "This issue may occur if there are misconfigurations in the Cortex deployment. Check the logs of the pods for more information.\n```bash\nkubectl logs <pod-name> --namespace cortex\n```"
       },
       {
         "title": "Service not reachable",
-        "description": "If you cannot access the Cortex service, verify that the service is correctly configured and running:\n```bash\nkubectl get svc --namespace cortex\n```\nEnsure that the service endpoints are correctly pointing to the pods."
+        "description": "If the Cortex service is not reachable, ensure that the service is running and the port forwarding is correctly set up.\n```bash\nkubectl get svc --namespace cortex\n```"
       },
       {
         "title": "High memory usage",
-        "description": "If you notice high memory usage in the Cortex pods, check the resource limits and adjust them if necessary. You can view the resource usage with:\n```bash\nkubectl top pods --namespace cortex\n```"
-      },
-      {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade command fails, check for any error messages and ensure that the chart version is compatible with your current installation. You can view the current release status with:\n```bash\nhelm status cortex --namespace cortex\n```"
+        "description": "If Cortex is consuming too much memory, consider adjusting the resource limits set during installation. You can edit the deployment to change the limits.\n```bash\nkubectl edit deployment cortex -n cortex\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Cortex will have all pods running without errors, and you will be able to access the service via the forwarded port. Resource limits should be set appropriately to ensure optimal performance.",
+      "codeSnippets": [
+        "helm repo add cortex https://cortexproject.github.io/cortex-helm-chart\nhelm repo update",
+        "helm install cortex cortex/cortex --namespace cortex --create-namespace --version 3.2.0",
+        "kubectl get pods --namespace cortex",
+        "kubectl patch deployment cortex -n cortex -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"cortex\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}}]}}}}'",
+        "kubectl port-forward service/cortex -n cortex 8080:80"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -119,7 +115,8 @@
     ],
     "sourceUrls": {
       "docs": "https://cortexmetrics.io/",
-      "repo": "https://github.com/cortexproject/cortex"
+      "repo": "https://github.com/cortexproject/cortex",
+      "helm": "https://cortexproject.github.io/cortex-helm-chart"
     },
     "qualityScore": 100
   },
@@ -129,10 +126,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and both Helm and kubectl installed on your local machine."
+    "description": "Ensure you have Helm and kubectl installed and configured to interact with your Kubernetes cluster."
   },
   "security": {
-    "scannedAt": "2026-03-01T00:17:39.291Z",
+    "scannedAt": "2026-03-05T22:18:03.635Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

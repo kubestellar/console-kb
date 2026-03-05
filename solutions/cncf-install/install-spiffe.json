@@ -6,87 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Spiffe on Kubernetes",
-    "description": "The SPIFFE Project provides a framework for securely identifying and authenticating services in a microservices architecture. Installing SPIFFE allows you to implement secure service-to-service communication using SPIFFE IDs and SVIDs.",
+    "description": "The SPIFFE Project provides a framework for securely identifying and communicating between application services. Installing SPIFFE allows you to implement a robust identity management system for your microservices architecture.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the SPIRE Helm repository",
-        "description": "Add the SPIRE Helm chart repository to your Helm configuration to access the SPIRE installation package.\n```bash\nhelm repo add spire https://spiffe.io/spire/helm\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the SPIFFE Helm chart repository to your local Helm configuration.\n```bash\nhelm repo add spiffe https://spiffe.github.io/helm-charts-hardened\nhelm repo update\n```"
       },
       {
-        "title": "Install SPIRE using Helm",
-        "description": "Install the SPIRE server and agent using Helm. This command will create a new namespace called 'spire' and deploy SPIRE into it.\n```bash\nhelm install spire spire/spire --namespace spire --create-namespace\n```"
+        "title": "Install the SPIFFE Helm chart",
+        "description": "Install the SPIFFE step SSH chart in a new namespace called 'spiffe'.\n```bash\nhelm install spiffe spiffe/spiffe-step-ssh --namespace spiffe --create-namespace --version 0.1.1\n```"
       },
       {
-        "title": "Verify SPIRE installation",
-        "description": "Check that the SPIRE server and agent pods are running successfully in the 'spire' namespace.\n```bash\nkubectl get pods --namespace spire\n```"
+        "title": "Verify the installation",
+        "description": "Check that the SPIFFE pods are running successfully.\n```bash\nkubectl get pods --namespace spiffe\n```"
       },
       {
-        "title": "Configure SPIRE with resource limits",
-        "description": "Set resource limits for the SPIRE server and agent to ensure they run efficiently within your cluster. Edit the values.yaml file and set the limits as needed, then upgrade the release.\n```bash\nhelm upgrade spire spire/spire --namespace spire -f values.yaml\n```"
-      },
-      {
-        "title": "Set up SPIFFE Trust Domain",
-        "description": "Configure your SPIFFE Trust Domain by editing the SPIRE server configuration. You can do this by modifying the ConfigMap that contains the SPIRE server configuration.\n```bash\nkubectl edit configmap spire-server-config -n spire\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the SPIFFE deployment.\n```bash\nkubectl set resources deployment spiffe --namespace spiffe --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will show the SPIRE server and agent pods running in the 'spire' namespace. You will also have configured resource limits and set up your SPIFFE Trust Domain.",
-      "codeSnippets": [
-        "helm repo add spire https://spiffe.io/spire/helm\nhelm repo update",
-        "helm install spire spire/spire --namespace spire --create-namespace",
-        "kubectl get pods --namespace spire",
-        "helm upgrade spire spire/spire --namespace spire -f values.yaml",
-        "kubectl edit configmap spire-server-config -n spire"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the SPIRE release using Helm to remove the deployed resources from the cluster."
+        "description": "Uninstall the SPIFFE Helm release from the cluster.\n```bash\nhelm uninstall spiffe --namespace spiffe\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with SPIRE."
+        "title": "Clean up CRDs and resources",
+        "description": "Delete any Custom Resource Definitions (CRDs) associated with SPIFFE.\n```bash\nkubectl delete crd <crd-name>\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'spire' namespace and verify that all resources have been removed."
+        "title": "Remove the namespace",
+        "description": "Delete the 'spiffe' namespace to clean up all resources.\n```bash\nkubectl delete namespace spiffe\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Create a backup of the current SPIRE release to ensure you can restore it if needed."
+        "description": "Before upgrading, back up the current configuration and resources.\n```bash\nkubectl get all --namespace spiffe -o yaml > spiffe-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and run the upgrade command to apply the latest version of SPIRE."
+        "title": "Update the Helm repository",
+        "description": "Ensure your Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade the SPIFFE Helm chart",
+        "description": "Upgrade the SPIFFE installation to the latest version.\n```bash\nhelm upgrade spiffe spiffe/spiffe-step-ssh --namespace spiffe --version 0.1.1\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the SPIRE server and agent pods are running the new version successfully."
+        "description": "Check that the SPIFFE pods are running the new version successfully.\n```bash\nkubectl get pods --namespace spiffe\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "This issue occurs when the SPIRE server or agent pods fail to start. Check the pod logs for errors using the following command:\n```bash\nkubectl logs <pod-name> --namespace spire\n```"
+        "title": "Pods stuck in Pending state",
+        "description": "If your SPIFFE pods are stuck in Pending, check for resource availability.\n```bash\nkubectl describe pod <pod-name> --namespace spiffe\n```"
       },
       {
-        "title": "SPIRE server not responding",
-        "description": "If the SPIRE server is not responding, verify that it is running and check its logs for any errors:\n```bash\nkubectl logs spire-server-<pod-id> --namespace spire\n```"
+        "title": "Pods crashing with error",
+        "description": "If your SPIFFE pods are crashing, check the logs for errors.\n```bash\nkubectl logs <pod-name> --namespace spiffe\n```"
       },
       {
-        "title": "Configuration changes not applied",
-        "description": "If changes to the SPIRE configuration are not taking effect, ensure that you have correctly edited the ConfigMap and restarted the SPIRE server:\n```bash\nkubectl delete pod spire-server-<pod-id> --namespace spire\n```"
-      },
-      {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade command fails, check for any version mismatches or required values in your values.yaml file. You can view the current release status with:\n```bash\nhelm status spire --namespace spire\n```"
+        "title": "Helm release not found",
+        "description": "If you encounter a 'release not found' error, ensure that the release name and namespace are correct.\n```bash\nhelm list --namespace spiffe\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of SPIFFE will have all pods running in the 'spiffe' namespace without errors. You can verify this by checking the pod status and ensuring they are in the 'Running' state.",
+      "codeSnippets": [
+        "helm repo add spiffe https://spiffe.github.io/helm-charts-hardened\nhelm repo update",
+        "helm install spiffe spiffe/spiffe-step-ssh --namespace spiffe --create-namespace --version 0.1.1",
+        "kubectl get pods --namespace spiffe",
+        "kubectl set resources deployment spiffe --namespace spiffe --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -100,7 +95,7 @@
       "spiffe"
     ],
     "targetResourceKinds": [
-      "Configmap",
+      "Deployment",
       "Namespace"
     ],
     "difficulty": "intermediate",
@@ -114,12 +109,12 @@
     "maturity": "graduated",
     "projectVersion": "latest",
     "containerImages": [
-      "spire/spire-server:v1.0.0",
-      "spire/spire-agent:v1.0.0"
+      "spiffe/spiffe-step-ssh:1.16.0"
     ],
     "sourceUrls": {
       "docs": "http://spiffe.io",
-      "repo": "https://github.com/spiffe/spiffe"
+      "repo": "https://github.com/spiffe/spiffe",
+      "helm": "https://spiffe.github.io/helm-charts-hardened"
     },
     "qualityScore": 100
   },
@@ -129,10 +124,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and have installed Helm and kubectl on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-02-28T23:29:03.512Z",
+    "scannedAt": "2026-03-05T22:16:22.450Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

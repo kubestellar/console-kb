@@ -6,87 +6,79 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Vitess on Kubernetes",
-    "description": "Vitess is a cloud-native horizontally-scalable distributed database system built around MySQL, enabling unlimited scaling through generalized sharding. Installing Vitess allows you to manage large-scale databases efficiently and maintain application performance as your data grows.",
+    "description": "Vitess is a cloud-native horizontally-scalable distributed database system built around MySQL, enabling unlimited scaling through generalized sharding. You would install it to manage large-scale databases efficiently and maintain performance as your application grows.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Vitess Helm repository",
-        "description": "Add the official Vitess Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add vitess https://vitess.io/helm\nhelm repo update\n```"
+        "title": "Create a namespace for Vitess",
+        "description": "First, create a dedicated namespace for Vitess to operate within your Kubernetes cluster. This helps in organizing resources and managing access.\n```bash\nkubectl create namespace vitess\n```"
       },
       {
-        "title": "Install Vitess using Helm",
-        "description": "Install Vitess in a new namespace called 'vitess' using the following command:\n```bash\nhelm install vitess vitess/vitess --namespace vitess --create-namespace --version v23.0.3\n```"
+        "title": "Deploy Vitess components",
+        "description": "Apply the Vitess manifests to deploy the necessary components. Make sure to use the correct version.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/vitessio/vitess/v23.0.3/deploy/kubernetes/vitess.yaml --namespace vitess\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check if the Vitess pods are running successfully with the command:\n```bash\nkubectl get pods --namespace vitess\n```"
+        "title": "Verify the deployment",
+        "description": "Check that the Vitess pods are running correctly. This step ensures that all components have been deployed successfully.\n```bash\nkubectl get pods --namespace vitess\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Edit the Vitess deployment to set resource limits. Use the following command to open the deployment configuration:\n```bash\nkubectl edit deployment vitess --namespace vitess\n```\nIn the editor, add resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n```"
+        "description": "Set resource limits for the Vitess components to ensure they operate within defined resource constraints. Modify the deployment YAML as needed and apply it.\n```bash\nkubectl edit deployment vitess --namespace vitess\n# Add resource limits under spec.template.spec.containers.resources\n```"
       },
       {
-        "title": "Set up port forwarding for access",
-        "description": "Forward a local port to the Vitess service to access it:\n```bash\nkubectl port-forward svc/vitess 15999:15999 --namespace vitess\n```"
+        "title": "Expose Vitess services",
+        "description": "To access Vitess from outside the cluster, expose the Vitess services using a LoadBalancer or NodePort service type.\n```bash\nkubectl expose deployment vitess --type=LoadBalancer --name=vitess-service --namespace vitess\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Vitess will have all pods running in the 'vitess' namespace, and you will be able to access the Vitess service through the forwarded port. You can verify the resource limits by checking the deployment configuration.",
-      "codeSnippets": [
-        "helm repo add vitess https://vitess.io/helm\nhelm repo update",
-        "helm install vitess vitess/vitess --namespace vitess --create-namespace --version v23.0.3",
-        "kubectl get pods --namespace vitess",
-        "kubectl edit deployment vitess --namespace vitess",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Vitess release from the Kubernetes cluster using Helm. This will remove all associated resources except for CRDs and persistent volumes.\n```bash\nhelm uninstall vitess --namespace vitess\n```"
+        "title": "Delete the Vitess deployment",
+        "description": "Remove the Vitess deployment from your Kubernetes cluster to clean up resources.\n```bash\nkubectl delete -f https://raw.githubusercontent.com/vitessio/vitess/v23.0.3/deploy/kubernetes/vitess.yaml --namespace vitess\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation. This ensures that no leftover resources remain.\n```bash\nkubectl delete crd vitessclusters.vitess.io\nkubectl delete pvc --all --namespace vitess\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'vitess' namespace to clean up all resources associated with the installation. Verify that the namespace has been removed successfully.\n```bash\nkubectl delete namespace vitess\nkubectl get namespaces\n```"
+        "title": "Remove the Vitess namespace",
+        "description": "Delete the namespace created for Vitess to ensure all resources are cleaned up.\n```bash\nkubectl delete namespace vitess\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current state of the Vitess installation. You can use the following command to export the current configuration.\n```bash\nhelm get values vitess --namespace vitess > vitess-backup.yaml\n```"
+        "title": "Backup current Vitess state",
+        "description": "Before upgrading, ensure you have a backup of your current Vitess data and configuration.\n```bash\n# Perform backup steps as per your data management policy\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Vitess installation to the latest version. Replace 'v23.0.4' with the desired version if necessary.\n```bash\nhelm repo update\nhelm upgrade vitess vitess/vitess --namespace vitess --version v23.0.4\n```"
+        "title": "Update the Vitess manifests",
+        "description": "Fetch the latest Vitess manifests to prepare for the upgrade.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/vitessio/vitess/v23.0.3/deploy/kubernetes/vitess.yaml --namespace vitess\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, check the status of the Vitess pods to ensure they are running the new version without issues.\n```bash\nkubectl get pods --namespace vitess\n```"
+        "description": "Check the status of the Vitess pods to ensure they are running the new version correctly.\n```bash\nkubectl get pods --namespace vitess\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Vitess pods are in a CrashLoopBackOff state, check the logs for errors that may indicate what is causing the crash.\n```bash\nkubectl logs <pod-name> --namespace vitess\n```"
+        "title": "Pods stuck in Pending state",
+        "description": "If your Vitess pods are stuck in a Pending state, check for resource availability in the cluster.\n```bash\nkubectl describe pod <pod-name> --namespace vitess\n```"
       },
       {
         "title": "Service not reachable",
-        "description": "If you cannot access the Vitess service, ensure that the port forwarding is set up correctly and that the service is running. Check the service status with:\n```bash\nkubectl get svc --namespace vitess\n```"
+        "description": "If the Vitess service is not reachable, ensure that the service is correctly exposed and check the service type.\n```bash\nkubectl get services --namespace vitess\n```"
       },
       {
-        "title": "Insufficient resources allocated",
-        "description": "If you encounter issues related to insufficient resources, verify the resource limits set in the deployment. You can check the current resource allocation with:\n```bash\nkubectl describe deployment vitess --namespace vitess\n```"
-      },
-      {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If the Helm upgrade fails due to a version conflict, ensure that you are using a compatible version of the Vitess chart. Check the available versions with:\n```bash\nhelm search repo vitess --namespace vitess\n```"
+        "title": "High memory usage",
+        "description": "If you notice high memory usage, consider adjusting the resource limits set for the Vitess components.\n```bash\nkubectl top pods --namespace vitess\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Vitess will have all pods running in the 'Running' state and the services accessible as configured. You should also be able to interact with the Vitess database as intended.",
+      "codeSnippets": [
+        "kubectl create namespace vitess",
+        "kubectl apply -f https://raw.githubusercontent.com/vitessio/vitess/v23.0.3/deploy/kubernetes/vitess.yaml --namespace vitess",
+        "kubectl get pods --namespace vitess",
+        "kubectl edit deployment vitess --namespace vitess\n# Add resource limits under spec.template.spec.containers.resources",
+        "kubectl expose deployment vitess --type=LoadBalancer --name=vitess-service --namespace vitess"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -110,7 +102,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "graduated",
     "projectVersion": "v23.0.3",
@@ -126,13 +118,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and both Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and kubectl installed to manage your cluster."
   },
   "security": {
-    "scannedAt": "2026-02-28T21:10:10.906Z",
+    "scannedAt": "2026-03-05T22:17:00.157Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

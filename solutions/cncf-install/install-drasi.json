@@ -6,87 +6,87 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Drasi on Kubernetes",
-    "description": "Drasi is a data processing platform that simplifies detecting changes in data and taking immediate action. Installing Drasi allows you to monitor system logs and change feeds for specific events, enabling real-time actionable insights without the overhead of traditional data processing methods.",
+    "description": "Drasi is a data processing platform that simplifies detecting changes in data and taking immediate action. It provides real-time actionable insights without the overhead of traditional data processing methods, making it ideal for applications that require immediate responses to data changes.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Drasi Helm repository",
-        "description": "Add the Drasi Helm chart repository to your local Helm setup using the following command:\n```bash\nhelm repo add drasi https://charts.drasi.io\nhelm repo update\n```"
+        "title": "Clone the Drasi repository",
+        "description": "Clone the Drasi repository to your local machine to access the necessary Kubernetes manifests.\n```bash\ngit clone https://github.com/drasi-project/drasi-platform.git\ncd drasi-platform\n```"
       },
       {
-        "title": "Install Drasi using Helm",
-        "description": "Install Drasi in a new namespace called 'drasi' with the following command:\n```bash\nhelm install drasi drasi/drasi --namespace drasi --create-namespace --version 1.0.0\n```"
+        "title": "Apply the Kubernetes manifests",
+        "description": "Deploy Drasi to your Kubernetes cluster using the provided manifests.\n```bash\nkubectl apply -f k8s/deployment.yaml --namespace drasi --create-namespace\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check the status of the Drasi pods to ensure they are running:\n```bash\nkubectl get pods --namespace drasi\n```"
+        "title": "Verify the deployment",
+        "description": "Check if the Drasi pods are running successfully.\n```bash\nkubectl get pods --namespace drasi\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "Edit the Drasi deployment to set resource limits. Use the following command to open the deployment configuration:\n```bash\nkubectl edit deployment drasi --namespace drasi\n```\nThen, add the following under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Drasi deployment to ensure optimal performance.\n```bash\nkubectl set resources deployment/drasi --namespace drasi --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
       },
       {
-        "title": "Set up port forwarding for access",
-        "description": "Forward a local port to the Drasi service to access it:\n```bash\nkubectl port-forward svc/drasi --namespace drasi 8080:80\n```"
+        "title": "Set up RBAC for Drasi",
+        "description": "Create a Role and RoleBinding to allow Drasi to access necessary resources.\n```bash\nkubectl apply -f k8s/rbac.yaml --namespace drasi\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Drasi will have the pods running without errors, and you will be able to access the Drasi service through port 8080 on your local machine. You can also verify that resource limits are applied by checking the deployment configuration.",
-      "codeSnippets": [
-        "helm repo add drasi https://charts.drasi.io\nhelm repo update",
-        "helm install drasi drasi/drasi --namespace drasi --create-namespace --version 1.0.0",
-        "kubectl get pods --namespace drasi",
-        "kubectl edit deployment drasi --namespace drasi",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Drasi release from the cluster using the following command to remove the deployment and all associated resources:\n```bash\nhelm uninstall drasi --namespace drasi\n```"
+        "title": "Remove the Drasi deployment",
+        "description": "Delete the Drasi deployment from your Kubernetes cluster.\n```bash\nkubectl delete deployment drasi --namespace drasi\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation:\n```bash\nkubectl delete crd $(kubectl get crd | grep drasi | awk '{print $1}')\nkubectl delete pvc --all --namespace drasi\n```"
+        "title": "Clean up associated resources",
+        "description": "Remove any associated resources such as services and config maps.\n```bash\nkubectl delete service drasi --namespace drasi\nkubectl delete configmap drasi-config --namespace drasi\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'drasi' namespace and verify that it has been removed:\n```bash\nkubectl delete namespace drasi\nkubectl get namespaces\n```"
+        "title": "Delete the namespace",
+        "description": "Finally, delete the namespace to clean up all resources.\n```bash\nkubectl delete namespace drasi\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, create a backup of the current state of the Drasi release:\n```bash\nhelm get all drasi --namespace drasi > drasi-backup.yaml\n```"
+        "description": "Export the current configuration and state of Drasi before upgrading.\n```bash\nkubectl get all --namespace drasi -o yaml > drasi-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Drasi release to the latest version:\n```bash\nhelm repo update\nhelm upgrade drasi drasi/drasi --namespace drasi --version 1.1.0\n```"
+        "title": "Update the manifests",
+        "description": "Pull the latest changes from the Drasi repository to get the updated manifests.\n```bash\ngit pull origin main\n```"
+      },
+      {
+        "title": "Upgrade the deployment",
+        "description": "Apply the updated manifests to upgrade Drasi.\n```bash\nkubectl apply -f k8s/deployment.yaml --namespace drasi\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check the status of the Drasi pods to ensure they are running the upgraded version:\n```bash\nkubectl get pods --namespace drasi\n```"
+        "description": "Check the status of the pods to ensure the upgrade was successful.\n```bash\nkubectl get pods --namespace drasi\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Drasi pods are stuck in a CrashLoopBackOff state, check the logs for more information:\n```bash\nkubectl logs <pod-name> --namespace drasi\n``` \nLook for any error messages that indicate what might be causing the crash."
+        "title": "Pods not starting",
+        "description": "If the Drasi pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace drasi\n``` \nLook for any error messages that indicate what might be wrong, such as configuration issues or missing dependencies."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Drasi service, ensure that the service is running and the port forwarding is set up correctly:\n```bash\nkubectl get svc --namespace drasi\nkubectl port-forward svc/drasi --namespace drasi 8080:80\n``` \nCheck for any firewall rules or network policies that might be blocking access."
+        "title": "Resource limits causing OOMKilled",
+        "description": "If pods are being terminated due to OOMKilled, check the resource usage:\n```bash\nkubectl top pods --namespace drasi\n``` \nConsider increasing the memory limits in your deployment."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you see errors related to insufficient resources, check the resource limits and the available resources in your cluster:\n```bash\nkubectl describe pod <pod-name> --namespace drasi\nkubectl top nodes\n``` \nConsider adjusting the resource limits or scaling your cluster."
-      },
-      {
-        "title": "Helm upgrade fails",
-        "description": "If the Helm upgrade command fails, check for version compatibility and existing resources:\n```bash\nhelm history drasi --namespace drasi\nhelm get all drasi --namespace drasi\n``` \nYou may need to rollback to a previous version if the upgrade cannot be completed."
+        "title": "RBAC permission errors",
+        "description": "If you encounter permission errors, verify the RBAC configuration:\n```bash\nkubectl get rolebindings --namespace drasi\nkubectl describe rolebinding <rolebinding-name> --namespace drasi\n``` \nEnsure that the correct permissions are granted."
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Drasi will have all pods running without errors, and you will be able to access the service as intended. You can verify this by checking the pod status and ensuring that the application is responding to data changes.",
+      "codeSnippets": [
+        "git clone https://github.com/drasi-project/drasi-platform.git\ncd drasi-platform",
+        "kubectl apply -f k8s/deployment.yaml --namespace drasi --create-namespace",
+        "kubectl get pods --namespace drasi",
+        "kubectl set resources deployment/drasi --namespace drasi --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
+        "kubectl apply -f k8s/rbac.yaml --namespace drasi"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -101,22 +101,19 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "latest",
-    "containerImages": [
-      "drasi/drasi:1.0.0"
-    ],
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://drasi.io/",
       "repo": "https://github.com/drasi-project/drasi-platform"
@@ -126,13 +123,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
   },
   "security": {
-    "scannedAt": "2026-03-01T13:01:02.846Z",
+    "scannedAt": "2026-03-05T22:34:09.741Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

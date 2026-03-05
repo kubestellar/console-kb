@@ -6,85 +6,77 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Chaosblade on Kubernetes",
-    "description": "ChaosBlade is a powerful chaos engineering toolkit that helps improve the fault tolerance of distributed systems through various experimental scenarios. Installing it allows you to conduct chaos experiments in your Kubernetes environment to ensure business continuity.",
+    "description": "ChaosBlade is an easy-to-use and powerful chaos engineering experiment toolkit that helps enterprises improve the fault tolerance of distributed systems. You would install it to conduct chaos experiments and ensure business continuity during cloud migrations.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the ChaosBlade Helm repository",
-        "description": "Add the official ChaosBlade Helm chart repository to your Helm configuration.\n```bash\nhelm repo add chaosblade https://charts.chaosblade.io\nhelm repo update\n```"
+        "title": "Create a namespace for ChaosBlade",
+        "description": "Create a dedicated namespace for ChaosBlade to isolate its resources.\n```bash\nkubectl create namespace chaosblade\n```"
       },
       {
-        "title": "Install ChaosBlade using Helm",
-        "description": "Install ChaosBlade in your Kubernetes cluster with the specified version and create a namespace if it doesn't exist.\n```bash\nhelm install chaosblade chaosblade/chaosblade --version v1.8.0 --namespace chaosblade --create-namespace\n```"
+        "title": "Apply the ChaosBlade deployment",
+        "description": "Deploy ChaosBlade using the provided Kubernetes manifests.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/chaosblade-io/chaosblade/master/deploy/chaosblade.yaml --namespace chaosblade\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the ChaosBlade pods are running successfully in the chaosblade namespace.\n```bash\nkubectl get pods -n chaosblade\n```"
+        "description": "Check if the ChaosBlade pods are running successfully.\n```bash\nkubectl get pods --namespace chaosblade\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "Set resource limits for the ChaosBlade deployment to ensure it runs efficiently.\n```bash\nkubectl set resources deployment chaosblade --limits=cpu=500m,memory=512Mi -n chaosblade\n```"
+        "title": "Configure resource limits for ChaosBlade",
+        "description": "Edit the deployment to set resource limits for the ChaosBlade container.\n```bash\nkubectl edit deployment chaosblade --namespace chaosblade\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     cpu: 500m\n#     memory: 512Mi\n```"
       },
       {
         "title": "Set up RBAC for ChaosBlade",
-        "description": "Create a Role and RoleBinding to allow ChaosBlade to access necessary resources.\n```bash\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: chaosblade\n  name: chaosblade-role\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/exec\"]\n  verbs: [\"get\", \"list\", \"watch\", \"create\", \"delete\"]\nEOF\n\nkubectl create rolebinding chaosblade-role-binding --role=chaosblade-role --serviceaccount=chaosblade:default --namespace=chaosblade\n```"
+        "description": "Create a Role and RoleBinding to allow ChaosBlade to access necessary resources.\n```bash\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: chaosblade\n  name: chaosblade-role\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/log\"]\n  verbs: [\"get\", \"list\", \"watch\"]\nEOF\n\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: chaosblade-rolebinding\n  namespace: chaosblade\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: chaosblade\nroleRef:\n  kind: Role\n  name: chaosblade-role\n  apiGroup: rbac.authorization.k8s.io\nEOF\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the ChaosBlade release from your Kubernetes cluster.\n```bash\nhelm uninstall chaosblade --namespace chaosblade\n```"
+        "title": "Delete the ChaosBlade deployment",
+        "description": "Remove the ChaosBlade deployment from the cluster.\n```bash\nkubectl delete -f https://raw.githubusercontent.com/chaosblade-io/chaosblade/master/deploy/chaosblade.yaml --namespace chaosblade\n```"
       },
       {
-        "title": "Clean up CRDs and resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) associated with ChaosBlade.\n```bash\nkubectl delete crd chaosblades.chaosblade.io\n```"
-      },
-      {
-        "title": "Remove the namespace",
-        "description": "Delete the namespace created for ChaosBlade to clean up all associated resources.\n```bash\nkubectl delete namespace chaosblade\n```"
+        "title": "Remove the ChaosBlade namespace",
+        "description": "Delete the namespace created for ChaosBlade to clean up all resources.\n```bash\nkubectl delete namespace chaosblade\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Export the current configuration of ChaosBlade for backup.\n```bash\nkubectl get all -n chaosblade -o yaml > chaosblade-backup.yaml\n```"
+        "description": "Export the current configuration of ChaosBlade for backup.\n```bash\nkubectl get all --namespace chaosblade -o yaml > chaosblade-backup.yaml\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Ensure the Helm repository is updated to get the latest charts.\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade ChaosBlade",
-        "description": "Upgrade the ChaosBlade installation to the latest version.\n```bash\nhelm upgrade chaosblade chaosblade/chaosblade --version v1.8.0 --namespace chaosblade\n```"
+        "title": "Update the deployment",
+        "description": "Apply the latest version of the ChaosBlade deployment.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/chaosblade-io/chaosblade/master/deploy/chaosblade.yaml --namespace chaosblade\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check if the upgraded ChaosBlade pods are running successfully.\n```bash\nkubectl get pods -n chaosblade\n```"
+        "description": "Check if the ChaosBlade pods are running the updated version.\n```bash\nkubectl get pods --namespace chaosblade\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If the ChaosBlade pods are stuck in Pending, check for resource availability and node conditions.\n```bash\nkubectl describe pod <pod-name> -n chaosblade\n```"
+        "title": "Pods not starting",
+        "description": "If the ChaosBlade pods are not starting, check the pod logs for errors.\n```bash\nkubectl logs <pod-name> --namespace chaosblade\n```"
       },
       {
-        "title": "ChaosBlade CLI not responding",
-        "description": "If the CLI commands are not responding, ensure that the service is running and accessible.\n```bash\nkubectl get svc -n chaosblade\n```"
+        "title": "Insufficient resources",
+        "description": "If you encounter resource allocation issues, ensure that your cluster has enough resources available. Check node resources with:\n```bash\nkubectl describe nodes\n```"
       },
       {
-        "title": "Failed to create chaos experiments",
-        "description": "If you encounter errors while creating chaos experiments, check the logs of the ChaosBlade pod for more information.\n```bash\nkubectl logs <chaosblade-pod-name> -n chaosblade\n```"
+        "title": "RBAC permission errors",
+        "description": "If you receive permission errors, verify that the RBAC settings are correctly configured. Check the Role and RoleBinding with:\n```bash\nkubectl get role,rolebinding -n chaosblade\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of ChaosBlade will have all pods running in the 'chaosblade' namespace, and you will be able to execute chaos experiments using the CLI. Resource limits and RBAC should be properly configured for optimal performance.",
+      "summary": "A successful installation of ChaosBlade will have all pods running in the 'chaosblade' namespace, and you will be able to perform chaos experiments. You should also have configured resource limits and RBAC permissions correctly.",
       "codeSnippets": [
-        "helm repo add chaosblade https://charts.chaosblade.io\nhelm repo update",
-        "helm install chaosblade chaosblade/chaosblade --version v1.8.0 --namespace chaosblade --create-namespace",
-        "kubectl get pods -n chaosblade",
-        "kubectl set resources deployment chaosblade --limits=cpu=500m,memory=512Mi -n chaosblade",
-        "kubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: chaosblade\n  name: chaosblade-role\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/exec\"]\n  verbs: [\"get\", \"list\", \"watch\", \"create\", \"delete\"]\nEOF\n\nkubectl create rolebinding chaosblade-role-binding --role=chaosblade-role --serviceaccount=chaosblade:default --namespace=chaosblade"
+        "kubectl create namespace chaosblade",
+        "kubectl apply -f https://raw.githubusercontent.com/chaosblade-io/chaosblade/master/deploy/chaosblade.yaml --namespace chaosblade",
+        "kubectl get pods --namespace chaosblade",
+        "kubectl edit deployment chaosblade --namespace chaosblade\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     cpu: 500m\n#     memory: 512Mi",
+        "kubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: chaosblade\n  name: chaosblade-role\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/log\"]\n  verbs: [\"get\", \"list\", \"watch\"]\nEOF\n\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: chaosblade-rolebinding\n  namespace: chaosblade\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: chaosblade\nroleRef:\n  kind: Role\n  name: chaosblade-role\n  apiGroup: rbac.authorization.k8s.io\nEOF"
       ]
     }
   },
@@ -111,7 +103,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.8.0",
@@ -127,13 +119,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed."
+    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
   },
   "security": {
-    "scannedAt": "2026-03-02T19:33:29.321Z",
+    "scannedAt": "2026-03-05T22:29:05.032Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

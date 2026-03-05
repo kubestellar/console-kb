@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Bfe on Kubernetes",
-    "description": "BFE (Beyond Front End) is a modern layer 7 load balancer developed by Baidu, designed to manage and route traffic efficiently. Installing BFE allows you to leverage its capabilities for advanced traffic management and load balancing in your Kubernetes environment.",
+    "description": "BFE is a modern layer 7 load balancer from Baidu, designed for efficient traffic management and routing. Installing BFE allows you to leverage its capabilities for load balancing and traffic management in your Kubernetes environment.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the BFE Helm repository",
-        "description": "Add the official BFE Helm chart repository to your Helm configuration. This will allow you to install BFE using Helm.\n```bash\nhelm repo add bfe https://bfenetworks.github.io/bfe-helm-chart\nhelm repo update\n```"
+        "title": "Clone the BFE repository",
+        "description": "First, clone the BFE repository to your local machine to access the necessary files for building Docker images.\n```bash\ngit clone https://github.com/bfenetworks/bfe.git\ncd bfe\n```"
       },
       {
-        "title": "Install BFE using Helm",
-        "description": "Install BFE with a specific version in a new namespace called 'bfe'. This command will deploy the BFE server and its components.\n```bash\nhelm install bfe bfe/bfe --version 1.8.1 --namespace bfe --create-namespace\n```"
+        "title": "Build Docker images",
+        "description": "Build the Docker images required for BFE. This command compiles the application and creates the necessary images.\n```bash\nmake docker\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check the status of the BFE pods to ensure they are running correctly.\n```bash\nkubectl get pods --namespace bfe\n```"
+        "title": "Deploy BFE to Kubernetes",
+        "description": "Apply the Kubernetes manifests to deploy BFE in your cluster. Ensure you have the necessary YAML files in the repository.\n```bash\nkubectl apply -f deploy/kubernetes/\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "Edit the BFE deployment to set resource limits for better performance and stability.\n```bash\nkubectl edit deployment bfe --namespace bfe\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n#   requests:\n#     cpu: \"250m\"\n#     memory: \"256Mi\"\n```"
+        "title": "Verify BFE deployment",
+        "description": "Check the status of the BFE pods to ensure they are running correctly.\n```bash\nkubectl get pods --namespace default\n```"
       },
       {
-        "title": "Set up port forwarding for access",
-        "description": "Forward a local port to the BFE service to access it from your local machine.\n```bash\nkubectl port-forward svc/bfe --namespace bfe 8080:80\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the BFE deployment to ensure it operates efficiently. Edit the deployment YAML file accordingly.\n```bash\nkubectl edit deployment bfe --namespace default\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will have the BFE pods running in the 'bfe' namespace, and you will be able to access the BFE service through port 8080 on your local machine. You should also see the configured resource limits applied to the BFE deployment.",
-      "codeSnippets": [
-        "helm repo add bfe https://bfenetworks.github.io/bfe-helm-chart\nhelm repo update",
-        "helm install bfe bfe/bfe --version 1.8.1 --namespace bfe --create-namespace",
-        "kubectl get pods --namespace bfe",
-        "kubectl edit deployment bfe --namespace bfe\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n#   requests:\n#     cpu: \"250m\"\n#     memory: \"256Mi\"",
-        "kubectl port-forward svc/bfe --namespace bfe 8080:80"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Use the Helm command to uninstall the BFE release from the Kubernetes cluster. This will remove the deployment and associated resources managed by Helm.\n```bash\nhelm uninstall bfe --namespace bfe\n```"
+        "title": "Remove BFE deployment",
+        "description": "Delete the BFE deployment from your Kubernetes cluster to cleanly uninstall it.\n```bash\nkubectl delete -f deploy/kubernetes/\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "If there are any Custom Resource Definitions (CRDs) or persistent volume claims (PVCs) created by BFE, clean them up using the following commands:\n```bash\nkubectl delete crd <crd-name>\nkubectl delete pvc --all --namespace bfe\n```"
+        "title": "Clean up remaining resources",
+        "description": "Remove any remaining custom resources or configurations related to BFE.\n```bash\nkubectl delete crd bfeconfigs.bfenetworks.com\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'bfe' namespace to remove all remaining resources associated with the BFE installation. Verify that the namespace has been deleted successfully.\n```bash\nkubectl delete namespace bfe\nkubectl get namespaces\n```"
+        "title": "Remove the namespace (if created)",
+        "description": "If you created a specific namespace for BFE, delete it to clean up completely.\n```bash\nkubectl delete namespace bfe-namespace\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current configuration and state of the BFE deployment. You can do this by exporting the current configuration:\n```bash\nkubectl get all --namespace bfe -o yaml > bfe-backup.yaml\n```"
+        "description": "Before upgrading, back up the current configuration and state of the BFE deployment.\n```bash\nkubectl get all --namespace default -o yaml > bfe-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts and then upgrade the BFE installation to the desired version. Replace `<new-version>` with the version you want to upgrade to.\n```bash\nhelm repo update\nhelm upgrade bfe bfe/bfe --version <new-version> --namespace bfe\n```"
+        "title": "Update the repository",
+        "description": "Pull the latest changes from the BFE repository to get the newest version.\n```bash\ngit pull origin main\n```"
       },
       {
-        "title": "Verify the upgrade",
-        "description": "After the upgrade, check the status of the BFE pods to ensure they are running the new version correctly.\n```bash\nkubectl get pods --namespace bfe\n```"
+        "title": "Rebuild Docker images",
+        "description": "Rebuild the Docker images with the latest changes.\n```bash\nmake docker\n```"
+      },
+      {
+        "title": "Apply updated manifests",
+        "description": "Reapply the updated Kubernetes manifests to upgrade the deployment.\n```bash\nkubectl apply -f deploy/kubernetes/\n```"
+      },
+      {
+        "title": "Verify upgrade",
+        "description": "Check the status of the BFE pods to ensure the upgrade was successful.\n```bash\nkubectl get pods --namespace default\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the BFE pods are in a CrashLoopBackOff state, check the logs for the pods to diagnose the issue:\n```bash\nkubectl logs <pod-name> --namespace bfe\n```"
+        "title": "Pods stuck in Pending state",
+        "description": "If your BFE pods are stuck in Pending, check for insufficient resources in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace default\n```"
       },
       {
-        "title": "Service not accessible",
-        "description": "If you cannot access the BFE service, ensure that the port forwarding is set up correctly and that the service is running:\n```bash\nkubectl get svc --namespace bfe\nkubectl port-forward svc/bfe --namespace bfe 8080:80\n```"
+        "title": "BFE pods crashing",
+        "description": "If BFE pods are crashing, check the logs for errors.\n```bash\nkubectl logs <pod-name> --namespace default\n```"
       },
       {
-        "title": "Insufficient resources error",
-        "description": "If you encounter errors related to insufficient resources, check the resource limits and requests set in the deployment:\n```bash\nkubectl describe deployment bfe --namespace bfe\n```"
-      },
-      {
-        "title": "Helm release not found",
-        "description": "If you receive an error stating that the Helm release is not found, verify that you are using the correct namespace and release name:\n```bash\nhelm list --namespace bfe\n```"
+        "title": "Service not reachable",
+        "description": "If the BFE service is not reachable, verify the service configuration and endpoints.\n```bash\nkubectl get svc --namespace default\nkubectl describe svc bfe --namespace default\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of BFE will result in running pods that are healthy and responding to traffic. You should be able to access the BFE service through the configured endpoints.",
+      "codeSnippets": [
+        "git clone https://github.com/bfenetworks/bfe.git\ncd bfe",
+        "make docker",
+        "kubectl apply -f deploy/kubernetes/",
+        "kubectl get pods --namespace default",
+        "kubectl edit deployment bfe --namespace default"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -101,7 +105,6 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
       "Namespace"
     ],
     "difficulty": "intermediate",
@@ -110,7 +113,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.8.1",
@@ -126,13 +129,13 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "make"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-01T06:49:08.701Z",
+    "scannedAt": "2026-03-05T22:26:22.172Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

@@ -6,87 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Connect Rpc on Kubernetes",
-    "description": "Connect is a slim library for building browser and gRPC-compatible HTTP APIs using Protocol Buffers. Installing Connect allows you to easily create type-safe clients and servers that support multiple protocols, making it ideal for modern web applications and microservices.",
+    "description": "Connect is a slim library for building browser and gRPC-compatible HTTP APIs using Protocol Buffers. You would install it to create efficient APIs that work seamlessly across different platforms and protocols.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Connect RPC Helm repository",
-        "description": "First, add the Connect RPC Helm repository to your Helm configuration with the following command:\n```bash\nhelm repo add connectrpc https://connectrpc.com/charts\nhelm repo update\n```"
+        "title": "Clone the repository",
+        "description": "Clone the Connect repository to your local machine using the following command:\n```bash\ngit clone https://github.com/connectrpc/connect-go.git\ncd connect-go\n```"
       },
       {
-        "title": "Install Connect RPC using Helm",
-        "description": "Next, install the Connect RPC chart into your Kubernetes cluster. Replace `<release-name>` with your desired release name and `<namespace>` with the namespace you want to use:\n```bash\nhelm install <release-name> connectrpc/connect --namespace <namespace> --create-namespace --version v1.19.1\n```"
+        "title": "Build the Connect library",
+        "description": "Build the Connect library by running the following command in the project directory:\n```bash\ngo build -o connect ./...\n```"
+      },
+      {
+        "title": "Deploy the Connect service",
+        "description": "Create a Kubernetes deployment for the Connect service. Save the following YAML to a file named `connect-deployment.yaml`:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: connect\n  namespace: connect\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: connect\n  template:\n    metadata:\n      labels:\n        app: connect\n    spec:\n      containers:\n      - name: connect\n        image: your-docker-registry/connect:1.19.1\n        ports:\n        - containerPort: 8080\n``` \nThen apply it with:\n```bash\nkubectl apply -f connect-deployment.yaml --create-namespace\n```"
+      },
+      {
+        "title": "Expose the Connect service",
+        "description": "Create a service to expose the Connect deployment. Save the following YAML to a file named `connect-service.yaml`:\n```yaml\napiVersion: v1\nkind: Service\nmetadata:\n  name: connect\n  namespace: connect\nspec:\n  type: NodePort\n  ports:\n    - port: 8080\n      targetPort: 8080\n      nodePort: 30000\n  selector:\n    app: connect\n```\nThen apply it with:\n```bash\nkubectl apply -f connect-service.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "After the installation, verify that the Connect RPC pods are running:\n```bash\nkubectl get pods --namespace <namespace>\n```"
+        "description": "Check if the Connect pods are running:\n```bash\nkubectl get pods -n connect\n```\nYou should see the Connect pod in a Running state. You can also port-forward to access the service:\n```bash\nkubectl port-forward svc/connect 8080:8080 -n connect\n```"
       },
       {
-        "title": "Configure resource limits",
-        "description": "To ensure your Connect RPC application runs efficiently, you can set resource limits. Edit the deployment with:\n```bash\nkubectl edit deployment <release-name> --namespace <namespace>\n```\nAdd the following under `spec.containers.resources`:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
-      },
-      {
-        "title": "Set up health checks",
-        "description": "To enable health checks for your Connect RPC service, you can modify the deployment to include readiness and liveness probes. Edit the deployment again:\n```bash\nkubectl edit deployment <release-name> --namespace <namespace>\n```\nAdd the following under `spec.containers`:\n```yaml\nlivenessProbe:\n  httpGet:\n    path: /healthz\n    port: 8080\n  initialDelaySeconds: 30\n  periodSeconds: 10\nreadinessProbe:\n  httpGet:\n    path: /healthz\n    port: 8080\n  initialDelaySeconds: 5\n  periodSeconds: 10\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the Connect deployment. Edit the `connect-deployment.yaml` file to include resource limits:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\"\n```\nThen reapply the deployment:\n```bash\nkubectl apply -f connect-deployment.yaml -n connect\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation will show the Connect RPC pods running in your specified namespace. You should also have resource limits and health checks configured for optimal performance.",
-      "codeSnippets": [
-        "helm repo add connectrpc https://connectrpc.com/charts\nhelm repo update",
-        "helm install <release-name> connectrpc/connect --namespace <namespace> --create-namespace --version v1.19.1",
-        "kubectl get pods --namespace <namespace>",
-        "kubectl edit deployment <release-name> --namespace <namespace>",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "To cleanly remove the Connect RPC installation, use the following command to uninstall the release. Replace `<release-name>` and `<namespace>` with your actual release name and namespace:\n```bash\nhelm uninstall <release-name> --namespace <namespace>\n```"
+        "title": "Remove the Connect service",
+        "description": "Delete the Connect service with the following command:\n```bash\nkubectl delete -f connect-service.yaml -n connect\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "After uninstalling the release, you may need to remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created. Use the following commands:\n```bash\nkubectl delete crd <crd-name>\nkubectl delete pvc --all --namespace <namespace>\n```"
+        "title": "Remove the Connect deployment",
+        "description": "Delete the Connect deployment with the following command:\n```bash\nkubectl delete -f connect-deployment.yaml -n connect\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Finally, if you no longer need the namespace, you can delete it. Ensure that all resources are cleaned up before doing so:\n```bash\nkubectl delete namespace <namespace>\nkubectl get namespaces\n```"
+        "title": "Clean up the namespace",
+        "description": "Remove the Connect namespace if it is no longer needed:\n```bash\nkubectl delete namespace connect\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up your current configuration and data. You can export the current release configuration with:\n```bash\nhelm get values <release-name> --namespace <namespace> > backup-values.yaml\n```"
+        "description": "Before upgrading, back up the current deployment configuration:\n```bash\nkubectl get deployment connect -n connect -o yaml > connect-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and then upgrade the Connect RPC release to the latest version. Run the following commands:\n```bash\nhelm repo update\nhelm upgrade <release-name> connectrpc/connect --namespace <namespace> --version v1.20.0\n```"
+        "title": "Update the Connect library",
+        "description": "Pull the latest changes from the repository and build the new version:\n```bash\ngit pull origin main\ngo build -o connect ./...\n```"
+      },
+      {
+        "title": "Upgrade the deployment",
+        "description": "Update the deployment with the new image version:\n```bash\nkubectl set image deployment/connect connect=your-docker-registry/connect:1.19.1 -n connect\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, verify that the Connect RPC pods are running with the new version. Use the following command:\n```bash\nkubectl get pods --namespace <namespace>\n```"
+        "description": "Check if the Connect pods are running the new version:\n```bash\nkubectl get pods -n connect\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If your pods are in a CrashLoopBackOff state, check the logs to diagnose the issue:\n```bash\nkubectl logs <pod-name> --namespace <namespace>\n```\nLook for any error messages that indicate what might be causing the crash."
+        "title": "Pods not starting",
+        "description": "If the Connect pods are not starting, check the pod logs:\n```bash\nkubectl logs <pod-name> -n connect\n```\nLook for any error messages indicating what might be wrong."
       },
       {
         "title": "Service not reachable",
-        "description": "If the service is not reachable, ensure that the service is running and check the endpoints:\n```bash\nkubectl get svc --namespace <namespace>\nkubectl describe svc <service-name> --namespace <namespace>\n```"
+        "description": "If you cannot access the Connect service, ensure the service is running:\n```bash\nkubectl get svc -n connect\n```\nCheck if the correct ports are exposed and the service type is set to NodePort."
       },
       {
-        "title": "Deployment not scaling",
-        "description": "If your deployment is not scaling as expected, check the deployment status and events:\n```bash\nkubectl get deployment <release-name> --namespace <namespace>\nkubectl describe deployment <release-name> --namespace <namespace>\n```"
-      },
-      {
-        "title": "Health checks failing",
-        "description": "If the liveness or readiness probes are failing, check the pod logs and probe configuration:\n```bash\nkubectl logs <pod-name> --namespace <namespace>\nkubectl get pods --namespace <namespace> -o jsonpath='{.items[*].status.containerStatuses[*].lastState}'\n```"
+        "title": "Deployment not updated",
+        "description": "If the deployment does not reflect the new changes, check the rollout status:\n```bash\nkubectl rollout status deployment/connect -n connect\n```\nIf it is stuck, you may need to restart the deployment:\n```bash\nkubectl rollout restart deployment/connect -n connect\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of Connect will have the deployment running with the specified replicas and the service accessible via the defined NodePort. You can verify the functionality by making API calls to the service.",
+      "codeSnippets": [
+        "git clone https://github.com/connectrpc/connect-go.git\ncd connect-go",
+        "go build -o connect ./...",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: connect\n  namespace: connect\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: connect\n  template:\n    metadata:\n      labels:\n        app: connect\n    spec:\n      containers:\n      - name: connect\n        image: your-docker-registry/connect:1.19.1\n        ports:\n        - containerPort: 8080",
+        "kubectl apply -f connect-deployment.yaml --create-namespace",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: connect\n  namespace: connect\nspec:\n  type: NodePort\n  ports:\n    - port: 8080\n      targetPort: 8080\n      nodePort: 30000\n  selector:\n    app: connect"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -110,12 +114,12 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.19.1",
     "containerImages": [
-      "connectrpc/connect:v1.19.1"
+      "your-docker-registry/connect:1.19.1"
     ],
     "sourceUrls": {
       "docs": "https://connectrpc.com",
@@ -126,13 +130,13 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "go"
     ],
-    "description": "You need a Kubernetes cluster and the Helm and kubectl command-line tools installed."
+    "description": "Ensure you have a Kubernetes cluster running and the Go programming language installed."
   },
   "security": {
-    "scannedAt": "2026-03-01T11:07:36.210Z",
+    "scannedAt": "2026-03-05T22:30:36.335Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

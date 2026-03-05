@@ -11,62 +11,47 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Score Helm repository",
-        "description": "Add the official Score Helm repository to your Helm configuration.\n```bash\nhelm repo add score https://charts.score.dev\nhelm repo update\n```"
+        "title": "Install the Score CLI",
+        "description": "Download and install the Score CLI tool for Kubernetes. Score provides `score-k8s` and `score-compose` commands for translating workload specifications.\n```bash\n# Download the binary from GitHub releases\ncurl -sL https://github.com/score-spec/score-k8s/releases/latest/download/score-k8s_$(uname -s)_$(uname -m).tar.gz | tar xz\nsudo mv score-k8s /usr/local/bin/\nscore-k8s version\n```"
       },
       {
-        "title": "Install Score using Helm",
-        "description": "Install the Score chart into your Kubernetes cluster. This command will create a namespace called 'score' if it doesn't exist.\n```bash\nhelm install score score/score --version 0.3.0 --namespace score --create-namespace\n```"
+        "title": "Initialize a Score project",
+        "description": "Initialize a new Score project in your working directory:\n```bash\nscore-k8s init\n```\nThis creates a `score.yaml` template that describes your workload in a platform-agnostic way."
       },
       {
-        "title": "Verify the installation",
-        "description": "Check that the Score pods are running in the 'score' namespace.\n```bash\nkubectl get pods --namespace score\n```"
+        "title": "Create a Score workload specification",
+        "description": "Create or edit `score.yaml` to define your workload:\n```yaml\napiVersion: score.dev/v1b1\nmetadata:\n  name: my-workload\ncontainers:\n  main:\n    image: nginx:1.25\n    ports:\n      http:\n        port: 80\n        protocol: TCP\n```"
       },
       {
-        "title": "Post-install configuration",
-        "description": "You may want to configure resource limits for the Score deployment. Edit the deployment as follows:\n```bash\nkubectl edit deployment score --namespace score\n```\nAdd resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n```"
+        "title": "Generate and deploy Kubernetes manifests",
+        "description": "Use score-k8s to generate Kubernetes manifests and deploy:\n```bash\nscore-k8s generate score.yaml | kubectl apply -f -\n```"
       },
       {
-        "title": "Access the Score service",
-        "description": "To access the Score service, you can port-forward the service to your local machine:\n```bash\nkubectl port-forward service/score --namespace score 8080:80\n```"
+        "title": "Verify the deployment",
+        "description": "Check that your workload was deployed:\n```bash\nkubectl get pods\nkubectl get deployments\nkubectl describe deployment my-workload\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the Score pods running in the 'score' namespace, and you will be able to access the service via port-forwarding. You can also verify that the resource limits have been applied correctly.",
+      "summary": "Score CLI is installed and you can translate Score workload specifications into Kubernetes manifests for deployment.",
       "codeSnippets": [
-        "helm repo add score https://charts.score.dev\nhelm repo update",
-        "helm install score score/score --version 0.3.0 --namespace score --create-namespace",
-        "kubectl get pods --namespace score",
-        "kubectl edit deployment score --namespace score",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\""
+        "score-k8s generate score.yaml | kubectl apply -f -",
+        "kubectl get pods"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Score Helm release from your Kubernetes cluster using the following command. This will remove the deployment and associated resources but not CRDs or persistent volumes.\n```bash\nhelm uninstall score --namespace score\n```"
+        "title": "Remove deployed workloads",
+        "description": "Delete the resources created from Score:\n```bash\nscore-k8s generate score.yaml | kubectl delete -f -\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "If you have created any custom resource definitions (CRDs) or persistent volume claims (PVCs) that are no longer needed, you can delete them with the following commands. Replace 'score' with your specific CRD name if necessary.\n```bash\nkubectl delete crd scores.score.dev\nkubectl delete pvc --all --namespace score\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Finally, delete the 'score' namespace to clean up any remaining resources. Verify that the namespace has been removed.\n```bash\nkubectl delete namespace score\nkubectl get namespaces\n```"
+        "title": "Uninstall Score CLI",
+        "description": "Remove the Score CLI:\n```bash\nsudo rm /usr/local/bin/score-k8s\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up your current Helm release configuration. You can do this by exporting the current values.\n```bash\nhelm get values score --namespace score > score-backup-values.yaml\n```"
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Score release to the latest version. Ensure you specify the correct version if needed.\n```bash\nhelm repo update\nhelm upgrade score score/score --version 0.4.0 --namespace score\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the Score pods are running the new version in the 'score' namespace. You can also check the release history for confirmation.\n```bash\nkubectl get pods --namespace score\nhelm history score --namespace score\n```"
+        "title": "Update Score CLI",
+        "description": "Download the latest version:\n```bash\ncurl -sL https://github.com/score-spec/score-k8s/releases/latest/download/score-k8s_$(uname -s)_$(uname -m).tar.gz | tar xz\nsudo mv score-k8s /usr/local/bin/\nscore-k8s version\n```"
       }
     ],
     "troubleshooting": [
@@ -110,7 +95,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "0.3.0",
@@ -126,10 +111,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a running Kubernetes cluster and have Helm and kubectl installed on your local machine."
+    "description": "A running Kubernetes cluster with kubectl configured."
   },
   "security": {
     "scannedAt": "2026-03-02T00:29:13.160Z",

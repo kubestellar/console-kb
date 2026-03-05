@@ -6,87 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Kubevela on Kubernetes",
-    "description": "KubeVela is a modern application delivery platform that simplifies deploying and managing applications across hybrid and multi-cloud environments. By using KubeVela, you can enhance your application deployment workflows and improve operational efficiency.",
+    "description": "KubeVela is a modern application delivery platform that simplifies deploying and operating applications across hybrid and multi-cloud environments. Installing KubeVela allows you to manage your applications more efficiently and with greater reliability.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the KubeVela Helm repository",
-        "description": "Add the official KubeVela Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add kubevela https://charts.kubevela.net/core\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the KubeVela Helm repository to your local Helm setup with the following command:\n```bash\nhelm repo add kubegems https://charts.kubegems.io/kubegems\nhelm repo update\n```"
       },
       {
         "title": "Install KubeVela using Helm",
-        "description": "Install KubeVela in a new namespace called 'kubevela' with the specified version:\n```bash\nhelm install vela-core kubevela/vela-core --version v1.10.7 --namespace kubevela --create-namespace\n```"
+        "description": "Install KubeVela with the following command, specifying the namespace and version:\n```bash\nhelm install kubevela kubegems/kubevela --namespace kubevela --create-namespace --version 1.3.5\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the KubeVela pods are running successfully:\n```bash\nkubectl get pods --namespace kubevela\n```"
+        "description": "Check if the KubeVela pods are running:\n```bash\nkubectl get pods -n kubevela\n```"
       },
       {
         "title": "Configure resource limits",
-        "description": "Update the KubeVela deployment to set resource limits for the controller:\n```bash\nkubectl patch deployment vela-core --namespace kubevela --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
-      },
-      {
-        "title": "Set up RBAC for KubeVela",
-        "description": "Create a Role and RoleBinding to allow access to KubeVela resources:\n```bash\nkubectl create role kubevela-admin --verb=* --resource=* --namespace kubevela\nkubectl create rolebinding kubevela-admin-binding --role=kubevela-admin --user=system:serviceaccount:kubevela:default --namespace kubevela\n```"
+        "description": "To set resource limits for the KubeVela controller, edit the values.yaml file or use the following command:\n```bash\nkubectl patch deployment kubevela-controller -n kubevela --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of KubeVela will show the KubeVela pods in the 'kubevela' namespace as running. You will also have configured resource limits and RBAC for managing access to KubeVela resources.",
-      "codeSnippets": [
-        "helm repo add kubevela https://charts.kubevela.net/core\nhelm repo update",
-        "helm install vela-core kubevela/vela-core --version v1.10.7 --namespace kubevela --create-namespace",
-        "kubectl get pods --namespace kubevela",
-        "kubectl patch deployment vela-core --namespace kubevela --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'",
-        "kubectl create role kubevela-admin --verb=* --resource=* --namespace kubevela\nkubectl create rolebinding kubevela-admin-binding --role=kubevela-admin --user=system:serviceaccount:kubevela:default --namespace kubevela"
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the KubeVela release from the cluster using Helm. This will remove the deployment and associated resources created by the installation.\n```bash\nhelm uninstall vela-core --namespace kubevela\n```"
+        "description": "Uninstall the KubeVela release with the following command:\n```bash\nhelm uninstall kubevela --namespace kubevela\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation. This ensures that all resources related to KubeVela are cleaned up.\n```bash\nkubectl delete crd $(kubectl get crd | grep 'kubevela.io' | awk '{print $1}')\nkubectl delete pvc --all --namespace kubevela\n```"
+        "title": "Clean up CRDs and resources",
+        "description": "Remove any Custom Resource Definitions (CRDs) that were installed:\n```bash\nkubectl delete crd applications.core.oam.dev\nkubectl delete crd definitions.core.oam.dev\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'kubevela' namespace to remove all remaining resources and verify that it has been deleted successfully.\n```bash\nkubectl delete namespace kubevela\nkubectl get namespaces | grep kubevela\n```"
+        "title": "Delete the namespace",
+        "description": "Finally, delete the KubeVela namespace:\n```bash\nkubectl delete namespace kubevela\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current state of KubeVela. You can do this by exporting the current configuration and resources.\n```bash\nkubectl get all --namespace kubevela -o yaml > kubevela-backup.yaml\n```"
+        "description": "Before upgrading, back up the current state of KubeVela:\n```bash\nkubectl get all -n kubevela -o yaml > kubevela-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and run the upgrade command to upgrade KubeVela to the latest version. Make sure to specify the new version you want to upgrade to.\n```bash\nhelm repo update\nhelm upgrade vela-core kubevela/vela-core --version v1.10.8 --namespace kubevela\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure you have the latest version of the Helm repository:\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade KubeVela",
+        "description": "Upgrade KubeVela to the latest version:\n```bash\nhelm upgrade kubevela kubegems/kubevela --namespace kubevela --version 1.3.5\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "After the upgrade, verify that the KubeVela pods are running the new version successfully. Check the status of the pods to ensure everything is functioning correctly.\n```bash\nkubectl get pods --namespace kubevela\n```"
+        "description": "Check if the KubeVela pods are running after the upgrade:\n```bash\nkubectl get pods -n kubevela\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the KubeVela pods are stuck in a CrashLoopBackOff state, check the logs for the failing pod to diagnose the issue.\n```bash\nkubectl logs <pod-name> --namespace kubevela\n```"
+        "description": "If you see pods in a CrashLoopBackOff state, check the logs for more information:\n```bash\nkubectl logs <pod-name> -n kubevela\n``` \nCommon fixes include checking configuration files and ensuring all required resources are available."
       },
       {
-        "title": "Helm upgrade fails with 'release not found'",
-        "description": "If you encounter an error stating 'release not found' during an upgrade, ensure that the release name is correct and that it exists in the specified namespace.\n```bash\nhelm list --namespace kubevela\n```"
+        "title": "Helm install fails with 'release already exists'",
+        "description": "If you encounter an error stating that the release already exists, you can either uninstall the existing release or upgrade it:\n```bash\nhelm uninstall kubevela --namespace kubevela\n```"
       },
       {
-        "title": "RBAC issues preventing access",
-        "description": "If you face permission issues, verify that the Role and RoleBinding are correctly set up. Check the bindings for the service account used by KubeVela.\n```bash\nkubectl get rolebinding --namespace kubevela\nkubectl describe rolebinding kubevela-admin-binding --namespace kubevela\n```"
-      },
-      {
-        "title": "Resource limits causing pod evictions",
-        "description": "If pods are being evicted due to resource limits, review the resource requests and limits set for the KubeVela deployment and adjust them as necessary.\n```bash\nkubectl get deployment vela-core --namespace kubevela -o yaml | grep resources -A 5\n```"
+        "title": "KubeVela controller not responding",
+        "description": "If the KubeVela controller is not responding, check the deployment status:\n```bash\nkubectl get deployment kubevela-controller -n kubevela\n``` \nIf it's not available, consider redeploying the controller."
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of KubeVela will show all pods in the kubevela namespace running without errors. You should also be able to access the KubeVela dashboard and manage your applications.",
+      "codeSnippets": [
+        "helm repo add kubegems https://charts.kubegems.io/kubegems\nhelm repo update",
+        "helm install kubevela kubegems/kubevela --namespace kubevela --create-namespace --version 1.3.5",
+        "kubectl get pods -n kubevela",
+        "kubectl patch deployment kubevela-controller -n kubevela --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -101,11 +96,9 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
-      "Namespace",
-      "Serviceaccount"
+      "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -116,12 +109,12 @@
     "maturity": "incubating",
     "projectVersion": "v1.10.7",
     "containerImages": [
-      "oamdev/vela-core:v1.10.7"
+      "oamdev/vela-core:latest"
     ],
     "sourceUrls": {
       "docs": "https://kubevela.io",
       "repo": "https://github.com/kubevela/kubevela",
-      "helm": "https://github.com/kubevela/kubevela/tree/main/charts/vela-core/"
+      "helm": "https://charts.kubegems.io/kubegems"
     },
     "qualityScore": 100
   },
@@ -131,10 +124,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and have Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-03-01T00:59:16.269Z",
+    "scannedAt": "2026-03-05T22:21:05.788Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []

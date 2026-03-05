@@ -182,6 +182,77 @@ async function findExampleConfigs(owner, repo, config) {
   return configs
 }
 
+/** Timeout in ms for Artifact Hub and Helm repo URL validation requests */
+const ARTIFACT_HUB_TIMEOUT_MS = 10000
+/** Timeout in ms for Helm repo URL validation */
+const HELM_URL_VALIDATE_TIMEOUT_MS = 5000
+
+async function findArtifactHubChart(projectName, owner, repo) {
+  try {
+    const query = encodeURIComponent(projectName)
+    const response = await fetch(
+      `https://artifacthub.io/api/v1/packages/search?ts_query_web=${query}&kind=0&limit=5`,
+      { signal: AbortSignal.timeout(ARTIFACT_HUB_TIMEOUT_MS) }
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    const packages = data.packages || []
+
+    // Find best match: prefer exact name match or same org
+    const match = packages.find(p =>
+      p.name === projectName ||
+      p.repository?.organization_name?.toLowerCase() === owner.toLowerCase() ||
+      p.repository?.name?.toLowerCase() === projectName.toLowerCase()
+    ) || packages[0]
+
+    if (!match || !match.repository?.url) return null
+
+    // Validate the URL actually serves index.yaml
+    const repoUrl = match.repository.url.replace(/\/$/, '')
+    const valid = await validateHelmRepoUrl(repoUrl)
+    if (!valid) return null
+
+    return {
+      repoUrl,
+      chartName: match.name,
+      version: match.version,
+      appVersion: match.app_version,
+      description: match.description,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function validateHelmRepoUrl(url) {
+  try {
+    const response = await fetch(`${url}/index.yaml`, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(HELM_URL_VALIDATE_TIMEOUT_MS),
+      redirect: 'follow',
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+async function findKustomize(owner, repo, config) {
+  const paths = config?.sources?.['kubectl-manifests']?.manifestPaths || ['deploy/', 'install/', 'manifests/', 'config/']
+  // Also check root
+  const allPaths = ['', ...paths]
+  for (const p of allPaths) {
+    const filePath = p ? `${p}kustomization.yaml` : 'kustomization.yaml'
+    const content = await fetchRawFile(owner, repo, filePath)
+    if (content) return { path: p || './', content: content.slice(0, 2000) }
+    // Try kustomization.yml
+    const altPath = p ? `${p}kustomization.yml` : 'kustomization.yml'
+    const altContent = await fetchRawFile(owner, repo, altPath)
+    if (altContent) return { path: p || './', content: altContent.slice(0, 2000) }
+  }
+  return null
+}
+
 async function findDockerfile(owner, repo) {
   for (const p of ['Dockerfile', 'build/Dockerfile', 'docker/Dockerfile']) {
     const content = await fetchRawFile(owner, repo, p)
@@ -236,7 +307,8 @@ Your output MUST be a JSON object with these fields:
 
 Rules:
 - If the project has NO installable component (it's a spec, SDK, or library only), return {"skip": true}
-- Prefer Helm install as primary method when a Helm chart exists
+- CRITICAL: ONLY use Helm install commands if a "## Helm Chart" section or "## Artifact Hub Helm Chart" section is provided in the context. If NEITHER section is present, DO NOT generate helm commands — use kubectl apply, kustomize, or another appropriate method instead.
+- CRITICAL: Do NOT invent Helm repository URLs, chart names, or image names. ONLY use URLs and names explicitly provided in the context above. If you don't know the real Helm repo URL, DO NOT guess.
 - Steps MUST have real commands — never "see the documentation"
 - Include a verification step (kubectl get pods, health check, port-forward)
 - Include at least 1 post-install configuration step (resource limits, RBAC, TLS, or monitoring)
@@ -246,7 +318,7 @@ Rules:
 - "uninstall" must have 2-4 steps covering: remove release, clean up CRDs/resources, remove namespace
 - "upgrade" must have 2-4 steps covering: backup current state, update repo/manifests, upgrade, verify
 - "troubleshooting" must have 3-5 common issues with diagnostic commands and fixes
-- Do NOT invent URLs or image names — only use what's in the provided context`
+- "installMethods" MUST accurately list ONLY the methods used in the steps (e.g. ["helm"], ["kubectl"], ["kustomize"], or a combination)`
 
 function buildInstallPrompt(project, context) {
   const sections = [`# Install mission for: ${project.name} (${project.maturity})`]
@@ -273,6 +345,23 @@ function buildInstallPrompt(project, context) {
     sections.push(`\n## Helm Chart (${context.helmChart.path})`)
     if (context.helmChart.chartYaml) sections.push(`### Chart.yaml\n\`\`\`yaml\n${truncate(context.helmChart.chartYaml, 1000)}\n\`\`\``)
     if (context.helmChart.valuesYaml) sections.push(`### values.yaml (excerpt)\n\`\`\`yaml\n${truncate(context.helmChart.valuesYaml, 2000)}\n\`\`\``)
+  }
+
+  if (context.artifactHubChart) {
+    sections.push(`\n## Artifact Hub Helm Chart`)
+    sections.push(`- Helm repo URL: ${context.artifactHubChart.repoUrl}`)
+    sections.push(`- Chart name: ${context.artifactHubChart.chartName}`)
+    if (context.artifactHubChart.version) sections.push(`- Chart version: ${context.artifactHubChart.version}`)
+    if (context.artifactHubChart.appVersion) sections.push(`- App version: ${context.artifactHubChart.appVersion}`)
+  }
+
+  if (!context.helmChart && !context.artifactHubChart) {
+    sections.push(`\n## ⚠️ NO HELM CHART FOUND\nThis project does NOT have a known Helm chart in its repository or on Artifact Hub. DO NOT generate Helm-based install commands. Use kubectl apply, kustomize, or another appropriate method.`)
+  }
+
+  if (context.kustomize) {
+    sections.push(`\n## Kustomize (${context.kustomize.path})`)
+    sections.push(`\`\`\`yaml\n${truncate(context.kustomize.content, 1500)}\n\`\`\``)
   }
 
   if (context.manifests?.length > 0) {
@@ -398,6 +487,16 @@ function applyQualityGate(mission, config) {
   }
   gates.push({ gate: 'verification-step', pass: true })
 
+  // Gate 7: Helm repo URL validation — reject missions with invalid Helm repo URLs
+  const helmRepoMatch = allText.match(/helm repo add \S+ (\S+)/i)
+  if (helmRepoMatch) {
+    const helmUrl = helmRepoMatch[1].replace(/\/$/, '')
+    // Async validation is handled in the caller — here we just flag if URL looks suspicious
+    // Common hallucination patterns: project-name.github.io/charts, project.io/charts, etc.
+    // The actual URL validation happens post-gate in processProject()
+    gates.push({ gate: 'helm-repo-url-present', pass: true, url: helmUrl })
+  }
+
   // Gate 2: Quality score
   const { score } = scoreMission(mission, minScore)
   // Apply install-specific bonuses
@@ -493,6 +592,7 @@ function buildMissionJson(project, llmResult, context, config) {
         docs: homepage,
         repo: `https://github.com/${project.repo}`,
         ...(context.helmChart ? { helm: `https://github.com/${project.repo}/tree/main/${context.helmChart.path}` } : {}),
+        ...(context.artifactHubChart ? { helm: context.artifactHubChart.repoUrl } : {}),
       },
     },
     prerequisites: llmResult.prerequisites || {
@@ -647,17 +747,24 @@ async function main() {
       ])
       await sleep(200)
 
-      const [helmChart, manifests, exampleConfigs, dockerfile] = await Promise.all([
+      const [helmChart, manifests, exampleConfigs, dockerfile, kustomize] = await Promise.all([
         findHelmChart(owner, repo, config),
         findManifests(owner, repo, config),
         findExampleConfigs(owner, repo, config),
         findDockerfile(owner, repo),
+        findKustomize(owner, repo, config),
       ])
 
-      const context = { repoMeta, readme, latestRelease, helmChart, manifests, exampleConfigs, dockerfile }
+      // Always check Artifact Hub — even if in-repo chart was found, we need the real published Helm repo URL
+      const artifactHubChart = await findArtifactHubChart(project.name, owner, repo)
+      if (artifactHubChart) {
+        console.log(`  Artifact Hub chart found: ${artifactHubChart.repoUrl} (${artifactHubChart.chartName})`)
+      }
 
-      const sourceCount = [readme, helmChart, manifests?.length > 0, exampleConfigs?.length > 0, dockerfile, latestRelease].filter(Boolean).length
-      console.log(`  Sources found: ${sourceCount}/6 (readme:${!!readme} helm:${!!helmChart} manifests:${manifests?.length || 0} configs:${exampleConfigs?.length || 0} dockerfile:${!!dockerfile} release:${!!latestRelease})`)
+      const context = { repoMeta, readme, latestRelease, helmChart, artifactHubChart, manifests, exampleConfigs, dockerfile, kustomize }
+
+      const sourceCount = [readme, helmChart || artifactHubChart, manifests?.length > 0, exampleConfigs?.length > 0, dockerfile, latestRelease, kustomize].filter(Boolean).length
+      console.log(`  Sources found: ${sourceCount}/7 (readme:${!!readme} helm:${!!helmChart} artifactHub:${!!artifactHubChart} kustomize:${!!kustomize} manifests:${manifests?.length || 0} configs:${exampleConfigs?.length || 0} dockerfile:${!!dockerfile} release:${!!latestRelease})`)
 
       // Synthesize via LLM
       console.log('  Synthesizing install mission via LLM...')
@@ -677,6 +784,44 @@ async function main() {
       const gateResult = applyQualityGate(mission, config)
       mission.metadata.qualityScore = gateResult.score
       console.log(`  Quality: ${gateResult.score}/100 — ${gateResult.tier}`)
+
+      // Post-gate: validate any Helm repo URLs in the generated steps
+      const allStepTextForValidation = (mission.mission?.steps || []).map(s => s.description || '').join('\n')
+      const helmUrlMatch = allStepTextForValidation.match(/helm repo add (\S+) (\S+)/i)
+      if (helmUrlMatch) {
+        const helmRepoName = helmUrlMatch[1]
+        const helmUrl = helmUrlMatch[2].replace(/\/$/, '')
+        const helmUrlValid = await validateHelmRepoUrl(helmUrl)
+        if (!helmUrlValid) {
+          console.log(`  ⚠️ Helm repo URL validation FAILED: ${helmUrl}`)
+          // If we have a known-good URL from Artifact Hub, fix the mission in-place
+          if (artifactHubChart?.repoUrl) {
+            console.log(`  🔧 Fixing: replacing with Artifact Hub URL: ${artifactHubChart.repoUrl}`)
+            const badUrl = helmUrl
+            const goodUrl = artifactHubChart.repoUrl
+            for (const step of mission.mission.steps) {
+              step.description = step.description.replace(badUrl, goodUrl)
+            }
+            for (const step of (mission.mission.uninstall || [])) {
+              step.description = step.description.replace(badUrl, goodUrl)
+            }
+            for (const step of (mission.mission.upgrade || [])) {
+              step.description = step.description.replace(badUrl, goodUrl)
+            }
+            if (mission.mission.resolution?.codeSnippets) {
+              mission.mission.resolution.codeSnippets = mission.mission.resolution.codeSnippets.map(s => s.replace(badUrl, goodUrl))
+            }
+          } else {
+            console.log(`  ❌ Rejected: LLM generated invalid Helm repo URL and no Artifact Hub fallback`)
+            report.rejected++
+            report.rejectedProjects.push({ name: project.name, reason: `Invalid Helm repo URL: ${helmUrl}` })
+            report.projects.push({ name: project.name, maturity: project.maturity, score: gateResult.score, tier: 'rejected', installMethods: 'N/A' })
+            continue
+          }
+        } else {
+          console.log(`  ✅ Helm repo URL validated: ${helmUrl}`)
+        }
+      }
 
       if (gateResult.tier === 'rejected') {
         const failedGates = gateResult.gates.filter(g => !g.pass).map(g => `${g.gate}: ${g.reason || 'failed'}`).join(', ')
@@ -723,4 +868,4 @@ if (process.argv[1]?.endsWith('generate-cncf-install-missions.mjs')) {
   main().catch(err => { console.error(err); process.exit(1) })
 }
 
-export { applyQualityGate, buildMissionJson, synthesizeInstallMission, slugify, titleCase, formatReport }
+export { applyQualityGate, buildMissionJson, synthesizeInstallMission, slugify, titleCase, formatReport, validateHelmRepoUrl, findArtifactHubChart, findKustomize }

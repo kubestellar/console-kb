@@ -11,80 +11,50 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Virtual Kubelet Helm repository",
-        "description": "Add the official Virtual Kubelet Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add virtual-kubelet https://charts.virtual-kubelet.io\nhelm repo update\n```"
+        "title": "Create a Namespace for Virtual Kubelet",
+        "description": "First, create a dedicated namespace for Virtual Kubelet to operate in. Run the following command:\n```bash\nkubectl create namespace virtual-kubelet\n```"
       },
       {
-        "title": "Install Virtual Kubelet using Helm",
-        "description": "Install Virtual Kubelet in the `virtual-kubelet` namespace with the following command:\n```bash\nhelm install virtual-kubelet virtual-kubelet/virtual-kubelet --namespace virtual-kubelet --create-namespace --version v1.12.0\n```"
+        "title": "Deploy Virtual Kubelet",
+        "description": "Next, apply the Virtual Kubelet deployment manifest. You can use the following command to deploy version 1.8.0:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/virtual-kubelet/virtual-kubelet/v1.8.0/deploy/virtual-kubelet.yaml -n virtual-kubelet\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check if the Virtual Kubelet pod is running by executing:\n```bash\nkubectl get pods -n virtual-kubelet\n```"
-      },
-      {
-        "title": "Configure resource limits for Virtual Kubelet",
-        "description": "Update the Virtual Kubelet deployment to set resource limits. Use the following command to edit the deployment:\n```bash\nkubectl edit deployment virtual-kubelet -n virtual-kubelet\n```\nIn the editor, add resource limits under the `spec.containers.resources` section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
-      },
-      {
-        "title": "Set up RBAC for Virtual Kubelet",
-        "description": "Create a Role and RoleBinding for Virtual Kubelet to ensure it has the necessary permissions. Run the following commands:\n```bash\nkubectl create role virtual-kubelet-role --verb=get,list,watch,create,update,delete --resource=pods --namespace=virtual-kubelet\nkubectl create rolebinding virtual-kubelet-binding --role=virtual-kubelet-role --serviceaccount=virtual-kubelet:default --namespace=virtual-kubelet\n```"
+        "title": "Verify the Installation",
+        "description": "To ensure that Virtual Kubelet is running correctly, check the status of the pods in the virtual-kubelet namespace:\n```bash\nkubectl get pods -n virtual-kubelet\n```"
       }
     ],
     "resolution": {
       "summary": "A successful installation of Virtual Kubelet will show the pod running in the `virtual-kubelet` namespace when you execute `kubectl get pods -n virtual-kubelet`. Additionally, resource limits and RBAC settings should be properly configured for optimal operation.",
       "codeSnippets": [
-        "helm repo add virtual-kubelet https://charts.virtual-kubelet.io\nhelm repo update",
-        "helm install virtual-kubelet virtual-kubelet/virtual-kubelet --namespace virtual-kubelet --create-namespace --version v1.12.0",
-        "kubectl get pods -n virtual-kubelet",
-        "kubectl edit deployment virtual-kubelet -n virtual-kubelet",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
+        "kubectl create namespace virtual-kubelet",
+        "kubectl apply -f https://raw.githubusercontent.com/virtual-kubelet/virtual-kubelet/v1.8.0/deploy/virtual-kubelet.yaml -n virtual-kubelet",
+        "kubectl get pods -n virtual-kubelet"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Virtual Kubelet Helm release from the cluster using the following command:\n```bash\nhelm uninstall virtual-kubelet --namespace virtual-kubelet\n```"
-      },
-      {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent resources associated with Virtual Kubelet. Execute the following commands:\n```bash\nkubectl delete crd virtualkubelets.virtual-kubelet.io\nkubectl delete pvc --all --namespace virtual-kubelet\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the `virtual-kubelet` namespace and verify its removal:\n```bash\nkubectl delete namespace virtual-kubelet\nkubectl get namespaces\n```"
+        "title": "Remove Virtual Kubelet",
+        "description": "To uninstall Virtual Kubelet, delete the deployment and the namespace:\n```bash\nkubectl delete -f https://raw.githubusercontent.com/virtual-kubelet/virtual-kubelet/v1.8.0/deploy/virtual-kubelet.yaml -n virtual-kubelet\nkubectl delete namespace virtual-kubelet\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of Virtual Kubelet. You can export the deployment configuration with:\n```bash\nkubectl get deployment virtual-kubelet -n virtual-kubelet -o yaml > virtual-kubelet-backup.yaml\n```"
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Virtual Kubelet release to the latest version:\n```bash\nhelm repo update\nhelm upgrade virtual-kubelet virtual-kubelet/virtual-kubelet --namespace virtual-kubelet --version v1.12.1\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check if the Virtual Kubelet pod is running the new version by executing:\n```bash\nkubectl get pods -n virtual-kubelet -o wide\n```"
+        "title": "Upgrade Virtual Kubelet",
+        "description": "To upgrade Virtual Kubelet, first delete the existing deployment and then apply the new version. For example, to upgrade to version 1.9.0:\n```bash\nkubectl delete -f https://raw.githubusercontent.com/virtual-kubelet/virtual-kubelet/v1.8.0/deploy/virtual-kubelet.yaml -n virtual-kubelet\nkubectl apply -f https://raw.githubusercontent.com/virtual-kubelet/virtual-kubelet/v1.9.0/deploy/virtual-kubelet.yaml -n virtual-kubelet\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not scheduling on Virtual Kubelet",
-        "description": "If pods are not scheduling on the Virtual Kubelet, check the logs for errors:\n```bash\nkubectl logs -l app=virtual-kubelet -n virtual-kubelet\n``` \nEnsure that the Virtual Kubelet is correctly configured and that the cloud provider is reachable."
+        "title": "Pod Not Starting",
+        "description": "Check the logs of the Virtual Kubelet pod for any errors:\n```bash\nkubectl logs <pod-name> -n virtual-kubelet\n```"
       },
       {
-        "title": "Virtual Kubelet pod in CrashLoopBackOff",
-        "description": "If the Virtual Kubelet pod is in a CrashLoopBackOff state, check the pod events and logs:\n```bash\nkubectl describe pod virtual-kubelet -n virtual-kubelet\nkubectl logs virtual-kubelet -n virtual-kubelet\n``` \nInvestigate any configuration issues or resource limits that may be causing the crash."
+        "title": "Namespace Issues",
+        "description": "Ensure that the virtual-kubelet namespace exists and that the deployment is applied to the correct namespace:\n```bash\nkubectl get namespaces\nkubectl get pods -n virtual-kubelet\n```"
       },
       {
-        "title": "RBAC permissions issues",
-        "description": "If you encounter RBAC permission errors, verify the Role and RoleBinding configurations:\n```bash\nkubectl get role virtual-kubelet-role -n virtual-kubelet -o yaml\nkubectl get rolebinding virtual-kubelet-binding -n virtual-kubelet -o yaml\n``` \nEnsure that the Role has the necessary permissions for the resources being accessed."
-      },
-      {
-        "title": "Network connectivity issues",
-        "description": "If there are connectivity issues with the cloud provider, check the network configuration and logs:\n```bash\nkubectl logs virtual-kubelet -n virtual-kubelet\n``` \nMake sure that the Virtual Kubelet can reach the necessary endpoints and that there are no firewall rules blocking access."
+        "title": "Resource Quotas",
+        "description": "If you encounter issues with resource allocation, check if there are resource quotas set in the namespace that may be limiting the Virtual Kubelet:\n```bash\nkubectl get resourcequota -n virtual-kubelet\n```"
       }
     ]
   },
@@ -111,7 +81,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.12.0",
@@ -127,10 +97,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
-    "description": "You need a running Kubernetes cluster with Helm and kubectl installed."
+    "description": "Ensure that you have a running Kubernetes cluster and kubectl installed and configured to interact with your cluster."
   },
   "security": {
     "scannedAt": "2026-03-02T04:34:43.262Z",

@@ -6,87 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Spire on Kubernetes",
-    "description": "SPIRE (the SPIFFE Runtime Environment) is a tool for managing the identities of workloads in a distributed system. Installing SPIRE allows you to secure your microservices with strong identity and authentication mechanisms.",
+    "description": "SPIRE (the SPIFFE Runtime Environment) provides a set of APIs and services to manage identities in a cloud-native environment. Installing SPIRE allows you to secure your workloads by providing them with strong identities and enabling secure communication between them.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the SPIRE Helm repository",
-        "description": "Add the official SPIRE Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add spire https://spiffe.io/spire/charts\nhelm repo update\n```"
+        "title": "Add the Helm repository",
+        "description": "Add the SPIRE Helm chart repository to your Helm configuration.\n```bash\nhelm repo add spire https://spiffe.github.io/helm-charts-hardened\nhelm repo update\n```"
       },
       {
         "title": "Install SPIRE using Helm",
-        "description": "Install SPIRE in a new namespace called 'spire' with the following command:\n```bash\nhelm install spire spire/spire --namespace spire --create-namespace --version v1.14.1\n```"
+        "description": "Install SPIRE in the `spire` namespace with the specified version.\n```bash\nhelm install spire spire/spire --namespace spire --create-namespace --version 0.28.3\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the SPIRE server and agent pods are running:\n```bash\nkubectl get pods --namespace spire\n```"
+        "description": "Check that the SPIRE pods are running successfully.\n```bash\nkubectl get pods --namespace spire\n```"
       },
       {
-        "title": "Configure Resource Limits",
-        "description": "Edit the SPIRE deployment to set resource limits. Use the following command to open the deployment configuration:\n```bash\nkubectl edit deployment spire-server --namespace spire\n```\nThen, add the following resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\"\n```"
-      },
-      {
-        "title": "Port-forward to access SPIRE server",
-        "description": "Set up port forwarding to access the SPIRE server locally:\n```bash\nkubectl port-forward svc/spire-server --namespace spire 8081:8081\n```"
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the SPIRE server and agent. Edit the Helm release to set resource limits.\n```bash\nhelm upgrade spire spire/spire --namespace spire --set server.resources.limits.cpu=500m --set server.resources.limits.memory=512Mi --set agent.resources.limits.cpu=500m --set agent.resources.limits.memory=512Mi\n```"
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of SPIRE will show the server and agent pods running in the 'spire' namespace. You can access the SPIRE server locally through port 8081.",
-      "codeSnippets": [
-        "helm repo add spire https://spiffe.io/spire/charts\nhelm repo update",
-        "helm install spire spire/spire --namespace spire --create-namespace --version v1.14.1",
-        "kubectl get pods --namespace spire",
-        "kubectl edit deployment spire-server --namespace spire",
-        "resources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\""
-      ]
-    },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the SPIRE release from the cluster using the following command to remove the deployment and associated resources:\n```bash\nhelm uninstall spire --namespace spire\n```"
+        "description": "Uninstall the SPIRE release from the cluster.\n```bash\nhelm uninstall spire --namespace spire\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation:\n```bash\nkubectl delete crd $(kubectl get crd | grep spire | awk '{print $1}')\nkubectl delete pvc --all --namespace spire\n```"
+        "title": "Clean up CRDs",
+        "description": "Remove the Custom Resource Definitions associated with SPIRE.\n```bash\nkubectl delete crd $(kubectl get crd | grep spire | awk '{print $1}')\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'spire' namespace to clean up all remaining resources and verify the deletion:\n```bash\nkubectl delete namespace spire\nkubectl get namespaces\n```"
+        "title": "Remove the namespace",
+        "description": "Delete the `spire` namespace to clean up all resources.\n```bash\nkubectl delete namespace spire\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and data of the SPIRE installation. You can export the current Helm release values:\n```bash\nhelm get values spire --namespace spire > spire-backup-values.yaml\n```"
+        "description": "Export the current configuration and resources for backup.\n```bash\nkubectl get all --namespace spire -o yaml > spire-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the SPIRE release to the latest version:\n```bash\nhelm repo update\nhelm upgrade spire spire/spire --namespace spire --version v1.15.0\n```"
+        "title": "Update the Helm repository",
+        "description": "Ensure the Helm repository is up to date before upgrading.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade SPIRE",
+        "description": "Upgrade SPIRE to the latest version.\n```bash\nhelm upgrade spire spire/spire --namespace spire --version 0.28.3\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the SPIRE server and agent pods are running and verify the upgrade:\n```bash\nkubectl get pods --namespace spire\n```"
+        "description": "Check that the SPIRE pods are running the new version successfully.\n```bash\nkubectl get pods --namespace spire\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the SPIRE server or agent pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace spire\n```\nLook for any configuration issues or missing dependencies."
+        "title": "Pods stuck in Pending state",
+        "description": "This may occur due to insufficient resources or node constraints. Check the events for the pod.\n```bash\nkubectl describe pod <pod-name> --namespace spire\n```"
       },
       {
-        "title": "Unable to connect to SPIRE server",
-        "description": "If you cannot connect to the SPIRE server, ensure that the port forwarding is set up correctly. Check the service status:\n```bash\nkubectl get svc --namespace spire\n```\nMake sure the service is running and the correct port is being forwarded."
+        "title": "Pods crashing or in CrashLoopBackOff",
+        "description": "Check the logs of the crashing pod to diagnose the issue.\n```bash\nkubectl logs <pod-name> --namespace spire\n```"
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If you encounter a version conflict during the upgrade, ensure that the version you are trying to upgrade to is compatible with your current installation. Check the current version:\n```bash\nhelm list --namespace spire\n```\nThen, specify a compatible version in the upgrade command."
-      },
-      {
-        "title": "Resource limits causing pod eviction",
-        "description": "If pods are being evicted due to resource limits, check the events for the namespace:\n```bash\nkubectl get events --namespace spire\n```\nAdjust the resource limits in the deployment if necessary to allocate more resources."
+        "title": "Service not reachable",
+        "description": "Ensure that the service is correctly configured and the pods are running. Check the service endpoints.\n```bash\nkubectl get svc --namespace spire\nkubectl get endpoints <service-name> --namespace spire\n```"
       }
-    ]
+    ],
+    "resolution": {
+      "summary": "A successful installation of SPIRE will have all pods running in the `spire` namespace without errors. You can verify this by checking the pod status and ensuring they are in the Running state.",
+      "codeSnippets": [
+        "helm repo add spire https://spiffe.github.io/helm-charts-hardened\nhelm repo update",
+        "helm install spire spire/spire --namespace spire --create-namespace --version 0.28.3",
+        "kubectl get pods --namespace spire",
+        "helm upgrade spire spire/spire --namespace spire --set server.resources.limits.cpu=500m --set server.resources.limits.memory=512Mi --set agent.resources.limits.cpu=500m --set agent.resources.limits.memory=512Mi"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -100,7 +95,6 @@
       "spire"
     ],
     "targetResourceKinds": [
-      "Deployment",
       "Namespace"
     ],
     "difficulty": "intermediate",
@@ -112,13 +106,14 @@
       "helm"
     ],
     "maturity": "graduated",
-    "projectVersion": "v1.14.1",
+    "projectVersion": "v1.14.2",
     "containerImages": [
-      "registry/spiffe/spire:v1.14.1"
+      "registry/spiffe/spire:1.14.2"
     ],
     "sourceUrls": {
       "docs": "https://spiffe.io",
-      "repo": "https://github.com/spiffe/spire"
+      "repo": "https://github.com/spiffe/spire",
+      "helm": "https://spiffe.github.io/helm-charts-hardened"
     },
     "qualityScore": 100
   },
@@ -128,10 +123,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "You need a Kubernetes cluster and Helm installed to deploy SPIRE."
+    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
   },
   "security": {
-    "scannedAt": "2026-02-28T23:36:31.090Z",
+    "scannedAt": "2026-03-05T22:16:40.811Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []
