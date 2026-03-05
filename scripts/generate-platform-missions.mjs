@@ -20,6 +20,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { K8S_PLATFORMS, getPlatformByName } from './k8s-platforms.mjs'
+import { OTHER_PROJECTS } from './other-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 
@@ -644,13 +645,14 @@ function formatReport(results) {
 // ─── Main ────────────────────────────────────────────────────────────
 async function main() {
   console.log('=== Platform Install Mission Generator ===')
-  console.log(`Platforms in catalog: ${K8S_PLATFORMS.length}`)
+  const ALL_PROJECTS = [...K8S_PLATFORMS, ...OTHER_PROJECTS]
+  console.log(`Projects in catalog: ${ALL_PROJECTS.length} (${K8S_PLATFORMS.length} platforms + ${OTHER_PROJECTS.length} other)`)
 
   // Determine which platforms to process
-  let platforms = [...K8S_PLATFORMS]
+  let platforms = [...ALL_PROJECTS]
   if (TARGET_PLATFORMS && TARGET_PLATFORMS.length > 0) {
     platforms = TARGET_PLATFORMS
-      .map(name => getPlatformByName(name))
+      .map(name => getPlatformByName(name) || OTHER_PROJECTS.find(p => p.name === name))
       .filter(Boolean)
     console.log(`Targeting ${platforms.length} platform(s): ${platforms.map(p => p.name).join(', ')}`)
   }
