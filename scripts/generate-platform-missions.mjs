@@ -40,6 +40,9 @@ const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'platform-install')
 
+/** Missions older than this are considered stale and will be regenerated */
+const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
+
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
@@ -665,16 +668,48 @@ async function main() {
     console.log(`Batch ${BATCH_INDEX}: platforms ${start}-${end - 1} (${platforms.length} items)`)
   }
 
-  // Filter already-generated unless force
+  // Filter already-generated unless force — with staleness detection
   if (!FORCE_REGENERATE) {
     const existing = existsSync(SOLUTIONS_DIR)
       ? readdirSync(SOLUTIONS_DIR).filter(f => f.endsWith('.json'))
       : []
     const existingNames = new Set(existing.map(f => f.replace(/\.json$/, '')))
     const before = platforms.length
-    platforms = platforms.filter(p => !existingNames.has(`platform-${slugify(p.name)}`))
-    if (before !== platforms.length) {
-      console.log(`Skipping ${before - platforms.length} already-generated platforms`)
+    const staleNames = []
+
+    platforms = platforms.filter(p => {
+      const filename = `platform-${slugify(p.name)}`
+      if (!existingNames.has(filename)) return true // new — needs generation
+
+      // Check staleness: if the repo was updated after the mission was generated
+      const missionPath = join(SOLUTIONS_DIR, `${filename}.json`)
+      try {
+        const mission = JSON.parse(readFileSync(missionPath, 'utf-8'))
+        const scannedAt = mission.security?.scannedAt
+        if (!scannedAt) return true // no timestamp — regenerate
+
+        const scannedDate = new Date(scannedAt)
+        const ageMs = Date.now() - scannedDate.getTime()
+        const MS_PER_DAY = 86_400_000
+        const ageDays = ageMs / MS_PER_DAY
+
+        if (ageDays > STALENESS_THRESHOLD_DAYS) {
+          staleNames.push(p.name)
+          return true // too old — regenerate
+        }
+      } catch {
+        return true // unreadable — regenerate
+      }
+
+      return false // fresh — skip
+    })
+
+    const skipped = before - platforms.length
+    if (skipped > 0) {
+      console.log(`Skipping ${skipped} fresh platforms (generated within ${STALENESS_THRESHOLD_DAYS} days)`)
+    }
+    if (staleNames.length > 0) {
+      console.log(`Regenerating ${staleNames.length} stale platform(s): ${staleNames.join(', ')}`)
     }
   }
 

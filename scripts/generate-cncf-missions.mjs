@@ -11,6 +11,7 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from 
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './cncf-projects.mjs'
+import { OTHER_PROJECTS } from './other-projects.mjs'
 import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
 import { slugify as baseSlugify } from './sources/base-source.mjs'
 import { validateMissionExport } from './scanner.mjs'
@@ -745,16 +746,28 @@ async function main() {
   console.log(`Active sources: ${sources.map(s => s.id).join(', ')}`)
   console.log(`Force rescan: ${FORCE_RESCAN}`)
 
+  // Merge CNCF and other projects — normalize schema for non-CNCF entries
+  const ALL_PROJECTS = [
+    ...CNCF_PROJECTS,
+    ...OTHER_PROJECTS.map(p => ({
+      name: p.name,
+      repo: p.repo,
+      maturity: 'community',          // non-CNCF projects use 'community' tier
+      category: p.category || 'other',
+      sources: p.sources || {},        // may lack SO/Reddit config
+    })),
+  ]
+
   let projects = TARGET_PROJECTS
-    ? CNCF_PROJECTS.filter(p => TARGET_PROJECTS.includes(p.name))
-    : CNCF_PROJECTS
+    ? ALL_PROJECTS.filter(p => TARGET_PROJECTS.includes(p.name))
+    : ALL_PROJECTS
 
   // Apply batch slicing if BATCH_INDEX is set
   if (BATCH_INDEX != null) {
     const start = BATCH_INDEX * BATCH_SIZE
     const end = start + BATCH_SIZE
     projects = projects.slice(start, end)
-    console.log(`Batch ${BATCH_INDEX}: projects ${start}-${Math.min(end, CNCF_PROJECTS.length) - 1} of ${CNCF_PROJECTS.length}`)
+    console.log(`Batch ${BATCH_INDEX}: projects ${start}-${Math.min(end, ALL_PROJECTS.length) - 1} of ${ALL_PROJECTS.length}`)
   }
 
   if (projects.length === 0) {
@@ -764,7 +777,7 @@ async function main() {
     process.exit(0)
   }
 
-  console.log(`Processing ${projects.length} CNCF projects (min_reactions=${MIN_REACTIONS}, dry_run=${DRY_RUN})`)
+  console.log(`Processing ${projects.length} projects (${CNCF_PROJECTS.length} CNCF + ${OTHER_PROJECTS.length} other, min_reactions=${MIN_REACTIONS}, dry_run=${DRY_RUN})`)
 
   mkdirSync(SOLUTIONS_DIR, { recursive: true })
 
