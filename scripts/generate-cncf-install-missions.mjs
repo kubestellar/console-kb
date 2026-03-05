@@ -229,6 +229,7 @@ async function validateHelmRepoUrl(url) {
     const response = await fetch(`${url}/index.yaml`, {
       method: 'HEAD',
       signal: AbortSignal.timeout(HELM_URL_VALIDATE_TIMEOUT_MS),
+      redirect: 'follow',
     })
     return response.ok
   } catch {
