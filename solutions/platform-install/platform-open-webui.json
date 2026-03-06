@@ -1,0 +1,179 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-open-webui",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Open WebUI",
+    "description": "Open WebUI is a user-friendly self-hosted AI platform designed for seamless integration with various LLM runners like Ollama and OpenAI-compatible APIs. It is ideal for users looking for an extensible and feature-rich AI deployment solution that operates entirely offline. Key trade-offs include the need for self-hosting and management of infrastructure.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Install the CLI",
+        "description": "Install the Open WebUI CLI to manage the deployment.\n\n```bash\n\ncurl -LO https://github.com/open-webui/open-webui/releases/download/v0.8.8/open-webui-cli-linux-amd64 && chmod +x open-webui-cli-linux-amd64 && sudo mv open-webui-cli-linux-amd64 /usr/local/bin/open-webui\n\n```\n\n> This command downloads the CLI binary, makes it executable, and moves it to the local bin directory.",
+        "commands": [
+          "curl -LO https://github.com/open-webui/open-webui/releases/download/v0.8.8/open-webui-cli-linux-amd64 && chmod +x open-webui-cli-linux-amd64 && sudo mv open-webui-cli-linux-amd64 /usr/local/bin/open-webui"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Set up a Kubernetes cluster with the desired version and node count.\n\n```bash\n\ngcloud container clusters create open-webui-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> This command creates a GKE cluster with 3 nodes in the specified region.",
+        "commands": [
+          "gcloud container clusters create open-webui-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "Configure your kubeconfig to interact with the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials open-webui-cluster --region us-central1\n\n```\n\n> This command updates your kubeconfig file to use the new cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials open-webui-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Deploy Open WebUI",
+        "description": "Install Open WebUI using Helm with the specified version.\n\n```bash\n\nhelm repo add open-webui https://charts.openwebui.com && helm repo update\n\nhelm install open-webui open-webui/open-webui --version 0.8.8 --namespace open-webui --create-namespace\n\n```\n\n> Add the Open WebUI Helm repository.\n> This command installs Open WebUI in the specified namespace.",
+        "commands": [
+          "helm repo add open-webui https://charts.openwebui.com && helm repo update",
+          "helm install open-webui open-webui/open-webui --version 0.8.8 --namespace open-webui --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify the Deployment",
+        "description": "Check the status of the deployed pods to ensure everything is running correctly.\n\n```bash\n\nkubectl get pods -n open-webui\n\n```\n\n> This command lists all pods in the Open WebUI namespace.",
+        "commands": [
+          "kubectl get pods -n open-webui"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Configure autoscaling and monitoring for the Open WebUI deployment.\n\n```bash\n\nkubectl autoscale deployment open-webui --cpu-percent=50 --min=1 --max=5 -n open-webui\n\n```\n\n> This command sets up autoscaling based on CPU usage.",
+        "commands": [
+          "kubectl autoscale deployment open-webui --cpu-percent=50 --min=1 --max=5 -n open-webui"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Open WebUI",
+        "description": "Remove Open WebUI from the cluster. This will delete all associated resources and may lead to data loss.\n\n```bash\n\nhelm uninstall open-webui --namespace open-webui\n\nkubectl delete namespace open-webui\n\n```\n\n> This command uninstalls the Open WebUI release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall open-webui --namespace open-webui",
+          "kubectl delete namespace open-webui"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Open WebUI",
+        "description": "Backup existing configurations, perform the upgrade, and verify the deployment.\n\n```bash\n\nkubectl get all -n open-webui -o yaml > open-webui-backup.yaml\n\nhelm upgrade open-webui open-webui/open-webui --version 0.8.8 --namespace open-webui\n\nkubectl get pods -n open-webui\n\n```\n\n> Backup current configurations.\n> Upgrade to the specified version.\n> Verify that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl get all -n open-webui -o yaml > open-webui-backup.yaml",
+          "helm upgrade open-webui open-webui/open-webui --version 0.8.8 --namespace open-webui",
+          "kubectl get pods -n open-webui"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Error creating deployment: failed to create deployment'",
+        "description": "**Cause:** This may occur due to insufficient permissions or misconfigured service accounts.\n\n**Fix:**\nEnsure that the service account has the necessary permissions to create deployments."
+      },
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** This indicates that Kubernetes cannot pull the specified container image.\n\n**Fix:**\nCheck the image name and ensure the image is available in the specified registry."
+      },
+      {
+        "title": "Pods are in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This usually happens when the application inside the pod fails to start.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n open-webui' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This indicates that the request to the Kubernetes API server timed out.\n\n**Fix:**\nIncrease the timeout settings or check the network connectivity to the API server."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.8.8",
+        "changes": "Added support for Ollama model integration and improved API compatibility.",
+        "deprecations": "No specific deprecations noted.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Open WebUI pods running with a status of 'Running' when executing 'kubectl get pods -n open-webui'.",
+      "codeSnippets": [
+        "curl -LO https://github.com/open-webui/open-webui/releases/download/v0.8.8/open-webui-cli-linux-amd64 && chmod +x open-webui-cli-linux-amd64 && sudo mv open-webui-cli-linux-amd64 /usr/local/bin/open-webui",
+        "gcloud container clusters create open-webui-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials open-webui-cluster --region us-central1",
+        "helm repo add open-webui https://charts.openwebui.com && helm repo update",
+        "helm install open-webui open-webui/open-webui --version 0.8.8 --namespace open-webui --create-namespace",
+        "kubectl get pods -n open-webui",
+        "kubectl autoscale deployment open-webui --cpu-percent=50 --min=1 --max=5 -n open-webui"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-app",
+      "open-webui"
+    ],
+    "platform": "open-webui",
+    "platformType": "ai-platform",
+    "platformProvider": "Open WebUI",
+    "platformVersions": [
+      "v0.8.8"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "docker.io/open-webui/open-webui:v0.8.8"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.openwebui.com/",
+      "repo": "https://github.com/open-webui/open-webui"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T18:09:59.133Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
