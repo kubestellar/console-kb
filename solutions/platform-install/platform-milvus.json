@@ -1,0 +1,171 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-milvus",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Milvus",
+    "description": "Milvus is a high-performance, cloud-native vector database designed for scalable vector approximate nearest neighbor (ANN) search. It is ideal for applications that require efficient organization and searching of vast amounts of unstructured data. Key trade-offs include the need for Kubernetes for deployment and the complexity of managing a distributed system.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Milvus Helm repository",
+        "description": "This step adds the official Milvus Helm chart repository to your Helm configuration, allowing you to install Milvus using Helm.\n\n```bash\n\nhelm repo add milvus https://milvus-io.github.io/milvus-helm\n\nhelm repo update\n\n```\n\n> This command adds the Milvus Helm chart repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Milvus CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Milvus to function properly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml\n\n```\n\n> This command installs the Milvus CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml"
+        ]
+      },
+      {
+        "title": "Install Milvus using Helm",
+        "description": "This step installs Milvus in the specified namespace using Helm, which simplifies the deployment process.\n\n```bash\n\nhelm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0\n\n```\n\n> Installs Milvus version 2.5.0 in the 'milvus' namespace.",
+        "commands": [
+          "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0"
+        ]
+      },
+      {
+        "title": "Create a Milvus Cluster",
+        "description": "This step creates an example Milvus cluster resource that defines the desired state of your Milvus deployment.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: milvus.io/v1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF\n\n```\n\n> This command creates a Milvus cluster resource.",
+        "commands": [
+          "cat <<EOF | kubectl apply -f -\napiVersion: milvus.io/v1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Milvus Cluster",
+        "description": "This step checks the status of the Milvus cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get milvusclusters -n milvus\n\n```\n\n> This command lists the Milvus clusters in the 'milvus' namespace.",
+        "commands": [
+          "kubectl get milvusclusters -n milvus"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Milvus",
+        "description": "This step removes the Milvus deployment and associated resources. Be aware that this will result in data loss unless backups are made.\n\n```bash\n\nhelm uninstall milvus --namespace milvus\n\nkubectl delete namespace milvus\n\n```\n\n> Uninstalls the Milvus Helm release.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall milvus --namespace milvus",
+          "kubectl delete namespace milvus"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Milvus",
+        "description": "Before upgrading, ensure you have backups of your data. This step will upgrade the Milvus installation to a newer version.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade milvus milvus/milvus --namespace milvus --version 2.6.0\n\nkubectl uncordon <node-name>\n\n```\n\n> Drains the node to prepare for upgrade.\n> Upgrades Milvus to version 2.6.0.\n> Uncordons the node after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade milvus milvus/milvus --namespace milvus --version 2.6.0",
+          "kubectl uncordon <node-name>"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'MilvusCluster not found'",
+        "description": "**Cause:** The specified Milvus cluster resource does not exist in the namespace.\n\n**Fix:**\nEnsure the Milvus cluster resource is created with the correct name and namespace."
+      },
+      {
+        "title": "Error: 'Failed to connect to Milvus'",
+        "description": "**Cause:** The Milvus service may not be running or is misconfigured.\n\n**Fix:**\nCheck the status of the Milvus pods using 'kubectl get pods -n milvus' and ensure they are running."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster does not have enough resources to schedule the Milvus pods.\n\n**Fix:**\nIncrease the resources available in your Kubernetes cluster or adjust the resource requests in the Milvus configuration."
+      },
+      {
+        "title": "Error: 'CRD validation failed'",
+        "description": "**Cause:** The installed CRDs may be outdated or incompatible with the current Milvus version.\n\n**Fix:**\nReinstall the CRDs using the command provided in the installation steps.\n\n**Affected versions:** <= 2.5"
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v2.5",
+        "changes": "Introduced new indexing algorithms and improved query performance.",
+        "deprecations": "Deprecated the old RESTful API endpoints.",
+        "migrationSteps": "Update your application code to use the new API endpoints."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Milvus cluster listed with a status of 'Running' when executing 'kubectl get milvusclusters -n milvus'.",
+      "codeSnippets": [
+        "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml",
+        "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0",
+        "cat <<EOF | kubectl apply -f -\napiVersion: milvus.io/v1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF",
+        "kubectl get milvusclusters -n milvus"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "zilliz"
+    ],
+    "platform": "milvus",
+    "platformType": "database",
+    "platformProvider": "Zilliz",
+    "platformVersions": [
+      "2.4",
+      "2.5"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "milvusdb/milvus:v2.5.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://milvus.io/docs",
+      "repo": "https://github.com/milvus-io/milvus"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster with sufficient resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T00:15:19.011Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
