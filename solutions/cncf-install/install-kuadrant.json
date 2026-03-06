@@ -5,82 +5,86 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Kuadrant on Kubernetes",
-    "description": "Kuadrant is an operator that manages the lifecycle of Kuadrant components, enhancing gateway providers with features like TLS, DNS, application authentication, and rate limiting. Installing Kuadrant allows you to leverage these capabilities in your Kubernetes environment.",
+    "title": "Install Kuadrant on Kubernetes",
+    "description": "Kuadrant is a Kubernetes operator that enhances Gateway API providers (Istio or Envoy Gateway) with policy capabilities including TLS management, DNS routing, application authentication (AuthPolicy), and rate limiting (RateLimitPolicy). The Kuadrant operator is installed via Helm and requires Gateway API CRDs, cert-manager, and a gateway provider as prerequisites.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Kuadrant Helm repository",
-        "description": "Add the Kuadrant Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add kuadrant https://kuadrant.io/helm-charts/\nhelm repo update\n```"
+        "title": "Install Gateway API CRDs (prerequisite)",
+        "description": "Kuadrant requires Gateway API CRDs to be installed on your cluster:\n```bash\nkubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml\n```"
       },
       {
-        "title": "Install the Kuadrant Operator",
-        "description": "Install the Kuadrant Operator in a new namespace called 'kuadrant' using the following command:\n```bash\nhelm install kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant --create-namespace --version v1.4.1\n```"
+        "title": "Install cert-manager (prerequisite)",
+        "description": "Kuadrant requires cert-manager for TLS certificate management:\n```bash\nkubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml\nkubectl wait --for=condition=Available --timeout=120s deployment/cert-manager -n cert-manager\nkubectl wait --for=condition=Available --timeout=120s deployment/cert-manager-webhook -n cert-manager\n```"
+      },
+      {
+        "title": "Install a Gateway provider (prerequisite)",
+        "description": "Kuadrant works with either Istio or Envoy Gateway. Install one of them:\n\n**Option A — Istio:**\n```bash\ncurl -L https://istio.io/downloadIstio | sh -\nistioctl install --set profile=minimal -y\n```\n\n**Option B — Envoy Gateway:**\n```bash\nhelm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.2.6 -n envoy-gateway-system --create-namespace\n```"
+      },
+      {
+        "title": "Install the Kuadrant Operator via Helm",
+        "description": "Add the Kuadrant Helm repository and install the operator:\n```bash\nhelm repo add kuadrant https://kuadrant.io/helm-charts/\nhelm repo update\nhelm install kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant-system --create-namespace --version v1.4.1\n```\nWait for the operator to be ready:\n```bash\nkubectl wait --for=condition=Available --timeout=120s deployment/kuadrant-operator-controller-manager -n kuadrant-system\n```"
+      },
+      {
+        "title": "Create the Kuadrant custom resource",
+        "description": "Create a Kuadrant CR to activate the operator's reconciliation of policy resources:\n```bash\nkubectl apply -f - <<EOF\napiVersion: kuadrant.io/v1beta1\nkind: Kuadrant\nmetadata:\n  name: kuadrant\n  namespace: kuadrant-system\nspec: {}\nEOF\n```\nVerify the Kuadrant CR is ready:\n```bash\nkubectl get kuadrant kuadrant -n kuadrant-system -o jsonpath='{.status.conditions}' | jq .\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Kuadrant Operator pod is running with the following command:\n```bash\nkubectl get pods --namespace kuadrant\n```"
-      },
-      {
-        "title": "Post-install configuration",
-        "description": "To configure resource limits for the Kuadrant Operator, you can edit the deployment with the following command:\n```bash\nkubectl edit deployment kuadrant-operator --namespace kuadrant\n```\nAdd the following resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\"\n```"
+        "description": "Check that all Kuadrant components are running:\n```bash\nkubectl get pods -n kuadrant-system\n```\nYou should see the Kuadrant operator controller manager and Limitador (rate limiting) pods running.\n\nVerify the CRDs were installed:\n```bash\nkubectl get crd | grep kuadrant\n```\nYou should see AuthPolicy, RateLimitPolicy, DNSPolicy, TLSPolicy, and Kuadrant CRDs."
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the Kuadrant Operator running in the 'kuadrant' namespace, with its pod status showing as 'Running'. You can further configure it as needed.",
+      "summary": "A successful installation will have the Kuadrant operator and Limitador pods running in the kuadrant-system namespace. The Kuadrant CR should show ready status. You can now create AuthPolicy, RateLimitPolicy, DNSPolicy, and TLSPolicy resources targeting your Gateway API HTTPRoutes and Gateways.",
       "codeSnippets": [
         "helm repo add kuadrant https://kuadrant.io/helm-charts/\nhelm repo update",
-        "helm install kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant --create-namespace --version v1.4.1",
-        "kubectl get pods --namespace kuadrant",
-        "kubectl edit deployment kuadrant-operator --namespace kuadrant",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
+        "helm install kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant-system --create-namespace --version v1.4.1",
+        "kubectl apply -f - <<EOF\napiVersion: kuadrant.io/v1beta1\nkind: Kuadrant\nmetadata:\n  name: kuadrant\n  namespace: kuadrant-system\nspec: {}\nEOF",
+        "kubectl get pods -n kuadrant-system",
+        "kubectl get crd | grep kuadrant"
       ]
     },
     "uninstall": [
       {
+        "title": "Delete the Kuadrant CR",
+        "description": "Remove the Kuadrant custom resource first:\n```bash\nkubectl delete kuadrant kuadrant -n kuadrant-system\n```"
+      },
+      {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Kuadrant Operator release using Helm with the following command:\n```bash\nhelm uninstall kuadrant-operator --namespace kuadrant\n```"
+        "description": "Uninstall the Kuadrant operator Helm release:\n```bash\nhelm uninstall kuadrant-operator -n kuadrant-system\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) created by the Kuadrant Operator with the following command:\n```bash\nkubectl delete crd kuadrant*.kuadrant.io\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'kuadrant' namespace and verify its removal with the following commands:\n```bash\nkubectl delete namespace kuadrant\nkubectl get namespaces\n```"
+        "title": "Clean up CRDs and namespace",
+        "description": "Remove Kuadrant CRDs and the namespace:\n```bash\nkubectl delete crd $(kubectl get crd | grep kuadrant | awk '{print $1}')\nkubectl delete namespace kuadrant-system\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of the Kuadrant Operator with the following command:\n```bash\nkubectl get all --namespace kuadrant -o yaml > kuadrant-backup.yaml\n```"
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Kuadrant Operator to the latest version with the following commands:\n```bash\nhelm repo update\nhelm upgrade kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant --version v1.5.0\n```"
+        "title": "Upgrade via Helm",
+        "description": "Update the Helm repo and upgrade to a new version:\n```bash\nhelm repo update\nhelm upgrade kuadrant-operator kuadrant/kuadrant-operator --namespace kuadrant-system --version <new-version>\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Kuadrant Operator pod is running the new version with the following command:\n```bash\nkubectl get pods --namespace kuadrant\n```"
+        "description": "Check that the operator pod is running the new version:\n```bash\nkubectl get pods -n kuadrant-system\nkubectl describe deployment kuadrant-operator-controller-manager -n kuadrant-system | grep Image\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Kuadrant Operator pod is in a CrashLoopBackOff state, check the logs for errors with the following command:\n```bash\nkubectl logs <pod-name> --namespace kuadrant\n```"
+        "title": "Operator pod in CrashLoopBackOff",
+        "description": "Check the operator logs for errors:\n```bash\nkubectl logs -n kuadrant-system deployment/kuadrant-operator-controller-manager\n```\nCommon causes: missing Gateway API CRDs, missing cert-manager, or no gateway provider (Istio/Envoy Gateway) installed."
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If you encounter a version conflict during the Helm upgrade, check the installed version with:\n```bash\nhelm list --namespace kuadrant\n```\nThen ensure the version you are upgrading to is compatible."
+        "title": "Kuadrant CR not becoming ready",
+        "description": "Check the Kuadrant CR status:\n```bash\nkubectl get kuadrant kuadrant -n kuadrant-system -o yaml\n```\nEnsure all prerequisites are installed and the operator pod is running."
       },
       {
-        "title": "CRDs not found after upgrade",
-        "description": "If the CRDs are not found after an upgrade, ensure they are still installed with:\n```bash\nkubectl get crd --namespace kuadrant\n```"
+        "title": "RateLimitPolicy not enforcing",
+        "description": "If rate limiting is not working:\n1. Check Limitador pod is running: `kubectl get pods -n kuadrant-system -l app=limitador`\n2. Verify the RateLimitPolicy targets a valid HTTPRoute: `kubectl get ratelimitpolicy -A`\n3. Check operator logs for reconciliation errors"
       },
       {
-        "title": "Resource limits not applied",
-        "description": "If the resource limits are not applied as expected, check the deployment configuration with:\n```bash\nkubectl get deployment kuadrant-operator --namespace kuadrant -o yaml\n```"
+        "title": "Gateway API CRDs missing",
+        "description": "If the operator shows errors about missing resources:\n```bash\nkubectl get crd | grep gateway\n```\nInstall Gateway API CRDs: `kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml`"
       }
     ]
   },
@@ -89,7 +93,7 @@
       "installation",
       "configuration",
       "cncf",
-      "app-definition",
+      "networking",
       "sandbox"
     ],
     "cncfProjects": [
@@ -97,9 +101,12 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Namespace"
+      "Namespace",
+      "Kuadrant",
+      "AuthPolicy",
+      "RateLimitPolicy"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -109,13 +116,11 @@
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.4.1",
-    "containerImages": [
-      "registry/org/image:tag"
-    ],
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://kuadrant.io",
       "repo": "https://github.com/kuadrant/kuadrant-operator",
-      "helm": "https://github.com/kuadrant/kuadrant-operator/tree/main/charts/kuadrant-operator/"
+      "helm": "https://kuadrant.io/helm-charts/"
     },
     "qualityScore": 100
   },
@@ -125,11 +130,11 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and have installed Helm and kubectl."
+    "description": "Kubernetes 1.24+ cluster with: Gateway API CRDs installed, cert-manager running, and a gateway provider (Istio or Envoy Gateway) deployed. Helm 3 and kubectl must be configured to access your cluster."
   },
   "security": {
-    "scannedAt": "2026-03-01T17:34:58.632Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-06T00:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }

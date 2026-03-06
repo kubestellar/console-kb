@@ -5,56 +5,65 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Keylime on Kubernetes",
-    "description": "Keylime is an open-source scalable trust system that leverages TPM technology to bootstrap and maintain trust on edge, cloud, and IoT devices. Installing Keylime allows you to ensure the integrity of remote machines and securely manage cryptographic trust.",
+    "title": "Install Keylime Attestation Operator on Kubernetes",
+    "description": "Keylime is a TPM-based remote boot attestation and runtime integrity measurement system. The Keylime Attestation Operator deploys Keylime components (registrar, verifier, and agent) on Kubernetes to provide hardware-rooted trust and continuous node integrity monitoring using TPM 2.0 devices.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace for Keylime",
-        "description": "First, create a dedicated namespace for Keylime to keep its resources organized."
+        "title": "Clone the attestation-operator repository",
+        "description": "Clone the Keylime attestation-operator repository which contains the Helm charts and manifests for deploying Keylime on Kubernetes:\n```bash\ngit clone https://github.com/keylime/attestation-operator.git\ncd attestation-operator\n```"
       },
       {
-        "title": "Apply Keylime Manifests",
-        "description": "Next, apply the Keylime manifests from the GitHub repository. Ensure you are using a specific version."
+        "title": "Install cert-manager (prerequisite)",
+        "description": "The attestation operator requires cert-manager for TLS certificate management:\n```bash\nkubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml\nkubectl wait --for=condition=Available --timeout=120s deployment/cert-manager -n cert-manager\nkubectl wait --for=condition=Available --timeout=120s deployment/cert-manager-webhook -n cert-manager\n```"
       },
       {
-        "title": "Verify Keylime Installation",
-        "description": "Check that all Keylime pods are running correctly in the keylime namespace."
+        "title": "Deploy the Keylime Attestation Operator",
+        "description": "Use the Makefile target to deploy the operator and Keylime components via Helm:\n```bash\nmake helm-keylime-deploy\n```\nThis installs the operator CRDs, the operator itself, and creates a default Keylime CR that deploys the registrar, verifier, and agent components.\n\nAlternatively, install step by step:\n```bash\nmake install           # Install CRDs\nmake deploy            # Deploy the operator\nkubectl apply -f config/samples/  # Create Keylime CR\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that all Keylime components are running:\n```bash\nkubectl get pods -n keylime\n```\nYou should see pods for:\n- `keylime-registrar` — tracks enrolled agents\n- `keylime-verifier` — performs attestation checks\n- `keylime-agent` (DaemonSet) — runs on each node with a TPM device\n- The attestation operator controller"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Keylime will show all Keylime pods running in the 'keylime' namespace. You will also have configured resource limits and RBAC for secure operation.",
-      "codeSnippets": []
+      "summary": "A successful installation will show the Keylime operator, registrar, verifier, and agent pods running in the keylime namespace. Agent pods run as a DaemonSet on nodes with TPM 2.0 devices. Use `kubectl get keylime -n keylime` to check the custom resource status.",
+      "codeSnippets": [
+        "git clone https://github.com/keylime/attestation-operator.git",
+        "make helm-keylime-deploy",
+        "kubectl get pods -n keylime",
+        "kubectl get keylime -n keylime"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Keylime Resources",
-        "description": "To uninstall Keylime, delete the resources applied in the keylime namespace."
+        "title": "Remove Keylime components",
+        "description": "Undeploy Keylime using the Makefile:\n```bash\nmake helm-keylime-undeploy\n```\nOr manually:\n```bash\nkubectl delete -f config/samples/\nmake undeploy\nmake uninstall\n```"
       },
       {
-        "title": "Delete the Keylime Namespace",
-        "description": "Finally, delete the namespace to clean up all resources."
+        "title": "Clean up namespace",
+        "description": "If the namespace still exists after undeployment:\n```bash\nkubectl delete namespace keylime\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Keylime",
-        "description": "To upgrade Keylime, apply the new version of the manifests. Ensure to specify the new version in the URLs."
+        "title": "Pull latest and redeploy",
+        "description": "Update the attestation-operator repository and redeploy:\n```bash\ncd attestation-operator\ngit pull origin main\nmake helm-keylime-deploy\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If a pod is not starting, check the pod logs for errors using the command: `kubectl logs <pod-name> -n keylime`."
+        "title": "Agent pods not starting",
+        "description": "Keylime agents require TPM 2.0 hardware on worker nodes. If agent pods fail to start:\n1. Verify TPM device exists: `ls /dev/tpm*` on the node\n2. Check agent logs: `kubectl logs -n keylime -l app=keylime-agent`\n3. On Kubernetes 1.26+, unprivileged TPM access may be available; on older versions, the agent may need privileged access"
       },
       {
-        "title": "Resource Quotas",
-        "description": "Ensure that your cluster has enough resources (CPU, memory) to run Keylime pods. Check resource usage with `kubectl top pods -n keylime`."
+        "title": "cert-manager not ready",
+        "description": "If the operator fails to start with certificate errors, ensure cert-manager is fully ready:\n```bash\nkubectl get pods -n cert-manager\nkubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=120s\n```"
       },
       {
-        "title": "Network Issues",
-        "description": "If the Keylime components cannot communicate, check your network policies and ensure that the necessary ports are open."
+        "title": "CRD not found errors",
+        "description": "If you see CRD-related errors, ensure the CRDs were installed:\n```bash\nkubectl get crd | grep keylime\n```\nIf missing, run `make install` to install them."
       }
     ]
   },
@@ -63,46 +72,49 @@
       "installation",
       "configuration",
       "cncf",
-      "app-definition",
+      "security",
       "sandbox"
     ],
     "cncfProjects": [
       "keylime"
     ],
     "targetResourceKinds": [
+      "Deployment",
+      "DaemonSet",
       "Service",
-      "Namespace",
-      "Serviceaccount"
+      "Namespace"
     ],
-    "difficulty": "intermediate",
+    "difficulty": "advanced",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "make",
+      "helm"
     ],
     "maturity": "sandbox",
-    "projectVersion": "v7.14.1",
-    "containerImages": [
-      "keylime/keylime:v7.14.1"
-    ],
+    "projectVersion": "latest",
+    "containerImages": [],
     "sourceUrls": {
       "docs": "https://keylime.dev",
-      "repo": "https://github.com/keylime/keylime"
+      "repo": "https://github.com/keylime/attestation-operator"
     },
     "qualityScore": 100
   },
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "git",
+      "make",
+      "helm"
     ],
-    "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to interact with your cluster."
+    "description": "Kubernetes 1.24+ cluster with worker nodes that have TPM 2.0 hardware. cert-manager must be installed. git, make, helm, and kubectl must be available on your workstation."
   },
   "security": {
-    "scannedAt": "2026-03-01T16:37:46.416Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-06T00:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }
