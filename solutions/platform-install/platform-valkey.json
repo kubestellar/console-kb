@@ -1,0 +1,171 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-valkey",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Valkey",
+    "description": "Valkey is a high-performance distributed key-value database optimized for caching and real-time workloads. It is suitable for applications requiring fast data access and supports a variety of data structures. Key trade-offs include the need for careful configuration to optimize performance and resource usage.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Valkey Helm repository",
+        "description": "This step adds the official Valkey Helm chart repository to your Helm configuration, allowing you to install Valkey easily.\n\n```bash\n\nhelm repo add valkey https://github.com/valkey-io/valkey/releases/download/v9.0.3\n\nhelm repo update\n\n```\n\n> This adds the repository for the latest release.\n> Updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add valkey https://github.com/valkey-io/valkey/releases/download/v9.0.3",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Valkey CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Valkey to function properly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://github.com/valkey-io/valkey/releases/download/v9.0.3/valkey-crds.yaml\n\n```\n\n> Ensure CRDs are installed before deploying the application.",
+        "commands": [
+          "kubectl apply -f https://github.com/valkey-io/valkey/releases/download/v9.0.3/valkey-crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Valkey using Helm",
+        "description": "This command installs Valkey in the specified namespace with the desired version.\n\n```bash\n\nhelm install valkey valkey/valkey --namespace valkey --create-namespace --version 9.0.3\n\n```\n\n> Replace 'valkey' with your desired release name.",
+        "commands": [
+          "helm install valkey valkey/valkey --namespace valkey --create-namespace --version 9.0.3"
+        ]
+      },
+      {
+        "title": "Create an example Valkey Custom Resource",
+        "description": "This step creates an example Custom Resource (CR) for Valkey to manage its instances.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: valkey.io/v1alpha1\nkind: Valkey\nmetadata:\n  name: example-valkey\nspec:\n  replicas: 3\nEOF\n\n```\n\n> This creates a Valkey instance with 3 replicas.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: valkey.io/v1alpha1\nkind: Valkey\nmetadata:\n  name: example-valkey\nspec:\n  replicas: 3\nEOF"
+        ]
+      },
+      {
+        "title": "Verify Valkey is running",
+        "description": "This command checks the status of the Valkey deployment to ensure it is running correctly.\n\n```bash\n\nkubectl get pods -n valkey\n\n```\n\n> You should see the Valkey pods in a Running state.",
+        "commands": [
+          "kubectl get pods -n valkey"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Valkey",
+        "description": "This step removes the Valkey deployment and associated resources. Be aware that this will result in data loss unless backups are taken.\n\n```bash\n\nhelm uninstall valkey --namespace valkey\n\nkubectl delete namespace valkey\n\n```\n\n> This command removes the Valkey release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall valkey --namespace valkey",
+          "kubectl delete namespace valkey"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Valkey",
+        "description": "Before upgrading, ensure you have a backup of your data. This process includes draining the pods, upgrading, and verifying the installation.\n\n```bash\n\nkubectl get pods -n valkey -o name | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data\n\nhelm upgrade valkey valkey/valkey --namespace valkey --version 9.0.3\n\nkubectl get pods -n valkey\n\n```\n\n> Drains the pods to prepare for upgrade.\n> Upgrades Valkey to the specified version.\n> Verify that the new pods are running.",
+        "commands": [
+          "kubectl get pods -n valkey -o name | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data",
+          "helm upgrade valkey valkey/valkey --namespace valkey --version 9.0.3",
+          "kubectl get pods -n valkey"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Valkey server'",
+        "description": "**Cause:** This may occur if the Valkey server is not running or is misconfigured.\n\n**Fix:**\nCheck the status of the Valkey pods using 'kubectl get pods -n valkey' and review logs with 'kubectl logs <pod-name> -n valkey'."
+      },
+      {
+        "title": "Error: 'Valkey CRD not found'",
+        "description": "**Cause:** This indicates that the Custom Resource Definitions were not installed properly.\n\n**Fix:**\nReapply the CRDs with 'kubectl apply -f https://github.com/valkey-io/valkey/releases/download/v9.0.3/valkey-crds.yaml'."
+      },
+      {
+        "title": "Pods are in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can happen due to misconfiguration or insufficient resources.\n\n**Fix:**\nCheck the pod logs for errors and ensure your cluster has enough resources allocated."
+      },
+      {
+        "title": "Error: 'Insufficient memory'",
+        "description": "**Cause:** The Valkey pods may be requesting more memory than is available on the nodes.\n\n**Fix:**\nAdjust the resource requests in the Valkey deployment configuration."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "9.0.3",
+        "changes": "Added support for new data structures and improved performance for existing operations.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Valkey pods in a Running state when executing 'kubectl get pods -n valkey'.",
+      "codeSnippets": [
+        "helm repo add valkey https://github.com/valkey-io/valkey/releases/download/v9.0.3",
+        "helm repo update",
+        "kubectl apply -f https://github.com/valkey-io/valkey/releases/download/v9.0.3/valkey-crds.yaml",
+        "helm install valkey valkey/valkey --namespace valkey --create-namespace --version 9.0.3",
+        "kubectl apply -f - <<EOF\napiVersion: valkey.io/v1alpha1\nkind: Valkey\nmetadata:\n  name: example-valkey\nspec:\n  replicas: 3\nEOF",
+        "kubectl get pods -n valkey"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "cache",
+      "linux-foundation"
+    ],
+    "platform": "valkey",
+    "platformType": "database",
+    "platformProvider": "Linux Foundation",
+    "platformVersions": [
+      "8.0",
+      "8.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/valkey-io/valkey:v9.0.3"
+    ],
+    "sourceUrls": {
+      "docs": "https://valkey.io/docs/",
+      "repo": "https://github.com/valkey-io/valkey"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T18:13:21.546Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

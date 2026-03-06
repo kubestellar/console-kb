@@ -1,0 +1,188 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-ollama",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Ollama",
+    "description": "Ollama is an AI platform for serving large language models (LLMs) such as Kimi-K2.5 and Gemma. It allows users to easily deploy and interact with various models through a simple command-line interface. Key trade-offs include the need for sufficient computational resources and the requirement to manage model versions effectively.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Ollama CLI",
+        "description": "This step installs the Ollama command-line interface, which is necessary for interacting with the models.\n\n```bash\n\ncurl -fsSL https://ollama.com/install.sh | sh\n\nirm https://ollama.com/install.ps1 | iex\n\n```\n\n> Use this command for Linux and macOS.\n> Use this command for Windows.",
+        "commands": [
+          "curl -fsSL https://ollama.com/install.sh | sh",
+          "irm https://ollama.com/install.ps1 | iex"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes cluster",
+        "description": "This command creates a new Kubernetes cluster with the specified version and node count in your preferred region.\n\n```bash\n\ngcloud container clusters create ollama-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Adjust the region as needed.",
+        "commands": [
+          "gcloud container clusters create ollama-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This command configures your kubeconfig to connect to the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials ollama-cluster --region=us-central1\n\n```\n\n> Make sure to match the region used in the previous step.",
+        "commands": [
+          "gcloud container clusters get-credentials ollama-cluster --region=us-central1"
+        ]
+      },
+      {
+        "title": "Verify the cluster nodes",
+        "description": "This command checks the status of the nodes in your Kubernetes cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in 'Ready' status.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Deploy Ollama on Kubernetes",
+        "description": "This command deploys the Ollama application on your Kubernetes cluster using Helm.\n\n```bash\n\nhelm repo add ollama https://ollama.com/helm\n\nhelm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace\n\n```\n\n> Add the Ollama Helm repository.\n> Install Ollama in a dedicated namespace.",
+        "commands": [
+          "helm repo add ollama https://ollama.com/helm",
+          "helm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-installation verification",
+        "description": "Verify that the Ollama deployment is running correctly.\n\n```bash\n\nkubectl get pods -n ollama\n\n```\n\n> Ensure all pods are in 'Running' status.",
+        "commands": [
+          "kubectl get pods -n ollama"
+        ]
+      },
+      {
+        "title": "Cost warning",
+        "description": "Be aware that running a Kubernetes cluster incurs costs based on the resources allocated.",
+        "commands": []
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Ollama",
+        "description": "This step removes the Ollama deployment from your Kubernetes cluster. Be aware that this will delete all associated resources.\n\n```bash\n\nhelm uninstall ollama --namespace ollama\n\ngcloud container clusters delete ollama-cluster --region=us-central1 --quiet\n\n```\n\n> This will remove the Ollama deployment.\n> This will delete the entire cluster and all its resources.",
+        "commands": [
+          "helm uninstall ollama --namespace ollama",
+          "gcloud container clusters delete ollama-cluster --region=us-central1 --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Ollama",
+        "description": "Before upgrading, ensure you back up any important data. This step will upgrade your Ollama installation to the latest version.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade ollama ollama/ollama --version 0.17.7 --namespace ollama\n\nkubectl uncordon <node-name>\n\nkubectl get pods -n ollama\n\n```\n\n> Replace <node-name> with the name of the node you want to drain.\n> This command upgrades Ollama to the specified version.\n> Replace <node-name> with the name of the node you drained earlier.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade ollama ollama/ollama --version 0.17.7 --namespace ollama",
+          "kubectl uncordon <node-name>",
+          "kubectl get pods -n ollama"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** This usually indicates that your kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials ollama-cluster --region=us-central1' to reset your kubeconfig."
+      },
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** This indicates that the Ollama image could not be pulled from the repository.\n\n**Fix:**\nCheck your internet connection and ensure the image exists in the repository."
+      },
+      {
+        "title": "Pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This usually means there is an issue with the application configuration or resource limits.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n ollama' for more details."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources allocated for the Ollama deployment.\n\n**Fix:**\nIncrease the node size or number of nodes in your cluster."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.17.7",
+        "changes": "Added support for new models and improved API endpoints.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME STATUS ROLES AGE VERSION' with all nodes in 'Ready' state when running 'kubectl get nodes'.",
+      "codeSnippets": [
+        "curl -fsSL https://ollama.com/install.sh | sh",
+        "irm https://ollama.com/install.ps1 | iex",
+        "gcloud container clusters create ollama-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials ollama-cluster --region=us-central1",
+        "kubectl get nodes",
+        "helm repo add ollama https://ollama.com/helm",
+        "helm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace",
+        "kubectl get pods -n ollama"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "ollama"
+    ],
+    "platform": "ollama",
+    "platformType": "ai-platform",
+    "platformProvider": "Ollama",
+    "platformVersions": [
+      "0.5",
+      "0.6"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "ollama/ollama:v0.17.7"
+    ],
+    "sourceUrls": {
+      "docs": "https://ollama.com/",
+      "repo": "https://github.com/ollama/ollama"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before proceeding with the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T18:07:36.307Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

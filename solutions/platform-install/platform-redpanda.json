@@ -1,0 +1,178 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-redpanda",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Redpanda",
+    "description": "Redpanda is a high-performance streaming data platform that is Kafka API compatible, designed for developers seeking a simpler and faster alternative to traditional streaming solutions. It eliminates the need for ZooKeeper and JVM, making it lightweight and easy to operate. Ideal for real-time data processing and analytics, Redpanda offers a robust ecosystem of connectors and tiered storage options.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Redpanda CLI",
+        "description": "This step installs the Redpanda command-line interface (CLI) which is essential for managing Redpanda clusters.\n\n```bash\n\ncurl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | sudo -E bash\n\nsudo apt-get install redpanda\n\n```\n\n> This command sets up the repository for Debian/Ubuntu.\n> This command installs the Redpanda CLI.",
+        "commands": [
+          "curl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | sudo -E bash",
+          "sudo apt-get install redpanda"
+        ]
+      },
+      {
+        "title": "Create a Redpanda cluster",
+        "description": "This step creates a Redpanda cluster on your Kubernetes environment with the specified version and node count.\n\n```bash\n\nkubectl create namespace redpanda\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml\n\n```\n\n> Create a namespace for Redpanda.\n> Deploy Redpanda using the provided YAML configuration.",
+        "commands": [
+          "kubectl create namespace redpanda",
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig to access the Redpanda cluster.\n\n```bash\n\nexport KUBECONFIG=$HOME/.kube/config\n\nkubectl config use-context <your-cluster-context>\n\n```\n\n> Set the kubeconfig environment variable.\n> Replace <your-cluster-context> with your actual cluster context.",
+        "commands": [
+          "export KUBECONFIG=$HOME/.kube/config",
+          "kubectl config use-context <your-cluster-context>"
+        ]
+      },
+      {
+        "title": "Verify Redpanda nodes",
+        "description": "This step checks the status of the Redpanda nodes to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n redpanda\n\nkubectl logs -l app=redpanda -n redpanda\n\n```\n\n> List all pods in the Redpanda namespace to verify their status.\n> Check logs for any errors or issues.",
+        "commands": [
+          "kubectl get pods -n redpanda",
+          "kubectl logs -l app=redpanda -n redpanda"
+        ]
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "This step configures autoscaling and monitoring for your Redpanda cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/monitoring.yaml\n\n```\n\n> Deploy autoscaler for Redpanda.\n> Deploy monitoring tools for Redpanda.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Redpanda",
+        "description": "This step removes the Redpanda deployment and associated resources. Be aware that this will result in data loss.\n\n```bash\n\nkubectl delete namespace redpanda\n\nkubectl delete -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml\n\n```\n\n> This command deletes the Redpanda namespace and all resources within it.\n> Remove the Redpanda deployment.",
+        "commands": [
+          "kubectl delete namespace redpanda",
+          "kubectl delete -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Redpanda",
+        "description": "Before upgrading, ensure you back up your data and check for any deprecated features. This step performs the upgrade and verifies the installation.\n\n```bash\n\nkubectl get pods -n redpanda -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml\n\nkubectl get pods -n redpanda\n\n```\n\n> Drain the nodes before upgrade.\n> Apply the new version of the Redpanda deployment.\n> Verify that all pods are running the new version.",
+        "commands": [
+          "kubectl get pods -n redpanda -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data",
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml",
+          "kubectl get pods -n redpanda"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Redpanda'",
+        "description": "**Cause:** This may occur if the Redpanda service is not running or the kubeconfig is misconfigured.\n\n**Fix:**\nEnsure the Redpanda pods are running and check your kubeconfig settings."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that the Redpanda pod is failing to start, possibly due to resource constraints.\n\n**Fix:**\nCheck the pod logs for errors and ensure sufficient resources are allocated."
+      },
+      {
+        "title": "Error: 'No nodes available for Redpanda'",
+        "description": "**Cause:** This may happen if there are no available nodes in the cluster.\n\n**Fix:**\nCheck the node status and ensure they are ready."
+      },
+      {
+        "title": "Error: 'Insufficient permissions to access Redpanda'",
+        "description": "**Cause:** This indicates that the RBAC settings are not correctly configured.\n\n**Fix:**\nEnsure that the service account has the necessary permissions to access Redpanda resources."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v25.3.10",
+        "changes": "Improved performance metrics, added support for tiered storage, and enhanced Kafka compatibility.",
+        "deprecations": "Deprecated legacy configuration flags related to storage.",
+        "migrationSteps": "If upgrading from v25.2.x, review the new storage configuration settings."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME READY STATUS RESTARTS AGE' with all pods in the 'Running' state when everything is working.",
+      "codeSnippets": [
+        "curl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | sudo -E bash",
+        "sudo apt-get install redpanda",
+        "kubectl create namespace redpanda",
+        "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/redpanda.yaml",
+        "export KUBECONFIG=$HOME/.kube/config",
+        "kubectl config use-context <your-cluster-context>",
+        "kubectl get pods -n redpanda",
+        "kubectl logs -l app=redpanda -n redpanda"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "messaging",
+      "streaming",
+      "redpanda-data"
+    ],
+    "platform": "redpanda",
+    "platformType": "messaging",
+    "platformProvider": "Redpanda Data",
+    "platformVersions": [
+      "24.x",
+      "25.x"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "kubectl"
+    ],
+    "containerImages": [
+      "vectorized/redpanda:v25.3.10"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.redpanda.com/",
+      "repo": "https://github.com/redpanda-data/redpanda"
+    },
+    "qualityScore": 97
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure your Kubernetes cluster meets the resource requirements and has the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T18:14:02.708Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
