@@ -6,130 +6,91 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Drasi on Kubernetes",
-    "description": "Drasi is a data processing platform that simplifies detecting changes in data and taking immediate action. It provides real-time actionable insights without the overhead of traditional data processing methods, making it ideal for applications that require immediate responses to data changes.",
+    "description": "Drasi is a data processing platform that simplifies detecting changes in data and taking immediate action. It uses a dedicated CLI tool to deploy its control plane (including Dapr) onto a Kubernetes cluster, then you define Sources, Continuous Queries, and Reactions to process data changes in real time.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the Drasi repository",
-        "description": "Clone the Drasi repository to your local machine to access the necessary Kubernetes manifests.\n```bash\ngit clone https://github.com/drasi-project/drasi-platform.git\ncd drasi-platform\n```"
+        "title": "Install the Drasi CLI",
+        "description": "Download and install the Drasi CLI for your platform:\n```bash\n# macOS\ncurl -fsSL https://raw.githubusercontent.com/drasi-project/drasi-platform/main/cli/installers/install-drasi-cli.sh | /bin/bash\n\n# Linux\nwget -q https://raw.githubusercontent.com/drasi-project/drasi-platform/main/cli/installers/install-drasi-cli.sh -O - | /bin/bash\n```\nVerify the CLI is installed:\n```bash\ndrasi version\n```"
       },
       {
-        "title": "Apply the Kubernetes manifests",
-        "description": "Deploy Drasi to your Kubernetes cluster using the provided manifests.\n```bash\nkubectl apply -f k8s/deployment.yaml --namespace drasi --create-namespace\n```"
+        "title": "Configure the Drasi environment",
+        "description": "Point the Drasi CLI at your Kubernetes cluster:\n```bash\ndrasi env kube\n```\nThis configures Drasi to use your current kubeconfig context."
       },
       {
-        "title": "Verify the deployment",
-        "description": "Check if the Drasi pods are running successfully.\n```bash\nkubectl get pods --namespace drasi\n```"
+        "title": "Initialize Drasi on the cluster",
+        "description": "Deploy the Drasi control plane to your cluster. This installs all Drasi components (including Dapr) into the drasi-system namespace:\n```bash\ndrasi init\n```\nOptional flags:\n- `-n <namespace>` to use a different namespace\n- `--version <tag>` to specify a Drasi version\n- `--registry <registry>` to use a custom container registry"
       },
       {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the Drasi deployment to ensure optimal performance.\n```bash\nkubectl set resources deployment/drasi --namespace drasi --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
+        "title": "Set up ingress for local clusters",
+        "description": "If running on a local cluster (kind, k3s, minikube), configure the ingress controller:\n```bash\ndrasi ingress init --local-cluster\n```"
       },
       {
-        "title": "Set up RBAC for Drasi",
-        "description": "Create a Role and RoleBinding to allow Drasi to access necessary resources.\n```bash\nkubectl apply -f k8s/rbac.yaml --namespace drasi\n```"
+        "title": "Verify the installation",
+        "description": "Check that all Drasi pods are running in the drasi-system namespace:\n```bash\nkubectl get pods -n drasi-system\n```\nYou should see the Drasi control plane pods in Running state."
       }
     ],
+    "resolution": {
+      "summary": "A successful installation will have all Drasi control plane pods running in the drasi-system namespace. You can now define Sources, Continuous Queries, and Reactions using `drasi apply -f <file.yaml>` and list them with `drasi list source`, `drasi list query`, `drasi list reaction`.",
+      "codeSnippets": [
+        "curl -fsSL https://raw.githubusercontent.com/drasi-project/drasi-platform/main/cli/installers/install-drasi-cli.sh | /bin/bash",
+        "drasi env kube",
+        "drasi init",
+        "kubectl get pods -n drasi-system"
+      ]
+    },
     "uninstall": [
       {
-        "title": "Remove the Drasi deployment",
-        "description": "Delete the Drasi deployment from your Kubernetes cluster.\n```bash\nkubectl delete deployment drasi --namespace drasi\n```"
-      },
-      {
-        "title": "Clean up associated resources",
-        "description": "Remove any associated resources such as services and config maps.\n```bash\nkubectl delete service drasi --namespace drasi\nkubectl delete configmap drasi-config --namespace drasi\n```"
-      },
-      {
-        "title": "Delete the namespace",
-        "description": "Finally, delete the namespace to clean up all resources.\n```bash\nkubectl delete namespace drasi\n```"
+        "title": "Uninstall Drasi",
+        "description": "Remove the Drasi environment from your cluster:\n```bash\ndrasi uninstall -y\n```\nThis removes all Drasi components and the drasi-system namespace."
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Export the current configuration and state of Drasi before upgrading.\n```bash\nkubectl get all --namespace drasi -o yaml > drasi-backup.yaml\n```"
-      },
-      {
-        "title": "Update the manifests",
-        "description": "Pull the latest changes from the Drasi repository to get the updated manifests.\n```bash\ngit pull origin main\n```"
-      },
-      {
-        "title": "Upgrade the deployment",
-        "description": "Apply the updated manifests to upgrade Drasi.\n```bash\nkubectl apply -f k8s/deployment.yaml --namespace drasi\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the pods to ensure the upgrade was successful.\n```bash\nkubectl get pods --namespace drasi\n```"
+        "title": "Upgrade Drasi",
+        "description": "Install the latest CLI version and re-initialize:\n```bash\ncurl -fsSL https://raw.githubusercontent.com/drasi-project/drasi-platform/main/cli/installers/install-drasi-cli.sh | /bin/bash\ndrasi init --version <new-version>\n```"
       }
     ],
     "troubleshooting": [
       {
+        "title": "drasi init fails",
+        "description": "Check that your kubeconfig context is correct and you have cluster-admin permissions:\n```bash\nkubectl config current-context\nkubectl auth can-i create namespaces\n```"
+      },
+      {
         "title": "Pods not starting",
-        "description": "If the Drasi pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace drasi\n``` \nLook for any error messages that indicate what might be wrong, such as configuration issues or missing dependencies."
+        "description": "Check pod logs and events in the drasi-system namespace:\n```bash\nkubectl logs -n drasi-system -l app.kubernetes.io/part-of=drasi\nkubectl get events -n drasi-system --sort-by=.lastTimestamp\n```"
       },
       {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If pods are being terminated due to OOMKilled, check the resource usage:\n```bash\nkubectl top pods --namespace drasi\n``` \nConsider increasing the memory limits in your deployment."
-      },
-      {
-        "title": "RBAC permission errors",
-        "description": "If you encounter permission errors, verify the RBAC configuration:\n```bash\nkubectl get rolebindings --namespace drasi\nkubectl describe rolebinding <rolebinding-name> --namespace drasi\n``` \nEnsure that the correct permissions are granted."
+        "title": "Drasi CLI not found after install",
+        "description": "Ensure the CLI binary is on your PATH. The installer places it in `~/.drasi/bin`. Add to your shell profile:\n```bash\nexport PATH=$PATH:~/.drasi/bin\n```"
       }
-    ],
-    "resolution": {
-      "summary": "A successful installation of Drasi will have all pods running without errors, and you will be able to access the service as intended. You can verify this by checking the pod status and ensuring that the application is responding to data changes.",
-      "codeSnippets": [
-        "git clone https://github.com/drasi-project/drasi-platform.git\ncd drasi-platform",
-        "kubectl apply -f k8s/deployment.yaml --namespace drasi --create-namespace",
-        "kubectl get pods --namespace drasi",
-        "kubectl set resources deployment/drasi --namespace drasi --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
-        "kubectl apply -f k8s/rbac.yaml --namespace drasi"
-      ]
-    }
+    ]
   },
   "metadata": {
-    "tags": [
-      "installation",
-      "configuration",
-      "cncf",
-      "app-definition",
-      "sandbox"
-    ],
-    "cncfProjects": [
-      "drasi"
-    ],
-    "targetResourceKinds": [
-      "Deployment",
-      "Namespace"
-    ],
+    "tags": ["installation", "configuration", "cncf", "app-definition", "sandbox"],
+    "cncfProjects": ["drasi"],
+    "targetResourceKinds": ["Namespace"],
     "difficulty": "intermediate",
-    "issueTypes": [
-      "installation",
-      "configuration"
-    ],
-    "installMethods": [
-      "kubectl"
-    ],
+    "issueTypes": ["installation", "configuration"],
+    "installMethods": ["cli"],
     "maturity": "sandbox",
     "projectVersion": "latest",
     "containerImages": [],
     "sourceUrls": {
-      "docs": "https://drasi.io/",
+      "docs": "https://drasi.io/drasi-kubernetes/getting-started/",
       "repo": "https://github.com/drasi-project/drasi-platform"
     },
     "qualityScore": 100
   },
   "prerequisites": {
     "kubernetes": ">=1.24",
-    "tools": [
-      "kubectl"
-    ],
-    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
+    "tools": ["kubectl"],
+    "description": "A running Kubernetes cluster with kubectl configured. The Drasi CLI is installed as part of the mission. Docker is required for local cluster setups."
   },
   "security": {
-    "scannedAt": "2026-03-05T22:34:09.741Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-06T00:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }
