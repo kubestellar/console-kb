@@ -1,0 +1,179 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-qdrant",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Qdrant",
+    "description": "Qdrant is a high-performance vector database designed for AI applications, enabling efficient storage and retrieval of vector embeddings. It is ideal for use cases involving semantic search, recommendation systems, and neural network applications. Key trade-offs include the need for careful configuration to optimize performance and resource usage.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Qdrant CLI",
+        "description": "This step installs the Qdrant command-line interface, which is necessary for managing your Qdrant instance.\n\n```bash\n\ncurl -sSfL https://get.qdrant.tech/cli.sh | sh\n\n```\n\n> This command downloads and installs the Qdrant CLI.",
+        "commands": [
+          "curl -sSfL https://get.qdrant.tech/cli.sh | sh"
+        ]
+      },
+      {
+        "title": "Create a Qdrant cluster",
+        "description": "This command creates a new Qdrant cluster with the specified version and node count in the desired region.\n\n```bash\n\ngcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Adjust the zone and node count as necessary.",
+        "commands": [
+          "gcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig file to interact with the newly created Qdrant cluster.\n\n```bash\n\ngcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a\n\n```\n\n> This command updates your kubeconfig with the cluster credentials.",
+        "commands": [
+          "gcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Verify cluster nodes",
+        "description": "This command checks the status of the nodes in your Qdrant cluster to ensure they are running correctly.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in the 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "This step involves configuring autoscaling and monitoring for your Qdrant deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/autoscale.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/monitoring.yaml\n\n```\n\n> This command sets up autoscaling for your Qdrant deployment.\n> This command sets up monitoring for your Qdrant deployment.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/autoscale.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall the Qdrant cluster",
+        "description": "This step will remove the Qdrant cluster and all associated resources. Be aware that this will result in data loss and orphaned resources.\n\n```bash\n\ngcloud container clusters delete qdrant-cluster --zone=us-central1-a --quiet\n\n```\n\n> This command deletes the Qdrant cluster.",
+        "commands": [
+          "gcloud container clusters delete qdrant-cluster --zone=us-central1-a --quiet"
+        ]
+      },
+      {
+        "title": "Remove Qdrant CLI",
+        "description": "This command removes the Qdrant CLI from your system.\n\n```bash\n\nrm -rf ~/.qdrant\n\n```\n\n> This command deletes the Qdrant CLI installation directory.",
+        "commands": [
+          "rm -rf ~/.qdrant"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade the Qdrant cluster",
+        "description": "Before upgrading, ensure you back up your data. This step includes draining nodes, upgrading, and verifying the upgrade.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\ngcloud container clusters upgrade qdrant-cluster --cluster-version=1.13 --zone=us-central1-a\n\nkubectl uncordon <node-name>\n\nkubectl get pods\n\n```\n\n> Replace <node-name> with the name of the node you want to drain.\n> This command upgrades your Qdrant cluster to version 1.13.\n> Replace <node-name> with the name of the node you want to uncordon.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "gcloud container clusters upgrade qdrant-cluster --cluster-version=1.13 --zone=us-central1-a",
+          "kubectl uncordon <node-name>",
+          "kubectl get pods"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Qdrant'",
+        "description": "**Cause:** This may occur if the Qdrant service is not running or the network is misconfigured.\n\n**Fix:**\nCheck the status of the Qdrant pods with 'kubectl get pods' and ensure they are running."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** This indicates that there are not enough resources available in the cluster.\n\n**Fix:**\nIncrease the node count or resize existing nodes to meet resource requirements."
+      },
+      {
+        "title": "Error: 'Qdrant service not found'",
+        "description": "**Cause:** This may happen if the Qdrant service was not deployed correctly.\n\n**Fix:**\nReapply the deployment configuration using 'kubectl apply -f <deployment-file>'."
+      },
+      {
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that the Qdrant pod is crashing due to configuration issues or resource limits.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name>' to diagnose the issue."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.13",
+        "changes": "Introduced support for advanced filtering capabilities and improved performance for large datasets.",
+        "deprecations": "Deprecated the old configuration format; users must migrate to the new format.",
+        "migrationSteps": "Update your configuration files to match the new schema as outlined in the documentation."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods' showing all Qdrant pods in the 'Running' state.",
+      "codeSnippets": [
+        "curl -sSfL https://get.qdrant.tech/cli.sh | sh",
+        "gcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/autoscale.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/k8s/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "qdrant"
+    ],
+    "platform": "qdrant",
+    "platformType": "database",
+    "platformProvider": "Qdrant",
+    "platformVersions": [
+      "1.12",
+      "1.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "kubectl"
+    ],
+    "containerImages": [
+      "ghcr.io/qdrant/qdrant:v1.17.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://qdrant.tech/documentation/",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "qualityScore": 93
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before proceeding with the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T06:14:31.854Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
