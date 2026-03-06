@@ -1,0 +1,171 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-ollama",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Ollama",
+    "description": "Ollama is an AI platform designed for serving large language models (LLMs) such as Kimi-K2.5 and GLM-5. It simplifies the deployment and management of AI models in Kubernetes environments, making it ideal for developers looking to integrate AI capabilities into their applications. Key trade-offs include the need for proper resource allocation and understanding of Kubernetes for optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Ollama Helm Repository",
+        "description": "This step adds the Ollama Helm repository to your local Helm client, allowing you to install Ollama using Helm.\n\n```bash\n\nhelm repo add ollama https://ollama.com/helm\n\nhelm repo update\n\n```\n\n> This command adds the Ollama Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add ollama https://ollama.com/helm",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Ollama CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Ollama to function properly.\n\n```bash\n\nkubectl apply -f https://ollama.com/crds/ollama-crds.yaml\n\n```\n\n> This command installs the necessary CRDs.",
+        "commands": [
+          "kubectl apply -f https://ollama.com/crds/ollama-crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Ollama using Helm",
+        "description": "This step installs the Ollama platform in the specified namespace using Helm.\n\n```bash\n\nhelm install ollama ollama/ollama --namespace ollama --create-namespace --version 0.6.0\n\n```\n\n> Replace '0.6.0' with the desired version.",
+        "commands": [
+          "helm install ollama ollama/ollama --namespace ollama --create-namespace --version 0.6.0"
+        ]
+      },
+      {
+        "title": "Create an Example Custom Resource",
+        "description": "This step creates an example custom resource to deploy a model on Ollama.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: ollama.io/v1\nkind: Model\nmetadata:\n  name: gemma3\nspec:\n  model: gemma3\nEOF\n\n```\n\n> This command creates a model resource for Gemma 3.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: ollama.io/v1\nkind: Model\nmetadata:\n  name: gemma3\nspec:\n  model: gemma3\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Model Deployment",
+        "description": "This step checks the status of the deployed model to ensure it is running correctly.\n\n```bash\n\nkubectl get models -n ollama\n\n```\n\n> This command lists all models in the Ollama namespace.",
+        "commands": [
+          "kubectl get models -n ollama"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Ollama",
+        "description": "This step removes the Ollama installation and associated resources. Be aware that this will delete all models and configurations, leading to potential data loss.\n\n```bash\n\nhelm uninstall ollama --namespace ollama\n\nkubectl delete namespace ollama\n\n```\n\n> Uninstalls the Ollama release.\n> Deletes the Ollama namespace and all resources within it.",
+        "commands": [
+          "helm uninstall ollama --namespace ollama",
+          "kubectl delete namespace ollama"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Ollama",
+        "description": "Before upgrading, ensure you back up any important data. This step upgrades the Ollama installation to the specified version.\n\n```bash\n\nkubectl get models -n ollama -o yaml > backup-models.yaml\n\nhelm upgrade ollama ollama/ollama --namespace ollama --version 0.6.0\n\nkubectl get models -n ollama\n\n```\n\n> Backup existing models.\n> Replace '0.6.0' with the desired version.\n> Verify that the models are still running after the upgrade.",
+        "commands": [
+          "kubectl get models -n ollama -o yaml > backup-models.yaml",
+          "helm upgrade ollama ollama/ollama --namespace ollama --version 0.6.0",
+          "kubectl get models -n ollama"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'model not found'",
+        "description": "**Cause:** The specified model does not exist in the Ollama deployment.\n\n**Fix:**\nEnsure the model name is correct and that it has been deployed successfully."
+      },
+      {
+        "title": "Error: 'connection refused'",
+        "description": "**Cause:** The Ollama service is not running or is misconfigured.\n\n**Fix:**\nCheck the status of the Ollama pods using 'kubectl get pods -n ollama' and ensure they are running."
+      },
+      {
+        "title": "Error: 'insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster does not have enough resources to schedule the Ollama pods.\n\n**Fix:**\nIncrease the resources available in your Kubernetes cluster or adjust the resource requests in the Ollama configuration."
+      },
+      {
+        "title": "Error: 'timeout waiting for condition'",
+        "description": "**Cause:** The model is taking too long to become ready.\n\n**Fix:**\nCheck the logs of the model pod using 'kubectl logs <pod-name> -n ollama' for more details."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.6.0",
+        "changes": "Added support for new models including Kimi-K2.5 and enhanced REST API capabilities.",
+        "deprecations": "Deprecated the old model deployment methods in favor of the new CRD approach.",
+        "migrationSteps": "If upgrading from 0.5, ensure to migrate existing models to the new CRD format."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the model listed with 'kubectl get models -n ollama' and its status should be 'Running'.",
+      "codeSnippets": [
+        "helm repo add ollama https://ollama.com/helm",
+        "helm repo update",
+        "kubectl apply -f https://ollama.com/crds/ollama-crds.yaml",
+        "helm install ollama ollama/ollama --namespace ollama --create-namespace --version 0.6.0",
+        "kubectl apply -f - <<EOF\napiVersion: ollama.io/v1\nkind: Model\nmetadata:\n  name: gemma3\nspec:\n  model: gemma3\nEOF",
+        "kubectl get models -n ollama"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "ollama"
+    ],
+    "platform": "ollama",
+    "platformType": "ai-platform",
+    "platformProvider": "Ollama",
+    "platformVersions": [
+      "0.5",
+      "0.6"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ollama/ollama:v0.17.7"
+    ],
+    "sourceUrls": {
+      "docs": "https://ollama.com/",
+      "repo": "https://github.com/ollama/ollama"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T12:04:41.832Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
