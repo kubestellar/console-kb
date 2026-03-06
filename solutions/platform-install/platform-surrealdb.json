@@ -1,0 +1,170 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-surrealdb",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure SurrealDB",
+    "description": "SurrealDB is a scalable, distributed, collaborative, multi-model database designed for the real-time web. It combines the features of document and graph databases, making it suitable for applications that require flexible data models. Key trade-offs include its complexity in setup and management compared to traditional databases.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the SurrealDB Helm repository",
+        "description": "This step adds the official SurrealDB Helm repository to your Helm configuration, allowing you to install SurrealDB using Helm.\n\n```bash\n\nhelm repo add surrealdb https://charts.surrealdb.com\n\nhelm repo update\n\n```\n\n> This command adds the SurrealDB Helm chart repository.\n> This updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add surrealdb https://charts.surrealdb.com",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install SurrealDB CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for SurrealDB to function correctly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/surrealdb/surrealdb/main/deploy/crds/surrealdbs.surrealdb.com_customresourcedefinition.yaml\n\n```\n\n> This command installs the necessary CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/surrealdb/surrealdb/main/deploy/crds/surrealdbs.surrealdb.com_customresourcedefinition.yaml"
+        ]
+      },
+      {
+        "title": "Install SurrealDB using Helm",
+        "description": "This command installs SurrealDB in the specified namespace with the desired version.\n\n```bash\n\nhelm install surrealdb surrealdb/surrealdb --version 3.0.2 --namespace surrealdb --create-namespace\n\n```\n\n> This installs SurrealDB in the 'surrealdb' namespace.",
+        "commands": [
+          "helm install surrealdb surrealdb/surrealdb --version 3.0.2 --namespace surrealdb --create-namespace"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource",
+        "description": "This step creates an example Custom Resource (CR) for SurrealDB to demonstrate its functionality.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: surrealdb.com/v1\nkind: SurrealDB\nmetadata:\n  name: example-surrealdb\n  namespace: surrealdb\nspec:\n  replicas: 1\nEOF\n\n```\n\n> This creates a simple SurrealDB instance.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: surrealdb.com/v1\nkind: SurrealDB\nmetadata:\n  name: example-surrealdb\n  namespace: surrealdb\nspec:\n  replicas: 1\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the SurrealDB instance",
+        "description": "This command checks the status of the SurrealDB instance to ensure it is running correctly.\n\n```bash\n\nkubectl get surrealdb -n surrealdb\n\n```\n\n> This command lists the SurrealDB instances in the 'surrealdb' namespace.",
+        "commands": [
+          "kubectl get surrealdb -n surrealdb"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall SurrealDB",
+        "description": "This step removes SurrealDB and its associated resources from your cluster. Be aware that this will result in data loss unless you have backups.\n\n```bash\n\nhelm uninstall surrealdb --namespace surrealdb\n\nkubectl delete crd surrealdbs.surrealdb.com\n\n```\n\n> This command uninstalls the SurrealDB release.\n> This command removes the Custom Resource Definitions.",
+        "commands": [
+          "helm uninstall surrealdb --namespace surrealdb",
+          "kubectl delete crd surrealdbs.surrealdb.com"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade SurrealDB",
+        "description": "Before upgrading, ensure you have a backup of your data. This process will upgrade SurrealDB to the specified version.\n\n```bash\n\nkubectl get surrealdb -n surrealdb -o json > surrealdb-backup.json\n\nhelm upgrade surrealdb surrealdb/surrealdb --version 3.0.2 --namespace surrealdb\n\nkubectl get surrealdb -n surrealdb\n\n```\n\n> Backup the current SurrealDB instance.\n> This command upgrades SurrealDB to the specified version.\n> Verify that the SurrealDB instance is running after the upgrade.",
+        "commands": [
+          "kubectl get surrealdb -n surrealdb -o json > surrealdb-backup.json",
+          "helm upgrade surrealdb surrealdb/surrealdb --version 3.0.2 --namespace surrealdb",
+          "kubectl get surrealdb -n surrealdb"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'SurrealDB instance not found'",
+        "description": "**Cause:** The specified SurrealDB instance does not exist in the cluster.\n\n**Fix:**\nCheck the namespace and ensure the SurrealDB instance is created correctly."
+      },
+      {
+        "title": "Error: 'Failed to connect to SurrealDB'",
+        "description": "**Cause:** The SurrealDB service is not running or is misconfigured.\n\n**Fix:**\nVerify the SurrealDB pod status with 'kubectl get pods -n surrealdb' and check logs with 'kubectl logs <pod-name> -n surrealdb'."
+      },
+      {
+        "title": "Error: 'CRD not found'",
+        "description": "**Cause:** The Custom Resource Definitions for SurrealDB have not been installed.\n\n**Fix:**\nReinstall the CRDs using the provided kubectl command."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster does not have enough resources to schedule the SurrealDB pods.\n\n**Fix:**\nEnsure your cluster meets the minimum resource requirements (2 vCPU, 4GB RAM per node) and scale up if necessary."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "3.0.2",
+        "changes": "Improved support for multi-model queries and enhanced performance for concurrent connections.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps are required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the SurrealDB instance listed with 'kubectl get surrealdb -n surrealdb' and its status should be 'Running'.",
+      "codeSnippets": [
+        "helm repo add surrealdb https://charts.surrealdb.com",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/surrealdb/surrealdb/main/deploy/crds/surrealdbs.surrealdb.com_customresourcedefinition.yaml",
+        "helm install surrealdb surrealdb/surrealdb --version 3.0.2 --namespace surrealdb --create-namespace",
+        "kubectl apply -f - <<EOF\napiVersion: surrealdb.com/v1\nkind: SurrealDB\nmetadata:\n  name: example-surrealdb\n  namespace: surrealdb\nspec:\n  replicas: 1\nEOF",
+        "kubectl get surrealdb -n surrealdb"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "multi-model-db",
+      "surrealdb"
+    ],
+    "platform": "surrealdb",
+    "platformType": "database",
+    "platformProvider": "SurrealDB",
+    "platformVersions": [
+      "3.0.2"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "surrealdb/surrealdb:v3.0.2"
+    ],
+    "sourceUrls": {
+      "docs": "https://surrealdb.com/docs",
+      "repo": "https://github.com/surrealdb/surrealdb"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T06:15:45.803Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

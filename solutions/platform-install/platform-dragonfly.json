@@ -1,0 +1,172 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-dragonfly",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Dragonfly",
+    "description": "Dragonfly is a modern in-memory data store that serves as a drop-in replacement for Redis and Memcached, offering significantly improved performance and resource efficiency. It is ideal for applications requiring high throughput and low latency caching solutions. Key trade-offs include compatibility with existing Redis/Memcached APIs and reduced resource consumption.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Dragonfly Helm repository",
+        "description": "This step adds the official Dragonfly Helm chart repository to your Helm configuration, allowing you to install Dragonfly easily.\n\n```bash\n\nhelm repo add dragonfly https://dragonflydb.github.io/charts\n\nhelm repo update\n\n```\n\n> This command adds the Dragonfly chart repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add dragonfly https://dragonflydb.github.io/charts",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Dragonfly CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Dragonfly to function correctly within your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/dragonflydb/dragonfly/v1.37.0/deploy/crds/dragonflydb_v1alpha1_dragonfly_crd.yaml\n\n```\n\n> This command installs the necessary CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/dragonflydb/dragonfly/v1.37.0/deploy/crds/dragonflydb_v1alpha1_dragonfly_crd.yaml"
+        ]
+      },
+      {
+        "title": "Install Dragonfly using Helm",
+        "description": "This step installs the Dragonfly application in the specified namespace using the Helm chart.\n\n```bash\n\nhelm install dragonfly dragonfly/dragonfly --namespace dragonfly --create-namespace --version 1.37.0\n\n```\n\n> Installs Dragonfly in the 'dragonfly' namespace.",
+        "commands": [
+          "helm install dragonfly dragonfly/dragonfly --namespace dragonfly --create-namespace --version 1.37.0"
+        ]
+      },
+      {
+        "title": "Create a Dragonfly instance",
+        "description": "This step creates a Dragonfly custom resource to deploy an instance of Dragonfly.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: dragonflydb.io/v1alpha1\nkind: Dragonfly\nmetadata:\n  name: my-dragonfly\n  namespace: dragonfly\nspec:\n  replicas: 3\nEOF\n\n```\n\n> Creates a Dragonfly instance with 3 replicas.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: dragonflydb.io/v1alpha1\nkind: Dragonfly\nmetadata:\n  name: my-dragonfly\n  namespace: dragonfly\nspec:\n  replicas: 3\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Dragonfly instance",
+        "description": "This step checks the status of the Dragonfly instance to ensure it is running correctly.\n\n```bash\n\nkubectl get dragonfly -n dragonfly\n\nkubectl get pods -n dragonfly\n\n```\n\n> Lists the Dragonfly instances in the 'dragonfly' namespace.\n> Verifies that all Dragonfly pods are running.",
+        "commands": [
+          "kubectl get dragonfly -n dragonfly",
+          "kubectl get pods -n dragonfly"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Dragonfly",
+        "description": "This step removes the Dragonfly installation and its associated resources. Be aware that this will result in data loss and orphaned resources such as persistent volumes and load balancers.\n\n```bash\n\nhelm uninstall dragonfly --namespace dragonfly\n\nkubectl delete namespace dragonfly\n\n```\n\n> Uninstalls the Dragonfly release.\n> Deletes the Dragonfly namespace and all resources within it.",
+        "commands": [
+          "helm uninstall dragonfly --namespace dragonfly",
+          "kubectl delete namespace dragonfly"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Dragonfly",
+        "description": "Before upgrading, ensure you backup your data. This step will upgrade Dragonfly to the latest version while ensuring minimal downtime.\n\n```bash\n\nkubectl get dragonfly my-dragonfly -n dragonfly -o yaml > dragonfly-backup.yaml\n\nhelm upgrade dragonfly dragonfly/dragonfly --namespace dragonfly --version 1.37.0\n\nkubectl get dragonfly -n dragonfly\n\n```\n\n> Backup the current Dragonfly instance configuration.\n> Upgrades Dragonfly to the specified version.\n> Verifies that the Dragonfly instance is upgraded and running.",
+        "commands": [
+          "kubectl get dragonfly my-dragonfly -n dragonfly -o yaml > dragonfly-backup.yaml",
+          "helm upgrade dragonfly dragonfly/dragonfly --namespace dragonfly --version 1.37.0",
+          "kubectl get dragonfly -n dragonfly"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Dragonfly'",
+        "description": "**Cause:** This may occur if the Dragonfly pods are not running or are in a crash loop.\n\n**Fix:**\nCheck the pod status with 'kubectl get pods -n dragonfly' and describe any failing pods using 'kubectl describe pod <pod-name> -n dragonfly'."
+      },
+      {
+        "title": "Error: 'Dragonfly instance not found'",
+        "description": "**Cause:** This indicates that the Dragonfly custom resource was not created or has been deleted.\n\n**Fix:**\nEnsure the Dragonfly instance is created with 'kubectl get dragonfly -n dragonfly'. If not, recreate it."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the Dragonfly pods.\n\n**Fix:**\nCheck cluster resource availability with 'kubectl describe nodes' and adjust resource requests/limits in the Dragonfly spec if necessary."
+      },
+      {
+        "title": "Error: 'CRD validation failed'",
+        "description": "**Cause:** This may occur if the CRDs are not installed or are outdated.\n\n**Fix:**\nReinstall the CRDs using 'kubectl apply -f https://raw.githubusercontent.com/dragonflydb/dragonfly/v1.37.0/deploy/crds/dragonflydb_v1alpha1_dragonfly_crd.yaml'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.37.0",
+        "changes": "Added support for new caching algorithms and improved metrics collection.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to:\n\nNAME          READY   STATUS    RESTARTS   AGE\nmy-dragonfly   3/3     Running   0          5m\n\nindicating that the Dragonfly instance is running correctly.",
+      "codeSnippets": [
+        "helm repo add dragonfly https://dragonflydb.github.io/charts",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/dragonflydb/dragonfly/v1.37.0/deploy/crds/dragonflydb_v1alpha1_dragonfly_crd.yaml",
+        "helm install dragonfly dragonfly/dragonfly --namespace dragonfly --create-namespace --version 1.37.0",
+        "kubectl apply -f - <<EOF\napiVersion: dragonflydb.io/v1alpha1\nkind: Dragonfly\nmetadata:\n  name: my-dragonfly\n  namespace: dragonfly\nspec:\n  replicas: 3\nEOF",
+        "kubectl get dragonfly -n dragonfly",
+        "kubectl get pods -n dragonfly"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "cache",
+      "dragonflydb"
+    ],
+    "platform": "dragonfly",
+    "platformType": "database",
+    "platformProvider": "DragonflyDB",
+    "platformVersions": [
+      "v1.37.0"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/dragonflydb/dragonfly:v1.37.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.dragonflydb.io/docs",
+      "repo": "https://github.com/dragonflydb/dragonfly"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running version 1.26 or higher with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T06:15:11.036Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

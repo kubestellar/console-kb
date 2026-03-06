@@ -1,0 +1,172 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-weaviate",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Weaviate",
+    "description": "Weaviate is an open-source vector database designed for semantic search and data management, combining vector similarity search with structured filtering. It is ideal for applications such as recommendation systems, chatbots, and content classification, providing scalability and fault tolerance. Key trade-offs include the complexity of setup and the need for proper resource allocation in production environments.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Weaviate Helm Repository",
+        "description": "This step adds the Weaviate Helm chart repository to your local Helm configuration, allowing you to install Weaviate using Helm.\n\n```bash\n\nhelm repo add weaviate https://weaviate.io/helm-charts\n\nhelm repo update\n\n```\n\n> This command adds the Weaviate Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add weaviate https://weaviate.io/helm-charts",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Weaviate CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Weaviate to function correctly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviateclasses.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviate.yaml\n\n```\n\n> Installs the Weaviate class CRD.\n> Installs the Weaviate instance CRD.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviateclasses.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviate.yaml"
+        ]
+      },
+      {
+        "title": "Install Weaviate using Helm",
+        "description": "This command installs Weaviate in the specified namespace with the desired version.\n\n```bash\n\nhelm install weaviate weaviate/weaviate --namespace weaviate --create-namespace --version 1.36.2\n\n```\n\n> Installs Weaviate with the specified version.",
+        "commands": [
+          "helm install weaviate weaviate/weaviate --namespace weaviate --create-namespace --version 1.36.2"
+        ]
+      },
+      {
+        "title": "Create Weaviate Custom Resource",
+        "description": "This step creates a Weaviate instance by applying a custom resource definition (CR) to your cluster.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: weaviate.io/v1\nkind: Weaviate\nmetadata:\n  name: weaviate\nspec:\n  replication: 1\n  module: text2vec-contextionary\nEOF\n\n```\n\n> Creates a Weaviate instance with the contextionary module.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: weaviate.io/v1\nkind: Weaviate\nmetadata:\n  name: weaviate\nspec:\n  replication: 1\n  module: text2vec-contextionary\nEOF"
+        ]
+      },
+      {
+        "title": "Verify Weaviate Installation",
+        "description": "This command checks the status of the Weaviate pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n weaviate\n\n```\n\n> Verify that the Weaviate pods are in 'Running' status.",
+        "commands": [
+          "kubectl get pods -n weaviate"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Weaviate",
+        "description": "This step removes the Weaviate installation from your Kubernetes cluster. Be aware that this will delete all data stored in Weaviate.\n\n```bash\n\nhelm uninstall weaviate --namespace weaviate\n\nkubectl delete namespace weaviate\n\n```\n\n> Uninstalls Weaviate from the specified namespace.\n> Deletes the Weaviate namespace, which may leave orphaned resources.",
+        "commands": [
+          "helm uninstall weaviate --namespace weaviate",
+          "kubectl delete namespace weaviate"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Weaviate",
+        "description": "Before upgrading, ensure you have a backup of your data. This process will upgrade Weaviate to the latest version.\n\n```bash\n\nkubectl cp <your-backup-command> weaviate-weaviate-0:<backup-location>\n\nhelm upgrade weaviate weaviate/weaviate --namespace weaviate --version 1.36.2\n\nkubectl get pods -n weaviate\n\n```\n\n> Backup your data before proceeding.\n> Upgrades Weaviate to the specified version.\n> Verify that the Weaviate pods are running after the upgrade.",
+        "commands": [
+          "kubectl cp <your-backup-command> weaviate-weaviate-0:<backup-location>",
+          "helm upgrade weaviate weaviate/weaviate --namespace weaviate --version 1.36.2",
+          "kubectl get pods -n weaviate"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Weaviate is not ready'",
+        "description": "**Cause:** The Weaviate pods may not have started correctly due to insufficient resources.\n\n**Fix:**\nCheck the resource allocation and ensure your nodes meet the minimum requirements."
+      },
+      {
+        "title": "Error: 'Failed to connect to the database'",
+        "description": "**Cause:** The database service may not be running or is misconfigured.\n\n**Fix:**\nVerify the database connection settings in the Weaviate configuration."
+      },
+      {
+        "title": "Error: 'CRD not found'",
+        "description": "**Cause:** The Custom Resource Definitions (CRDs) may not have been installed correctly.\n\n**Fix:**\nReapply the CRD installation commands."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** The Weaviate pod may be crashing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n weaviate' for more details."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.36.2",
+        "changes": "Improved support for multi-tenancy and added new vectorization modules.",
+        "deprecations": "Deprecated the old vectorization module 'text2vec-contextionary'.",
+        "migrationSteps": "If upgrading from v1.35.x, ensure to migrate your data to the new vectorization module."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Weaviate pods running with the command 'kubectl get pods -n weaviate' showing 'Running' status.",
+      "codeSnippets": [
+        "helm repo add weaviate https://weaviate.io/helm-charts",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviateclasses.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/crds/weaviate.io_weaviate.yaml",
+        "helm install weaviate weaviate/weaviate --namespace weaviate --create-namespace --version 1.36.2",
+        "kubectl apply -f - <<EOF\napiVersion: weaviate.io/v1\nkind: Weaviate\nmetadata:\n  name: weaviate\nspec:\n  replication: 1\n  module: text2vec-contextionary\nEOF",
+        "kubectl get pods -n weaviate"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "weaviate"
+    ],
+    "platform": "weaviate",
+    "platformType": "database",
+    "platformProvider": "Weaviate",
+    "platformVersions": [
+      "v1.36.2"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "cr.weaviate.io/semitechnologies/weaviate:1.36.2"
+    ],
+    "sourceUrls": {
+      "docs": "https://weaviate.io/developers/weaviate",
+      "repo": "https://github.com/weaviate/weaviate"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster with the necessary resources and tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-06T06:14:50.681Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
