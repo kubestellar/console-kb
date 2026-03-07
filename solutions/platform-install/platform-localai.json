@@ -1,0 +1,175 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-localai",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure LocalAI",
+    "description": "LocalAI is an open-source alternative to proprietary AI models, designed for self-hosting on consumer-grade hardware. It supports various AI tasks such as text generation, audio, and image processing without requiring a GPU. Ideal for users seeking a local-first, decentralized AI solution.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Install the LocalAI CLI",
+        "description": "This step installs the LocalAI command-line interface, which is necessary for interacting with the LocalAI service.\n\n```bash\n\ncurl -Lo localai https://github.com/go-skynet/LocalAI/releases/download/v3.12.1/localai-linux-amd64\n\nchmod +x localai\n\nsudo mv localai /usr/local/bin/\n\n```\n\n> Download the LocalAI binary for Linux.\n> Make the downloaded binary executable.\n> Move the binary to a directory in your PATH.",
+        "commands": [
+          "curl -Lo localai https://github.com/go-skynet/LocalAI/releases/download/v3.12.1/localai-linux-amd64",
+          "chmod +x localai",
+          "sudo mv localai /usr/local/bin/"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes cluster",
+        "description": "This step sets up a Kubernetes cluster where LocalAI will be deployed.\n\n```bash\n\nkind create cluster --name localai --image kindest/node:v1.30.0\n\n```\n\n> Create a local Kubernetes cluster using Kind.",
+        "commands": [
+          "kind create cluster --name localai --image kindest/node:v1.30.0"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig to interact with the newly created cluster.\n\n```bash\n\nexport KUBECONFIG=$(kind get kubeconfig-path --name=\n\n```\n\n> Set the KUBECONFIG environment variable to point to the Kind cluster.",
+        "commands": [
+          "export KUBECONFIG=$(kind get kubeconfig-path --name="
+        ]
+      },
+      {
+        "title": "Deploy LocalAI to the cluster",
+        "description": "This step deploys LocalAI to your Kubernetes cluster using a Helm chart.\n\n```bash\n\nhelm repo add localai https://localai.io/charts\n\nhelm install localai localai/localai --version 3.12.1 --namespace localai --create-namespace\n\n```\n\n> Add the LocalAI Helm repository.\n> Install LocalAI in the 'localai' namespace.",
+        "commands": [
+          "helm repo add localai https://localai.io/charts",
+          "helm install localai localai/localai --version 3.12.1 --namespace localai --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify the deployment",
+        "description": "This step checks if the LocalAI pods are running correctly.\n\n```bash\n\nkubectl get pods -n localai\n\n```\n\n> List the pods in the LocalAI namespace to verify they are running.",
+        "commands": [
+          "kubectl get pods -n localai"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall LocalAI",
+        "description": "This step removes LocalAI from your Kubernetes cluster. Be aware that this will delete all associated resources.\n\n```bash\n\nhelm uninstall localai --namespace localai\n\nkubectl delete namespace localai\n\n```\n\n> Uninstall the LocalAI release.\n> Delete the LocalAI namespace and all its resources.",
+        "commands": [
+          "helm uninstall localai --namespace localai",
+          "kubectl delete namespace localai"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade LocalAI",
+        "description": "This step outlines the process to upgrade LocalAI to the latest version. Ensure to backup any necessary data before proceeding.\n\n```bash\n\nkubectl get pods -n localai -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data\n\nhelm upgrade localai localai/localai --version 3.12.1 --namespace localai\n\nkubectl get pods -n localai\n\n```\n\n> Drain the LocalAI pods before upgrading.\n> Upgrade LocalAI to the specified version.\n> Verify that the LocalAI pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n localai -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data",
+          "helm upgrade localai localai/localai --version 3.12.1 --namespace localai",
+          "kubectl get pods -n localai"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** The specified Docker image may not exist or the repository is unreachable.\n\n**Fix:**\nCheck the image name and ensure the repository is accessible."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The LocalAI application may be misconfigured or missing required resources.\n\n**Fix:**\nCheck the logs of the pod using 'kubectl logs <pod-name> -n localai' for more details."
+      },
+      {
+        "title": "Error: 'Connection refused'",
+        "description": "**Cause:** The LocalAI service may not be running or is not exposed correctly.\n\n**Fix:**\nEnsure the LocalAI service is running and check the service configuration."
+      },
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** The Kubernetes cluster cannot pull the Docker image due to authentication issues.\n\n**Fix:**\nEnsure that the image pull secrets are correctly configured if the image is in a private repository."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "3.12.1",
+        "changes": "Added support for new model types and improved API endpoints for better performance.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the LocalAI pods running with a status of 'Running' when executing 'kubectl get pods -n localai'.",
+      "codeSnippets": [
+        "curl -Lo localai https://github.com/go-skynet/LocalAI/releases/download/v3.12.1/localai-linux-amd64",
+        "chmod +x localai",
+        "sudo mv localai /usr/local/bin/",
+        "kind create cluster --name localai --image kindest/node:v1.30.0",
+        "export KUBECONFIG=$(kind get kubeconfig-path --name=",
+        "helm repo add localai https://localai.io/charts",
+        "helm install localai localai/localai --version 3.12.1 --namespace localai --create-namespace",
+        "kubectl get pods -n localai"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "localai"
+    ],
+    "platform": "localai",
+    "platformType": "ai-platform",
+    "platformProvider": "LocalAI",
+    "platformVersions": [
+      "3.12.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "localai/localai:v3.12.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://localai.io/",
+      "repo": "https://github.com/mudler/LocalAI"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the specified resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T00:05:26.416Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

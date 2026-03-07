@@ -1,0 +1,170 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-vllm",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure vLLM",
+    "description": "vLLM is a high-throughput and memory-efficient inference and serving engine for large language models (LLMs). It is ideal for applications requiring fast and scalable LLM serving, leveraging advanced techniques for efficient memory management and request handling. Key trade-offs include the need for GPU resources for optimal performance and potential complexity in configuration.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Helm repository",
+        "description": "This step adds the vLLM Helm repository to your local Helm setup, allowing you to install vLLM using Helm.\n\n```bash\n\nhelm repo add vllm https://github.com/vllm-project/vllm/releases/download/v0.16.0\n\nhelm repo update\n\n```\n\n> This command adds the vLLM repository.\n> Updates the Helm repositories to fetch the latest charts.",
+        "commands": [
+          "helm repo add vllm https://github.com/vllm-project/vllm/releases/download/v0.16.0",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Custom Resource Definitions (CRDs)",
+        "description": "CRDs are necessary for vLLM to define its custom resources in Kubernetes.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/v0.16.0/deploy/crds/vllm.io_vllms_crd.yaml\n\n```\n\n> This command installs the required CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/v0.16.0/deploy/crds/vllm.io_vllms_crd.yaml"
+        ]
+      },
+      {
+        "title": "Install vLLM using Helm",
+        "description": "This step installs the vLLM application in the specified namespace with the desired version.\n\n```bash\n\nhelm install vllm vllm/vllm --namespace vllm --create-namespace --version 0.16.0\n\n```\n\n> Installs vLLM in the 'vllm' namespace.",
+        "commands": [
+          "helm install vllm vllm/vllm --namespace vllm --create-namespace --version 0.16.0"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource (CR)",
+        "description": "Creating an example CR allows you to deploy a sample model with vLLM for testing.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: vllm.io/v1\nkind: VLLM\nmetadata:\n  name: example-vllm\nspec:\n  model: 'gpt2'\n  replicas: 1\nEOF\n\n```\n\n> This command creates a sample vLLM resource.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: vllm.io/v1\nkind: VLLM\nmetadata:\n  name: example-vllm\nspec:\n  model: 'gpt2'\n  replicas: 1\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Custom Resource is ready",
+        "description": "This step checks the status of the deployed vLLM instance to ensure it is running correctly.\n\n```bash\n\nkubectl get vllm -n vllm\n\n```\n\n> This command lists the vLLM instances and their statuses.",
+        "commands": [
+          "kubectl get vllm -n vllm"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall vLLM",
+        "description": "This step removes the vLLM installation and its associated resources. Note that this may result in data loss if any models or configurations are not backed up.\n\n```bash\n\nhelm uninstall vllm --namespace vllm\n\nkubectl delete namespace vllm\n\n```\n\n> Uninstalls the vLLM release.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall vllm --namespace vllm",
+          "kubectl delete namespace vllm"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade vLLM",
+        "description": "Before upgrading, ensure you back up any important data. This step will upgrade vLLM to the latest version.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets --delete-local-data\n\nhelm upgrade vllm vllm/vllm --namespace vllm --version 0.16.0\n\nkubectl uncordon <node-name>\n\n```\n\n> Drains the node to prepare for upgrade.\n> Upgrades vLLM to the specified version.\n> Uncordons the node after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets --delete-local-data",
+          "helm upgrade vllm vllm/vllm --namespace vllm --version 0.16.0",
+          "kubectl uncordon <node-name>"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'vllm not found'",
+        "description": "**Cause:** The vLLM Helm chart may not be installed or the namespace may be incorrect.\n\n**Fix:**\nEnsure that vLLM is installed in the correct namespace using 'helm list --namespace vllm'."
+      },
+      {
+        "title": "Error: 'Failed to create VLLM resource'",
+        "description": "**Cause:** The CRD for vLLM may not be installed correctly.\n\n**Fix:**\nReapply the CRD using 'kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/v0.16.0/deploy/crds/vllm.io_vllms_crd.yaml'."
+      },
+      {
+        "title": "Pods are in 'CrashLoopBackOff' state",
+        "description": "**Cause:** The model specified in the CR may not be available or there may be insufficient resources.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n vllm' and ensure the specified model is supported."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** The cluster may not have enough resources allocated for vLLM.\n\n**Fix:**\nIncrease the resource limits in the vLLM CR or add more nodes to the cluster."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.16.0",
+        "changes": "Added support for new models and improved memory management features.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the vLLM instance listed with a status of 'Running' when executing 'kubectl get vllm -n vllm'.",
+      "codeSnippets": [
+        "helm repo add vllm https://github.com/vllm-project/vllm/releases/download/v0.16.0",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/v0.16.0/deploy/crds/vllm.io_vllms_crd.yaml",
+        "helm install vllm vllm/vllm --namespace vllm --create-namespace --version 0.16.0",
+        "kubectl apply -f - <<EOF\napiVersion: vllm.io/v1\nkind: VLLM\nmetadata:\n  name: example-vllm\nspec:\n  model: 'gpt2'\n  replicas: 1\nEOF",
+        "kubectl get vllm -n vllm"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "vllm-project"
+    ],
+    "platform": "vllm",
+    "platformType": "ai-platform",
+    "platformProvider": "vLLM Project",
+    "platformVersions": [
+      "0.6",
+      "0.7"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/vllm-project/vllm:v0.16.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.vllm.ai/",
+      "repo": "https://github.com/vllm-project/vllm"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the required tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T00:05:34.067Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

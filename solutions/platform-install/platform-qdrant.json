@@ -1,0 +1,178 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-qdrant",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Qdrant",
+    "description": "Qdrant is a high-performance vector database designed for AI applications, enabling efficient storage and retrieval of vector embeddings. It is suitable for applications requiring semantic search and matching, offering extensive filtering capabilities. Key trade-offs include the need for careful resource management and potential complexity in configuration for optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Qdrant CLI",
+        "description": "This step installs the Qdrant command-line interface, which is necessary for managing Qdrant instances.\n\n```bash\n\ncurl -sSfL https://get.qdrant.tech/cli.sh | sh\n\n```\n\n> This command downloads and installs the Qdrant CLI.",
+        "commands": [
+          "curl -sSfL https://get.qdrant.tech/cli.sh | sh"
+        ]
+      },
+      {
+        "title": "Create a Qdrant cluster",
+        "description": "This command creates a new Qdrant cluster with the specified version and node count in the desired region.\n\n```bash\n\nqdrant cluster create --version 1.13 --node-count 3 --region us-central1\n\n```\n\n> Adjust the region and node count as needed.",
+        "commands": [
+          "qdrant cluster create --version 1.13 --node-count 3 --region us-central1"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig to interact with the newly created Qdrant cluster.\n\n```bash\n\nexport KUBECONFIG=$(pwd)/kubeconfig.yaml\n\n```\n\n> Ensure you have the correct path to your kubeconfig file.",
+        "commands": [
+          "export KUBECONFIG=$(pwd)/kubeconfig.yaml"
+        ]
+      },
+      {
+        "title": "Verify cluster nodes",
+        "description": "This command checks the status of the nodes in your Qdrant cluster to ensure they are running correctly.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in a 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "This step sets up autoscaling and monitoring for your Qdrant deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/autoscale.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/monitoring.yaml\n\n```\n\n> This configures autoscaling based on resource usage.\n> This sets up monitoring for your Qdrant instance.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/autoscale.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Qdrant cluster",
+        "description": "This step removes the Qdrant cluster and all associated resources. Be aware that this will lead to data loss.\n\n```bash\n\nqdrant cluster delete --force\n\n```\n\n> This command will delete the cluster and all its resources.",
+        "commands": [
+          "qdrant cluster delete --force"
+        ]
+      },
+      {
+        "title": "Clean up orphaned resources",
+        "description": "This command ensures that any orphaned resources such as load balancers and PVCs are removed.\n\n```bash\n\nkubectl delete pvc --all\n\n```\n\n> This will delete all persistent volume claims associated with the Qdrant cluster.",
+        "commands": [
+          "kubectl delete pvc --all"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Qdrant cluster",
+        "description": "Before upgrading, ensure you back up your data and check the compatibility of your configurations.\n\n```bash\n\nqdrant backup create --all\n\nqdrant cluster upgrade --version 1.13\n\nkubectl get pods\n\n```\n\n> Create a backup of all data before proceeding.\n> Upgrade the cluster to the specified version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "qdrant backup create --all",
+          "qdrant cluster upgrade --version 1.13",
+          "kubectl get pods"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Qdrant'",
+        "description": "**Cause:** This may occur if the Qdrant service is not running or the kubeconfig is misconfigured.\n\n**Fix:**\nCheck the status of the Qdrant pods with 'kubectl get pods' and ensure your kubeconfig is set correctly."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources available for the new pod.\n\n**Fix:**\nScale up your cluster or reduce the resource requests for your pods."
+      },
+      {
+        "title": "Error: 'Database connection timeout'",
+        "description": "**Cause:** This can happen if the Qdrant service is overloaded or if there are network issues.\n\n**Fix:**\nCheck the resource usage and logs of the Qdrant pods for any signs of overload."
+      },
+      {
+        "title": "Error: 'Invalid configuration file'",
+        "description": "**Cause:** This may occur if the configuration file has syntax errors or unsupported settings.\n\n**Fix:**\nValidate your configuration file against the Qdrant documentation and fix any errors."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.13",
+        "changes": "Introduced support for advanced filtering options and improved performance for large datasets.",
+        "deprecations": "Deprecated the old snapshot storage method in favor of the new S3-compatible storage.",
+        "migrationSteps": "If upgrading from v1.12, ensure to migrate your snapshot storage configuration."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME STATUS ROLES AGE VERSION' with all nodes in 'Ready' state when running 'kubectl get nodes'.",
+      "codeSnippets": [
+        "curl -sSfL https://get.qdrant.tech/cli.sh | sh",
+        "qdrant cluster create --version 1.13 --node-count 3 --region us-central1",
+        "export KUBECONFIG=$(pwd)/kubeconfig.yaml",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/autoscale.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "qdrant"
+    ],
+    "platform": "qdrant",
+    "platformType": "database",
+    "platformProvider": "Qdrant",
+    "platformVersions": [
+      "1.12",
+      "1.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "kubectl"
+    ],
+    "containerImages": [
+      "ghcr.io/qdrant/qdrant:v1.13"
+    ],
+    "sourceUrls": {
+      "docs": "https://qdrant.tech/documentation/",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "qdrant-cli"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T00:09:35.864Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
