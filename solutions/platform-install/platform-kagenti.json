@@ -1,0 +1,176 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kagenti",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kagenti",
+    "description": "Kagenti is a cloud-native middleware designed for deploying and orchestrating AI agents with a focus on security and scalability. It simplifies the deployment complexity and operational overhead associated with various agent frameworks. Key trade-offs include the need for a Kubernetes environment and potential learning curve for new users.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Install the Kagenti CLI",
+        "description": "This step installs the Kagenti command-line interface which is required to interact with the Kagenti platform.\n\n```bash\n\ncurl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti\n\n```\n\n> This command downloads the CLI, makes it executable, and moves it to the local bin.",
+        "commands": [
+          "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster using the Kagenti CLI with the specified version and node count.\n\n```bash\n\nkagenti create cluster --name kagenti-cluster --version 1.30 --node-count 3 --region us-central1\n\n```\n\n> Replace 'us-central1' with your desired region.",
+        "commands": [
+          "kagenti create cluster --name kagenti-cluster --version 1.30 --node-count 3 --region us-central1"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig file to connect to the newly created Kubernetes cluster.\n\n```bash\n\nkagenti kubeconfig --cluster kagenti-cluster\n\n```\n\n> This command updates your kubeconfig to use the new cluster.",
+        "commands": [
+          "kagenti kubeconfig --cluster kagenti-cluster"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks the status of the nodes in your Kubernetes cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in the 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step sets up autoscaling and monitoring for your Kagenti deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/monitoring.yaml\n\n```\n\n> This command applies the autoscaler configuration.\n> This command applies the monitoring configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/monitoring.yaml"
+        ]
+      },
+      {
+        "title": "Cost Warning",
+        "description": "Be aware that running a Kubernetes cluster incurs costs based on the resources allocated.",
+        "commands": []
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kagenti",
+        "description": "This step removes the Kagenti deployment and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nkagenti delete cluster --name kagenti-cluster\n\nkubectl delete namespace kagenti\n\n```\n\n> This command deletes the cluster and all resources.\n> This command deletes the namespace associated with Kagenti.",
+        "commands": [
+          "kagenti delete cluster --name kagenti-cluster",
+          "kubectl delete namespace kagenti"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kagenti",
+        "description": "Before upgrading, ensure you back up your configurations and data. This step upgrades the Kagenti installation.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nkagenti upgrade --version v0.4.0-alpha.1\n\nkubectl uncordon <node-name>\n\nkubectl get pods -n kagenti\n\n```\n\n> Replace <node-name> with the name of the node you want to drain.\n> This command upgrades Kagenti to the specified version.\n> This command allows the node to accept new pods again.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "kagenti upgrade --version v0.4.0-alpha.1",
+          "kubectl uncordon <node-name>",
+          "kubectl get pods -n kagenti"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to create cluster'",
+        "description": "**Cause:** This may occur due to insufficient permissions or quota in your cloud provider.\n\n**Fix:**\nCheck your cloud provider's IAM permissions and resource quotas."
+      },
+      {
+        "title": "Error: 'kubectl get nodes' returns no nodes",
+        "description": "**Cause:** The cluster may not have been created successfully.\n\n**Fix:**\nRun 'kagenti list clusters' to check the status of your clusters."
+      },
+      {
+        "title": "Error: 'Failed to apply autoscaler.yaml'",
+        "description": "**Cause:** This may happen if the Kubernetes API server is not reachable.\n\n**Fix:**\nEnsure your kubeconfig is set up correctly and that the cluster is running."
+      },
+      {
+        "title": "Error: 'kubectl drain' fails with 'node not found'",
+        "description": "**Cause:** The specified node may not exist or may have been deleted.\n\n**Fix:**\nVerify the node name with 'kubectl get nodes' and try again."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.4.0-alpha.1",
+        "changes": "Initial release with core functionalities for deploying AI agents.",
+        "deprecations": "None",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get nodes' showing all nodes in the 'Ready' state.",
+      "codeSnippets": [
+        "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti",
+        "kagenti create cluster --name kagenti-cluster --version 1.30 --node-count 3 --region us-central1",
+        "kagenti kubeconfig --cluster kagenti-cluster",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/autoscaler.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/deploy/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-agents",
+      "kagenti"
+    ],
+    "platform": "kagenti",
+    "platformType": "ai-platform",
+    "platformProvider": "Kagenti",
+    "platformVersions": [
+      "v0.4.0-alpha.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "ghcr.io/kagenti/kagenti:v0.4.0-alpha.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://kagenti.github.io/.github/",
+      "repo": "https://github.com/kagenti/kagenti"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "curl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes environment set up with the necessary resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:02:01.828Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
