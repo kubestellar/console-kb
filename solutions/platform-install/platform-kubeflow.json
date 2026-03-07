@@ -1,0 +1,180 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kubeflow",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kubeflow",
+    "description": "Kubeflow is a machine learning toolkit for Kubernetes that provides a comprehensive set of tools for building, deploying, and managing machine learning workflows. It is ideal for teams looking to implement AI solutions at scale, leveraging Kubernetes' orchestration capabilities. Key trade-offs include the complexity of setup and management versus the flexibility and power of a fully integrated ML platform.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Kubeflow CLI",
+        "description": "This step installs the Kubeflow CLI, which is necessary for managing your Kubeflow deployment.\n\n```bash\n\ncurl -LO https://github.com/kubeflow/kubeflow/releases/download/v1.10.0/kubeflow-cli-linux-amd64.tar.gz\n\ntar -xvf kubeflow-cli-linux-amd64.tar.gz\n\nsudo mv kubeflow /usr/local/bin/\n\n```\n\n> Download the CLI for Linux\n> Extract the downloaded archive\n> Move the CLI to a directory in your PATH",
+        "commands": [
+          "curl -LO https://github.com/kubeflow/kubeflow/releases/download/v1.10.0/kubeflow-cli-linux-amd64.tar.gz",
+          "tar -xvf kubeflow-cli-linux-amd64.tar.gz",
+          "sudo mv kubeflow /usr/local/bin/"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster in your preferred cloud provider with the specified version and node count.\n\n```bash\n\ngcloud container clusters create kubeflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Create a GKE cluster with 3 nodes",
+        "commands": [
+          "gcloud container clusters create kubeflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures your kubeconfig file to interact with the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials kubeflow-cluster --region us-central1\n\n```\n\n> Update kubeconfig to use the new cluster",
+        "commands": [
+          "gcloud container clusters get-credentials kubeflow-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks the status of the nodes in your cluster to ensure they are running correctly.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes and their statuses",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Kubeflow",
+        "description": "This step deploys Kubeflow to your Kubernetes cluster using the CLI.\n\n```bash\n\nkfctl apply -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz\n\n```\n\n> Deploy Kubeflow using the specified version",
+        "commands": [
+          "kfctl apply -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step configures additional features such as autoscaling and monitoring.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/v1.10.0/monitoring/monitoring.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/v1.10.0/autoscaling/autoscaling.yaml\n\n```\n\n> Set up monitoring for Kubeflow\n> Enable autoscaling for your deployments",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/v1.10.0/monitoring/monitoring.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/v1.10.0/autoscaling/autoscaling.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kubeflow",
+        "description": "This step removes Kubeflow from your cluster. Be aware that this will delete all associated resources, which may lead to data loss.\n\n```bash\n\nkfctl delete -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz\n\ngcloud container clusters delete kubeflow-cluster --region us-central1 --quiet\n\n```\n\n> Delete the GKE cluster and all associated resources",
+        "commands": [
+          "kfctl delete -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz",
+          "gcloud container clusters delete kubeflow-cluster --region us-central1 --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kubeflow",
+        "description": "Before upgrading, back up your existing configurations and data. This step will upgrade your Kubeflow installation to the latest version.\n\n```bash\n\nkubectl get all --all-namespaces > kubeflow-backup.yaml\n\nkfctl apply -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz\n\nkubectl get pods -n kubeflow-system\n\n```\n\n> Backup current resources\n> Upgrade to the latest version of Kubeflow\n> Verify that all pods are running after the upgrade",
+        "commands": [
+          "kubectl get all --all-namespaces > kubeflow-backup.yaml",
+          "kfctl apply -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz",
+          "kubectl get pods -n kubeflow-system"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'kubectl: command not found'",
+        "description": "**Cause:** The kubectl CLI is not installed or not in your PATH.\n\n**Fix:**\nInstall kubectl using 'gcloud components install kubectl' or download it from the Kubernetes website."
+      },
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** The kubeconfig is not set up correctly or the cluster is not running.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials kubeflow-cluster --region us-central1' to update kubeconfig."
+      },
+      {
+        "title": "Pods in 'kubeflow-system' are in 'CrashLoopBackOff'",
+        "description": "**Cause:** One or more pods are failing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck pod logs using 'kubectl logs <pod-name> -n kubeflow-system' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** The cluster does not have enough resources allocated for the workloads.\n\n**Fix:**\nIncrease the node count or resize the existing nodes in your cluster."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.10.0",
+        "changes": "Added support for new ML frameworks, improved integration with Kubernetes 1.30, and enhanced user interface.",
+        "deprecations": "Deprecated support for Kubernetes versions below 1.27.",
+        "migrationSteps": "If upgrading from v1.9, ensure to update your configurations to align with the new API changes."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see a list of running pods in the 'kubeflow-system' namespace when you run 'kubectl get pods -n kubeflow-system'.",
+      "codeSnippets": [
+        "curl -LO https://github.com/kubeflow/kubeflow/releases/download/v1.10.0/kubeflow-cli-linux-amd64.tar.gz",
+        "tar -xvf kubeflow-cli-linux-amd64.tar.gz",
+        "sudo mv kubeflow /usr/local/bin/",
+        "gcloud container clusters create kubeflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials kubeflow-cluster --region us-central1",
+        "kubectl get nodes",
+        "kfctl apply -V -f https://github.com/kubeflow/manifests/archive/v1.10.0.tar.gz",
+        "kubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/v1.10.0/monitoring/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ml-platform",
+      "kubeflow"
+    ],
+    "platform": "kubeflow",
+    "platformType": "ai-platform",
+    "platformProvider": "Kubeflow",
+    "platformVersions": [
+      "v1.10"
+    ],
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "gcr.io/kubeflow-images-public/kubeflow:v1.10.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.kubeflow.org/docs/",
+      "repo": "https://github.com/kubeflow/kubeflow"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the necessary CLI tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T00:07:03.682Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
