@@ -1,0 +1,180 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-llm-d",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure llm-d",
+    "description": "llm-d is a high-performance distributed inference serving stack optimized for Kubernetes, designed to achieve state-of-the-art inference performance with modern accelerators. It is ideal for deploying large language models efficiently and reliably in production environments. Key trade-offs include the complexity of setup and the need for adequate hardware resources.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the CLI",
+        "description": "This step installs the llm-d command-line interface, which is necessary for managing deployments.\n\n```bash\n\ncurl -LO https://github.com/llm-d/llm-d/releases/download/v0.5.1/llm-d-linux-amd64 && chmod +x llm-d-linux-amd64 && sudo mv llm-d-linux-amd64 /usr/local/bin/llm-d\n\n```\n\n> This command downloads the CLI binary for Linux.",
+        "commands": [
+          "curl -LO https://github.com/llm-d/llm-d/releases/download/v0.5.1/llm-d-linux-amd64 && chmod +x llm-d-linux-amd64 && sudo mv llm-d-linux-amd64 /usr/local/bin/llm-d"
+        ]
+      },
+      {
+        "title": "Create the Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster with the specified version and node count in the desired region.\n\n```bash\n\ngcloud container clusters create llm-d-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1\n\n```\n\n> Adjust the region and node count as needed.",
+        "commands": [
+          "gcloud container clusters create llm-d-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up kubeconfig",
+        "description": "This step configures your kubeconfig file to use the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials llm-d-cluster --region=us-central1\n\n```\n\n> This command updates your kubeconfig to point to the new cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials llm-d-cluster --region=us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks that the nodes in your cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in the 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install llm-d Helm Chart",
+        "description": "This step installs the llm-d Helm chart into the Kubernetes cluster.\n\n```bash\n\nhelm repo add llm-d https://llm-d.github.io/llm-d/ && helm repo update\n\nhelm install llm-d llm-d/llm-d --version 0.5.1 --namespace llm-d --create-namespace\n\n```\n\n> Adds the llm-d Helm repository.\n> Installs llm-d in its own namespace.",
+        "commands": [
+          "helm repo add llm-d https://llm-d.github.io/llm-d/ && helm repo update",
+          "helm install llm-d llm-d/llm-d --version 0.5.1 --namespace llm-d --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step configures autoscaling and monitoring for llm-d.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/autoscale.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/monitoring.yaml\n\n```\n\n> Applies the autoscaling configuration.\n> Applies the monitoring configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/autoscale.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall llm-d",
+        "description": "This step removes llm-d from your cluster and warns about potential data loss.\n\n```bash\n\nhelm uninstall llm-d --namespace llm-d\n\nkubectl delete namespace llm-d\n\n```\n\n> This command removes the llm-d release.\n> This command deletes the llm-d namespace, which may result in data loss.",
+        "commands": [
+          "helm uninstall llm-d --namespace llm-d",
+          "kubectl delete namespace llm-d"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade llm-d",
+        "description": "This step includes backing up your configuration, upgrading the Helm chart, and verifying the upgrade.\n\n```bash\n\nkubectl get all -n llm-d -o yaml > llm-d-backup.yaml\n\nhelm upgrade llm-d llm-d/llm-d --version 0.5.1 --namespace llm-d\n\nkubectl get pods -n llm-d\n\n```\n\n> Backup current configuration.\n> Upgrades llm-d to the specified version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get all -n llm-d -o yaml > llm-d-backup.yaml",
+          "helm upgrade llm-d llm-d/llm-d --version 0.5.1 --namespace llm-d",
+          "kubectl get pods -n llm-d"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** This usually indicates that the kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials llm-d-cluster --region=us-central1' to refresh kubeconfig."
+      },
+      {
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that the application inside the pod is failing to start.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n llm-d' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources allocated for the llm-d deployment.\n\n**Fix:**\nIncrease the node count or resize the nodes in your cluster."
+      },
+      {
+        "title": "Error: 'Service not found'",
+        "description": "**Cause:** This indicates that the service you are trying to access is not deployed or has been deleted.\n\n**Fix:**\nVerify that the service is running with 'kubectl get services -n llm-d'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.5.1",
+        "changes": "Added support for dynamic multi-workload autoscaling and improved inference scheduling capabilities.",
+        "deprecations": "No deprecations in this release.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods -n llm-d' showing all pods in the 'Running' state.",
+      "codeSnippets": [
+        "curl -LO https://github.com/llm-d/llm-d/releases/download/v0.5.1/llm-d-linux-amd64 && chmod +x llm-d-linux-amd64 && sudo mv llm-d-linux-amd64 /usr/local/bin/llm-d",
+        "gcloud container clusters create llm-d-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials llm-d-cluster --region=us-central1",
+        "kubectl get nodes",
+        "helm repo add llm-d https://llm-d.github.io/llm-d/ && helm repo update",
+        "helm install llm-d llm-d/llm-d --version 0.5.1 --namespace llm-d --create-namespace",
+        "kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/autoscale.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/deploy/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "llm-d"
+    ],
+    "platform": "llm-d",
+    "platformType": "ai-platform",
+    "platformProvider": "llm-d",
+    "platformVersions": [
+      "v0.5.1"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/llm-d/llm-d:v0.5.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://llm-d.github.io/llm-d/",
+      "repo": "https://github.com/llm-d/llm-d"
+    },
+    "qualityScore": 99
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before proceeding with the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T12:02:33.465Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
