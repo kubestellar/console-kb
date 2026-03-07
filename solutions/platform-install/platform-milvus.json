@@ -1,0 +1,184 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-milvus",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Milvus",
+    "description": "Milvus is a high-performance, cloud-native vector database designed for scalable vector approximate nearest neighbor (ANN) search. It is ideal for applications that require efficient organization and searching of vast amounts of unstructured data. Key trade-offs include the need for Kubernetes for deployment and the complexity of managing distributed systems.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Milvus CLI",
+        "description": "This step installs the Milvus command-line interface, which is necessary for interacting with the Milvus database.\n\n```bash\n\ncurl -LO https://github.com/milvus-io/milvus/releases/download/v2.5.0/milvus-cli-linux-amd64.tar.gz\n\ntar -xzf milvus-cli-linux-amd64.tar.gz\n\nsudo mv milvus-cli /usr/local/bin/\n\n```\n\n> Download the Milvus CLI\n> Extract the downloaded archive\n> Move the CLI to a directory in your PATH",
+        "commands": [
+          "curl -LO https://github.com/milvus-io/milvus/releases/download/v2.5.0/milvus-cli-linux-amd64.tar.gz",
+          "tar -xzf milvus-cli-linux-amd64.tar.gz",
+          "sudo mv milvus-cli /usr/local/bin/"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster with the specified version and node count.\n\n```bash\n\ngcloud container clusters create milvus-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Create a GKE cluster with 3 nodes",
+        "commands": [
+          "gcloud container clusters create milvus-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures your local kubeconfig to connect to the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials milvus-cluster --zone us-central1-a\n\n```\n\n> Fetch credentials for the cluster",
+        "commands": [
+          "gcloud container clusters get-credentials milvus-cluster --zone us-central1-a"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks that the nodes in the cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes in the cluster",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Milvus using Helm",
+        "description": "This step installs Milvus on the Kubernetes cluster using Helm.\n\n```bash\n\nhelm repo add milvus https://milvus-io.github.io/milvus-helm\n\nhelm install milvus milvus/milvus --version 2.5.0 --namespace milvus --create-namespace\n\n```\n\n> Add the Milvus Helm repository\n> Install Milvus in the 'milvus' namespace",
+        "commands": [
+          "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+          "helm install milvus milvus/milvus --version 2.5.0 --namespace milvus --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step configures autoscaling and monitoring for the Milvus installation.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/k8s/autoscaling.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/k8s/monitoring.yaml\n\n```\n\n> Apply autoscaling configuration\n> Apply monitoring configuration",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/k8s/autoscaling.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/k8s/monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Milvus",
+        "description": "This step removes the Milvus installation and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nhelm uninstall milvus --namespace milvus\n\nkubectl delete namespace milvus\n\n```\n\n> Uninstall the Milvus Helm release\n> Delete the namespace and orphaned resources",
+        "commands": [
+          "helm uninstall milvus --namespace milvus",
+          "kubectl delete namespace milvus"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Milvus",
+        "description": "Before upgrading, back up your data. This step will upgrade Milvus to the latest version.\n\n```bash\n\nkubectl cp milvus-pod:/data /backup/milvus-data\n\nhelm upgrade milvus milvus/milvus --version 2.6.11 --namespace milvus\n\nkubectl get pods -n milvus\n\n```\n\n> Backup data from the Milvus pod\n> Upgrade Milvus to version 2.6.11\n> Verify that the Milvus pods are running",
+        "commands": [
+          "kubectl cp milvus-pod:/data /backup/milvus-data",
+          "helm upgrade milvus milvus/milvus --version 2.6.11 --namespace milvus",
+          "kubectl get pods -n milvus"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Milvus'",
+        "description": "**Cause:** The Milvus service may not be running or is misconfigured.\n\n**Fix:**\nCheck the status of the Milvus pods with 'kubectl get pods -n milvus' and ensure they are running."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster may not have enough resources allocated.\n\n**Fix:**\nScale up the cluster or adjust resource requests/limits in the Milvus Helm chart."
+      },
+      {
+        "title": "Error: 'Helm release failed'",
+        "description": "**Cause:** The Helm installation may have encountered an issue during deployment.\n\n**Fix:**\nCheck the Helm release status with 'helm status milvus --namespace milvus' and troubleshoot accordingly."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** The Milvus pod may be crashing due to configuration errors.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n milvus' to identify the issue."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v2.6.11",
+        "changes": "Added support for new vector indexing algorithms and improved query performance.",
+        "deprecations": "Deprecated the old indexing methods in favor of the new ones.",
+        "migrationSteps": "If upgrading from v2.5, ensure to migrate your indexing configurations to the new format."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Milvus service running with the output of 'kubectl get pods -n milvus' showing all pods in 'Running' status.",
+      "codeSnippets": [
+        "curl -LO https://github.com/milvus-io/milvus/releases/download/v2.5.0/milvus-cli-linux-amd64.tar.gz",
+        "tar -xzf milvus-cli-linux-amd64.tar.gz",
+        "sudo mv milvus-cli /usr/local/bin/",
+        "gcloud container clusters create milvus-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials milvus-cluster --zone us-central1-a",
+        "kubectl get nodes",
+        "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+        "helm install milvus milvus/milvus --version 2.5.0 --namespace milvus --create-namespace"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "zilliz"
+    ],
+    "platform": "milvus",
+    "platformType": "database",
+    "platformProvider": "Zilliz",
+    "platformVersions": [
+      "2.4",
+      "2.5"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "milvusdb/milvus:v2.5.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://milvus.io/docs",
+      "repo": "https://github.com/milvus-io/milvus"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:05:29.282Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

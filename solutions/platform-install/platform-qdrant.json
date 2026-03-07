@@ -1,0 +1,183 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-qdrant",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Qdrant",
+    "description": "Qdrant is a high-performance vector database designed for AI applications, enabling efficient storage, search, and management of vector data. It is ideal for use cases involving neural networks and semantic-based matching. Key trade-offs include the need for careful resource management and configuration to optimize performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Qdrant CLI",
+        "description": "This step installs the Qdrant command-line interface, which is necessary for interacting with the Qdrant service.\n\n```bash\n\ncurl -sSL https://github.com/qdrant/qdrant/releases/download/v1.17.0/qdrant-cli-linux-amd64 -o /usr/local/bin/qdrant\n\nchmod +x /usr/local/bin/qdrant\n\n```\n\n> Download the Qdrant CLI binary.\n> Make the Qdrant CLI executable.",
+        "commands": [
+          "curl -sSL https://github.com/qdrant/qdrant/releases/download/v1.17.0/qdrant-cli-linux-amd64 -o /usr/local/bin/qdrant",
+          "chmod +x /usr/local/bin/qdrant"
+        ]
+      },
+      {
+        "title": "Create a Qdrant cluster",
+        "description": "This command creates a new Qdrant cluster on a managed Kubernetes service with the specified version and node count.\n\n```bash\n\ngcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Create a GKE cluster with 3 nodes.",
+        "commands": [
+          "gcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your local kubeconfig to connect to the newly created Qdrant cluster.\n\n```bash\n\ngcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a\n\n```\n\n> Fetch the credentials for the cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Verify the cluster nodes",
+        "description": "This command checks that the nodes in the Qdrant cluster are running and ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes in the cluster.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Qdrant using Helm",
+        "description": "This step installs Qdrant on the Kubernetes cluster using Helm, ensuring the correct version is deployed.\n\n```bash\n\nhelm repo add qdrant https://qdrant.tech/helm-charts\n\nhelm install qdrant qdrant/qdrant --version 1.17.0 --namespace qdrant --create-namespace\n\n```\n\n> Add the Qdrant Helm repository.\n> Install Qdrant in the 'qdrant' namespace.",
+        "commands": [
+          "helm repo add qdrant https://qdrant.tech/helm-charts",
+          "helm install qdrant qdrant/qdrant --version 1.17.0 --namespace qdrant --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-installation configuration",
+        "description": "This step configures autoscaling and monitoring for the Qdrant deployment.\n\n```bash\n\nkubectl autoscale deployment qdrant --cpu-percent=50 --min=1 --max=5 --namespace qdrant\n\nkubectl apply -f monitoring-config.yaml\n\n```\n\n> Set up horizontal pod autoscaling.\n> Apply monitoring configuration (ensure monitoring-config.yaml is defined).",
+        "commands": [
+          "kubectl autoscale deployment qdrant --cpu-percent=50 --min=1 --max=5 --namespace qdrant",
+          "kubectl apply -f monitoring-config.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Qdrant",
+        "description": "This step removes the Qdrant deployment and associated resources. Be aware that this will result in data loss and orphaned resources may remain.\n\n```bash\n\nhelm uninstall qdrant --namespace qdrant\n\ngcloud container clusters delete qdrant-cluster --zone=us-central1-a --quiet\n\n```\n\n> Uninstall the Qdrant Helm release.\n> Delete the GKE cluster and all associated resources.",
+        "commands": [
+          "helm uninstall qdrant --namespace qdrant",
+          "gcloud container clusters delete qdrant-cluster --zone=us-central1-a --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Qdrant",
+        "description": "Before upgrading, ensure you back up your data and verify the current state of your deployment. After the upgrade, verify that the deployment is running correctly.\n\n```bash\n\nkubectl cp qdrant/qdrant:/var/lib/qdrant/storage ./backup-storage\n\nhelm upgrade qdrant qdrant/qdrant --version 1.17.0 --namespace qdrant\n\nkubectl get pods --namespace qdrant\n\n```\n\n> Backup the current storage.\n> Upgrade to the new version of Qdrant.\n> Verify that all pods are running.",
+        "commands": [
+          "kubectl cp qdrant/qdrant:/var/lib/qdrant/storage ./backup-storage",
+          "helm upgrade qdrant qdrant/qdrant --version 1.17.0 --namespace qdrant",
+          "kubectl get pods --namespace qdrant"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Qdrant'",
+        "description": "**Cause:** The Qdrant service may not be running or is misconfigured.\n\n**Fix:**\nCheck the status of the Qdrant pods with 'kubectl get pods --namespace qdrant' and review logs with 'kubectl logs <pod-name> --namespace qdrant'."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** The cluster may not have enough resources available to schedule the Qdrant pods.\n\n**Fix:**\nScale up the cluster or reduce the resource requests in the Qdrant Helm chart values."
+      },
+      {
+        "title": "Error: 'Connection refused'",
+        "description": "**Cause:** The Qdrant service may not be exposed correctly.\n\n**Fix:**\nEnsure the service is correctly defined and check the service type (ClusterIP, NodePort, LoadBalancer)."
+      },
+      {
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** The Qdrant pod may be crashing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs for errors and adjust the configuration or resource limits as necessary."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.17.0",
+        "changes": "Introduced improved indexing algorithms and enhanced API performance.",
+        "deprecations": "Deprecated the old snapshot storage method in favor of a new optimized approach.",
+        "migrationSteps": "If upgrading from v1.12 or v1.13, ensure to migrate your snapshot storage configuration."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME READY STATUS RESTARTS AGE' with all Qdrant pods in the Running state when executing 'kubectl get pods --namespace qdrant'.",
+      "codeSnippets": [
+        "curl -sSL https://github.com/qdrant/qdrant/releases/download/v1.17.0/qdrant-cli-linux-amd64 -o /usr/local/bin/qdrant",
+        "chmod +x /usr/local/bin/qdrant",
+        "gcloud container clusters create qdrant-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials qdrant-cluster --zone=us-central1-a",
+        "kubectl get nodes",
+        "helm repo add qdrant https://qdrant.tech/helm-charts",
+        "helm install qdrant qdrant/qdrant --version 1.17.0 --namespace qdrant --create-namespace",
+        "kubectl autoscale deployment qdrant --cpu-percent=50 --min=1 --max=5 --namespace qdrant"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "qdrant"
+    ],
+    "platform": "qdrant",
+    "platformType": "database",
+    "platformProvider": "Qdrant",
+    "platformVersions": [
+      "1.12",
+      "1.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/qdrant/qdrant:v1.17.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://qdrant.tech/documentation/",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and cloud CLI installed, and your Kubernetes cluster meets the resource requirements."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:05:49.165Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

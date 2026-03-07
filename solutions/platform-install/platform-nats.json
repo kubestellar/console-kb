@@ -1,0 +1,163 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-nats",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure NATS",
+    "description": "NATS is a high-performance messaging system designed for cloud-native applications. It provides a lightweight and scalable solution for communication between services and devices. Key trade-offs include simplicity and speed versus advanced features found in more complex messaging systems.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add NATS Helm Repository",
+        "description": "This step adds the official NATS Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add nats https://nats-io.github.io/k8s\n\nhelm repo update\n\n```\n\n> This repository contains the NATS Helm charts.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add nats https://nats-io.github.io/k8s",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install NATS Server",
+        "description": "This command installs the NATS server using Helm with the specified version.\n\n```bash\n\nhelm install nats nats/nats --version 2.11.0 --namespace nats --create-namespace\n\n```\n\n> Installs NATS in a new namespace called 'nats'.",
+        "commands": [
+          "helm install nats nats/nats --version 2.11.0 --namespace nats --create-namespace"
+        ]
+      },
+      {
+        "title": "Create NATS Configuration",
+        "description": "This step creates a custom configuration for NATS to define its behavior.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: nats-config\n  namespace: nats\ndata:\n  nats-server.conf: |\n    port: 4222\n    http_port: 8222\nEOF\n\n```\n\n> Creates a ConfigMap with a basic NATS configuration.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: nats-config\n  namespace: nats\ndata:\n  nats-server.conf: |\n    port: 4222\n    http_port: 8222\nEOF"
+        ]
+      },
+      {
+        "title": "Verify NATS Deployment",
+        "description": "This command checks the status of the NATS pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n nats\n\n```\n\n> You should see NATS pods in a Running state.",
+        "commands": [
+          "kubectl get pods -n nats"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall NATS Server",
+        "description": "This command removes the NATS server and all associated resources. Be aware that this will delete all data stored in NATS.\n\n```bash\n\nhelm uninstall nats --namespace nats\n\nkubectl delete namespace nats\n\n```\n\n> Removes the NATS release from the cluster.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall nats --namespace nats",
+          "kubectl delete namespace nats"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade NATS Server",
+        "description": "Before upgrading, ensure you back up your configuration and data. This step will upgrade NATS to the latest version.\n\n```bash\n\nkubectl get pods -n nats -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data\n\nhelm upgrade nats nats/nats --version 2.11.0 --namespace nats\n\nkubectl uncordon <pod-name>\n\n```\n\n> Drains the NATS pods before upgrading.\n> Upgrades NATS to the specified version.\n> Uncordon the pods after the upgrade.",
+        "commands": [
+          "kubectl get pods -n nats -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data",
+          "helm upgrade nats nats/nats --version 2.11.0 --namespace nats",
+          "kubectl uncordon <pod-name>"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "NATS pods are in CrashLoopBackOff",
+        "description": "**Cause:** This may occur due to misconfiguration in the NATS server configuration.\n\n**Fix:**\nCheck the logs of the NATS pod using 'kubectl logs <pod-name> -n nats' for errors."
+      },
+      {
+        "title": "Unable to connect to NATS server",
+        "description": "**Cause:** Network policies or firewall rules may be blocking access.\n\n**Fix:**\nEnsure that the correct ports (4222, 8222) are open and accessible."
+      },
+      {
+        "title": "NATS server not responding",
+        "description": "**Cause:** The server may be overloaded or misconfigured.\n\n**Fix:**\nReview the NATS configuration and resource limits set for the deployment."
+      },
+      {
+        "title": "Helm install fails with 'chart not found'",
+        "description": "**Cause:** The NATS Helm repository may not be added or updated.\n\n**Fix:**\nRun 'helm repo add nats https://nats-io.github.io/k8s' and 'helm repo update'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v2.11",
+        "changes": "Added support for JetStream, improved performance metrics.",
+        "deprecations": "No specific deprecations noted.",
+        "migrationSteps": "If upgrading from v2.10, review the JetStream documentation for configuration changes."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see NATS pods running with the command 'kubectl get pods -n nats' showing status as 'Running'.",
+      "codeSnippets": [
+        "helm repo add nats https://nats-io.github.io/k8s",
+        "helm repo update",
+        "helm install nats nats/nats --version 2.11.0 --namespace nats --create-namespace",
+        "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: nats-config\n  namespace: nats\ndata:\n  nats-server.conf: |\n    port: 4222\n    http_port: 8222\nEOF",
+        "kubectl get pods -n nats"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "messaging",
+      "messaging",
+      "synadia"
+    ],
+    "platform": "nats",
+    "platformType": "messaging",
+    "platformProvider": "Synadia",
+    "platformVersions": [
+      "v2.10",
+      "v2.11"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "docker.io/nats:2.11.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.nats.io/",
+      "repo": "https://github.com/nats-io/nats-server"
+    },
+    "qualityScore": 99
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:07:38.034Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

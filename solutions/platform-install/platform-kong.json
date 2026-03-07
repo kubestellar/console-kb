@@ -1,0 +1,165 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kong",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kong Gateway",
+    "description": "Kong Gateway is a cloud-native, scalable API gateway designed for high performance and extensibility via plugins. It is ideal for managing microservices and API traffic, providing features like load balancing, authentication, and advanced AI traffic capabilities. Key trade-offs include the need for proper configuration and management of plugins for optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Kong Helm repository",
+        "description": "This step adds the official Kong Helm chart repository to your Helm configuration, allowing you to install Kong Gateway using Helm.\n\n```bash\n\nhelm repo add kong https://charts.konghq.com\n\nhelm repo update\n\n```\n\n> This command adds the Kong repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add kong https://charts.konghq.com",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Kong Gateway with Helm",
+        "description": "This step installs Kong Gateway in the 'kong' namespace using the specified version of the Helm chart.\n\n```bash\n\nkubectl create namespace kong\n\nhelm install kong kong/kong --namespace kong --version 3.9.1\n\n```\n\n> Creates a namespace for Kong Gateway.\n> Installs Kong Gateway with the specified version.",
+        "commands": [
+          "kubectl create namespace kong",
+          "helm install kong kong/kong --namespace kong --version 3.9.1"
+        ]
+      },
+      {
+        "title": "Verify the installation",
+        "description": "This step checks the status of the Kong Gateway pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n kong\n\n```\n\n> Lists all pods in the 'kong' namespace to verify their status.",
+        "commands": [
+          "kubectl get pods -n kong"
+        ]
+      },
+      {
+        "title": "Create an example KongIngress resource",
+        "description": "This step creates an example ingress resource to demonstrate how to route traffic through Kong Gateway.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: example-ingress\n  namespace: kong\nspec:\n  rules:\n  - host: example.local\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: example-service\n            port:\n              number: 80\nEOF\n\n```\n\n> Creates an example ingress resource.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: example-ingress\n  namespace: kong\nspec:\n  rules:\n  - host: example.local\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: example-service\n            port:\n              number: 80\nEOF"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kong Gateway",
+        "description": "This step removes Kong Gateway and all associated resources. Be aware that this will delete all configurations and data related to Kong.\n\n```bash\n\nhelm uninstall kong --namespace kong\n\nkubectl delete namespace kong\n\n```\n\n> Uninstalls Kong Gateway from the specified namespace.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kong --namespace kong",
+          "kubectl delete namespace kong"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kong Gateway",
+        "description": "This step outlines the process to upgrade Kong Gateway to a newer version, including backing up configurations.\n\n```bash\n\nkubectl get kong -n kong -o yaml > kong-backup.yaml\n\nhelm upgrade kong kong/kong --namespace kong --version 3.9.1\n\nkubectl get pods -n kong\n\n```\n\n> Backs up the current Kong configuration.\n> Upgrades Kong Gateway to the specified version.\n> Verifies that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl get kong -n kong -o yaml > kong-backup.yaml",
+          "helm upgrade kong kong/kong --namespace kong --version 3.9.1",
+          "kubectl get pods -n kong"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Kong ingress controller is not running'",
+        "description": "**Cause:** The Kong ingress controller pod may not be running due to resource constraints or misconfiguration.\n\n**Fix:**\nCheck pod logs with 'kubectl logs <pod-name> -n kong' and ensure sufficient resources are allocated."
+      },
+      {
+        "title": "Error: 'Service Unavailable'",
+        "description": "**Cause:** This may occur if the backend service is not reachable or not running.\n\n**Fix:**\nVerify that the backend service is running and accessible from the Kong Gateway."
+      },
+      {
+        "title": "Error: 'Ingress not found'",
+        "description": "**Cause:** The specified ingress resource may not exist or may be in a different namespace.\n\n**Fix:**\nEnsure the ingress resource is created in the correct namespace and check with 'kubectl get ingress -n kong'."
+      },
+      {
+        "title": "Error: 'Kong Gateway failed to start'",
+        "description": "**Cause:** This could be due to misconfiguration in the values.yaml file or insufficient permissions.\n\n**Fix:**\nReview the configuration and ensure the service account has the necessary permissions."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "3.9.1",
+        "changes": "Added support for new plugins and improved performance metrics collection.",
+        "deprecations": "Deprecated legacy plugin support; users must migrate to the new plugin architecture.",
+        "migrationSteps": "If upgrading from 3.8, ensure all plugins are compatible with the new version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Kong Gateway pods running with a status of 'Running' when executing 'kubectl get pods -n kong'.",
+      "codeSnippets": [
+        "helm repo add kong https://charts.konghq.com",
+        "helm repo update",
+        "kubectl create namespace kong",
+        "helm install kong kong/kong --namespace kong --version 3.9.1",
+        "kubectl get pods -n kong",
+        "kubectl apply -f - <<EOF\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: example-ingress\n  namespace: kong\nspec:\n  rules:\n  - host: example.local\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: example-service\n            port:\n              number: 80\nEOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "networking",
+      "api-gateway",
+      "kong-inc"
+    ],
+    "platform": "kong",
+    "platformType": "networking",
+    "platformProvider": "Kong Inc",
+    "platformVersions": [
+      "3.8",
+      "3.9"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "kong:3.9.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.konghq.com/",
+      "repo": "https://github.com/Kong/kong"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:07:55.616Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

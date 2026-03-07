@@ -1,0 +1,187 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-weaviate",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Weaviate",
+    "description": "Weaviate is an open-source vector database that combines vector search with structured filtering, making it ideal for applications like semantic search and recommendation engines. It offers cloud-native scalability and fault tolerance, but requires careful configuration for optimal performance and resource management.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Weaviate CLI",
+        "description": "This step installs the Weaviate command-line interface, which is necessary for managing Weaviate deployments.\n\n```bash\n\ncurl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate\n\n```\n\n> This command downloads the CLI, makes it executable, and moves it to your PATH.",
+        "commands": [
+          "curl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate"
+        ]
+      },
+      {
+        "title": "Create a Weaviate cluster",
+        "description": "This command creates a new Weaviate cluster on your managed Kubernetes service with the specified version and node count.\n\n```bash\n\ngcloud container clusters create weaviate-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Adjust the zone and node count as necessary.",
+        "commands": [
+          "gcloud container clusters create weaviate-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig to interact with the newly created Weaviate cluster.\n\n```bash\n\ngcloud container clusters get-credentials weaviate-cluster --zone=us-central1-a\n\n```\n\n> This command fetches the cluster credentials and updates your kubeconfig.",
+        "commands": [
+          "gcloud container clusters get-credentials weaviate-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Verify the cluster nodes",
+        "description": "This command checks that the nodes in your Weaviate cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in a 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Weaviate using Helm",
+        "description": "This step installs Weaviate on your Kubernetes cluster using Helm, which simplifies deployment and management.\n\n```bash\n\nhelm repo add semitechnologies https://charts.semitechnologies.com\n\nhelm install weaviate semitechnologies/weaviate --version 1.36.0 --namespace weaviate --create-namespace\n\n```\n\n> Add the Weaviate Helm chart repository.\n> This command installs Weaviate in the 'weaviate' namespace.",
+        "commands": [
+          "helm repo add semitechnologies https://charts.semitechnologies.com",
+          "helm install weaviate semitechnologies/weaviate --version 1.36.0 --namespace weaviate --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "Configure autoscaling and monitoring for your Weaviate deployment.\n\n```bash\n\nkubectl autoscale deployment weaviate --cpu-percent=50 --min=1 --max=10 --namespace weaviate\n\nkubectl apply -f monitoring-config.yaml\n\n```\n\n> This command sets up horizontal pod autoscaling.\n> Ensure you have a monitoring configuration file ready.",
+        "commands": [
+          "kubectl autoscale deployment weaviate --cpu-percent=50 --min=1 --max=10 --namespace weaviate",
+          "kubectl apply -f monitoring-config.yaml"
+        ]
+      },
+      {
+        "title": "Cost warning",
+        "description": "Be aware that running a managed Kubernetes cluster incurs costs based on the resources allocated.\n\n```bash\n\necho 'Monitor your Google Cloud billing to avoid unexpected charges.'\n\n```\n\n> This is a reminder to keep track of your cloud expenses.",
+        "commands": [
+          "echo 'Monitor your Google Cloud billing to avoid unexpected charges.'"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Weaviate",
+        "description": "This step removes Weaviate from your Kubernetes cluster. Be aware that this will result in data loss unless backups are made.\n\n```bash\n\nhelm uninstall weaviate --namespace weaviate\n\ngcloud container clusters delete weaviate-cluster --zone=us-central1-a\n\n```\n\n> This command removes the Weaviate deployment.\n> This command deletes the entire cluster and all associated resources.",
+        "commands": [
+          "helm uninstall weaviate --namespace weaviate",
+          "gcloud container clusters delete weaviate-cluster --zone=us-central1-a"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Weaviate",
+        "description": "Before upgrading, ensure you have backups of your data. This process includes draining the nodes, upgrading, and verifying the installation.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade weaviate semitechnologies/weaviate --version 1.36.0 --namespace weaviate\n\nkubectl get pods --namespace weaviate\n\n```\n\n> Replace <node-name> with the actual node name to cordon and drain it.\n> This command upgrades Weaviate to the specified version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade weaviate semitechnologies/weaviate --version 1.36.0 --namespace weaviate",
+          "kubectl get pods --namespace weaviate"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** The specified image version may not exist or is incorrect.\n\n**Fix:**\nCheck the image version in your Helm chart and ensure it matches the available versions."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The Weaviate pod is failing to start due to misconfiguration.\n\n**Fix:**\nReview the pod logs with 'kubectl logs <pod-name> --namespace weaviate' to identify the issue."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** The cluster does not have enough resources allocated to meet the Weaviate requirements.\n\n**Fix:**\nIncrease the node size or number of nodes in your cluster."
+      },
+      {
+        "title": "Error: 'Connection refused'",
+        "description": "**Cause:** The Weaviate service may not be exposed correctly.\n\n**Fix:**\nCheck your service configuration and ensure it is set to type LoadBalancer or NodePort."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.36.0",
+        "changes": "Added support for new vectorization models and improved RBAC features.",
+        "deprecations": "Deprecated the old vectorization API endpoints.",
+        "migrationSteps": "If upgrading from v1.35.0, update your API calls to use the new endpoints."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output from 'kubectl get pods --namespace weaviate' showing all pods in a 'Running' state.",
+      "codeSnippets": [
+        "curl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate",
+        "gcloud container clusters create weaviate-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials weaviate-cluster --zone=us-central1-a",
+        "kubectl get nodes",
+        "helm repo add semitechnologies https://charts.semitechnologies.com",
+        "helm install weaviate semitechnologies/weaviate --version 1.36.0 --namespace weaviate --create-namespace",
+        "kubectl autoscale deployment weaviate --cpu-percent=50 --min=1 --max=10 --namespace weaviate",
+        "kubectl apply -f monitoring-config.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "weaviate"
+    ],
+    "platform": "weaviate",
+    "platformType": "database",
+    "platformProvider": "Weaviate",
+    "platformVersions": [
+      "1.36.0"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "cr.weaviate.io/semitechnologies/weaviate:1.36.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://weaviate.io/developers/weaviate",
+      "repo": "https://github.com/weaviate/weaviate"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T18:06:09.765Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
