@@ -1,0 +1,170 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kagenti",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kagenti",
+    "description": "Kagenti is a cloud-native middleware designed for deploying and orchestrating AI agents with a focus on standardized communication protocols. It simplifies deployment complexity, enhances security, and reduces operational overhead. Ideal for teams looking to manage AI agents in production environments efficiently.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Kagenti CLI",
+        "description": "This step installs the Kagenti command-line interface, which is essential for managing the Kagenti deployment.\n\n```bash\n\ncurl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti\n\n```\n\n> Install the CLI for Linux systems.",
+        "commands": [
+          "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This command creates a new Kubernetes cluster with the specified version and node count in the desired region.\n\n```bash\n\ngcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Ensure you have gcloud CLI installed and authenticated.",
+        "commands": [
+          "gcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This command configures your local kubeconfig file to interact with the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials kagenti-cluster --region us-central1\n\n```\n\n> This command updates your kubeconfig to use the new cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials kagenti-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This command checks the status of the nodes in your Kubernetes cluster to ensure they are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in 'Ready' status.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step sets up monitoring and autoscaling for your Kagenti deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/monitoring.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/autoscaling.yaml\n\n```\n\n> Applies monitoring configuration.\n> Applies autoscaling configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/monitoring.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/autoscaling.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kagenti",
+        "description": "This step removes the Kagenti deployment from your cluster. Be aware that this will delete all associated resources and data.\n\n```bash\n\nkubectl delete deployment kagenti --all-namespaces\n\ngcloud container clusters delete kagenti-cluster --region us-central1 --quiet\n\n```\n\n> This command will remove all deployments related to Kagenti.\n> This command will delete the entire Kubernetes cluster.",
+        "commands": [
+          "kubectl delete deployment kagenti --all-namespaces",
+          "gcloud container clusters delete kagenti-cluster --region us-central1 --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kagenti",
+        "description": "Before upgrading, ensure you backup your current configurations. This step will upgrade Kagenti to the latest version.\n\n```bash\n\nkubectl get all --all-namespaces -o yaml > kagenti-backup.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/kagenti.yaml\n\nkubectl get pods --all-namespaces\n\n```\n\n> Backup current configurations.\n> Upgrades Kagenti to the specified version.\n> Verify that all pods are running correctly after the upgrade.",
+        "commands": [
+          "kubectl get all --all-namespaces -o yaml > kagenti-backup.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/kagenti.yaml",
+          "kubectl get pods --all-namespaces"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Kubernetes cluster unreachable'",
+        "description": "**Cause:** This may occur if the kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials kagenti-cluster --region us-central1' to update kubeconfig."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that a pod is failing to start, possibly due to misconfiguration or missing resources.\n\n**Fix:**\nCheck pod logs with 'kubectl logs <pod-name>' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough CPU resources to schedule the pods.\n\n**Fix:**\nIncrease the number of nodes or resize existing nodes in your cluster."
+      },
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** This may occur if the image is not available or there are network issues.\n\n**Fix:**\nVerify the image name and check your network connectivity."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.4.0-alpha.1",
+        "changes": "Initial release of Kagenti with support for AI agent orchestration and standardized communication protocols.",
+        "deprecations": "None",
+        "migrationSteps": "No specific migration steps required for this initial release."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
+      "codeSnippets": [
+        "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.4.0-alpha.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti",
+        "gcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials kagenti-cluster --region us-central1",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/monitoring.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.4.0-alpha.1/deploy/autoscaling.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-agents",
+      "kagenti"
+    ],
+    "platform": "kagenti",
+    "platformType": "ai-platform",
+    "platformProvider": "Kagenti",
+    "platformVersions": [
+      "v0.4.0-alpha.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "ghcr.io/kagenti/kagenti:v0.4.0-alpha.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://kagenti.github.io/.github/",
+      "repo": "https://github.com/kagenti/kagenti"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the required tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:05:19.203Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

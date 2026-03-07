@@ -1,0 +1,169 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-dify",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Dify",
+    "description": "Dify is a production-ready platform for developing agentic workflows, designed to streamline AI application development. It is ideal for teams looking to self-host their AI solutions while maintaining control over their infrastructure. Key trade-offs include the need for infrastructure management versus the convenience of managed services.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Helm repository",
+        "description": "This step adds the Dify Helm chart repository to your Helm configuration, allowing you to install Dify easily.\n\n```bash\n\nhelm repo add dify https://charts.langgenius.com\n\n```\n\n> This is the official Dify Helm chart repository.",
+        "commands": [
+          "helm repo add dify https://charts.langgenius.com"
+        ]
+      },
+      {
+        "title": "Install Custom Resource Definitions (CRDs)",
+        "description": "CRDs are necessary for Dify to function correctly as they define the custom resources used by the application.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml\n\n```\n\n> This command installs the required CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Dify using Helm",
+        "description": "This command installs the Dify application in the specified namespace, ensuring you are using the correct version.\n\n```bash\n\nhelm install dify dify/dify --namespace dify --create-namespace --version 0.12.0\n\n```\n\n> Replace with the desired version if needed.",
+        "commands": [
+          "helm install dify dify/dify --namespace dify --create-namespace --version 0.12.0"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource (CR)",
+        "description": "Creating a sample CR allows you to test the installation and ensure that Dify is functioning as expected.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: Dify\nmetadata:\n  name: example-dify\nspec:\n  workflow: example-workflow\nEOF\n\n```\n\n> This creates a sample Dify resource.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: Dify\nmetadata:\n  name: example-dify\nspec:\n  workflow: example-workflow\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Dify installation",
+        "description": "This step checks the status of the Dify pods to ensure everything is running correctly.\n\n```bash\n\nkubectl get pods -n dify\n\n```\n\n> Look for the status of the pods to be 'Running'.",
+        "commands": [
+          "kubectl get pods -n dify"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Dify",
+        "description": "This command will remove the Dify installation and all associated resources. Be aware that any data stored in Dify may be lost.\n\n```bash\n\nhelm uninstall dify --namespace dify\n\nkubectl delete namespace dify\n\n```\n\n> This removes the Dify release.\n> This deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall dify --namespace dify",
+          "kubectl delete namespace dify"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Dify",
+        "description": "Before upgrading, ensure you back up any important data. This process includes draining the pods if necessary, upgrading, and verifying the installation.\n\n```bash\n\nkubectl get pods -n dify -o name | xargs -I {} kubectl drain {} --ignore-daemonsets\n\nhelm upgrade dify dify/dify --namespace dify --version 0.12.0\n\nkubectl get pods -n dify\n\n```\n\n> Drains the pods to prepare for upgrade.\n> Replace with the desired version.\n> Verify that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n dify -o name | xargs -I {} kubectl drain {} --ignore-daemonsets",
+          "helm upgrade dify dify/dify --namespace dify --version 0.12.0",
+          "kubectl get pods -n dify"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Error: unable to recognize \"\": no matches for kind \"Dify\" in version \"dify.langgenius.com/v1\"'",
+        "description": "**Cause:** This indicates that the CRDs have not been installed correctly.\n\n**Fix:**\nReapply the CRDs using the command: kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml"
+      },
+      {
+        "title": "Pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This usually indicates an issue with the application configuration or missing dependencies.\n\n**Fix:**\nCheck the pod logs using: kubectl logs <pod-name> -n dify to diagnose the issue."
+      },
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** This indicates a problem with the Kubernetes cluster or kubeconfig.\n\n**Fix:**\nEnsure your kubeconfig is set up correctly and that the cluster is running."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This indicates that the request to the Kubernetes API server timed out.\n\n**Fix:**\nCheck the network connectivity to the cluster and ensure the API server is reachable."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.12",
+        "changes": "Added support for new workflow types and improved API performance.",
+        "deprecations": "Deprecated the old workflow configuration format.",
+        "migrationSteps": "Update your existing workflows to the new format as per the documentation."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Dify pods running with the command: kubectl get pods -n dify, and the status should be 'Running'.",
+      "codeSnippets": [
+        "helm repo add dify https://charts.langgenius.com",
+        "kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml",
+        "helm install dify dify/dify --namespace dify --create-namespace --version 0.12.0",
+        "kubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: Dify\nmetadata:\n  name: example-dify\nspec:\n  workflow: example-workflow\nEOF",
+        "kubectl get pods -n dify"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-app",
+      "langgenius"
+    ],
+    "platform": "dify",
+    "platformType": "ai-platform",
+    "platformProvider": "LangGenius",
+    "platformVersions": [
+      "0.11",
+      "0.12"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "langgenius/dify-web:1.13.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.dify.ai/",
+      "repo": "https://github.com/langgenius/dify"
+    },
+    "qualityScore": 97
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:07:39.448Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

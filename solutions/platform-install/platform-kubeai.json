@@ -1,0 +1,167 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kubeai",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure KubeAI",
+    "description": "KubeAI is an AI Inference Operator for Kubernetes designed to serve machine learning models, including LLMs and embeddings, in production environments. It simplifies the deployment and scaling of AI models while optimizing performance through intelligent load balancing. Key trade-offs include the need for adequate hardware resources and the absence of dependencies on other systems like Istio or Knative.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the KubeAI Helm repository",
+        "description": "This step adds the official KubeAI Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1\n\n```\n\n> This command adds the KubeAI repository for Helm.",
+        "commands": [
+          "helm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1"
+        ]
+      },
+      {
+        "title": "Install KubeAI CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for KubeAI to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_kubeai_crd.yaml\n\n```\n\n> This command applies the CRDs necessary for KubeAI.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_kubeai_crd.yaml"
+        ]
+      },
+      {
+        "title": "Install KubeAI using Helm",
+        "description": "This step installs the KubeAI operator into the specified namespace.\n\n```bash\n\nhelm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1\n\n```\n\n> This command installs KubeAI in the kubeai namespace.",
+        "commands": [
+          "helm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource",
+        "description": "This step creates an example Custom Resource (CR) to deploy a machine learning model.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: KubeAI\nmetadata:\n  name: example-model\nspec:\n  model: 'your-model-name'\n  replicas: 2\nEOF\n\n```\n\n> Replace 'your-model-name' with the actual model you want to deploy.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: KubeAI\nmetadata:\n  name: example-model\nspec:\n  model: 'your-model-name'\n  replicas: 2\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the KubeAI deployment",
+        "description": "This step checks the status of the KubeAI deployment to ensure it is running correctly.\n\n```bash\n\nkubectl get kubeai -n kubeai\n\n```\n\n> This command lists the KubeAI resources in the kubeai namespace.",
+        "commands": [
+          "kubectl get kubeai -n kubeai"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall KubeAI",
+        "description": "This step removes the KubeAI operator and its associated resources. Be aware that this will delete all models and configurations associated with KubeAI.\n\n```bash\n\nhelm uninstall kubeai --namespace kubeai\n\nkubectl delete namespace kubeai\n\n```\n\n> This command uninstalls the KubeAI Helm release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kubeai --namespace kubeai",
+          "kubectl delete namespace kubeai"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade KubeAI",
+        "description": "Before upgrading, ensure you back up your existing configurations. This step involves upgrading the KubeAI operator to the latest version.\n\n```bash\n\nkubectl get kubeai -n kubeai -o yaml > kubeai-backup.yaml\n\nhelm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1\n\nkubectl get kubeai -n kubeai\n\n```\n\n> Backup existing KubeAI configurations.\n> This command upgrades KubeAI to the specified version.\n> Verify that the KubeAI resources are running after the upgrade.",
+        "commands": [
+          "kubectl get kubeai -n kubeai -o yaml > kubeai-backup.yaml",
+          "helm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1",
+          "kubectl get kubeai -n kubeai"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'KubeAI not found'",
+        "description": "**Cause:** The KubeAI operator may not be installed or the namespace is incorrect.\n\n**Fix:**\nEnsure KubeAI is installed and check the namespace with 'kubectl get namespaces'."
+      },
+      {
+        "title": "Error: 'Failed to create KubeAI resource'",
+        "description": "**Cause:** The Custom Resource Definition (CRD) may not be applied correctly.\n\n**Fix:**\nReapply the CRDs using the command: 'kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_kubeai_crd.yaml'."
+      },
+      {
+        "title": "Pods in 'CrashLoopBackOff' state",
+        "description": "**Cause:** The model specified in the Custom Resource may not be available or misconfigured.\n\n**Fix:**\nCheck the model name and configuration in your Custom Resource and correct it."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster may not have enough resources (CPU, memory) allocated.\n\n**Fix:**\nEnsure your cluster meets the minimum resource requirements: 2 vCPU, 4GB RAM per node."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.23.1",
+        "changes": "Added support for new model types and improved load balancing algorithms.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the KubeAI resources listed with 'kubectl get kubeai -n kubeai', and the status should indicate they are running without errors.",
+      "codeSnippets": [
+        "helm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1",
+        "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_kubeai_crd.yaml",
+        "helm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1",
+        "kubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: KubeAI\nmetadata:\n  name: example-model\nspec:\n  model: 'your-model-name'\n  replicas: 2\nEOF",
+        "kubectl get kubeai -n kubeai"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "substratus-ai"
+    ],
+    "platform": "kubeai",
+    "platformType": "ai-platform",
+    "platformProvider": "Substratus AI",
+    "platformVersions": [
+      "0.23.1"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/substratusai/kubeai:0.23.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.kubeai.org/",
+      "repo": "https://github.com/substratusai/kubeai"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the specified resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:06:07.310Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
