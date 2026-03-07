@@ -1,0 +1,169 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-milvus",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Milvus",
+    "description": "Milvus is a high-performance, cloud-native vector database designed for scalable vector approximate nearest neighbor (ANN) search. It is ideal for applications requiring efficient organization and searching of vast amounts of unstructured data, such as AI applications. Key trade-offs include the need for Kubernetes for deployment and the complexity of managing distributed systems.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Milvus Helm repository",
+        "description": "This step adds the official Milvus Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add milvus https://milvus-io.github.io/milvus-helm\n\n```\n\n> This is the official Helm chart repository for Milvus.",
+        "commands": [
+          "helm repo add milvus https://milvus-io.github.io/milvus-helm"
+        ]
+      },
+      {
+        "title": "Install Milvus CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Milvus to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml\n\n```\n\n> This CRD is necessary for managing Milvus clusters.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml"
+        ]
+      },
+      {
+        "title": "Install Milvus using Helm",
+        "description": "This step installs Milvus in the specified namespace using the Helm chart.\n\n```bash\n\nhelm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0\n\n```\n\n> Replace '2.5.0' with the desired version.",
+        "commands": [
+          "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0"
+        ]
+      },
+      {
+        "title": "Create a Milvus Cluster",
+        "description": "This step creates a Milvus cluster by applying a custom resource definition.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus\n  namespace: milvus\nspec:\n  mode: cluster\nEOF\n\n```\n\n> This YAML defines a basic Milvus cluster.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus\n  namespace: milvus\nspec:\n  mode: cluster\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Milvus installation",
+        "description": "This step checks the status of the Milvus pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n milvus\n\n```\n\n> You should see all Milvus pods in the Running state.",
+        "commands": [
+          "kubectl get pods -n milvus"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Milvus",
+        "description": "This step removes the Milvus deployment and associated resources. Be aware that this will lead to data loss unless backups are made.\n\n```bash\n\nhelm uninstall milvus --namespace milvus\n\nkubectl delete namespace milvus\n\n```\n\n> This command removes the Milvus release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall milvus --namespace milvus",
+          "kubectl delete namespace milvus"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Milvus",
+        "description": "Before upgrading, ensure you have a backup of your data. This step will upgrade the Milvus installation to a new version.\n\n```bash\n\nkubectl get pods -n milvus -o jsonpath='{.items[*].metadata.name}' | xargs -n 1 kubectl drain --ignore-daemonsets --delete-local-data\n\nhelm upgrade milvus milvus/milvus --namespace milvus --version 2.6.0\n\nkubectl get pods -n milvus\n\n```\n\n> Drain the nodes before upgrading.\n> Replace '2.6.0' with the desired version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n milvus -o jsonpath='{.items[*].metadata.name}' | xargs -n 1 kubectl drain --ignore-daemonsets --delete-local-data",
+          "helm upgrade milvus milvus/milvus --namespace milvus --version 2.6.0",
+          "kubectl get pods -n milvus"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'MilvusCluster not found'",
+        "description": "**Cause:** The Milvus cluster resource may not have been created successfully.\n\n**Fix:**\nReapply the Milvus cluster resource definition using the provided YAML."
+      },
+      {
+        "title": "Pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This may occur due to misconfiguration or insufficient resources.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n milvus' for more details."
+      },
+      {
+        "title": "Error: 'Failed to connect to Milvus'",
+        "description": "**Cause:** The Milvus service may not be running or accessible.\n\n**Fix:**\nEnsure that the Milvus service is running and check the service endpoints."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The cluster may not have enough resources allocated for Milvus.\n\n**Fix:**\nIncrease the resource limits in the Milvus deployment configuration."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v2.5",
+        "changes": "Added support for new vector index types and improved query performance.",
+        "deprecations": "Deprecated old index types in favor of new implementations.",
+        "migrationSteps": "If upgrading from v2.4, ensure to update your index configurations."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Milvus pods running with the output similar to: 'NAME READY STATUS RESTARTS AGE' followed by the pod names and their statuses.",
+      "codeSnippets": [
+        "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+        "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml",
+        "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0",
+        "kubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus\n  namespace: milvus\nspec:\n  mode: cluster\nEOF",
+        "kubectl get pods -n milvus"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "zilliz"
+    ],
+    "platform": "milvus",
+    "platformType": "database",
+    "platformProvider": "Zilliz",
+    "platformVersions": [
+      "2.4",
+      "2.5"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "milvusdb/milvus:v2.5.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://milvus.io/docs",
+      "repo": "https://github.com/milvus-io/milvus"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T12:05:48.596Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
