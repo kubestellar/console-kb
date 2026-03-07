@@ -1,0 +1,190 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kong",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kong Gateway",
+    "description": "Kong Gateway is a cloud-native, scalable API gateway that provides advanced traffic management and security features. It is ideal for orchestrating microservices and API traffic with high performance and extensibility through plugins. Key trade-offs include the need for proper configuration and management of resources to ensure optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Install the CLI",
+        "description": "Install the Kong CLI to manage your Kong Gateway installation.\n\n```bash\n\ncurl -sSL https://get.konghq.com/ | sh\n\n```\n\n> This command downloads and installs the Kong CLI.",
+        "commands": [
+          "curl -sSL https://get.konghq.com/ | sh"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Create a Kubernetes cluster using gcloud with the specified version and node count.\n\n```bash\n\ngcloud container clusters create kong-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> This command creates a GKE cluster with 3 nodes.",
+        "commands": [
+          "gcloud container clusters create kong-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "Configure kubectl to use the new cluster's credentials.\n\n```bash\n\ngcloud container clusters get-credentials kong-cluster --zone=us-central1-a\n\n```\n\n> This command updates kubeconfig to use the new cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials kong-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Verify Nodes",
+        "description": "Check that the nodes in the cluster are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes and their statuses.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Kong Gateway",
+        "description": "Deploy Kong Gateway using Helm with the specified version.\n\n```bash\n\nhelm repo add kong https://charts.konghq.com\n\nhelm install kong kong/kong --version 3.9.1 --namespace kong --create-namespace\n\n```\n\n> Add the Kong Helm repository.\n> Install Kong Gateway in the 'kong' namespace.",
+        "commands": [
+          "helm repo add kong https://charts.konghq.com",
+          "helm install kong kong/kong --version 3.9.1 --namespace kong --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-install Configuration",
+        "description": "Set up autoscaling and monitoring for the Kong Gateway.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-monitoring.yaml\n\n```\n\n> This command applies the autoscaler configuration.\n> This command applies the monitoring configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-monitoring.yaml"
+        ]
+      },
+      {
+        "title": "Cost Warning",
+        "description": "Be aware of potential costs associated with running the cluster and services.\n\n```bash\n\necho 'Monitor your GCP billing to avoid unexpected charges.'\n\n```\n\n> This is a reminder to keep track of costs.",
+        "commands": [
+          "echo 'Monitor your GCP billing to avoid unexpected charges.'"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kong Gateway",
+        "description": "This will remove Kong Gateway and all associated resources. Be aware that this may lead to data loss.\n\n```bash\n\nhelm uninstall kong --namespace kong\n\ngcloud container clusters delete kong-cluster --zone=us-central1-a --quiet\n\n```\n\n> This command uninstalls Kong from the Kubernetes cluster.\n> This command deletes the Kubernetes cluster and all its resources.",
+        "commands": [
+          "helm uninstall kong --namespace kong",
+          "gcloud container clusters delete kong-cluster --zone=us-central1-a --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kong Gateway",
+        "description": "Backup your current configuration, upgrade Kong, and verify the installation.\n\n```bash\n\nkubectl get kong -n kong -o yaml > kong-backup.yaml\n\nhelm upgrade kong kong/kong --version 3.9.1 --namespace kong\n\nkubectl get pods -n kong\n\n```\n\n> Backup the current Kong configuration.\n> Upgrade Kong to the specified version.\n> Verify that all Kong pods are running after the upgrade.",
+        "commands": [
+          "kubectl get kong -n kong -o yaml > kong-backup.yaml",
+          "helm upgrade kong kong/kong --version 3.9.1 --namespace kong",
+          "kubectl get pods -n kong"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Kong Gateway is not responding'",
+        "description": "**Cause:** Kong Gateway pods may not be running or are in a crash loop.\n\n**Fix:**\nRun 'kubectl get pods -n kong' to check the status of the pods and 'kubectl logs <pod-name> -n kong' for logs."
+      },
+      {
+        "title": "Error: 'Failed to connect to database'",
+        "description": "**Cause:** Database connection settings may be incorrect or the database is not running.\n\n**Fix:**\nVerify the database connection settings in the Kong configuration and ensure the database is running."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** The cluster may not have enough resources available.\n\n**Fix:**\nIncrease the node count or size in your Kubernetes cluster."
+      },
+      {
+        "title": "Error: 'Kong ingress not found'",
+        "description": "**Cause:** The Kong ingress resource may not be created or configured correctly.\n\n**Fix:**\nCheck the ingress resource with 'kubectl get ingress -n kong' and ensure it is properly configured."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "3.9.1",
+        "changes": "Added support for multi-LLM traffic management and enhanced plugin capabilities.",
+        "deprecations": "Deprecated legacy authentication plugins.",
+        "migrationSteps": "Review the updated plugin documentation for migration from deprecated plugins."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output from 'kubectl get services -n kong' showing the Kong Gateway service with an external IP.",
+      "codeSnippets": [
+        "curl -sSL https://get.konghq.com/ | sh",
+        "gcloud container clusters create kong-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials kong-cluster --zone=us-central1-a",
+        "kubectl get nodes",
+        "helm repo add kong https://charts.konghq.com",
+        "helm install kong kong/kong --version 3.9.1 --namespace kong --create-namespace",
+        "kubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-autoscaler.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/Kong/kong/main/k8s/kong-monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "networking",
+      "api-gateway",
+      "kong-inc"
+    ],
+    "platform": "kong",
+    "platformType": "networking",
+    "platformProvider": "Kong Inc",
+    "platformVersions": [
+      "3.8",
+      "3.9"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm",
+      "kubectl"
+    ],
+    "containerImages": [
+      "kong:3.9.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.konghq.com/",
+      "repo": "https://github.com/Kong/kong"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:11:06.360Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

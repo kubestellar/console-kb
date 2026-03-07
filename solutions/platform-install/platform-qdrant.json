@@ -1,0 +1,171 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-qdrant",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Qdrant",
+    "description": "Qdrant is a high-performance vector database designed for AI applications, enabling efficient storage and retrieval of vector embeddings. It is suitable for applications requiring fast similarity search and filtering capabilities. Key trade-offs include the need for careful configuration to optimize performance and resource usage.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Qdrant Helm Repository",
+        "description": "This step adds the Qdrant Helm chart repository to your local Helm setup, allowing you to install Qdrant using Helm.\n\n```bash\n\nhelm repo add qdrant https://qdrant.github.io/qdrant-helm\n\nhelm repo update\n\n```\n\n> This adds the official Qdrant Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add qdrant https://qdrant.github.io/qdrant-helm",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Qdrant CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Qdrant to function properly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/crds/qdrant.io_qdrants.yaml\n\n```\n\n> This command installs the necessary CRDs for Qdrant.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/crds/qdrant.io_qdrants.yaml"
+        ]
+      },
+      {
+        "title": "Deploy Qdrant using Helm",
+        "description": "This step installs the Qdrant application in your Kubernetes cluster using Helm, specifying the desired namespace and version.\n\n```bash\n\nhelm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.17.0\n\n```\n\n> This deploys Qdrant in the 'qdrant' namespace.",
+        "commands": [
+          "helm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.17.0"
+        ]
+      },
+      {
+        "title": "Create an Example Qdrant Collection",
+        "description": "This step creates an example collection in Qdrant to demonstrate its functionality.\n\n```bash\n\nkubectl exec -it $(kubectl get pods -n qdrant -l app=qdrant -o jsonpath='{.items[0].metadata.name}') -n qdrant -- curl -X POST 'http://localhost:6333/collections/my_collection' -d '{\"vectors\": {\"size\": 128, \"distance\": \"Cosine\"}}' -H 'Content-Type: application/json'\n\n```\n\n> This creates a collection named 'my_collection'.",
+        "commands": [
+          "kubectl exec -it $(kubectl get pods -n qdrant -l app=qdrant -o jsonpath='{.items[0].metadata.name}') -n qdrant -- curl -X POST 'http://localhost:6333/collections/my_collection' -d '{\"vectors\": {\"size\": 128, \"distance\": \"Cosine\"}}' -H 'Content-Type: application/json'"
+        ]
+      },
+      {
+        "title": "Verify Qdrant Deployment",
+        "description": "This step checks the status of the Qdrant pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n qdrant\n\n```\n\n> You should see the Qdrant pod in a 'Running' state.",
+        "commands": [
+          "kubectl get pods -n qdrant"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Qdrant",
+        "description": "This step removes the Qdrant deployment and associated resources from your Kubernetes cluster. Be aware that this will result in data loss and orphaned resources.\n\n```bash\n\nhelm uninstall qdrant --namespace qdrant\n\nkubectl delete namespace qdrant\n\n```\n\n> This command uninstalls the Qdrant release.\n> This command deletes the namespace and any remaining resources.",
+        "commands": [
+          "helm uninstall qdrant --namespace qdrant",
+          "kubectl delete namespace qdrant"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Qdrant",
+        "description": "Before upgrading, ensure you have a backup of your data. This step will upgrade your Qdrant installation to the latest version.\n\n```bash\n\nkubectl exec -it $(kubectl get pods -n qdrant -l app=qdrant -o jsonpath='{.items[0].metadata.name}') -n qdrant -- curl -X GET 'http://localhost:6333/collections/my_collection' -H 'Content-Type: application/json'\n\nhelm upgrade qdrant qdrant/qdrant --namespace qdrant --version 1.17.0\n\nkubectl get pods -n qdrant\n\n```\n\n> Backup your data by exporting it.\n> This command upgrades Qdrant to the specified version.\n> Verify that the Qdrant pods are running after the upgrade.",
+        "commands": [
+          "kubectl exec -it $(kubectl get pods -n qdrant -l app=qdrant -o jsonpath='{.items[0].metadata.name}') -n qdrant -- curl -X GET 'http://localhost:6333/collections/my_collection' -H 'Content-Type: application/json'",
+          "helm upgrade qdrant qdrant/qdrant --namespace qdrant --version 1.17.0",
+          "kubectl get pods -n qdrant"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: '404 Not Found' when accessing Qdrant API",
+        "description": "**Cause:** The Qdrant service may not be running or the pod may not be ready.\n\n**Fix:**\nCheck the pod status with 'kubectl get pods -n qdrant' and ensure it is running."
+      },
+      {
+        "title": "Error: '503 Service Unavailable' when querying Qdrant",
+        "description": "**Cause:** The Qdrant service may not be reachable due to network issues or misconfiguration.\n\n**Fix:**\nEnsure the service is correctly configured and check the network policies."
+      },
+      {
+        "title": "Error: 'Invalid configuration' in logs",
+        "description": "**Cause:** The Qdrant configuration may have invalid parameters.\n\n**Fix:**\nReview the configuration file and ensure all parameters are correctly set."
+      },
+      {
+        "title": "Error: 'Connection refused' when trying to connect to Qdrant",
+        "description": "**Cause:** The Qdrant pod may not be running or the service may not be exposed correctly.\n\n**Fix:**\nCheck the pod status and service configuration."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "1.17.0",
+        "changes": "Added support for new vector distance metrics and improved performance for large datasets.",
+        "deprecations": "Deprecated the old API endpoints for collection management.",
+        "migrationSteps": "Update your API calls to use the new endpoints as specified in the documentation."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Qdrant pod running with the command 'kubectl get pods -n qdrant' showing the pod in 'Running' state.",
+      "codeSnippets": [
+        "helm repo add qdrant https://qdrant.github.io/qdrant-helm",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/qdrant/qdrant/main/deploy/crds/qdrant.io_qdrants.yaml",
+        "helm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.17.0",
+        "kubectl exec -it $(kubectl get pods -n qdrant -l app=qdrant -o jsonpath='{.items[0].metadata.name}') -n qdrant -- curl -X POST 'http://localhost:6333/collections/my_collection' -d '{\"vectors\": {\"size\": 128, \"distance\": \"Cosine\"}}' -H 'Content-Type: application/json'",
+        "kubectl get pods -n qdrant"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "qdrant"
+    ],
+    "platform": "qdrant",
+    "platformType": "database",
+    "platformProvider": "Qdrant",
+    "platformVersions": [
+      "1.12",
+      "1.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/qdrant/qdrant:v1.17.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://qdrant.tech/documentation/",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:09:09.322Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-redpanda",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Redpanda",
+    "description": "Redpanda is a high-performance streaming data platform that is compatible with the Kafka API. It is designed for developers seeking a simpler, faster alternative to traditional streaming solutions, eliminating the need for ZooKeeper and JVM. Key trade-offs include its focus on performance and ease of use versus the maturity and ecosystem of Kafka.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Redpanda Helm repository",
+        "description": "This step adds the official Redpanda Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add redpanda https://charts.redpanda.com\n\nhelm repo update\n\n```\n\n> This is the official repository for Redpanda Helm charts.\n> Updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add redpanda https://charts.redpanda.com",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Redpanda CRDs",
+        "description": "This step installs the Custom Resource Definitions required for Redpanda to function properly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml\n\n```\n\n> This command installs the necessary CRDs.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml"
+        ]
+      },
+      {
+        "title": "Install Redpanda using Helm",
+        "description": "This command installs Redpanda in the specified namespace with the desired version.\n\n```bash\n\nhelm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10\n\n```\n\n> This installs Redpanda in the 'redpanda' namespace.",
+        "commands": [
+          "helm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10"
+        ]
+      },
+      {
+        "title": "Create a Redpanda cluster resource",
+        "description": "This step creates a Custom Resource (CR) to define your Redpanda cluster configuration.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-redpanda\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF\n\n```\n\n> This creates a Redpanda cluster with 3 replicas.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-redpanda\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF"
+        ]
+      },
+      {
+        "title": "Verify Redpanda cluster status",
+        "description": "This command checks the status of the Redpanda cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get redpandas -n redpanda\n\n```\n\n> You should see your Redpanda cluster listed with a status of 'Ready'.",
+        "commands": [
+          "kubectl get redpandas -n redpanda"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Redpanda",
+        "description": "This step removes the Redpanda installation and associated resources. Be aware that this will result in data loss.\n\n```bash\n\nhelm uninstall redpanda --namespace redpanda\n\nkubectl delete namespace redpanda\n\n```\n\n> This command uninstalls the Redpanda release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall redpanda --namespace redpanda",
+          "kubectl delete namespace redpanda"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Redpanda",
+        "description": "Before upgrading, ensure you back up your data. This step will upgrade Redpanda to the specified version.\n\n```bash\n\nkubectl get pods -n redpanda -o name | xargs kubectl drain --ignore-daemonsets --delete-local-data\n\nhelm upgrade redpanda redpanda/redpanda --namespace redpanda --version 25.3.10\n\nkubectl get redpandas -n redpanda\n\n```\n\n> Drains the nodes to prepare for upgrade.\n> This command upgrades Redpanda to the specified version.\n> Verify that the Redpanda cluster is running the new version.",
+        "commands": [
+          "kubectl get pods -n redpanda -o name | xargs kubectl drain --ignore-daemonsets --delete-local-data",
+          "helm upgrade redpanda redpanda/redpanda --namespace redpanda --version 25.3.10",
+          "kubectl get redpandas -n redpanda"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Redpanda broker'",
+        "description": "**Cause:** The Redpanda broker may not be running or is unreachable.\n\n**Fix:**\nCheck the status of the Redpanda pods with 'kubectl get pods -n redpanda'."
+      },
+      {
+        "title": "Error: 'No such host'",
+        "description": "**Cause:** The service name may not be correctly configured or the service is not running.\n\n**Fix:**\nVerify the service configuration with 'kubectl get svc -n redpanda'."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The cluster may not have enough resources allocated for Redpanda.\n\n**Fix:**\nCheck node resource availability with 'kubectl describe nodes'."
+      },
+      {
+        "title": "Error: 'Redpanda cluster is not ready'",
+        "description": "**Cause:** One or more pods in the Redpanda cluster are not in a running state.\n\n**Fix:**\nUse 'kubectl get pods -n redpanda' to identify any pods that are not running and troubleshoot accordingly."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v25.3.10",
+        "changes": "Improved performance for topic partitioning and added support for new Kafka API features.",
+        "deprecations": "No specific deprecations noted in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Redpanda cluster listed with a status of 'Ready' when running 'kubectl get redpandas -n redpanda'.",
+      "codeSnippets": [
+        "helm repo add redpanda https://charts.redpanda.com",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml",
+        "helm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10",
+        "kubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-redpanda\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF",
+        "kubectl get redpandas -n redpanda"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "messaging",
+      "streaming",
+      "redpanda-data"
+    ],
+    "platform": "redpanda",
+    "platformType": "messaging",
+    "platformProvider": "Redpanda Data",
+    "platformVersions": [
+      "25.3.10"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "vectorized/redpanda:v25.3.10"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.redpanda.com/",
+      "repo": "https://github.com/redpanda-data/redpanda"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-07T06:10:33.082Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
