@@ -1,0 +1,165 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kubeai",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure KubeAI",
+    "description": "KubeAI is an AI Inference Operator for Kubernetes designed to serve machine learning models, including LLMs and embeddings, in production environments. It simplifies the deployment and scaling of AI models, providing intelligent routing and caching mechanisms. Key trade-offs include the need for adequate resources and potential complexity in model management.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the KubeAI Helm repository",
+        "description": "This step adds the official KubeAI Helm chart repository to your Helm configuration, allowing you to install KubeAI easily.\n\n```bash\n\nhelm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1\n\nhelm repo update\n\n```\n\n> This command adds the KubeAI repository.\n> This command updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install KubeAI with Helm",
+        "description": "This step installs KubeAI into a specified namespace, ensuring all necessary components are deployed.\n\n```bash\n\nkubectl create namespace kubeai\n\nhelm install kubeai kubeai/kubeai --namespace kubeai --version 0.23.1\n\n```\n\n> Create a namespace for KubeAI.\n> Install KubeAI in the kubeai namespace.",
+        "commands": [
+          "kubectl create namespace kubeai",
+          "helm install kubeai kubeai/kubeai --namespace kubeai --version 0.23.1"
+        ]
+      },
+      {
+        "title": "Verify KubeAI installation",
+        "description": "This step checks that the KubeAI components are running correctly in the cluster.\n\n```bash\n\nkubectl get pods -n kubeai\n\nkubectl get services -n kubeai\n\n```\n\n> List all pods in the kubeai namespace to verify they are running.\n> List all services in the kubeai namespace to ensure they are correctly set up.",
+        "commands": [
+          "kubectl get pods -n kubeai",
+          "kubectl get services -n kubeai"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource (CR)",
+        "description": "This step creates an example Custom Resource to demonstrate how to use KubeAI for serving a model.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kubeai.io/v1\nkind: Model\nmetadata:\n  name: example-model\n  namespace: kubeai\nspec:\n  model:\n    name: your-model-name\n    version: latest\nEOF\n\n```\n\n> Replace 'your-model-name' with the actual model you want to serve.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: kubeai.io/v1\nkind: Model\nmetadata:\n  name: example-model\n  namespace: kubeai\nspec:\n  model:\n    name: your-model-name\n    version: latest\nEOF"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall KubeAI",
+        "description": "This step removes KubeAI and all associated resources from the cluster. Be aware that this will delete all models and configurations associated with KubeAI.\n\n```bash\n\nhelm uninstall kubeai --namespace kubeai\n\nkubectl delete namespace kubeai\n\n```\n\n> Uninstall KubeAI from the kubeai namespace.\n> Delete the kubeai namespace and all its resources.",
+        "commands": [
+          "helm uninstall kubeai --namespace kubeai",
+          "kubectl delete namespace kubeai"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade KubeAI",
+        "description": "Before upgrading, ensure you have a backup of your configurations. This step upgrades KubeAI to the latest version.\n\n```bash\n\nkubectl get models -n kubeai -o yaml > kubeai-models-backup.yaml\n\nhelm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1\n\nkubectl get pods -n kubeai\n\n```\n\n> Backup existing models.\n> Upgrade KubeAI to the specified version.\n> Verify that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl get models -n kubeai -o yaml > kubeai-models-backup.yaml",
+          "helm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1",
+          "kubectl get pods -n kubeai"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** The specified container image does not exist or is not accessible.\n\n**Fix:**\nCheck the image name and ensure it is available in the specified registry."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The application inside the pod is crashing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n kubeai' and adjust the configuration or resource limits."
+      },
+      {
+        "title": "Error: 'Service not found'",
+        "description": "**Cause:** The service for KubeAI has not been created or is misconfigured.\n\n**Fix:**\nEnsure that the service is defined correctly in your Helm chart and check the service status with 'kubectl get services -n kubeai'."
+      },
+      {
+        "title": "Error: 'Permission denied'",
+        "description": "**Cause:** Insufficient permissions for the service account used by KubeAI.\n\n**Fix:**\nEnsure that the service account has the necessary RBAC permissions to access the required resources."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.23.1",
+        "changes": "Added support for new model types and improved load balancing algorithms.",
+        "deprecations": "No deprecations in this release.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the KubeAI pods running with a status of 'Running' and the example model deployed successfully. Use 'kubectl get models -n kubeai' to verify the model status.",
+      "codeSnippets": [
+        "helm repo add kubeai https://github.com/substratusai/kubeai/releases/download/helm-chart-kubeai-0.23.1",
+        "helm repo update",
+        "kubectl create namespace kubeai",
+        "helm install kubeai kubeai/kubeai --namespace kubeai --version 0.23.1",
+        "kubectl get pods -n kubeai",
+        "kubectl get services -n kubeai",
+        "kubectl apply -f - <<EOF\napiVersion: kubeai.io/v1\nkind: Model\nmetadata:\n  name: example-model\n  namespace: kubeai\nspec:\n  model:\n    name: your-model-name\n    version: latest\nEOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "substratus-ai"
+    ],
+    "platform": "kubeai",
+    "platformType": "ai-platform",
+    "platformProvider": "Substratus AI",
+    "platformVersions": [
+      "0.23.1"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/substratusai/kubeai:0.23.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.kubeai.org/",
+      "repo": "https://github.com/substratusai/kubeai"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 4 vCPU, 16GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster with the specified resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T06:09:49.895Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
