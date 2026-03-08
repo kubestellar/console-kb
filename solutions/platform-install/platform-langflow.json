@@ -1,0 +1,181 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-langflow",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Langflow",
+    "description": "Langflow is a powerful platform for building and deploying AI-powered agents and workflows, providing a visual authoring experience and built-in API servers. It is ideal for developers looking to integrate AI workflows into applications without managing complex dependencies. Key trade-offs include the need for Kubernetes expertise and potential resource overhead.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Langflow CLI",
+        "description": "This step installs the Langflow CLI tool which is necessary for managing the Langflow deployment.\n\n```bash\n\npip install langflow==1.8.0\n\n```\n\n> Ensure Python 3.10–3.13 is installed.",
+        "commands": [
+          "pip install langflow==1.8.0"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This command creates a new Kubernetes cluster with the specified version and node count in the desired region.\n\n```bash\n\ngcloud container clusters create langflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Adjust region and node count as needed.",
+        "commands": [
+          "gcloud container clusters create langflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This command configures your local kubeconfig to connect to the newly created cluster.\n\n```bash\n\ngcloud container clusters get-credentials langflow-cluster --region=us-central1\n\n```\n\n> Ensure you have gcloud CLI installed.",
+        "commands": [
+          "gcloud container clusters get-credentials langflow-cluster --region=us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This command checks the status of the nodes in your cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in 'Ready' status.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Deploy Langflow",
+        "description": "This command deploys Langflow to your Kubernetes cluster using Helm.\n\n```bash\n\nhelm repo add langflow https://charts.langflow.org\n\nhelm install langflow langflow/langflow --version 1.8.0 --namespace langflow --create-namespace\n\n```\n\n> Add the Langflow Helm repository.\n> Deploy Langflow in its own namespace.",
+        "commands": [
+          "helm repo add langflow https://charts.langflow.org",
+          "helm install langflow langflow/langflow --version 1.8.0 --namespace langflow --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step configures monitoring and autoscaling for Langflow.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/langflow-ai/langflow/main/deploy/monitoring.yaml\n\nkubectl autoscale deployment langflow --cpu-percent=50 --min=1 --max=10\n\n```\n\n> Set up monitoring with Prometheus.\n> Enable autoscaling based on CPU usage.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/langflow-ai/langflow/main/deploy/monitoring.yaml",
+          "kubectl autoscale deployment langflow --cpu-percent=50 --min=1 --max=10"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Langflow",
+        "description": "This command removes the Langflow deployment and associated resources. Be aware that this will delete all data stored in the cluster.\n\n```bash\n\nhelm uninstall langflow --namespace langflow\n\ngcloud container clusters delete langflow-cluster --region=us-central1 --quiet\n\n```\n\n> This will remove the Langflow deployment.\n> This will delete the entire cluster and all its resources.",
+        "commands": [
+          "helm uninstall langflow --namespace langflow",
+          "gcloud container clusters delete langflow-cluster --region=us-central1 --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Langflow",
+        "description": "Before upgrading, ensure you back up your data. This process includes draining nodes if necessary, upgrading the deployment, and verifying the upgrade.\n\n```bash\n\nkubectl get pods -n langflow\n\nhelm upgrade langflow langflow/langflow --version 1.8.0 --namespace langflow\n\nkubectl get pods -n langflow\n\n```\n\n> Check the status of your pods before upgrading.\n> Upgrade to the latest version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n langflow",
+          "helm upgrade langflow langflow/langflow --version 1.8.0 --namespace langflow",
+          "kubectl get pods -n langflow"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Error: unable to connect to the server: dial tcp 35.185.XXX.XXX:443: i/o timeout'",
+        "description": "**Cause:** This indicates a network connectivity issue to the Kubernetes API server.\n\n**Fix:**\nCheck your internet connection and ensure that the cluster is running."
+      },
+      {
+        "title": "Error: 'Failed to pull image 'langflow:1.8.0': Error response from daemon: pull access denied'",
+        "description": "**Cause:** This indicates that the specified image does not exist or is not accessible.\n\n**Fix:**\nEnsure the image name and tag are correct and that you have access to the repository."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff' on Langflow pods",
+        "description": "**Cause:** This indicates that the Langflow application is failing to start.\n\n**Fix:**\nCheck the logs of the pod using 'kubectl logs <pod-name> -n langflow' for more details."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the Langflow pods.\n\n**Fix:**\nIncrease the number of nodes or the resources allocated to the existing nodes."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.8.0",
+        "changes": "Added support for new AI models and improved the visual builder interface.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME READY STATUS RESTARTS AGE' with all pods in 'Running' state when everything is working.",
+      "codeSnippets": [
+        "pip install langflow==1.8.0",
+        "gcloud container clusters create langflow-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials langflow-cluster --region=us-central1",
+        "kubectl get nodes",
+        "helm repo add langflow https://charts.langflow.org",
+        "helm install langflow langflow/langflow --version 1.8.0 --namespace langflow --create-namespace",
+        "kubectl apply -f https://raw.githubusercontent.com/langflow-ai/langflow/main/deploy/monitoring.yaml",
+        "kubectl autoscale deployment langflow --cpu-percent=50 --min=1 --max=10"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-app",
+      "langflow-ai"
+    ],
+    "platform": "langflow",
+    "platformType": "ai-platform",
+    "platformProvider": "Langflow AI",
+    "platformVersions": [
+      "v1.8.0"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "langflow/langflow:1.8.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.langflow.org/",
+      "repo": "https://github.com/langflow-ai/langflow"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T00:06:19.854Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
