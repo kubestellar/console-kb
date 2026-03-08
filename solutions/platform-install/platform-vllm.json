@@ -1,0 +1,179 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-vllm",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure vLLM",
+    "description": "vLLM is a high-throughput and memory-efficient inference and serving engine for large language models (LLMs). It is ideal for applications requiring fast and scalable LLM serving, with support for various hardware and models. Key trade-offs include the need for specific hardware configurations and potential complexity in setup.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the CLI",
+        "description": "Install the vLLM CLI tool to manage deployments and configurations.\n\n```bash\n\npip install vllm==0.17.0\n\n```\n\n> Install the specific version of vLLM.",
+        "commands": [
+          "pip install vllm==0.17.0"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Set up a managed Kubernetes cluster using Google Kubernetes Engine (GKE) with the required version and node count.\n\n```bash\n\ngcloud container clusters create vllm-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1\n\n```\n\n> Adjust region and node count as needed.",
+        "commands": [
+          "gcloud container clusters create vllm-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "Configure your local environment to interact with the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials vllm-cluster --region us-central1\n\n```\n\n> This command updates your kubeconfig file.",
+        "commands": [
+          "gcloud container clusters get-credentials vllm-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "Ensure that the nodes in your cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Deploy vLLM",
+        "description": "Deploy the vLLM application to your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-deployment.yaml\n\n```\n\n> This YAML file contains the deployment configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-deployment.yaml"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Configure autoscaling and monitoring for your vLLM deployment.\n\n```bash\n\nkubectl autoscale deployment vllm --cpu-percent=50 --min=1 --max=10\n\nkubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-monitoring.yaml\n\n```\n\n> This command sets up horizontal pod autoscaling.\n> This YAML file sets up monitoring.",
+        "commands": [
+          "kubectl autoscale deployment vllm --cpu-percent=50 --min=1 --max=10",
+          "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-monitoring.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove vLLM Deployment",
+        "description": "This will remove the vLLM deployment and all associated resources. Be aware that this may lead to data loss.\n\n```bash\n\nkubectl delete -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-deployment.yaml\n\ngcloud container clusters delete vllm-cluster --region us-central1\n\n```\n\n> This will delete the entire cluster and all resources.",
+        "commands": [
+          "kubectl delete -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-deployment.yaml",
+          "gcloud container clusters delete vllm-cluster --region us-central1"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade vLLM",
+        "description": "Backup your current deployment, perform the upgrade, and verify the upgrade.\n\n```bash\n\nkubectl get deployment vllm -o yaml > vllm-backup.yaml\n\nkubectl set image deployment/vllm vllm=<new-image-tag>\n\nkubectl rollout status deployment/vllm\n\n```\n\n> Backup the current deployment configuration.\n> Replace <new-image-tag> with the new version of vLLM.\n> Verify that the rollout was successful.",
+        "commands": [
+          "kubectl get deployment vllm -o yaml > vllm-backup.yaml",
+          "kubectl set image deployment/vllm vllm=<new-image-tag>",
+          "kubectl rollout status deployment/vllm"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** The specified image tag does not exist or is incorrect.\n\n**Fix:**\nCheck the image tag in your deployment YAML and ensure it is correct."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The application is failing to start due to misconfiguration or missing dependencies.\n\n**Fix:**\nCheck the logs of the pod using 'kubectl logs <pod-name>' to identify the issue."
+      },
+      {
+        "title": "Error: 'Insufficient CPU'",
+        "description": "**Cause:** The cluster does not have enough resources to schedule the pod.\n\n**Fix:**\nIncrease the number of nodes or the machine type in your cluster."
+      },
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** Kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials vllm-cluster --region us-central1' to reset kubeconfig."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.17.0",
+        "changes": "Added support for new models and improved memory management features.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods' showing all pods in 'Running' state.",
+      "codeSnippets": [
+        "pip install vllm==0.17.0",
+        "gcloud container clusters create vllm-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials vllm-cluster --region us-central1",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-deployment.yaml",
+        "kubectl autoscale deployment vllm --cpu-percent=50 --min=1 --max=10",
+        "kubectl apply -f https://raw.githubusercontent.com/vllm-project/vllm/main/deploy/kubernetes/vllm-monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "vllm-project"
+    ],
+    "platform": "vllm",
+    "platformType": "ai-platform",
+    "platformProvider": "vLLM Project",
+    "platformVersions": [
+      "0.6",
+      "0.7"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "kubectl"
+    ],
+    "containerImages": [
+      "ghcr.io/vllm-project/vllm:v0.17.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.vllm.ai/",
+      "repo": "https://github.com/vllm-project/vllm"
+    },
+    "qualityScore": 87
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T18:02:43.648Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
