@@ -1,0 +1,168 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kuberay",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure KubeRay",
+    "description": "KubeRay is an open-source Kubernetes operator that simplifies the deployment and management of Ray applications on Kubernetes. It is ideal for users looking to run distributed machine learning workloads with ease, leveraging Kubernetes' orchestration capabilities. Key trade-offs include the need for familiarity with Kubernetes and potential complexity in managing Ray applications.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add KubeRay Helm Repository",
+        "description": "This step adds the KubeRay Helm chart repository to your local Helm configuration, allowing you to install KubeRay easily.\n\n```bash\n\nhelm repo add kuberay https://ray-project.github.io/kuberay\n\nhelm repo update\n\n```\n\n> This adds the official KubeRay Helm repository.\n> Updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add kuberay https://ray-project.github.io/kuberay",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install KubeRay Custom Resource Definitions (CRDs)",
+        "description": "CRDs are necessary for KubeRay to manage RayCluster, RayJob, and RayService resources.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/raycluster.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayjob.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayservice.yaml\n\n```\n\n> Installs the RayCluster CRD.\n> Installs the RayJob CRD.\n> Installs the RayService CRD.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/raycluster.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayjob.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayservice.yaml"
+        ]
+      },
+      {
+        "title": "Install KubeRay Operator",
+        "description": "This step installs the KubeRay operator using Helm, which manages the lifecycle of Ray applications.\n\n```bash\n\nhelm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace\n\n```\n\n> Installs the KubeRay operator in a dedicated namespace.",
+        "commands": [
+          "helm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify KubeRay Installation",
+        "description": "After installation, it's important to verify that the KubeRay operator is running correctly.\n\n```bash\n\nkubectl get pods -n kuberay\n\nkubectl get crd\n\n```\n\n> Check that the KubeRay operator pod is running.\n> Verify that the CRDs are installed.",
+        "commands": [
+          "kubectl get pods -n kuberay",
+          "kubectl get crd"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall KubeRay Operator",
+        "description": "This step removes the KubeRay operator and its associated resources. Be aware that this will delete all RayClusters, RayJobs, and RayServices managed by KubeRay, leading to potential data loss.\n\n```bash\n\nhelm uninstall kuberay --namespace kuberay\n\nkubectl delete namespace kuberay\n\n```\n\n> Uninstalls the KubeRay operator.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kuberay --namespace kuberay",
+          "kubectl delete namespace kuberay"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade KubeRay Operator",
+        "description": "Before upgrading, ensure you back up any important data. This step will upgrade the KubeRay operator to the latest version.\n\n```bash\n\nkubectl get pods -n kuberay -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data\n\nhelm upgrade kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay\n\nkubectl get pods -n kuberay\n\n```\n\n> Drains the nodes to prepare for upgrade.\n> Upgrades the KubeRay operator.\n> Verify that the upgraded operator pod is running.",
+        "commands": [
+          "kubectl get pods -n kuberay -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data",
+          "helm upgrade kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay",
+          "kubectl get pods -n kuberay"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Error from server (NotFound): customresourcedefinitions.apiextensions.k8s.io 'rayclusters.kuberay.io' not found'",
+        "description": "**Cause:** The RayCluster CRD was not installed correctly.\n\n**Fix:**\nReapply the CRD using 'kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/raycluster.yaml'."
+      },
+      {
+        "title": "Error: 'Failed to create RayCluster: insufficient resources'",
+        "description": "**Cause:** The Kubernetes cluster does not have enough resources to create the RayCluster.\n\n**Fix:**\nEnsure your cluster has sufficient resources (minimum 2 vCPU, 4GB RAM per node)."
+      },
+      {
+        "title": "Error: 'KubeRay operator pod is CrashLoopBackOff'",
+        "description": "**Cause:** The KubeRay operator may be misconfigured or missing dependencies.\n\n**Fix:**\nCheck the operator logs using 'kubectl logs <operator-pod-name> -n kuberay' for more details."
+      },
+      {
+        "title": "Error: 'kubectl: command not found'",
+        "description": "**Cause:** kubectl is not installed or not in your PATH.\n\n**Fix:**\nInstall kubectl following the official installation guide."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.5.1",
+        "changes": "Added support for new Ray features, improved CRD management, and enhanced error handling.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the KubeRay operator pod running with a status of 'Running' and the output of 'kubectl get pods -n kuberay' should list the operator pod without errors.",
+      "codeSnippets": [
+        "helm repo add kuberay https://ray-project.github.io/kuberay",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/raycluster.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayjob.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/rayservice.yaml",
+        "helm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace",
+        "kubectl get pods -n kuberay",
+        "kubectl get crd"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ml-platform",
+      "ray-project"
+    ],
+    "platform": "kuberay",
+    "platformType": "ai-platform",
+    "platformProvider": "Ray Project",
+    "platformVersions": [
+      "v1.5.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/ray-project/kuberay:v1.5.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.ray.io/en/latest/cluster/kubernetes/",
+      "repo": "https://github.com/ray-project/kuberay"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T12:03:43.634Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

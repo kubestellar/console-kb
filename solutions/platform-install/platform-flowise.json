@@ -1,0 +1,182 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-flowise",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Flowise",
+    "description": "Flowise is an AI platform that allows users to build AI agents visually. It is ideal for developers looking to create and manage AI workflows without deep technical expertise. Key trade-offs include the need for Node.js and Docker for installation and operation.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Flowise CLI",
+        "description": "This step installs the Flowise command-line interface globally on your machine, allowing you to manage Flowise applications.\n\n```bash\n\nnpm install -g flowise@3.0.13\n\n```\n\n> Install the specific version of Flowise globally.",
+        "commands": [
+          "npm install -g flowise@3.0.13"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This command creates a new Kubernetes cluster with the specified version, node count, and region.\n\n```bash\n\ngcloud container clusters create flowise-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Ensure you have gcloud CLI installed and authenticated.",
+        "commands": [
+          "gcloud container clusters create flowise-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This command configures your local kubeconfig file to interact with the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials flowise-cluster --zone=us-central1-a\n\n```\n\n> This allows kubectl to communicate with your cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials flowise-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Deploy Flowise on Kubernetes",
+        "description": "This step deploys Flowise using a Helm chart, ensuring the application is installed in the correct namespace.\n\n```bash\n\nhelm repo add flowise https://flowiseai.github.io/Flowise\n\nhelm install flowise flowise/flowise --namespace flowise --create-namespace --version 3.0.13\n\n```\n\n> Add the Flowise Helm repository.\n> Install Flowise in the 'flowise' namespace.",
+        "commands": [
+          "helm repo add flowise https://flowiseai.github.io/Flowise",
+          "helm install flowise flowise/flowise --namespace flowise --create-namespace --version 3.0.13"
+        ]
+      },
+      {
+        "title": "Verify Flowise Deployment",
+        "description": "This command checks the status of the Flowise pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n flowise\n\n```\n\n> Look for 'Running' status in the output.",
+        "commands": [
+          "kubectl get pods -n flowise"
+        ]
+      },
+      {
+        "title": "Post-Installation Configuration",
+        "description": "This step configures autoscaling and monitoring for the Flowise deployment.\n\n```bash\n\nkubectl autoscale deployment flowise --cpu-percent=50 --min=1 --max=5 -n flowise\n\nkubectl apply -f monitoring-config.yaml\n\n```\n\n> Set up autoscaling based on CPU usage.\n> Apply your monitoring configuration.",
+        "commands": [
+          "kubectl autoscale deployment flowise --cpu-percent=50 --min=1 --max=5 -n flowise",
+          "kubectl apply -f monitoring-config.yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Flowise",
+        "description": "This command removes the Flowise deployment and associated resources. Be aware that this will delete all Flowise data.\n\n```bash\n\nhelm uninstall flowise --namespace flowise\n\ngcloud container clusters delete flowise-cluster --zone=us-central1-a --quiet\n\n```\n\n> This removes the Flowise release.\n> This deletes the entire Kubernetes cluster.",
+        "commands": [
+          "helm uninstall flowise --namespace flowise",
+          "gcloud container clusters delete flowise-cluster --zone=us-central1-a --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Flowise",
+        "description": "Before upgrading, ensure you back up your data. This process includes draining nodes if necessary, upgrading the Helm release, and verifying the upgrade.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade flowise flowise/flowise --namespace flowise --version 3.0.13\n\nkubectl get pods -n flowise\n\n```\n\n> Drain the node to prepare for upgrade.\n> Upgrade to the latest version of Flowise.\n> Verify that the Flowise pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade flowise flowise/flowise --namespace flowise --version 3.0.13",
+          "kubectl get pods -n flowise"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** The specified image may not exist or there may be network issues.\n\n**Fix:**\nCheck the image name and ensure your cluster has internet access."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The application may be failing to start due to misconfiguration.\n\n**Fix:**\nCheck the logs with 'kubectl logs <pod-name> -n flowise' for more details."
+      },
+      {
+        "title": "Error: 'Insufficient CPU'",
+        "description": "**Cause:** The cluster may not have enough resources allocated.\n\n**Fix:**\nIncrease the node size or number of nodes in your cluster."
+      },
+      {
+        "title": "Error: 'Connection refused'",
+        "description": "**Cause:** The service may not be exposed correctly.\n\n**Fix:**\nEnsure the service is running and check the service type and port configuration."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "3.0.13",
+        "changes": "Added new visual workflow features, improved API performance, and enhanced user interface.",
+        "deprecations": "Deprecated legacy API endpoints.",
+        "migrationSteps": "If upgrading from 2.x, review the migration guide for API changes."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Flowise UI accessible at http://<your-cluster-ip>:3000 with all services running.",
+      "codeSnippets": [
+        "npm install -g flowise@3.0.13",
+        "gcloud container clusters create flowise-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials flowise-cluster --zone=us-central1-a",
+        "helm repo add flowise https://flowiseai.github.io/Flowise",
+        "helm install flowise flowise/flowise --namespace flowise --create-namespace --version 3.0.13",
+        "kubectl get pods -n flowise",
+        "kubectl autoscale deployment flowise --cpu-percent=50 --min=1 --max=5 -n flowise",
+        "kubectl apply -f monitoring-config.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-app",
+      "flowiseai"
+    ],
+    "platform": "flowise",
+    "platformType": "ai-platform",
+    "platformProvider": "FlowiseAI",
+    "platformVersions": [
+      "3.0.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "flowiseai/flowise:3.0.13"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.flowiseai.com/",
+      "repo": "https://github.com/FlowiseAI/Flowise"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x",
+      "npm"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T12:05:18.984Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
