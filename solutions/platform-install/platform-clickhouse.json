@@ -1,0 +1,169 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-clickhouse",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure ClickHouse",
+    "description": "ClickHouse is a real-time analytics database management system designed for generating analytical data reports. It is ideal for applications requiring high-performance data processing and querying. Key trade-offs include its column-oriented storage which optimizes read performance but may require more complex data modeling.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add ClickHouse Helm Repository",
+        "description": "This step adds the official ClickHouse Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add clickhouse https://clickhouse.github.io/clickhouse-helm\n\n```\n\n> This is the official repository for ClickHouse Helm charts.",
+        "commands": [
+          "helm repo add clickhouse https://clickhouse.github.io/clickhouse-helm"
+        ]
+      },
+      {
+        "title": "Install ClickHouse CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for ClickHouse to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/ClickHouse/clickhouse-helm/main/crds/clickhouse.altinity.com_clickhouses.yaml\n\n```\n\n> This CRD is necessary for managing ClickHouse clusters.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/ClickHouse/clickhouse-helm/main/crds/clickhouse.altinity.com_clickhouses.yaml"
+        ]
+      },
+      {
+        "title": "Install ClickHouse using Helm",
+        "description": "This command installs ClickHouse in the specified namespace with the desired version.\n\n```bash\n\nhelm install clickhouse clickhouse/clickhouse --namespace clickhouse --create-namespace --version 26.2.4.23-stable\n\n```\n\n> Replace 'clickhouse' with your desired release name.",
+        "commands": [
+          "helm install clickhouse clickhouse/clickhouse --namespace clickhouse --create-namespace --version 26.2.4.23-stable"
+        ]
+      },
+      {
+        "title": "Create a ClickHouse Cluster Resource",
+        "description": "This step creates a Custom Resource (CR) to define your ClickHouse cluster configuration.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: altinity.com/v1\nkind: ClickHouseCluster\nmetadata:\n  name: my-clickhouse\n  namespace: clickhouse\nspec:\n  config:\n    zookeeper:\n      nodes:\n        - host: zookeeper-0.zookeeper.clickhouse.svc.cluster.local\n  pods:\n    count: 3\nEOF\n\n```\n\n> This example creates a ClickHouse cluster with 3 pods.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: altinity.com/v1\nkind: ClickHouseCluster\nmetadata:\n  name: my-clickhouse\n  namespace: clickhouse\nspec:\n  config:\n    zookeeper:\n      nodes:\n        - host: zookeeper-0.zookeeper.clickhouse.svc.cluster.local\n  pods:\n    count: 3\nEOF"
+        ]
+      },
+      {
+        "title": "Verify ClickHouse Cluster Status",
+        "description": "This command checks the status of the ClickHouse cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get clickhousecluster -n clickhouse\n\n```\n\n> You should see your ClickHouse cluster listed with its status.",
+        "commands": [
+          "kubectl get clickhousecluster -n clickhouse"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall ClickHouse",
+        "description": "This step will remove the ClickHouse installation and all associated resources. Be aware that this will result in data loss unless backups are made.\n\n```bash\n\nhelm uninstall clickhouse --namespace clickhouse\n\nkubectl delete namespace clickhouse\n\n```\n\n> This command removes the ClickHouse release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall clickhouse --namespace clickhouse",
+          "kubectl delete namespace clickhouse"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade ClickHouse",
+        "description": "Before upgrading, ensure you back up your data. This step will upgrade ClickHouse to the specified version.\n\n```bash\n\nkubectl cp my-clickhouse-0:/var/lib/clickhouse/data /path/to/backup\n\nhelm upgrade clickhouse clickhouse/clickhouse --namespace clickhouse --version 26.2.4.23-stable\n\nkubectl get clickhousecluster -n clickhouse\n\n```\n\n> Backup your data from the ClickHouse pod.\n> This command upgrades ClickHouse to the specified version.\n> Verify the status of the ClickHouse cluster after the upgrade.",
+        "commands": [
+          "kubectl cp my-clickhouse-0:/var/lib/clickhouse/data /path/to/backup",
+          "helm upgrade clickhouse clickhouse/clickhouse --namespace clickhouse --version 26.2.4.23-stable",
+          "kubectl get clickhousecluster -n clickhouse"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to ClickHouse server'",
+        "description": "**Cause:** The ClickHouse server may not be running or is misconfigured.\n\n**Fix:**\nCheck the status of the ClickHouse pods with 'kubectl get pods -n clickhouse' and review logs with 'kubectl logs <pod-name> -n clickhouse'."
+      },
+      {
+        "title": "Error: 'Zookeeper connection failed'",
+        "description": "**Cause:** Zookeeper may not be running or is unreachable.\n\n**Fix:**\nEnsure Zookeeper is running and accessible. Check Zookeeper pod status with 'kubectl get pods -n clickhouse'."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** The cluster may not have enough resources allocated to run ClickHouse.\n\n**Fix:**\nIncrease the resource limits in the ClickHouse cluster configuration and redeploy."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** The ClickHouse pod may be crashing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs for errors and adjust the configuration or resources as needed."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v26.2.4.23-stable",
+        "changes": "Introduced new SQL functions for analytics, improved performance for large datasets, and enhanced monitoring capabilities.",
+        "deprecations": "Deprecated certain legacy SQL functions that are no longer recommended.",
+        "migrationSteps": "Review the release notes for any SQL function changes that may affect existing queries."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the ClickHouse cluster listed with the command 'kubectl get clickhousecluster -n clickhouse' and its status should be 'Running'.",
+      "codeSnippets": [
+        "helm repo add clickhouse https://clickhouse.github.io/clickhouse-helm",
+        "kubectl apply -f https://raw.githubusercontent.com/ClickHouse/clickhouse-helm/main/crds/clickhouse.altinity.com_clickhouses.yaml",
+        "helm install clickhouse clickhouse/clickhouse --namespace clickhouse --create-namespace --version 26.2.4.23-stable",
+        "kubectl apply -f - <<EOF\napiVersion: altinity.com/v1\nkind: ClickHouseCluster\nmetadata:\n  name: my-clickhouse\n  namespace: clickhouse\nspec:\n  config:\n    zookeeper:\n      nodes:\n        - host: zookeeper-0.zookeeper.clickhouse.svc.cluster.local\n  pods:\n    count: 3\nEOF",
+        "kubectl get clickhousecluster -n clickhouse"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "analytics-db",
+      "clickhouse-inc"
+    ],
+    "platform": "clickhouse",
+    "platformType": "database",
+    "platformProvider": "ClickHouse Inc",
+    "platformVersions": [
+      "24.x",
+      "25.x"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "clickhouse/clickhouse-server:26.2.4.23-stable"
+    ],
+    "sourceUrls": {
+      "docs": "https://clickhouse.com/docs",
+      "repo": "https://github.com/ClickHouse/ClickHouse"
+    },
+    "qualityScore": 97
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T00:06:55.723Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
