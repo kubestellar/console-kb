@@ -1,0 +1,179 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-litellm",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure LiteLLM",
+    "description": "LiteLLM is a Python SDK and Proxy Server designed to facilitate interactions with over 100 LLM APIs in a unified OpenAI format. It is ideal for developers looking to integrate multiple LLM services with features like cost tracking and load balancing. Key trade-offs include the complexity of managing multiple API keys and potential latency introduced by the proxy server.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Install the CLI",
+        "description": "Install the necessary command-line tools to interact with your Kubernetes cluster.\n\n```bash\n\npip install litellm==1.82.dev2\n\n```\n\n> Install the LiteLLM SDK for Python.",
+        "commands": [
+          "pip install litellm==1.82.dev2"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "Provision a new Kubernetes cluster with the specified version and node count.\n\n```bash\n\ngcloud container clusters create litellm-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Replace 'us-central1' with your preferred region.",
+        "commands": [
+          "gcloud container clusters create litellm-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "Configure your local environment to communicate with the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials litellm-cluster --region=us-central1\n\n```\n\n> Ensure you are authenticated with Google Cloud.",
+        "commands": [
+          "gcloud container clusters get-credentials litellm-cluster --region=us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "Check that the nodes in your cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in 'Ready' status.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "Set up autoscaling and monitoring for your LiteLLM deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/monitoring.yaml\n\n```\n\n> This will enable autoscaling for your LiteLLM deployment.\n> This will set up monitoring for your LiteLLM deployment.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/monitoring.yaml"
+        ]
+      },
+      {
+        "title": "Cost Warning",
+        "description": "Be aware of potential costs associated with running the cluster and services.\n\n```bash\n\ngcloud compute instances list\n\n```\n\n> Check for running instances and their associated costs.",
+        "commands": [
+          "gcloud compute instances list"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall LiteLLM",
+        "description": "This will remove the LiteLLM deployment and all associated resources. Be cautious as this may lead to data loss.\n\n```bash\n\nkubectl delete deployment litellm-deployment\n\ngcloud container clusters delete litellm-cluster --region=us-central1\n\n```\n\n> This removes the LiteLLM deployment.\n> This deletes the entire Kubernetes cluster.",
+        "commands": [
+          "kubectl delete deployment litellm-deployment",
+          "gcloud container clusters delete litellm-cluster --region=us-central1"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade LiteLLM",
+        "description": "Before upgrading, ensure you back up your data and configurations. After upgrading, verify that the deployment is functioning correctly.\n\n```bash\n\nkubectl get pods -n litellm --output=jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets\n\nkubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/litellm-deployment-v1.82.dev2.yaml\n\nkubectl get pods -n litellm\n\n```\n\n> Drain the pods before upgrading.\n> Apply the new deployment configuration.\n> Verify that the new pods are running.",
+        "commands": [
+          "kubectl get pods -n litellm --output=jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets",
+          "kubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/litellm-deployment-v1.82.dev2.yaml",
+          "kubectl get pods -n litellm"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to the API server'",
+        "description": "**Cause:** This usually indicates that the kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials litellm-cluster --region=us-central1' to reconfigure kubeconfig."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources available'",
+        "description": "**Cause:** The cluster may not have enough resources allocated to handle the current load.\n\n**Fix:**\nIncrease the number of nodes or the machine type in your cluster."
+      },
+      {
+        "title": "Pods are in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can occur if the application inside the pod fails to start due to misconfiguration.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name>' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** This indicates that Kubernetes cannot pull the specified container image.\n\n**Fix:**\nVerify that the image name and tag are correct and that the image is accessible."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.82.dev2",
+        "changes": "Introduced support for new LLM APIs including Bedrock and improved cost tracking features.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME STATUS ROLES AGE VERSION' with all nodes in 'Ready' status when running 'kubectl get nodes'.",
+      "codeSnippets": [
+        "pip install litellm==1.82.dev2",
+        "gcloud container clusters create litellm-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials litellm-cluster --region=us-central1",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/autoscaler.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/BerriAI/litellm/main/deploy/monitoring.yaml",
+        "gcloud compute instances list"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-gateway",
+      "berriai"
+    ],
+    "platform": "litellm",
+    "platformType": "ai-platform",
+    "platformProvider": "BerriAI",
+    "platformVersions": [
+      "v1.82.dev2"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "kubectl"
+    ],
+    "containerImages": [
+      "ghcr.io/berriai/litellm:v1.82.dev2"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.litellm.ai/",
+      "repo": "https://github.com/BerriAI/litellm"
+    },
+    "qualityScore": 92
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and cloud access configured."
+  },
+  "security": {
+    "scannedAt": "2026-03-08T06:10:06.800Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
