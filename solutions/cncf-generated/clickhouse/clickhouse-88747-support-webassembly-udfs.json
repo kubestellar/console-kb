@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "clickhouse-88747-support-webassembly-udfs",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "clickhouse: Support WebAssembly UDFs",
+    "description": "### Changelog category (leave one):\n\n- Experimental Feature\n\n### Changelog entry (a [user-readable short description](https://github.com/ClickHouse/ClickHouse/blob/master/docs/changelog_entry_guidelines.md) of the changes that goes into CHANGELOG.md):\n\n* Add experimental support for WebAssembly-based user-defined functions (UDFs), allowing custom function logic to be implemented in WebAssembly and executed within ClickHouse. Special thanks to [Alexey Smirnov](https://github.com/lioshik) (@lioshi",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "### Changelog category (leave one):\n\n- Experimental Feature\n\n### Changelog entry (a [user-readable short description](https://github.com/ClickHouse/ClickHouse/blob/master/docs/changelog_entry_guidelin"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\ndiff --git a/rust/workspace/wasmtime/CMakeLists.txt b/rust/workspace/wasmtime/CMakeLists.txt\r\nindex 41417047c46..219c3dbc4bd 100644\r\n--- a/rust/workspace/wasmtime/CMakeLists.txt\r\n+++ b/rust/workspace/wasmtime/CMakeLists.txt\r\n@@ -39,6 +39,8 @@ set(WASMTIME_FEATURE_GC_DRC OFF)\r\n set(WASMTIME_FEATURE_ASYNC OFF)\r\n set(WASMTIME_FEATURE_WINCH OFF)\r\n \r\n+set(WASMTIME_FEATURE_WASI ON)\r\n+\r\n set(WASMTIME_HEADER_DST ${WASMTIME_BINARY_DIR}/include)\r\n set(WASMTIME_HEADER_SRC ${WASMTIME_SOURCE_DIR}/crates/c-ap\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> @vdimir just curious, how much effort would it take to add WASI support? Probably not in this PR, but maybe as a follow-up?\n\n@bacek I did a bit of research on this earlier. Overall, it looks feasible and actually like a good thing to have, since it would allow us to use more tools/compilers for wasm UDFs, treating them more like regular programs.\n\nFrom what I saw, wasmtime already provides some stub implementations. So in general, we would just need to decide which parts should have real implementations and which should remain restricted (e.g., we could implement guest–host interaction via stdin/stdout similar to executable UDFs, but forbid writing to arbitrary files).\n\nThat said, my research was done quite a while ago and was focused on WASI Preview 1, which is essentially a set of syscall-like functions. Now WASI Preview 2 introduces the component model, and I haven’t looked into it yet. My assumption is that it’s still about implementing a set of host-side functions with specific names and signatures, but I’d need to verify that.\n\nSo for now, I’d consider it a “good to have” rather than something urgent.",
+      "codeSnippets": [
+        "diff --git a/rust/workspace/wasmtime/CMakeLists.txt b/rust/workspace/wasmtime/CMakeLists.txt\r\nindex 41417047c46..219c3dbc4bd 100644\r\n--- a/rust/workspace/wasmtime/CMakeLists.txt\r\n+++ b/rust/workspace/wasmtime/CMakeLists.txt\r\n@@ -39,6 +39,8 @@ set(WASMTIME_FEATURE_GC_DRC OFF)\r\n set(WASMTIME_FEATURE_ASYNC OFF)\r\n set(WASMTIME_FEATURE_WINCH OFF)\r\n \r\n+set(WASMTIME_FEATURE_WASI ON)\r\n+\r\n set(WASMTIME_HEADER_DST ${WASMTIME_BINARY_DIR}/include)\r\n set(WASMTIME_HEADER_SRC ${WASMTIME_SOURCE_DIR}/crates/c-ap",
+        "diff --git a/rust/workspace/wasmtime/CMakeLists.txt b/rust/workspace/wasmtime/CMakeLists.txt\r\nindex 41417047c46..219c3dbc4bd 100644\r\n--- a/rust/workspace/wasmtime/CMakeLists.txt\r\n+++ b/rust/workspace/wasmtime/CMakeLists.txt\r\n@@ -39,6 +39,8 @@ set(WASMTIME_FEATURE_GC_DRC OFF)\r\n set(WASMTIME_FEATURE_ASYNC OFF)\r\n set(WASMTIME_FEATURE_WINCH OFF)\r\n \r\n+set(WASMTIME_FEATURE_WASI ON)\r\n+\r\n set(WASMTIME_HEADER_DST ${WASMTIME_BINARY_DIR}/include)\r\n set(WASMTIME_HEADER_SRC ${WASMTIME_SOURCE_DIR}/crates/c-api/include)\r\n target_include_directories(_ch_wasmtime SYSTEM INTERFACE ${WASMTIME_HEADER_DST})\r\ndiff --git a/rust/workspace/wasmtime/Cargo.toml b/rust/workspace/wasmtime/Cargo.toml\r\nindex 4e0430c7edb..6dc53b2a36d 100644\r\n--- a/rust/workspace/wasmtime/Cargo.toml\r\n+++ b/rust/workspace/wasmtime/Cargo.toml\r\n@@ -9,4 +9,4 @@ crate-type = [\"staticlib\"]\r\n # Dummy package to build wasmtime within the ClickHouse workspace and re-export its symbols.\r\n # Wasmtime provides C/C++ header files located, so we put it to contrib, and we use it from there.\r\n [dependencies]\r\n-wasmtime-c-api = { path = \"../../../contrib/wasmtime/crates/c-api\" , package = \"wasmtime-c-api-impl\" , default-features = false , features = [\"addr2line\", \"coredump\", \"cranelift\", \"gc\", \"gc-null\", \"debug-builtins\", \"demangle\", \"wat\"] }\r\n+wasmtime-c-api = { path = \"../../../contrib/wasmtime/crates/c-api\" , package = \"wasmtime-c-api-impl\" , default-features = false , features = [\"addr2line\", \"coredump\", \"cranelift\", \"gc\", \"gc-null\", \"debug-builtins\", \"demangle\", \"wat\", \"wasi\"] }\r\ndiff --git a/src/Interpreters/WebAssembly/WasmTimeRuntime.cpp b/src/Interpreters/WebAssembly/WasmTimeRuntime.cpp\r\nindex 7dc10d1f3ce..8012eed4ff4 100644\r\n--- a/src/Interpreters/WebAssembly/WasmTimeRuntime.cpp\r\n+++ b/src/Interpreters/WebAssembly/WasmTimeRuntime.cpp\r\n@@ -19,6 +19,8 @@\r\n #include <Interpreters/WebAssembly/WasmTypes.h>\r\n \r\n #include <wasmtime.hh>\r\n+#include <wasmtime/wasi.hh>\r\n+\r\n \r\n namespace ProfileEvents\r\n {\r\n@@ -369,6 +371,15 @@ public:\r\n     std::unique_ptr<WasmCompartment> instantiate(Config cfg) const override\r\n     {\r\n         wasmtime::Store store(engine);\r\n+        wasmtime::WasiConfig wasi;\r\n+        wasi.inherit_argv();\r\n+        wasi.inherit_stdin();\r\n+        wasi.inherit_stdout();\r\n+        wasi.inherit_stderr();\r\n+\r\n+        store.context().set_wasi(std::move(wasi)).unwrap();\r\n+\r\n+\r\n         if (cfg.memory_limit)\r\n             store.limiter(cfg.memory_limit, -1, -1, -1, -1);\r\n         if (cfg.fuel_limit)\r\n@@ -379,6 +390,8 @@ public:\r\n         }\r\n \r\n         wasmtime::Linker linker(engine);\r\n+        linker.define_wasi().unwrap();\r\n+\r\n         for (const auto & host_function : host_functions)\r\n         {\r\n             const auto & func_decl = host_function.getFunctionDeclaration();",
+        "0x241 | 03 65 6e 76 | import [func 0] Import { module: \"env\", name: \"clickhouse_throw\", ty: Func(1) }\r\n   0x258 | 03 65 6e 76 | import [func 1] Import { module: \"env\", name: \"clickhouse_log\", ty: Func(1) }\r\n   0x26d | 16 77 61 73 | import [func 2] Import { module: \"wasi_snapshot_preview1\", name: \"fd_close\", ty: Func(0) }",
+        "+        if (!wasi.preopen_dir(\r\n+                \"/tmp/ch-udf/\",\r\n+                \".\",\r\n+                WASMTIME_WASI_DIR_PERMS_READ | WASMTIME_WASI_DIR_PERMS_WRITE,\r\n+                WASMTIME_WASI_FILE_PERMS_READ | WASMTIME_WASI_FILE_PERMS_WRITE))\r\n+        {\r\n+            throw Exception(ErrorCodes::WASM_ERROR, \"Can't preopen_dir\");\r\n+        }\r\n+",
+        "#[clickhouse_udf]\r\npub fn test_fs(greet: String) -> anyhow::Result<String> {\r\n    let mut file = fs::File::create(\"test.txt\")?;\r\n    for _ in 0..10 {\r\n        writeln!(file, \"{}\", greet)?;\r\n    }\r\n    let contents = fs::read_to_string(\"test.txt\")?;\r\n    Ok(contents)\r\n}\r\n\r\n#[clickhouse_udf]\r\npub fn test_read(path: String) -> anyhow::Result<String> {\r\n    let contents = fs::read_to_string(path)?;\r\n    Ok(contents)\r\n}\r\n\r\n#[clickhouse_udf]\r\npub fn ls(path: String) -> anyhow::Result<Vec<String>> {\r\n    let mut entries = Vec::new();\r\n    for entry in fs::read_dir(&path)? {\r\n        let entry = entry?;\r\n        entries.push(entry.file_name().to_string_lossy().into_owned());\r\n    }\r\n    Ok(entries)\r\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "clickhouse",
+      "community",
+      "analytics-db",
+      "troubleshoot",
+      "submodule-changed",
+      "pr-synced-to-cloud",
+      "pr-experimental"
+    ],
+    "cncfProjects": [
+      "clickhouse"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/ClickHouse/ClickHouse/pull/88747",
+      "repo": "https://github.com/ClickHouse/ClickHouse"
+    },
+    "reactions": 14,
+    "comments": 11,
+    "synthesizedBy": "regex",
+    "qualityScore": 60
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with clickhouse installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:46:09.150Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

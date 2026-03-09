@@ -1,0 +1,94 @@
+{
+  "version": "kc-mission-v1",
+  "name": "valkey-1952-fix-incorrect-lag-reported-in-xinfo-groups",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "valkey: Fix incorrect lag reported in XINFO GROUPS",
+    "description": "When a tombstone is created after the last_id of a consumer group.\n\nThe consumer group lag is reported in the reply of `XINFO GROUPS mystream`.\n\nClose: #1951",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "When a tombstone is created after the last_id of a consumer group.\n\nThe consumer group lag is reported in the reply of `XINFO GROUPS mystream`.\n\nClose: #1951"
+      },
+      {
+        "title": "1) \"name\"",
+        "description": "1) \"name\""
+      },
+      {
+        "title": "\"consumers\"",
+        "description": "\"consumers\""
+      },
+      {
+        "title": "(integer) 1",
+        "description": "(integer) 1"
+      },
+      {
+        "title": "\"pending\"",
+        "description": "\"pending\""
+      },
+      {
+        "title": "(integer) 3",
+        "description": "(integer) 3"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n| [Files with missing lines](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?dropdown=coverage&src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io) | Coverage Δ | |\n|---|---|---|\n| [src/t\\_stream.c](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?src=pr&el=tree&filepath=src%2Ft_stream.c&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io#diff-c3JjL3Rfc3RyZWFtLmM=) | `93.17\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> Could you share the before and after behavior (preferrable valkey-cli output) ?\n\n@hpatro the full output is in #1951 description, here is just the last result\n\n```bash\n127.0.0.1:6379> XINFO GROUPS mystream\n1)  1) \"name\"\n    2) \"g1\"\n    3) \"consumers\"\n    4) (integer) 1\n    5) \"pending\"\n    6) (integer) 3\n    7) \"last-delivered-id\"\n    8) \"4-0\"\n    9) \"entries-read\"\n   10) (integer) 3\n   11) \"lag\"\n   12) (integer) 1 # it should be 0 the message was deleted and there is not lag\n```\nthis is the new output with the fix\n\n```bash\n> ./src/valkey-cli\n127.0.0.1:6379> xadd mystream 1-0 data a\n\"1-0\"\n127.0.0.1:6379> xadd mystream 2-0 data b\n\"2-0\"\n127.0.0.1:6379> xadd mystream 3-0 data c\n\"3-0\"\n127.0.0.1:6379> xadd mystream 4-0 data d\n\"4-0\"\n127.0.0.1:6379> XGROUP CREATE mystream g1 0\nOK\n127.0.0.1:6379> XREADGROUP GROUP g1 c1 COUNT 2 STREAMS mystream >\n1) 1) \"mystream\"\n   2) 1) 1) \"1-0\"\n         2) 1) \"data\"\n            2) \"a\"\n      2) 1) \"2-0\"\n         2) 1) \"data\"\n            2) \"b\"\n127.0.0.1:6379> XINFO GROUPS mystream\n1)  1) \"name\"\n    2) \"g1\"\n    3) \"consumers\"\n    4) (integer) 1\n    5) \"pending\"\n    6) (integer) 2\n    7) \"last-delivered-id\"\n    8) \"2-0\"\n    9) \"entries-read\"\n   10) (integer) 2\n   11) \"lag\"\n   12) (integer) 2\n127.0.0.1:6379> xdel mystream 3-0\n(integer) 1\n127.0.0.1:6379> XINFO GROUPS mystream\n1)  1) \"name\"\n    2) \"g1\"\n    3) \"consumers\"\n    4) (integer) 1\n    5) \"pending\"\n    6) (integer) 2\n    7) \"last-delivered-id\"\n    8) \"2-0\"\n    9) \"entries-read\"\n   10) (integer)",
+      "codeSnippets": [
+        "| [Files with missing lines](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?dropdown=coverage&src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io) | Coverage Δ | |\n|---|---|---|\n| [src/t\\_stream.c](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?src=pr&el=tree&filepath=src%2Ft_stream.c&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io#diff-c3JjL3Rfc3RyZWFtLmM=) | `93.17",
+        "| [Files with missing lines](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?dropdown=coverage&src=pr&el=tree&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io) | Coverage Δ | |\n|---|---|---|\n| [src/t\\_stream.c](https://app.codecov.io/gh/valkey-io/valkey/pull/1952?src=pr&el=tree&filepath=src%2Ft_stream.c&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io#diff-c3JjL3Rfc3RyZWFtLmM=) | `93.17% <100.00%> (+<0.01%)` | :arrow_up: |\n\n... and [27 files with indirect coverage changes](https://app.codecov.io/gh/valkey-io/valkey/pull/1952/indirect-changes?src=pr&el=tree-more&utm_medium=referral&utm_source=github&utm_content=comment&utm_campaign=pr+comments&utm_term=valkey-io)\n\n</details>\n<details><summary> :rocket: New features to boost your workflow: </summary>\n\n- :snowflake: [Test Analytics](https://docs.codecov.com/docs/test-analytics): Detect flaky tests, report on failures, and find test suite problems.\n- :package: [JS Bundle Analysis](https://docs.codecov.com/docs/javascript-bundle-analysis): Save yourself from yourself by tracking and limiting bundle sizes in JS merges.\n</details>\nHaven't read the code. Is this related to https://github.com/valkey-io/valkey/pull/685 ?\r\n \r\n> @hpatro Shall we backport it?\r\n\r\nDo we backport or just make the change in latest version? If we do we would need to get it to 7.2.x, 8.0.x and 8.1.x I believe.\n> Is this related to #685 ?\r\n\r\n:thinking: \r\n\r\nIt looks very similar, yes. @artikell is it a duplicate? Can you take a look and decide which one we can merge?\n@zuiderkwast @hpatro #685 try to fix others issues as well and it's more dangerous to handle all of them in a single fix\n> @zuiderkwast @hpatro #685 try to fix others issues as well and it's more dangerous to handle all of them in a single fix\r\n\r\nRight. I agree we shouldn't conflate the PR. I just want to ensure the correctness. @artikell would you mind reviewing this ?\n@zuiderkwast @hpatro Yes, this PR is a simple fix that also aligns redis. There is another fix on redis, and this pr is also dealt with together? @nesty92 \r\n\r\nWhen using the XTRIM command to trim a stream, it does not update the maximal tombstone (max_deleted_entry_id). This leads to an issue where the lag calculation incorrectly assumes that there are no tombstones after the consumer group's last_id, resulting in an inaccurate lag.\n> Could you share the before and after behavior (preferrable valkey-cli output) ?\r\n\r\n@hpatro the full output is in #1951 description, here is just the last result",
+        "this is the new output with the fix"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "valkey",
+      "community",
+      "cache",
+      "troubleshoot",
+      "release-notes"
+    ],
+    "cncfProjects": [
+      "valkey"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/valkey-io/valkey/pull/1952",
+      "repo": "https://github.com/valkey-io/valkey"
+    },
+    "reactions": 2,
+    "comments": 11,
+    "synthesizedBy": "regex",
+    "qualityScore": 64
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with valkey installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:48:03.132Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

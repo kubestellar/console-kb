@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kuberay-4413-history-server-storage-add-azure-blob-storage-support",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kuberay: [history server][storage] Add Azure Blob Storage support",
+    "description": "## Why are these changes needed?\n\nAdds Azure Blob Storage support for the History Server, enabling Azure users to persist Ray cluster logs and events. Supports both connection string authentication (for dev/test) and [Microsoft Entra Workload Identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview?tabs=go) (for production AKS deployments).\n\n### Configuration\n\nSet `--runtime-class-name=azureblob` to enable this module.\n\nConfig via environment variables or `/var/collector-",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "## Why are these changes needed?\n\nAdds Azure Blob Storage support for the History Server, enabling Azure users to persist Ray cluster logs and events. Supports both connection string authentication (f"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n{\"azureContainer\": \"\", \"azureConnectionString\": \"\", \"azureAccountURL\": \"\"}\n```"
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "> I've addressed the proposed TODOs @Future-Outlier :\n> \n> * Added an E2E test using Azurite (`historyserver/test/e2e/azureblob_collector_test.go`) - [bf98a64](https://github.com/ray-project/kuberay/commit/bf98a64403d754cdcca3329a0710a138e4f95478)\n> * Added RayCluster example for working AZ Blob Storage (`historyserver/config/raycluster-azureblob.yaml`)\n> * Added `historyserver/docs/README.md` and updated `set_up_collector.md` with AZ Blob Storage setup instructions - [4d2cd9e](https://github.com/ray-project/kuberay/commit/4d2cd9e910df5668c1aaf6305c67fad6470cdf01)\n> \n> > As a follow-up (not in this PR), would you be willing to open another PR to add an example for the history server?\n> \n> would [this example](https://github.com/ikchifo/kuberay/blob/feature/azure-blob-storage/historyserver/config/raycluster-azureblob.yaml) be enough? Or were you thinking of something else?\n\nFor the follow-up (not in this PR), I think we need to add an example like the following. An example shows how the history server can access Azure Blob Storage:\n\nhttps://github.com/ray-project/kuberay/blob/master/historyserver/config/historyserver.yaml\n\nAnd also add a test similar to `historyserver/test/e2e/historyserver_test.go` for azure blob storage.",
+      "codeSnippets": [
+        "{\"azureContainer\": \"\", \"azureConnectionString\": \"\", \"azureAccountURL\": \"\"}",
+        "{\"azureContainer\": \"\", \"azureConnectionString\": \"\", \"azureAccountURL\": \"\"}",
+        "export RESOURCE_GROUP=\"rg-kuberay-wi-test\"\r\nexport LOCATION=\"eastus\"\r\nexport CLUSTER_NAME=\"aks-kuberay-wi-test\"\r\nexport IDENTITY_NAME=\"id-kuberay-historyserver\"\r\nexport STORAGE_ACCOUNT_NAME=\"stkuberayhistory$(date +%s | tail -c 6)\"\r\nexport CONTAINER_NAME=\"ray-historyserver\"\r\nexport SERVICE_ACCOUNT_NAME=\"ray-collector\"\r\nexport SERVICE_ACCOUNT_NAMESPACE=\"default\"\r\nexport ACR_NAME=\"kuberaycollector\"\r\n\r\n# AKS Cluster with Workload Identity\r\naz group create --name \"${RESOURCE_GROUP}\" --location \"${LOCATION}\"\r\n\r\naz aks create \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --name \"${CLUSTER_NAME}\" \\\r\n  --node-count 2 \\\r\n  --enable-oidc-issuer \\\r\n  --enable-workload-identity \\\r\n  --generate-ssh-keys\r\n\r\naz aks get-credentials --resource-group \"${RESOURCE_GROUP}\" --name \"${CLUSTER_NAME}\"\r\n\r\n# User-Assigned Managed Identity\r\n\r\naz identity create \\\r\n  --name \"${IDENTITY_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --location \"${LOCATION}\"\r\n\r\nexport IDENTITY_CLIENT_ID=$(az identity show --name \"${IDENTITY_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" --query \"clientId\" -o tsv)\r\nexport IDENTITY_PRINCIPAL_ID=$(az identity show --name \"${IDENTITY_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" --query \"principalId\" -o tsv)\r\n\r\n# Storage Account with RBAC\r\n\r\naz storage account create \\\r\n  --name \"${STORAGE_ACCOUNT_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --location \"${LOCATION}\" \\\r\n  --sku Standard_LRS\r\n\r\nexport STORAGE_ACCOUNT_ID=$(az storage account show \\\r\n  --name \"${STORAGE_ACCOUNT_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --query \"id\" -o tsv)\r\n\r\naz role assignment create \\\r\n  --assignee-object-id \"${IDENTITY_PRINCIPAL_ID}\" \\\r\n  --assignee-principal-type ServicePrincipal \\\r\n  --role \"Storage Blob Data Contributor\" \\\r\n  --scope \"${STORAGE_ACCOUNT_ID}\"\r\n\r\n# Federated Identity Credential\r\n\r\nexport AKS_OIDC_ISSUER=$(az aks show \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --name \"${CLUSTER_NAME}\" \\\r\n  --query \"oidcIssuerProfile.issuerUrl\" -o tsv)\r\n\r\naz identity federated-credential create \\\r\n  --name \"fc-ray-collector\" \\\r\n  --identity-name \"${IDENTITY_NAME}\" \\\r\n  --resource-group \"${RESOURCE_GROUP}\" \\\r\n  --issuer \"${AKS_OIDC_ISSUER}\" \\\r\n  --subject \"system:serviceaccount:${SERVICE_ACCOUNT_NAMESPACE}:${SERVICE_ACCOUNT_NAME}\" \\\r\n  --audience \"api://AzureADTokenExchange\"\r\n\r\n# Create ACR and attach to AKS\r\naz acr create --resource-group \"${RESOURCE_GROUP}\" --name \"${ACR_NAME}\" --sku Basic\r\naz aks update --resource-group \"${RESOURCE_GROUP}\" --name \"${CLUSTER_NAME}\" --attach-acr \"${ACR_NAME}\"\r\n\r\n# Build collector image\r\ncd historyserver\r\naz acr build --registry \"${ACR_NAME}\" --image collector:v0.1.0 . -f Dockerfile.collector\r\n\r\n# Install KubeRay Operator\r\n\r\nhelm repo add kuberay https://ray-project.github.io/kuberay-helm/\r\nhelm install kuberay-operator kuberay/kuberay-operator --version 1.5.1\r\n\r\n# Create ServiceAccount with Workload Identity\r\n\r\nkubectl apply -f - <<EOF\r\napiVersion: v1\r\nkind: ServiceAccount\r\nmetadata:\r\n  name: ray-collector\r\n  namespace: default\r\n  annotations:\r\n    azure.workload.identity/client-id: \"${IDENTITY_CLIENT_ID}\"\r\nEOF",
+        "kubectl apply -f - <<EOF\r\napiVersion: ray.io/v1\r\nkind: RayCluster\r\nmetadata:\r\n  name: raycluster-wi-test\r\nspec:\r\n  headGroupSpec:\r\n    rayStartParams:\r\n      dashboard-host: 0.0.0.0\r\n    template:\r\n      metadata:\r\n        labels:\r\n          azure.workload.identity/use: \"true\"\r\n      spec:\r\n        serviceAccountName: ray-collector\r\n        containers:\r\n        - name: ray-head\r\n          image: rayproject/ray:2.50.1\r\n          env:\r\n          - name: RAY_enable_ray_event\r\n            value: \"true\"\r\n          - name: RAY_enable_core_worker_ray_event_to_aggregator\r\n            value: \"true\"\r\n          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR\r\n            value: \"http://localhost:8084/v1/events\"\r\n          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES\r\n            value: \"TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT\"\r\n          resources:\r\n            limits:\r\n              cpu: \"2\"\r\n              memory: 4Gi\r\n            requests:\r\n              cpu: \"500m\"\r\n              memory: 1Gi\r\n          lifecycle:\r\n            postStart:\r\n              exec:\r\n                command:\r\n                - /bin/sh\r\n                - -c\r\n                - |\r\n                  while true; do\r\n                    nodeid=\\$(ps -ef | grep 'raylet.*--node_id' | grep -v grep | sed -n 's/.*--node_id=\\([^ ]*\\).*/\\1/p' | head -1)\r\n                    if [ -n \"\\$nodeid\" ]; then\r\n                      echo \"\\$nodeid\" > /tmp/ray/raylet_node_id\r\n                      break\r\n                    fi\r\n                    sleep 1\r\n                  done\r\n          volumeMounts:\r\n          - name: ray-logs\r\n            mountPath: /tmp/ray\r\n        - name: collector\r\n          image: kuberaycollector.azurecr.io/collector:v0.1.0\r\n          env:\r\n          - name: AZURE_STORAGE_ACCOUNT_URL\r\n            value: \"https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net\"\r\n          - name: AZURE_STORAGE_CONTAINER\r\n            value: \"ray-historyserver\"\r\n          command:\r\n          - collector\r\n          - --role=Head\r\n          - --runtime-class-name=azureblob\r\n          - --ray-cluster-name=raycluster-wi-test\r\n          - --events-port=8084\r\n          volumeMounts:\r\n          - name: ray-logs\r\n            mountPath: /tmp/ray\r\n        volumes:\r\n        - name: ray-logs\r\n          emptyDir: {}\r\nEOF\r\n\r\n# Wait for pod to be ready\r\nkubectl wait --for=condition=ready pod -l ray.io/cluster=raycluster-wi-test --timeout=120s\r\n\r\n# Submit a Ray job to generate activity\r\nkubectl exec -it $(kubectl get pods -l ray.io/cluster=raycluster-wi-test -o jsonpath='{.items[0].metadata.name}') \\\r\n  -c ray-head -- python -c \"import ray; ray.init(); print(ray.cluster_resources())\"\r\n\r\n# Delete the cluster to trigger log upload\r\nkubectl delete raycluster raycluster-wi-test\r\n\r\n# Check Azure Blob Storage for uploaded files\r\naz storage blob list \\\r\n  --account-name \"${STORAGE_ACCOUNT_NAME}\" \\\r\n  --container-name ray-historyserver \\\r\n  --auth-mode login \\\r\n  --output table\r\n\r\n# Cleanup\r\naz group delete --name \"${RESOURCE_GROUP}\" --yes --no-wait"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kuberay",
+      "community",
+      "ml-platform",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kuberay"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service",
+      "Job",
+      "Namespace",
+      "Serviceaccount",
+      "Role",
+      "Node"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/ray-project/kuberay/pull/4413",
+      "repo": "https://github.com/ray-project/kuberay"
+    },
+    "reactions": 5,
+    "comments": 10,
+    "synthesizedBy": "regex",
+    "qualityScore": 60
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kuberay installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:45:56.356Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "version": "kc-mission-v1",
+  "name": "caddy-6862-caddytls-encrypted-clienthello-ech",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "caddy: caddytls: Encrypted ClientHello (ECH)",
+    "description": "This is the initial implementation for Encrypted ClientHello (ECH).\n\nI have verified during testing with Firefox + Wireshark that only the outer name(s) appear on the wire in plaintext; the actual server names do not. (Firefox requires DoH enabled.)\n\nCurrent features:\n\n- Adds a DNS provider configurable for the entire TLS app that acts as a default when a DNS module is needed, since most people use a single DNS provider; this can reduce redundancy in configs.\n- Generates an ECH config given only",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "This is the initial implementation for Encrypted ClientHello (ECH).\n\nI have verified during testing with Firefox + Wireshark that only the outer name(s) appear on the wire in plaintext; the actual ser"
+      },
+      {
+        "title": "Adding support for the upstream `libdns` [`Priority`, `Weight`, and `Target` ...",
+        "description": "Adding support for the upstream `libdns` [`Priority`, `Weight`, and `Target` struct fields](https://pkg.go.dev/github.com/libdns/libdns#Record)."
+      },
+      {
+        "title": "Changing the semantics of `SetRecords` and `AppendRecords` to align with thos...",
+        "description": "Changing the semantics of `SetRecords` and `AppendRecords` to align with those discussed in libdns/libdns#145."
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n(Be sure to replace with your actual values.)\r\n\r\nThis minimal, opinionated tells Caddy to serve your site, `example.com`, as usual (with automatic HTTPS, a certificate, the whole bit), but to also manage a certain for `ech.example.net`. This config is opinionated because it is so minimal, in that it enables ECH for all sites, protecting them behind the domain listed in the `ech` global option. (Each outer name correlates to an ECH config.) It also publishes all ECH configs (one in this case) to \n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/libdns/rfc2136/pull/8. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "Caddy [recently added ECH support](https://github.com/caddyserver/caddy/releases/tag/v2.10.0-beta.1), but [the `rfc2136` provider doesn't work properly with it](https://github.com/caddyserver/caddy/pull/6862#issuecomment-2692164710). This PR modifies the `rfc2136` module so that setting the ECH records works properly. I've tested these patches on my own server, and everything seems to work as expected now.\n\nThe two main changes that I had to make were:\n\n1. Adding support for the upstream `libdns` [`Priority`, `Weight`, and `Target` struct fields](https://pkg.go.dev/github.com/libdns/libdns#Record).\n\n2. Changing the semantics of `SetRecords` and `AppendRecords` to align with those discussed in libdns/libdns#145.\n\nI don't have much Go experience, so please let me know if you want me to make any changes. Thanks!",
+      "codeSnippets": [
+        "(Be sure to replace with your actual values.)\r\n\r\nThis minimal, opinionated tells Caddy to serve your site, `example.com`, as usual (with automatic HTTPS, a certificate, the whole bit), but to also manage a certain for `ech.example.net`. This config is opinionated because it is so minimal, in that it enables ECH for all sites, protecting them behind the domain listed in the `ech` global option. (Each outer name correlates to an ECH config.) It also publishes all ECH configs (one in this case) to",
+        "(Be sure to replace with your actual values.)\r\n\r\nThis minimal, opinionated tells Caddy to serve your site, `example.com`, as usual (with automatic HTTPS, a certificate, the whole bit), but to also manage a certain for `ech.example.net`. This config is opinionated because it is so minimal, in that it enables ECH for all sites, protecting them behind the domain listed in the `ech` global option. (Each outer name correlates to an ECH config.) It also publishes all ECH configs (one in this case) to all publishers (one DNS publisher, in this case).\r\n\r\n(The new `dns` global option specifies a DNS provider to use if none other is specified but one is needed. It does _not_ enable the ACME DNS challenge in the way the `acme_dns` global option does.)\r\n\r\nSimilarly, here's a sample JSON config with debug logs enabled; be sure to fill out your actual domain names (both inner and outer) and set your DNS provider accordingly. I have a Cloudflare one here since I used it for testing.",
+        "This tells Caddy to serve a site (`example.com`) over HTTPS with auto-managing certificates, as usual, and the TLS app has ECH enabled, so it will use the global DNS module (`cloudflare`) to publish the config for the outer name (`ech.example.net`).\r\n\r\nTo test this, open Firefox and ensure DNS-over-HTTPS is enabled. Then go to **about:networking#dns** and \"Clear DNS cache\" to ensure your test has a clean slate.\r\n\r\nWhen you run this config, wait about 1-2 seconds or for a cert to be provisioned, then, assuming an empty DNS cache, when you load your site (`example.com`) in Firefox, it will find the HTTPS-type DNS record and use that to employ ECH for the connection. Verify with Wireshark.\r\n\r\nYou can compile with this patch and a DNS plugin like so:",
+        "(The commented-out SVCB RRs would behave the same as the HTTPS RRs if they were valid.)\r\n\r\nAnyways, I'd suggest Caddyfile syntax something like the following",
+        "that behaves something like"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "caddy",
+      "community",
+      "web-server",
+      "troubleshoot",
+      "feature--gear-"
+    ],
+    "cncfProjects": [
+      "caddy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/caddyserver/caddy/pull/6862",
+      "repo": "https://github.com/caddyserver/caddy",
+      "pr": "https://github.com/libdns/rfc2136/pull/8"
+    },
+    "reactions": 17,
+    "comments": 12,
+    "synthesizedBy": "regex",
+    "qualityScore": 65
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with caddy installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:51:06.597Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

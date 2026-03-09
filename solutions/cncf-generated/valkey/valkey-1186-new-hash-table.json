@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "valkey-1186-new-hash-table",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "valkey: New hash table",
+    "description": "This PR implements a new hash table and uses it for keys, command lookup and more. There are multiple commits. Do not squash-merge.\n\n1. Hash table implementation and unit tests\n2. Use new hash table for command lookup\n3. Use new hash table keys and expire\n\nHash table design\n-----------------\n\nThe hash table is a cache line optimized and implemented as outlined in #169, but changed to chaining instead of probing after an idea by Madelyn. The key-value entry is user-defined, which allows the user ",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "This PR implements a new hash table and uses it for keys, command lookup and more. There are multiple commits. Do not squash-merge.\n\n1. Hash table implementation and unit tests\n2. Use new hash table f"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\nBucket          Bucket          Bucket               \r\n-----+---------------+---------------+---------------+-----\r\n ... | x x x x x x p | x x x x x x x | x x x x x x x | ... \r\n-----+-------------|-+---------------+---------------+-----\r\n                   |                                       \r\n                   v  Child bucket                         \r\n                 +---------------+                         \r\n                 | x x x x x x p |                         \r\n                 +\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/valkey-io/valkey/pull/1178. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR is based on #1186. When it is merged, this PR will change target to unstable.\n\nKeys and expire are embedded in `robj`.\n\nDict is replaced by hashset for the keys and expire tables. Hashset is a hash table that doesn't have a dict entry. Pointers point directly to robj, where also the expire is stored, if any. Also pubsub channels are changed, since they use kvstore. Kvstore is changed from dict to hashset.\n\nSome db.c functions like `dbAdd`, `setKey` and `setExpire` are changed to return the reallocated object after embedding the key and optional expire. `setKey` does not increment the reference counter, since it would require duplicating the object.\n\nAn `robj` value with an embedded key can be called valkey (val + key). A valkey typedef is added for robj and it's used when the object has an embedded key, to distinguish it from an object from other usages of robj (such as a string object from the command parser in c->argv).\n\n```\nkeys                                      expire\nhashset            robj                   hashset\n+---+         +-------------------+        +---+\n| 1 --------->| type, enc, lru    |<-------- 1 |\n| 2 |         | refcount, flags   |        | 2 |\n| 3 |         | ptr               |        | 3 |\n| . |         | expire?           |        | . |\n| . |         | embedded key      |        | . |\n| . |         | embedded value?   |        | . |\n+---+         +-------------------+        +---+\n\n? = optional\n```\n\nA quick benchmark using `valkey-benchmark",
+      "codeSnippets": [
+        "Bucket          Bucket          Bucket               \r\n-----+---------------+---------------+---------------+-----\r\n ... | x x x x x x p | x x x x x x x | x x x x x x x | ... \r\n-----+-------------|-+---------------+---------------+-----\r\n                   |                                       \r\n                   v  Child bucket                         \r\n                 +---------------+                         \r\n                 | x x x x x x p |                         \r\n                 +",
+        "Bucket          Bucket          Bucket               \r\n-----+---------------+---------------+---------------+-----\r\n ... | x x x x x x p | x x x x x x x | x x x x x x x | ... \r\n-----+-------------|-+---------------+---------------+-----\r\n                   |                                       \r\n                   v  Child bucket                         \r\n                 +---------------+                         \r\n                 | x x x x x x p |                         \r\n                 +-------------|-+                         \r\n                               |                           \r\n                               v  Child bucket             \r\n                             +---------------+             \r\n                             | x x x x x x x |             \r\n                             +---------------+",
+        "keys                                      expire\r\nhashtable             robj                hashtable\r\n +---+         +-------------------+        +---+\r\n | 1 --------->| type, enc, lru    |<-------- 1 |\r\n | 2 |         | refcount, flags   |        | 2 |\r\n | 3 |         | ptr               |        | 3 |\r\n | . |         | [expire]          |        | . |\r\n | . |         | embedded key      |        | . |\r\n | . |         | [embedded value]  |        | . |\r\n +---+         +-------------------+        +---+\r\n\r\n[.] = optional",
+        "keys                                      expire\r\nhashset            robj                   hashset\r\n+---+         +-------------------+        +---+\r\n| 1 --------->| type, enc, lru    |<-------- 1 |\r\n| 2 |         | refcount, flags   |        | 2 |\r\n| 3 |         | ptr               |        | 3 |\r\n| . |         | expire?           |        | . |\r\n| . |         | embedded key      |        | . |\r\n| . |         | embedded value?   |        | . |\r\n+---+         +-------------------+        +---+\r\n\r\n? = optional",
+        "This branch:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "valkey",
+      "community",
+      "cache",
+      "troubleshoot",
+      "release-notes",
+      "run-extra-tests"
+    ],
+    "cncfProjects": [
+      "valkey"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/valkey-io/valkey/pull/1186",
+      "repo": "https://github.com/valkey-io/valkey",
+      "pr": "https://github.com/valkey-io/valkey/pull/1178"
+    },
+    "reactions": 11,
+    "comments": 17,
+    "synthesizedBy": "regex",
+    "qualityScore": 62
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with valkey installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:47:52.837Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

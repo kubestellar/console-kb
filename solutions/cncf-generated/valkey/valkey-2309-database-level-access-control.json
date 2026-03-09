@@ -1,0 +1,95 @@
+{
+  "version": "kc-mission-v1",
+  "name": "valkey-2309-database-level-access-control",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "valkey: Database-level access control",
+    "description": "## API changes and user behavior:\n\nDefault is `alldbs` permissions.\n\n### Database Permissions (`db=`)\n\n```\n> ACL SETUSER test1 on +@all ~* resetdbs db=0,1 nopass\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"\n```\n\n```\n> ACL SETUSER test1 on +@all ~* db=0,1 nopass\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"\n```\n\n```\n> ACL SETUSER test1 on nopass (db=0,1 +@write +select ~*) (db=2,3 +@read +select ~*)\n\"user test1 on nopass sanitize-payload resetchann",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the problem",
+        "description": "## API changes and user behavior:\n\nDefault is `alldbs` permissions.\n\n### Database Permissions (`db=`)\n\n```\n> ACL SETUSER test1 on +@all ~* resetdbs db=0,1 nopass\n\"user test1 on nopass sanitize-payload"
+      },
+      {
+        "title": "(error) ERR DB index is out of range",
+        "description": "(error) ERR DB index is out of range"
+      },
+      {
+        "title": "(error) ERR value is out of range, value must between -2147483648 and 2147483647",
+        "description": "(error) ERR value is out of range, value must between -2147483648 and 2147483647"
+      },
+      {
+        "title": "(error) ERR DB index is out of range",
+        "description": "(error) ERR DB index is out of range"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "Apply the following configuration to your cluster:\n```yaml\n> ACL SETUSER test1 on +@all ~* resetdbs db=0,1 nopass\r\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"\n```"
+      },
+      {
+        "title": "Review the fix",
+        "description": "The fix was implemented in https://github.com/valkey-io/valkey/pull/2357. Review the changes to understand the solution."
+      },
+      {
+        "title": "Verify the fix",
+        "description": "Confirm that the issue is resolved in your environment by testing the affected functionality."
+      }
+    ],
+    "resolution": {
+      "summary": "I was testing #2309 and found that if you do `MULTI, SELECT incorrect dbid and EXEC`  combination of commands, then database ID right next to valkey-server address won't change, but it should. Turns out, for this combination of commands reply->type is `VALKEY_REPLY_ARRAY`, which was added to if statement for EXEC handling.\n```\nBEFORE:\n127.0.0.1:6379> multi\nOK\n127.0.0.1:6379(TX)> select 438764\nQUEUED\n127.0.0.1:6379[438764](TX)> exec\n1) (error) ERR DB index is out of range\n127.0.0.1:6379[438764]> multi\nOK\n127.0.0.1:6379[438764](TX)> select 327648273645872634\nQUEUED\n127.0.0.1:6379[1911465466](TX)> exec\n1) (error) ERR value is out of range, value must between -2147483648 and 2147483647\n\nAFTER:\n127.0.0.1:6379> multi\nOK\n127.0.0.1:6379(TX)> select 7463746\nQUEUED\n127.0.0.1:6379[7463746](TX)> exec\n1) (error) ERR DB index is out of range\n127.0.0.1:6379>\n             /\\\nNo incorrect DB ID\n```",
+      "codeSnippets": [
+        "> ACL SETUSER test1 on +@all ~* resetdbs db=0,1 nopass\r\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"",
+        "> ACL SETUSER test1 on +@all ~* resetdbs db=0,1 nopass\r\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"",
+        "> ACL SETUSER test1 on +@all ~* db=0,1 nopass\r\n\"user test1 on nopass sanitize-payload ~* resetchannels db=0,1 +@all\"",
+        "> ACL SETUSER test1 on nopass (db=0,1 +@write +select ~*) (db=2,3 +@read +select ~*)\r\n\"user test1 on nopass sanitize-payload resetchannels alldbs -@all (~* resetchannels db=0,1 -@all +@write +select) (~* resetchannels db=2,3 -@all +@read +select)\"",
+        "BEFORE:\r\n127.0.0.1:6379> multi\r\nOK\r\n127.0.0.1:6379(TX)> select 438764\r\nQUEUED\r\n127.0.0.1:6379[438764](TX)> exec\r\n1) (error) ERR DB index is out of range\r\n127.0.0.1:6379[438764]> multi\r\nOK\r\n127.0.0.1:6379[438764](TX)> select 327648273645872634\r\nQUEUED\r\n127.0.0.1:6379[1911465466](TX)> exec\r\n1) (error) ERR value is out of range, value must between -2147483648 and 2147483647\r\n\r\nAFTER:\r\n127.0.0.1:6379> multi\r\nOK\r\n127.0.0.1:6379(TX)> select 7463746\r\nQUEUED\r\n127.0.0.1:6379[7463746](TX)> exec\r\n1) (error) ERR DB index is out of range\r\n127.0.0.1:6379>\r\n             /\\\r\nNo incorrect DB ID"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "valkey",
+      "community",
+      "cache",
+      "troubleshoot",
+      "release-notes",
+      "major-decision-approved",
+      "needs-doc-pr"
+    ],
+    "cncfProjects": [
+      "valkey"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/valkey-io/valkey/pull/2309",
+      "repo": "https://github.com/valkey-io/valkey",
+      "pr": "https://github.com/valkey-io/valkey/pull/2357"
+    },
+    "reactions": 3,
+    "comments": 55,
+    "synthesizedBy": "regex",
+    "qualityScore": 65
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with valkey installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:48:02.196Z",
+    "scannerVersion": "cncf-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
