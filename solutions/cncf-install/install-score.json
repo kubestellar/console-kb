@@ -5,14 +5,14 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Score on Kubernetes",
-    "description": "The Score Specification provides a developer-centric and platform-agnostic workload specification to improve developer productivity and experience. Installing Score allows you to define and manage your workloads in a consistent manner across different environments.",
+    "title": "Install and Use Score for Kubernetes Workload Deployment",
+    "description": "Score is a developer-centric, platform-agnostic workload specification. The score-k8s CLI translates Score YAML into Kubernetes manifests, letting you define workloads once and deploy across environments. Score is a client-side CLI tool — it does not run inside your cluster.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Install the Score CLI",
-        "description": "Download and install the Score CLI tool for Kubernetes. Score provides `score-k8s` and `score-compose` commands for translating workload specifications.\n```bash\n# Download the binary from GitHub releases\ncurl -sL https://github.com/score-spec/score-k8s/releases/latest/download/score-k8s_$(uname -s)_$(uname -m).tar.gz | tar xz\nsudo mv score-k8s /usr/local/bin/\nscore-k8s version\n```"
+        "title": "Install the score-k8s CLI",
+        "description": "Install score-k8s using one of these methods:\n\n**Homebrew (macOS/Linux):**\n```bash\nbrew install score-spec/tap/score-k8s\n```\n\n**Go install:**\n```bash\ngo install -v github.com/score-spec/score-k8s/cmd/score-k8s@latest\n```\n\n**Binary download:**\n```bash\n# Download from https://github.com/score-spec/score-k8s/releases\n# Example for Linux amd64:\nwget https://github.com/score-spec/score-k8s/releases/download/0.10.1/score-k8s_0.10.1_linux_amd64.tar.gz\ntar xzf score-k8s_0.10.1_linux_amd64.tar.gz\nsudo mv score-k8s /usr/local/bin/\n```\n\nVerify the installation:\n```bash\nscore-k8s version\n```"
       },
       {
         "title": "Initialize a Score project",
@@ -20,11 +20,11 @@
       },
       {
         "title": "Create a Score workload specification",
-        "description": "Create or edit `score.yaml` to define your workload:\n```yaml\napiVersion: score.dev/v1b1\nmetadata:\n  name: my-workload\ncontainers:\n  main:\n    image: nginx:1.25\n    ports:\n      http:\n        port: 80\n        protocol: TCP\n```"
+        "description": "Edit `score.yaml` to define your workload. Ports are defined under `service`, not under `containers`:\n```yaml\napiVersion: score.dev/v1b1\nmetadata:\n  name: my-workload\ncontainers:\n  main:\n    image: nginx:1.25\nservice:\n  ports:\n    http:\n      port: 80\n      protocol: TCP\n```"
       },
       {
-        "title": "Generate and deploy Kubernetes manifests",
-        "description": "Use score-k8s to generate Kubernetes manifests and deploy:\n```bash\nscore-k8s generate score.yaml | kubectl apply -f -\n```"
+        "title": "Generate Kubernetes manifests and deploy",
+        "description": "Generate manifests from your Score file and apply them:\n```bash\nscore-k8s generate score.yaml\nkubectl apply -f manifests.yaml\n```\nThe `generate` command writes output to `manifests.yaml` by default. To pipe directly:\n```bash\nscore-k8s generate score.yaml -o - | kubectl apply -f -\n```"
       },
       {
         "title": "Verify the deployment",
@@ -32,44 +32,41 @@
       }
     ],
     "resolution": {
-      "summary": "Score CLI is installed and you can translate Score workload specifications into Kubernetes manifests for deployment.",
+      "summary": "The score-k8s CLI is installed locally and can translate Score workload specifications into Kubernetes manifests. Score runs entirely client-side — no cluster-side components are installed.",
       "codeSnippets": [
-        "score-k8s generate score.yaml | kubectl apply -f -",
+        "score-k8s generate score.yaml",
+        "kubectl apply -f manifests.yaml",
         "kubectl get pods"
       ]
     },
     "uninstall": [
       {
         "title": "Remove deployed workloads",
-        "description": "Delete the resources created from Score:\n```bash\nscore-k8s generate score.yaml | kubectl delete -f -\n```"
+        "description": "Delete the resources created from Score:\n```bash\nkubectl delete -f manifests.yaml\n```\nNote: resource cleanup in score-k8s is not fully implemented yet. Verify all resources are removed:\n```bash\nkubectl get all | grep my-workload\n```"
       },
       {
-        "title": "Uninstall Score CLI",
-        "description": "Remove the Score CLI:\n```bash\nsudo rm /usr/local/bin/score-k8s\n```"
+        "title": "Uninstall the Score CLI",
+        "description": "Remove the CLI binary:\n```bash\n# If installed via Homebrew:\nbrew uninstall score-k8s\n\n# If installed manually:\nsudo rm /usr/local/bin/score-k8s\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Update Score CLI",
-        "description": "Download the latest version:\n```bash\ncurl -sL https://github.com/score-spec/score-k8s/releases/latest/download/score-k8s_$(uname -s)_$(uname -m).tar.gz | tar xz\nsudo mv score-k8s /usr/local/bin/\nscore-k8s version\n```"
+        "title": "Update the Score CLI",
+        "description": "Upgrade to the latest version:\n```bash\n# Homebrew:\nbrew upgrade score-k8s\n\n# Go install:\ngo install -v github.com/score-spec/score-k8s/cmd/score-k8s@latest\n\n# Manual: download the latest release from\n# https://github.com/score-spec/score-k8s/releases\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If your Score pods are in a CrashLoopBackOff state, you can check the logs to diagnose the issue. Use the following command to view the logs of a specific pod:\n```bash\nkubectl logs <pod-name> --namespace score\n```"
+        "title": "Generated pods stuck in CrashLoopBackOff",
+        "description": "This is an issue with the workload definition, not Score itself. Check the pod logs:\n```bash\nkubectl logs <pod-name>\nkubectl describe pod <pod-name>\n```\nVerify your `score.yaml` references a valid container image and correct port configuration."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Score service, ensure that the service is running and check the port-forwarding command. Verify the service status with:\n```bash\nkubectl get svc --namespace score\n```"
+        "title": "Generate command fails with validation error",
+        "description": "Ensure your `score.yaml` follows the v1b1 spec. Common mistakes:\n- Ports must be under `service.ports`, not `containers.*.ports`\n- `apiVersion` must be `score.dev/v1b1`\n- Container names must be alphanumeric\n\nRe-initialize to get a valid template:\n```bash\nscore-k8s init --overwrite\n```"
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If you encounter a version conflict during the Helm upgrade, ensure that you are using a compatible version of the Score chart. You can check the available versions with:\n```bash\nhelm search repo score --versions\n```"
-      },
-      {
-        "title": "Insufficient resources for Score pods",
-        "description": "If the Score pods are failing to start due to insufficient resources, you may need to adjust the resource limits in the deployment. Check the events for the pods to see resource-related errors:\n```bash\nkubectl describe pod <pod-name> --namespace score\n```"
+        "title": "Binary not found after install",
+        "description": "Ensure the binary is on your PATH:\n```bash\nwhich score-k8s\necho $PATH\n```\nIf installed via `go install`, ensure `$GOPATH/bin` (or `$HOME/go/bin`) is in your PATH."
       }
     ]
   },
@@ -79,15 +76,15 @@
       "configuration",
       "cncf",
       "app-definition",
-      "sandbox"
+      "sandbox",
+      "developer-tools"
     ],
     "cncfProjects": [
       "score"
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Service",
-      "Namespace"
+      "Service"
     ],
     "difficulty": "beginner",
     "issueTypes": [
@@ -95,16 +92,16 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "binary",
+      "brew",
+      "go-install"
     ],
     "maturity": "sandbox",
-    "projectVersion": "0.3.0",
-    "containerImages": [
-      "ghcr.io/score-spec/sample-app-gif:sha-2533037"
-    ],
+    "projectVersion": "0.10.1",
+    "containerImages": [],
     "sourceUrls": {
-      "docs": "https://score.dev/",
-      "repo": "https://github.com/score-spec/spec"
+      "docs": "https://docs.score.dev/",
+      "repo": "https://github.com/score-spec/score-k8s"
     },
     "qualityScore": 100
   },
@@ -113,10 +110,10 @@
     "tools": [
       "kubectl"
     ],
-    "description": "A running Kubernetes cluster with kubectl configured."
+    "description": "A Kubernetes cluster with kubectl configured. For installing the CLI: Homebrew, Go 1.22+, or wget/curl for binary download."
   },
   "security": {
-    "scannedAt": "2026-03-02T00:29:13.160Z",
+    "scannedAt": "2026-03-09T00:00:00.000Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []
