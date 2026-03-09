@@ -1,0 +1,174 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-ollama",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Ollama",
+    "description": "Ollama is an AI platform designed for serving large language models (LLMs) such as Kimi-K2.5, GLM-5, and others. It provides a straightforward way to deploy and interact with these models via a command-line interface and REST API. Key trade-offs include ease of use versus the flexibility of custom deployments.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Install the Ollama CLI",
+        "description": "This step installs the Ollama command-line interface (CLI) on your local machine, which is necessary to interact with the Ollama platform.\n\n```bash\n\ncurl -fsSL https://ollama.com/install.sh | sh\n\nirm https://ollama.com/install.ps1 | iex\n\n```\n\n> Use this command for Linux and macOS.\n> Use this command for Windows.",
+        "commands": [
+          "curl -fsSL https://ollama.com/install.sh | sh",
+          "irm https://ollama.com/install.ps1 | iex"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a Kubernetes cluster where Ollama will be deployed. Adjust the node count and region as needed.\n\n```bash\n\ngcloud container clusters create ollama-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30\n\n```\n\n> Ensure you have gcloud CLI installed and authenticated.",
+        "commands": [
+          "gcloud container clusters create ollama-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures your local kubeconfig to interact with the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials ollama-cluster --zone=us-central1-a\n\n```\n\n> This command sets up your kubeconfig for the Ollama cluster.",
+        "commands": [
+          "gcloud container clusters get-credentials ollama-cluster --zone=us-central1-a"
+        ]
+      },
+      {
+        "title": "Deploy Ollama on Kubernetes",
+        "description": "This step deploys the Ollama application using Helm, which simplifies the deployment process.\n\n```bash\n\nhelm repo add ollama https://ollama.com/charts\n\nhelm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace\n\n```\n\n> Add the Ollama Helm repository.\n> Deploy Ollama using the specified version.",
+        "commands": [
+          "helm repo add ollama https://ollama.com/charts",
+          "helm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify the Deployment",
+        "description": "This step checks the status of the Ollama deployment to ensure it is running correctly.\n\n```bash\n\nkubectl get pods -n ollama\n\n```\n\n> Verify that all Ollama pods are in the Running state.",
+        "commands": [
+          "kubectl get pods -n ollama"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Ollama",
+        "description": "This step removes the Ollama deployment from your Kubernetes cluster. Be aware that this will delete all associated resources.\n\n```bash\n\nhelm uninstall ollama --namespace ollama\n\ngcloud container clusters delete ollama-cluster --zone=us-central1-a --quiet\n\n```\n\n> This command will remove the Ollama release.\n> This command will delete the entire cluster and all its resources.",
+        "commands": [
+          "helm uninstall ollama --namespace ollama",
+          "gcloud container clusters delete ollama-cluster --zone=us-central1-a --quiet"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Ollama",
+        "description": "Before upgrading, ensure you back up any important data. This step will upgrade the Ollama deployment to the latest version.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade ollama ollama/ollama --version 0.17.7 --namespace ollama\n\nkubectl get pods -n ollama\n\n```\n\n> Drain the node before upgrading.\n> Upgrade the Ollama deployment to the specified version.\n> Verify that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade ollama ollama/ollama --version 0.17.7 --namespace ollama",
+          "kubectl get pods -n ollama"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** This may occur if the Ollama image is not available or there are network issues.\n\n**Fix:**\nCheck your internet connection and ensure the image exists on Docker Hub."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that the Ollama pod is failing to start, possibly due to misconfiguration.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n ollama' for more details."
+      },
+      {
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources allocated.\n\n**Fix:**\nIncrease the node size or number of nodes in your cluster."
+      },
+      {
+        "title": "Error: 'Kubernetes API server unreachable'",
+        "description": "**Cause:** This may happen if the kubeconfig is not set up correctly or the cluster is down.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials ollama-cluster --zone=us-central1-a' to reset kubeconfig."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.6",
+        "changes": "Added support for new models including MiniMax and DeepSeek.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods -n ollama' showing all pods in the Running state.",
+      "codeSnippets": [
+        "curl -fsSL https://ollama.com/install.sh | sh",
+        "irm https://ollama.com/install.ps1 | iex",
+        "gcloud container clusters create ollama-cluster --num-nodes=3 --zone=us-central1-a --cluster-version=1.30",
+        "gcloud container clusters get-credentials ollama-cluster --zone=us-central1-a",
+        "helm repo add ollama https://ollama.com/charts",
+        "helm install ollama ollama/ollama --version 0.17.7 --namespace ollama --create-namespace",
+        "kubectl get pods -n ollama"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "ollama"
+    ],
+    "platform": "ollama",
+    "platformType": "ai-platform",
+    "platformProvider": "Ollama",
+    "platformVersions": [
+      "0.5",
+      "0.6"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "ollama/ollama:v0.17.7"
+    ],
+    "sourceUrls": {
+      "docs": "https://ollama.com/",
+      "repo": "https://github.com/ollama/ollama"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before proceeding with the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:16:43.494Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

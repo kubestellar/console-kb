@@ -1,0 +1,181 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-weaviate",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Weaviate",
+    "description": "Weaviate is an open-source vector database designed for semantic search and data retrieval, combining vector similarity search with structured filtering. It is ideal for applications such as recommendation engines, chatbots, and content classification. Key trade-offs include the complexity of setup and the need for resource allocation for optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Install the Weaviate CLI",
+        "description": "This step installs the Weaviate command-line interface, which is necessary for managing your Weaviate instance.\n\n```bash\n\ncurl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate\n\n```\n\n> This command downloads the CLI binary, makes it executable, and moves it to your PATH.",
+        "commands": [
+          "curl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate"
+        ]
+      },
+      {
+        "title": "Create a Weaviate cluster",
+        "description": "This command creates a new Weaviate cluster on your managed Kubernetes service with the specified version and node count.\n\n```bash\n\nweaviate create cluster --version 1.36.0 --node-count 3 --region us-central1\n\n```\n\n> Adjust the region and node count as per your requirements.",
+        "commands": [
+          "weaviate create cluster --version 1.36.0 --node-count 3 --region us-central1"
+        ]
+      },
+      {
+        "title": "Set up kubeconfig",
+        "description": "This step configures your kubeconfig to access the Weaviate cluster you just created.\n\n```bash\n\ngcloud container clusters get-credentials weaviate-cluster --region us-central1\n\n```\n\n> Replace 'weaviate-cluster' with your actual cluster name.",
+        "commands": [
+          "gcloud container clusters get-credentials weaviate-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Verify cluster nodes",
+        "description": "This command checks the status of the nodes in your Weaviate cluster to ensure they are running correctly.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in a 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-installation configuration",
+        "description": "This step sets up autoscaling and monitoring for your Weaviate cluster to ensure optimal performance.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/autoscale.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/monitoring.yaml\n\n```\n\n> This applies the autoscaling configuration.\n> This applies the monitoring configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/autoscale.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/monitoring.yaml"
+        ]
+      },
+      {
+        "title": "Cost warning",
+        "description": "Be aware that running a Weaviate cluster incurs costs based on the resources allocated in your cloud provider.",
+        "commands": []
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Weaviate",
+        "description": "This command removes the Weaviate cluster and all associated resources. Be cautious as this may lead to data loss.\n\n```bash\n\nweaviate delete cluster --name weaviate-cluster --region us-central1\n\n```\n\n> This will delete the cluster and all its resources.",
+        "commands": [
+          "weaviate delete cluster --name weaviate-cluster --region us-central1"
+        ]
+      },
+      {
+        "title": "Clean up orphaned resources",
+        "description": "Ensure that any orphaned resources such as load balancers and persistent volumes are also removed.\n\n```bash\n\nkubectl delete pvc --all\n\n```\n\n> This command deletes all persistent volume claims.",
+        "commands": [
+          "kubectl delete pvc --all"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Weaviate",
+        "description": "Before upgrading, back up your data and ensure that your cluster is in a stable state. After the upgrade, verify that the nodes are functioning correctly.\n\n```bash\n\nkubectl cp my-backup:/data /backup\n\nweaviate upgrade cluster --version 1.36.0\n\nkubectl get pods\n\n```\n\n> Backup your data before proceeding.\n> This command upgrades your Weaviate cluster to the specified version.\n> Verify that all pods are running and healthy after the upgrade.",
+        "commands": [
+          "kubectl cp my-backup:/data /backup",
+          "weaviate upgrade cluster --version 1.36.0",
+          "kubectl get pods"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Weaviate'",
+        "description": "**Cause:** This may occur if the Weaviate service is not running or the kubeconfig is not set up correctly.\n\n**Fix:**\nCheck the status of the Weaviate pods with 'kubectl get pods' and ensure your kubeconfig is correct."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to accommodate the new pod.\n\n**Fix:**\nScale up your cluster or reduce the resource requests of your pods."
+      },
+      {
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** This usually means that the application inside the pod is failing to start.\n\n**Fix:**\nCheck the logs of the pod with 'kubectl logs <pod-name>' to diagnose the issue."
+      },
+      {
+        "title": "Error: 'Service Unavailable'",
+        "description": "**Cause:** This can happen if the Weaviate service is not properly exposed or the pods are not ready.\n\n**Fix:**\nEnsure that the service is correctly configured and that all pods are in the 'Running' state."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.36.0",
+        "changes": "Added support for new vectorization models and improved query performance.",
+        "deprecations": "Deprecated the old vectorization API endpoints.",
+        "migrationSteps": "If upgrading from v1.35.0, update your API calls to use the new endpoints."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME READY STATUS RESTARTS AGE' with all nodes in the 'Ready' state when everything is working.",
+      "codeSnippets": [
+        "curl -LO https://github.com/weaviate/weaviate/releases/download/v1.36.0/weaviate-cli-linux-amd64 && chmod +x weaviate-cli-linux-amd64 && sudo mv weaviate-cli-linux-amd64 /usr/local/bin/weaviate",
+        "weaviate create cluster --version 1.36.0 --node-count 3 --region us-central1",
+        "gcloud container clusters get-credentials weaviate-cluster --region us-central1",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/autoscale.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/weaviate/weaviate/main/deploy/k8s/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "weaviate"
+    ],
+    "platform": "weaviate",
+    "platformType": "database",
+    "platformProvider": "Weaviate",
+    "platformVersions": [
+      "1.36.0"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "cr.weaviate.io/semitechnologies/weaviate:1.36.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://weaviate.io/developers/weaviate",
+      "repo": "https://github.com/weaviate/weaviate"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "gcloud >= 450.0"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:21:43.364Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

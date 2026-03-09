@@ -1,0 +1,170 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-milvus",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Milvus",
+    "description": "Milvus is a high-performance, cloud-native vector database designed for scalable vector approximate nearest neighbor (ANN) search. It is ideal for applications involving large amounts of unstructured data, such as AI and machine learning workloads. Key trade-offs include the need for proper resource allocation and understanding of vector data management.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Milvus Helm repository",
+        "description": "This step adds the official Milvus Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add milvus https://milvus-io.github.io/milvus-helm\n\n```\n\n> This is the official Helm chart repository for Milvus.",
+        "commands": [
+          "helm repo add milvus https://milvus-io.github.io/milvus-helm"
+        ]
+      },
+      {
+        "title": "Install Milvus CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Milvus to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml\n\n```",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml"
+        ]
+      },
+      {
+        "title": "Install Milvus using Helm",
+        "description": "This command installs Milvus in the specified namespace with the desired version.\n\n```bash\n\nhelm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0\n\n```",
+        "commands": [
+          "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0"
+        ]
+      },
+      {
+        "title": "Create a Milvus Cluster",
+        "description": "This step creates a sample Milvus cluster resource to manage your vector database.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF\n\n```\n\n> This YAML creates a basic Milvus cluster.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF"
+        ]
+      },
+      {
+        "title": "Verify Milvus Cluster",
+        "description": "This command checks the status of the Milvus cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get milvusclusters -n milvus\n\n```",
+        "commands": [
+          "kubectl get milvusclusters -n milvus"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Milvus",
+        "description": "This step removes the Milvus installation and associated resources. Be aware that this will lead to data loss unless backups are taken.\n\n```bash\n\nhelm uninstall milvus --namespace milvus\n\nkubectl delete namespace milvus\n\n```",
+        "commands": [
+          "helm uninstall milvus --namespace milvus",
+          "kubectl delete namespace milvus"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Milvus",
+        "description": "Before upgrading, ensure you back up your data. This process includes draining the nodes, upgrading the Helm chart, and verifying the upgrade.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade milvus milvus/milvus --namespace milvus --version 2.5.1\n\nkubectl uncordon <node-name>\n\nkubectl get milvusclusters -n milvus\n\n```\n\n> Replace <node-name> with your actual node name.\n> Replace <node-name> with your actual node name.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "helm upgrade milvus milvus/milvus --namespace milvus --version 2.5.1",
+          "kubectl uncordon <node-name>",
+          "kubectl get milvusclusters -n milvus"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Milvus pods are in CrashLoopBackOff",
+        "description": "**Cause:** This may occur due to insufficient resources allocated to the pods.\n\n**Fix:**\nIncrease the resource limits in the Milvus cluster configuration."
+      },
+      {
+        "title": "kubectl get milvusclusters returns 'NotFound'",
+        "description": "**Cause:** The Milvus cluster may not have been created successfully.\n\n**Fix:**\nCheck the YAML definition and reapply it if necessary."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This indicates that the Kubernetes API server is not reachable.\n\n**Fix:**\nCheck your Kubernetes cluster status and network connectivity."
+      },
+      {
+        "title": "Milvus service is not accessible",
+        "description": "**Cause:** The service may not be exposed correctly.\n\n**Fix:**\nEnsure the service type is set to LoadBalancer or NodePort in the Helm chart values."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v2.5.0",
+        "changes": "Introduced support for new vector indexing algorithms and improved query performance.",
+        "deprecations": "Deprecated the old REST API endpoints in favor of the new gRPC-based API.",
+        "migrationSteps": "Update your application code to use the new gRPC endpoints."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Milvus cluster listed with the command 'kubectl get milvusclusters -n milvus' showing the status as 'Running'.",
+      "codeSnippets": [
+        "helm repo add milvus https://milvus-io.github.io/milvus-helm",
+        "kubectl apply -f https://raw.githubusercontent.com/milvus-io/milvus/master/deploy/crds/milvus.io_milvusclusters.yaml",
+        "helm install milvus milvus/milvus --namespace milvus --create-namespace --version 2.5.0",
+        "kubectl apply -f - <<EOF\napiVersion: milvus.io/v1alpha1\nkind: MilvusCluster\nmetadata:\n  name: milvus-cluster\n  namespace: milvus\nspec:\n  mode: cluster\n  version: v2.5.0\nEOF",
+        "kubectl get milvusclusters -n milvus"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "zilliz"
+    ],
+    "platform": "milvus",
+    "platformType": "database",
+    "platformProvider": "Zilliz",
+    "platformVersions": [
+      "2.4",
+      "2.5"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "milvusdb/milvus:v2.5.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://milvus.io/docs",
+      "repo": "https://github.com/milvus-io/milvus"
+    },
+    "qualityScore": 92
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T06:20:55.947Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
