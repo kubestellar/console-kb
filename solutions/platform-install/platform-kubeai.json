@@ -1,0 +1,173 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kubeai",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure KubeAI",
+    "description": "KubeAI is an AI Inference Operator for Kubernetes designed to simplify the deployment and scaling of machine learning models, including LLMs and embeddings. It offers intelligent scaling, optimized routing, and model caching, making it suitable for production-grade AI applications. Key trade-offs include the requirement for specific Kubernetes versions and the need for adequate hardware resources.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the KubeAI Helm repository",
+        "description": "This step adds the KubeAI Helm chart repository to your local Helm setup, allowing you to install KubeAI easily.\n\n```bash\n\nhelm repo add kubeai https://charts.kubeai.org\n\nhelm repo update\n\n```\n\n> This command adds the official KubeAI Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add kubeai https://charts.kubeai.org",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install KubeAI CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for KubeAI to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_model_crd.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_inference_crd.yaml\n\n```\n\n> Installs the Model CRD.\n> Installs the Inference CRD.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_model_crd.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_inference_crd.yaml"
+        ]
+      },
+      {
+        "title": "Install KubeAI using Helm",
+        "description": "This step installs the KubeAI operator in the specified namespace, allowing you to manage AI inference workloads.\n\n```bash\n\nhelm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1\n\n```\n\n> Installs KubeAI in the kubeai namespace.",
+        "commands": [
+          "helm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1"
+        ]
+      },
+      {
+        "title": "Create an example Inference Custom Resource",
+        "description": "This step creates an example Inference resource to demonstrate how to use KubeAI for serving a model.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: Inference\nmetadata:\n  name: example-inference\nspec:\n  model:\n    name: example-model\n    version: v1\nEOF\n\n```\n\n> Creates an example inference resource.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: Inference\nmetadata:\n  name: example-inference\nspec:\n  model:\n    name: example-model\n    version: v1\nEOF"
+        ]
+      },
+      {
+        "title": "Verify KubeAI installation",
+        "description": "This step checks the status of the KubeAI operator and the example inference resource to ensure everything is running correctly.\n\n```bash\n\nkubectl get pods -n kubeai\n\nkubectl get inference\n\n```\n\n> Lists all pods in the kubeai namespace to verify the operator is running.\n> Checks the status of the created inference resource.",
+        "commands": [
+          "kubectl get pods -n kubeai",
+          "kubectl get inference"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall KubeAI",
+        "description": "This step removes KubeAI and its associated resources. Be aware that this will delete all inference resources and associated data.\n\n```bash\n\nhelm uninstall kubeai --namespace kubeai\n\nkubectl delete namespace kubeai\n\n```\n\n> Uninstalls the KubeAI Helm release.\n> Deletes the kubeai namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kubeai --namespace kubeai",
+          "kubectl delete namespace kubeai"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade KubeAI",
+        "description": "Before upgrading, ensure you have a backup of your resources. This step upgrades KubeAI to the latest version.\n\n```bash\n\nkubectl get inference -o yaml > backup-inference.yaml\n\nhelm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1\n\nkubectl get pods -n kubeai\n\n```\n\n> Backs up the current inference resources.\n> Upgrades KubeAI to the specified version.\n> Verifies that the KubeAI pods are running after the upgrade.",
+        "commands": [
+          "kubectl get inference -o yaml > backup-inference.yaml",
+          "helm upgrade kubeai kubeai/kubeai --namespace kubeai --version 0.23.1",
+          "kubectl get pods -n kubeai"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'no matches for kind \"Inference\" in version \"kubeai.substratus.ai/v1alpha1\"'",
+        "description": "**Cause:** The Inference CRD may not be installed correctly.\n\n**Fix:**\nReapply the Inference CRD using the command: kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_inference_crd.yaml"
+      },
+      {
+        "title": "Pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** The KubeAI pod may be failing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs with: kubectl logs <pod-name> -n kubeai and adjust the configuration or resources as needed."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** The KubeAI service may not be reachable due to network issues.\n\n**Fix:**\nVerify the service status with: kubectl get svc -n kubeai and ensure the network policies allow access."
+      },
+      {
+        "title": "Inference resource not found",
+        "description": "**Cause:** The Inference resource may not have been created successfully.\n\n**Fix:**\nCheck the status of the Inference resource with: kubectl get inference and ensure the spec is correct."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.23.1",
+        "changes": "Added support for new model types and improved load balancing algorithms.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the KubeAI pods running and the example inference resource in a 'Ready' state when everything is working. Use 'kubectl get pods -n kubeai' and 'kubectl get inference' to verify.",
+      "codeSnippets": [
+        "helm repo add kubeai https://charts.kubeai.org",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_model_crd.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/substratusai/kubeai/helm-chart-kubeai-0.23.1/deploy/crds/kubeai_v1alpha1_inference_crd.yaml",
+        "helm install kubeai kubeai/kubeai --namespace kubeai --create-namespace --version 0.23.1",
+        "kubectl apply -f - <<EOF\napiVersion: kubeai.substratus.ai/v1alpha1\nkind: Inference\nmetadata:\n  name: example-inference\nspec:\n  model:\n    name: example-model\n    version: v1\nEOF",
+        "kubectl get pods -n kubeai",
+        "kubectl get inference"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "llm-serving",
+      "substratus-ai"
+    ],
+    "platform": "kubeai",
+    "platformType": "ai-platform",
+    "platformProvider": "Substratus AI",
+    "platformVersions": [
+      "0.23.1"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/substratusai/kubeai:0.23.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://www.kubeai.org/",
+      "repo": "https://github.com/substratusai/kubeai"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster with the specified version and adequate resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T00:05:03.497Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

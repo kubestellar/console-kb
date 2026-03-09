@@ -1,0 +1,171 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-qdrant",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Qdrant",
+    "description": "Qdrant is a high-performance vector database designed for AI applications, enabling efficient storage and retrieval of vector embeddings. It is suitable for applications requiring fast similarity search and filtering capabilities. Key trade-offs include the need for sufficient resources to handle large datasets and the complexity of managing persistent storage.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add Qdrant Helm Repository",
+        "description": "This step adds the Qdrant Helm chart repository to your Helm configuration, allowing you to install Qdrant using Helm.\n\n```bash\n\nhelm repo add qdrant https://qdrant.github.io/qdrant-helm\n\nhelm repo update\n\n```\n\n> This command adds the official Qdrant Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add qdrant https://qdrant.github.io/qdrant-helm",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Qdrant with Helm",
+        "description": "This command installs Qdrant in the specified namespace with the desired version.\n\n```bash\n\nhelm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.13.0\n\n```\n\n> Replace '1.13.0' with the desired version if needed.",
+        "commands": [
+          "helm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.13.0"
+        ]
+      },
+      {
+        "title": "Create a Qdrant Configuration File",
+        "description": "This step creates a configuration file for Qdrant, which defines storage paths and logging settings.\n\n```bash\n\nkubectl create configmap qdrant-config --from-file=config.yaml --namespace qdrant\n\n```\n\n> Ensure you have a config.yaml file ready with your desired configuration.",
+        "commands": [
+          "kubectl create configmap qdrant-config --from-file=config.yaml --namespace qdrant"
+        ]
+      },
+      {
+        "title": "Verify Qdrant Deployment",
+        "description": "This command checks the status of the Qdrant pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n qdrant\n\n```\n\n> Look for the status 'Running' for all Qdrant pods.",
+        "commands": [
+          "kubectl get pods -n qdrant"
+        ]
+      },
+      {
+        "title": "Expose Qdrant Service",
+        "description": "This step exposes the Qdrant service to allow external access.\n\n```bash\n\nkubectl expose deployment qdrant --type=LoadBalancer --name=qdrant-service --port=6333 --target-port=6333 --namespace=qdrant\n\n```\n\n> This creates a LoadBalancer service for external access.",
+        "commands": [
+          "kubectl expose deployment qdrant --type=LoadBalancer --name=qdrant-service --port=6333 --target-port=6333 --namespace=qdrant"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Qdrant",
+        "description": "This command removes the Qdrant deployment and associated resources. Be aware that this will result in data loss unless backups are taken.\n\n```bash\n\nhelm uninstall qdrant --namespace qdrant\n\nkubectl delete namespace qdrant\n\n```\n\n> This command removes the Qdrant release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall qdrant --namespace qdrant",
+          "kubectl delete namespace qdrant"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Qdrant",
+        "description": "Before upgrading, ensure you have a backup of your data. This process includes draining the pods, upgrading, and verifying the deployment.\n\n```bash\n\nkubectl get pods -n qdrant -o name | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data\n\nhelm upgrade qdrant qdrant/qdrant --namespace qdrant --version 1.13.0\n\nkubectl get pods -n qdrant\n\n```\n\n> Drains the pods to prepare for upgrade.\n> Replace '1.13.0' with the desired version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n qdrant -o name | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data",
+          "helm upgrade qdrant qdrant/qdrant --namespace qdrant --version 1.13.0",
+          "kubectl get pods -n qdrant"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Qdrant service'",
+        "description": "**Cause:** The Qdrant service may not be exposed correctly or the pods are not running.\n\n**Fix:**\nCheck the status of the pods with 'kubectl get pods -n qdrant' and ensure the service is exposed correctly."
+      },
+      {
+        "title": "Error: 'Insufficient storage available'",
+        "description": "**Cause:** The persistent volume may not have enough storage allocated.\n\n**Fix:**\nIncrease the storage size in your persistent volume claim or adjust the storage configuration in config.yaml."
+      },
+      {
+        "title": "Error: 'Qdrant pod is crashing repeatedly'",
+        "description": "**Cause:** This may be due to misconfiguration in the config.yaml file.\n\n**Fix:**\nReview the logs of the pod using 'kubectl logs <pod-name> -n qdrant' and correct any configuration issues."
+      },
+      {
+        "title": "Error: 'Connection refused on port 6333'",
+        "description": "**Cause:** The Qdrant service may not be running or the port is not exposed.\n\n**Fix:**\nEnsure the Qdrant service is running and properly exposed using 'kubectl get svc -n qdrant'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "1.13.0",
+        "changes": "Added support for new vector indexing algorithms and improved performance for large datasets.",
+        "deprecations": "Deprecated the old snapshot storage configuration in favor of a more flexible approach.",
+        "migrationSteps": "If upgrading from 1.12.x, update your config.yaml to reflect the new storage paths."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the Qdrant service running and accessible via the LoadBalancer IP with the command 'kubectl get svc -n qdrant'. The output should show the EXTERNAL-IP of the service.",
+      "codeSnippets": [
+        "helm repo add qdrant https://qdrant.github.io/qdrant-helm",
+        "helm repo update",
+        "helm install qdrant qdrant/qdrant --namespace qdrant --create-namespace --version 1.13.0",
+        "kubectl create configmap qdrant-config --from-file=config.yaml --namespace qdrant",
+        "kubectl get pods -n qdrant",
+        "kubectl expose deployment qdrant --type=LoadBalancer --name=qdrant-service --port=6333 --target-port=6333 --namespace=qdrant"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "database",
+      "vector-db",
+      "qdrant"
+    ],
+    "platform": "qdrant",
+    "platformType": "database",
+    "platformProvider": "Qdrant",
+    "platformVersions": [
+      "1.12",
+      "1.13"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/qdrant/qdrant:v1.13.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://qdrant.tech/documentation/",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T00:08:16.651Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

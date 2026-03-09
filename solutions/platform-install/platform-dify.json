@@ -1,0 +1,169 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-dify",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Dify",
+    "description": "Dify is a production-ready platform for developing agentic workflows, ideal for users looking to self-host AI applications. It provides a robust framework for building and managing AI-driven workflows, but requires careful resource management and configuration for optimal performance.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Dify Helm repository",
+        "description": "This step adds the official Dify Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add langgenius https://charts.langgenius.com\n\n```\n\n> This is the official repository for Dify.",
+        "commands": [
+          "helm repo add langgenius https://charts.langgenius.com"
+        ]
+      },
+      {
+        "title": "Install Dify CRDs",
+        "description": "This step installs the Custom Resource Definitions required for Dify to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml\n\n```\n\n> Ensure CRDs are installed before deploying the application.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Dify using Helm",
+        "description": "This command installs the Dify application in the specified namespace with the desired version.\n\n```bash\n\nhelm install dify langgenius/dify --namespace dify --create-namespace --version 0.12.0\n\n```\n\n> Replace '0.12.0' with the desired version if necessary.",
+        "commands": [
+          "helm install dify langgenius/dify --namespace dify --create-namespace --version 0.12.0"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource",
+        "description": "This step creates an example Custom Resource to demonstrate how to use Dify.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: DifyWorkflow\nmetadata:\n  name: example-workflow\nspec:\n  workflow:\n    steps:\n      - name: example-step\n        action: example-action\nEOF\n\n```\n\n> This creates a simple workflow for testing.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: DifyWorkflow\nmetadata:\n  name: example-workflow\nspec:\n  workflow:\n    steps:\n      - name: example-step\n        action: example-action\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Dify installation",
+        "description": "This command checks if the Dify Custom Resource is ready and functioning as expected.\n\n```bash\n\nkubectl get difyworkflow example-workflow -o yaml\n\n```\n\n> Look for 'status: ready' in the output.",
+        "commands": [
+          "kubectl get difyworkflow example-workflow -o yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Dify",
+        "description": "This step removes the Dify application and its associated resources. Be aware that this will delete all workflows and data associated with Dify.\n\n```bash\n\nhelm uninstall dify --namespace dify\n\nkubectl delete namespace dify\n\n```\n\n> This command will remove the Dify release.\n> This will delete the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall dify --namespace dify",
+          "kubectl delete namespace dify"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Dify",
+        "description": "Before upgrading, ensure you have a backup of your workflows. This process includes draining any active workloads, upgrading the Helm release, and verifying the installation.\n\n```bash\n\nkubectl get difyworkflow -o json | jq '.items[] | {name: .metadata.name, spec: .spec}' > backup.json\n\nhelm upgrade dify langgenius/dify --namespace dify --version 0.12.1\n\nkubectl get difyworkflow example-workflow -o yaml\n\n```\n\n> Backup existing workflows.\n> Replace '0.12.1' with the desired version.\n> Verify that the upgrade was successful.",
+        "commands": [
+          "kubectl get difyworkflow -o json | jq '.items[] | {name: .metadata.name, spec: .spec}' > backup.json",
+          "helm upgrade dify langgenius/dify --namespace dify --version 0.12.1",
+          "kubectl get difyworkflow example-workflow -o yaml"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'DifyWorkflow not found'",
+        "description": "**Cause:** The specified DifyWorkflow resource does not exist in the cluster.\n\n**Fix:**\nEnsure that the Custom Resource was created successfully with the correct name."
+      },
+      {
+        "title": "Error: 'Failed to install CRDs'",
+        "description": "**Cause:** The CRDs may not have been applied correctly.\n\n**Fix:**\nRe-run the command to apply the CRDs: kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml"
+      },
+      {
+        "title": "Error: 'Helm release failed'",
+        "description": "**Cause:** There may be a conflict with existing resources or incorrect Helm chart version.\n\n**Fix:**\nCheck for existing resources and ensure the correct version is specified."
+      },
+      {
+        "title": "Error: 'Workflow not ready'",
+        "description": "**Cause:** The DifyWorkflow may not have completed initialization.\n\n**Fix:**\nCheck the logs of the Dify pods for errors: kubectl logs -l app=dify -n dify"
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "0.12",
+        "changes": "Introduced new workflow actions and improved API stability.",
+        "deprecations": "Deprecated older workflow definitions in favor of the new format.",
+        "migrationSteps": "Update existing workflows to conform to the new definition format."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the DifyWorkflow status as 'ready' when running: kubectl get difyworkflow example-workflow.",
+      "codeSnippets": [
+        "helm repo add langgenius https://charts.langgenius.com",
+        "kubectl apply -f https://raw.githubusercontent.com/langgenius/dify/main/deploy/crds.yaml",
+        "helm install dify langgenius/dify --namespace dify --create-namespace --version 0.12.0",
+        "kubectl apply -f - <<EOF\napiVersion: dify.langgenius.com/v1\nkind: DifyWorkflow\nmetadata:\n  name: example-workflow\nspec:\n  workflow:\n    steps:\n      - name: example-step\n        action: example-action\nEOF",
+        "kubectl get difyworkflow example-workflow -o yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-app",
+      "langgenius"
+    ],
+    "platform": "dify",
+    "platformType": "ai-platform",
+    "platformProvider": "LangGenius",
+    "platformVersions": [
+      "0.11",
+      "0.12"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "langgenius/dify-web:1.13.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.dify.ai/",
+      "repo": "https://github.com/langgenius/dify"
+    },
+    "qualityScore": 92
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T00:06:42.002Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

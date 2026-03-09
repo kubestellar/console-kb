@@ -1,0 +1,169 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kuberay",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure KubeRay",
+    "description": "KubeRay is an open-source Kubernetes operator designed to simplify the deployment and management of Ray applications on Kubernetes. It provides custom resource definitions for managing Ray clusters, jobs, and services, making it ideal for machine learning workloads. Key trade-offs include the need for Kubernetes expertise and potential complexity in managing Ray applications.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add KubeRay Helm Repository",
+        "description": "This step adds the KubeRay Helm repository to your local Helm configuration, allowing you to install KubeRay using Helm.\n\n```bash\n\nhelm repo add kuberay https://ray-project.github.io/kuberay\n\nhelm repo update\n\n```\n\n> This command adds the KubeRay Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add kuberay https://ray-project.github.io/kuberay",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install KubeRay",
+        "description": "This step installs KubeRay using Helm, deploying the necessary components to your Kubernetes cluster.\n\n```bash\n\nhelm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace\n\n```\n\n> Installs KubeRay in the 'kuberay' namespace.",
+        "commands": [
+          "helm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace"
+        ]
+      },
+      {
+        "title": "Verify KubeRay Installation",
+        "description": "This step checks the status of the KubeRay components to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n kuberay\n\n```\n\n> Lists all pods in the 'kuberay' namespace to verify they are running.",
+        "commands": [
+          "kubectl get pods -n kuberay"
+        ]
+      },
+      {
+        "title": "Create a RayCluster",
+        "description": "This step creates a RayCluster custom resource to start a Ray cluster managed by KubeRay.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: ray.io/v1alpha1\nkind: RayCluster\nmetadata:\n  name: my-ray-cluster\n  namespace: kuberay\nspec:\n  head:\n    replicas: 1\n  worker:\n    replicas: 2\nEOF\n\n```\n\n> Creates a RayCluster with 1 head and 2 worker nodes.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: ray.io/v1alpha1\nkind: RayCluster\nmetadata:\n  name: my-ray-cluster\n  namespace: kuberay\nspec:\n  head:\n    replicas: 1\n  worker:\n    replicas: 2\nEOF"
+        ]
+      },
+      {
+        "title": "Verify RayCluster Status",
+        "description": "This step checks the status of the RayCluster to ensure it is running as expected.\n\n```bash\n\nkubectl get raycluster my-ray-cluster -n kuberay\n\n```\n\n> Displays the status of the created RayCluster.",
+        "commands": [
+          "kubectl get raycluster my-ray-cluster -n kuberay"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall KubeRay",
+        "description": "This step removes KubeRay from your cluster. Be aware that this will delete all associated resources, including RayClusters, which may lead to data loss.\n\n```bash\n\nhelm uninstall kuberay --namespace kuberay\n\nkubectl delete namespace kuberay\n\n```\n\n> Uninstalls KubeRay from the 'kuberay' namespace.\n> Deletes the 'kuberay' namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kuberay --namespace kuberay",
+          "kubectl delete namespace kuberay"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade KubeRay",
+        "description": "Before upgrading, ensure you back up any important data. This step performs the upgrade and verifies the installation afterward.\n\n```bash\n\nhelm upgrade kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay\n\nkubectl get pods -n kuberay\n\n```\n\n> Upgrades KubeRay to version 1.5.1.\n> Verifies that all pods are running after the upgrade.",
+        "commands": [
+          "helm upgrade kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay",
+          "kubectl get pods -n kuberay"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to install CRD'",
+        "description": "**Cause:** The Custom Resource Definitions (CRDs) may not have been installed correctly.\n\n**Fix:**\nReinstall the CRDs using 'kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/v1.5.1/deploy/crds/ray.io_rayclusters.yaml'."
+      },
+      {
+        "title": "Error: 'Pod is CrashLoopBackOff'",
+        "description": "**Cause:** One or more pods are failing to start due to misconfiguration or resource limits.\n\n**Fix:**\nCheck pod logs using 'kubectl logs <pod-name> -n kuberay' and adjust resource requests/limits as necessary."
+      },
+      {
+        "title": "Error: 'KubeRay not found'",
+        "description": "**Cause:** The KubeRay Helm chart may not be installed or the namespace may be incorrect.\n\n**Fix:**\nEnsure KubeRay is installed in the correct namespace using 'helm list --namespace kuberay'."
+      },
+      {
+        "title": "Error: 'RayCluster not found'",
+        "description": "**Cause:** The specified RayCluster resource may not exist or may have been deleted.\n\n**Fix:**\nVerify the RayCluster exists using 'kubectl get raycluster -n kuberay'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.5.1",
+        "changes": "Introduced support for new Ray features and improved stability of RayCluster management.",
+        "deprecations": "No specific deprecations noted.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the RayCluster status as 'Running' when everything is working, with output similar to: 'NAME          STATUS   AGE\nmy-ray-cluster   Running   5m'.",
+      "codeSnippets": [
+        "helm repo add kuberay https://ray-project.github.io/kuberay",
+        "helm repo update",
+        "helm install kuberay kuberay/kuberay --version 1.5.1 --namespace kuberay --create-namespace",
+        "kubectl get pods -n kuberay",
+        "kubectl apply -f - <<EOF\napiVersion: ray.io/v1alpha1\nkind: RayCluster\nmetadata:\n  name: my-ray-cluster\n  namespace: kuberay\nspec:\n  head:\n    replicas: 1\n  worker:\n    replicas: 2\nEOF",
+        "kubectl get raycluster my-ray-cluster -n kuberay"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ml-platform",
+      "ray-project"
+    ],
+    "platform": "kuberay",
+    "platformType": "ai-platform",
+    "platformProvider": "Ray Project",
+    "platformVersions": [
+      "v1.5.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/ray-project/kuberay:v1.5.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.ray.io/en/latest/cluster/kubernetes/",
+      "repo": "https://github.com/ray-project/kuberay"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the specified resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T00:05:41.401Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

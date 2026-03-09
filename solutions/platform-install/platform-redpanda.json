@@ -1,0 +1,168 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-redpanda",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Redpanda",
+    "description": "Redpanda is a high-performance streaming data platform that is compatible with the Kafka API, designed to be faster and simpler to operate without the need for ZooKeeper or JVM. It is ideal for developers looking for a lightweight solution for real-time data streaming. Key trade-offs include the absence of certain Kafka features due to its unique architecture.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Redpanda Helm repository",
+        "description": "This step adds the official Redpanda Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add redpanda https://charts.redpanda.com\n\n```\n\n> This is the official repository for Redpanda Helm charts.",
+        "commands": [
+          "helm repo add redpanda https://charts.redpanda.com"
+        ]
+      },
+      {
+        "title": "Install Redpanda CRDs",
+        "description": "This step installs the Custom Resource Definitions required for Redpanda to function properly in your Kubernetes cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml\n\n```",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml"
+        ]
+      },
+      {
+        "title": "Install Redpanda using Helm",
+        "description": "This command installs Redpanda in the specified namespace with the desired version.\n\n```bash\n\nhelm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10\n\n```",
+        "commands": [
+          "helm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10"
+        ]
+      },
+      {
+        "title": "Create a Redpanda Cluster",
+        "description": "This step creates a custom resource for the Redpanda cluster to manage its configuration.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-cluster\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF\n\n```",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-cluster\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF"
+        ]
+      },
+      {
+        "title": "Verify Redpanda Cluster",
+        "description": "This command checks the status of the Redpanda cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get redpandas -n redpanda\n\n```",
+        "commands": [
+          "kubectl get redpandas -n redpanda"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Redpanda",
+        "description": "This step removes the Redpanda installation and all associated resources. Be aware that this will result in data loss unless backups are made.\n\n```bash\n\nhelm uninstall redpanda --namespace redpanda\n\nkubectl delete namespace redpanda\n\n```",
+        "commands": [
+          "helm uninstall redpanda --namespace redpanda",
+          "kubectl delete namespace redpanda"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Redpanda",
+        "description": "Before upgrading, ensure you have backups of your data. This process includes draining the nodes, upgrading the Helm release, and verifying the upgrade.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets --delete-local-data\n\nhelm upgrade redpanda redpanda/redpanda --namespace redpanda --version 25.3.10\n\nkubectl get redpandas -n redpanda\n\n```\n\n> Replace <node-name> with the name of your Redpanda node.",
+        "commands": [
+          "kubectl drain <node-name> --ignore-daemonsets --delete-local-data",
+          "helm upgrade redpanda redpanda/redpanda --namespace redpanda --version 25.3.10",
+          "kubectl get redpandas -n redpanda"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to connect to Redpanda'",
+        "description": "**Cause:** This may occur if the Redpanda service is not running or if there are network issues.\n\n**Fix:**\nCheck the status of the Redpanda pods with 'kubectl get pods -n redpanda' and ensure they are running."
+      },
+      {
+        "title": "Error: 'No such host'",
+        "description": "**Cause:** This indicates a DNS resolution issue within the Kubernetes cluster.\n\n**Fix:**\nVerify your Kubernetes DNS settings and ensure that the Redpanda service is correctly defined."
+      },
+      {
+        "title": "Error: 'Insufficient resources'",
+        "description": "**Cause:** This can happen if the cluster does not have enough resources allocated for Redpanda.\n\n**Fix:**\nIncrease the resource limits in your Redpanda deployment configuration."
+      },
+      {
+        "title": "Error: 'Topic creation failed'",
+        "description": "**Cause:** This may occur if the auto-create topics feature is disabled.\n\n**Fix:**\nEnsure that 'auto_create_topics_enabled' is set to true in your Redpanda configuration."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v25.3.10",
+        "changes": "Improved performance for topic partitioning and added support for tiered storage.",
+        "deprecations": "No specific deprecations noted in this version.",
+        "migrationSteps": "No migration steps are required when upgrading from previous versions."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see output similar to 'NAME           READY   STATUS    RESTARTS   AGE' followed by your Redpanda pods indicating they are running.",
+      "codeSnippets": [
+        "helm repo add redpanda https://charts.redpanda.com",
+        "kubectl apply -f https://raw.githubusercontent.com/redpanda-data/redpanda/v25.3.10/deploy/crds/redpanda.vectorized.io_redpandas.yaml",
+        "helm install redpanda redpanda/redpanda --namespace redpanda --create-namespace --version 25.3.10",
+        "kubectl apply -f - <<EOF\napiVersion: vectorized.io/v1beta1\nkind: Redpanda\nmetadata:\n  name: my-cluster\n  namespace: redpanda\nspec:\n  replicas: 3\n  configuration:\n    auto_create_topics_enabled: true\nEOF",
+        "kubectl get redpandas -n redpanda"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "messaging",
+      "streaming",
+      "redpanda-data"
+    ],
+    "platform": "redpanda",
+    "platformType": "messaging",
+    "platformProvider": "Redpanda Data",
+    "platformVersions": [
+      "25.3.10"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "vectorized/redpanda:v25.3.10"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.redpanda.com/",
+      "repo": "https://github.com/redpanda-data/redpanda"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure your Kubernetes cluster meets the resource requirements and that you have the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-09T00:09:43.647Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
