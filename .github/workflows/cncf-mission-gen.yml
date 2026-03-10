@@ -1,7 +1,7 @@
 name: Generate CNCF Missions
 on:
   schedule:
-    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+    - cron: '0 6 * * *'  # Daily 6am UTC
   workflow_dispatch:
     inputs:
       projects:
@@ -187,4 +187,114 @@ jobs:
             echo "| Copilot issues created | $ISSUES_CREATED |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Copilot coding agent will create PRs for each issue." >> $GITHUB_STEP_SUMMARY
+          echo "Auto-merge will score and merge passing missions." >> $GITHUB_STEP_SUMMARY
+
+  auto-merge:
+    needs: [generate, collect]
+    if: inputs.dry_run != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm install --no-audit
+      - name: Score and auto-merge passing mission PRs
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TOKEN }}
+          QUALITY_THRESHOLD: '70'
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+
+            const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10);
+            const LABEL = 'cncf-mission-gen';
+            const LOOKBACK_HOURS = 6;
+
+            async function main() {
+              // Find open PRs with the cncf-mission-gen label created recently
+              const since = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+              const prsJson = execSync(
+                \`gh pr list --label \${LABEL} --state open --json number,headRefName,title,createdAt --limit 50\`,
+                { encoding: 'utf8' }
+              );
+              const prs = JSON.parse(prsJson);
+              const recentPrs = prs.filter(pr => new Date(pr.createdAt) >= new Date(since));
+
+              console.log(\`Found \${recentPrs.length} recent mission PRs (last \${LOOKBACK_HOURS}h)\`);
+              if (!recentPrs.length) return;
+
+              // Dynamic import for ESM scorer
+              const { scoreMission } = await import('./scripts/quality-scorer.mjs');
+
+              let merged = 0;
+              let failed = 0;
+
+              for (const pr of recentPrs) {
+                try {
+                  // List changed files in the PR to find the mission JSON
+                  const filesJson = execSync(
+                    \`gh pr diff \${pr.number} --name-only\`,
+                    { encoding: 'utf8' }
+                  );
+                  const missionFile = filesJson.trim().split('\\n').find(f =>
+                    f.startsWith('solutions/') && f.endsWith('.json') && !f.endsWith('index.json')
+                  );
+
+                  if (!missionFile) {
+                    console.log(\`PR #\${pr.number}: no mission JSON found, skipping\`);
+                    continue;
+                  }
+
+                  // Fetch the file content from the PR branch
+                  const content = execSync(
+                    \`gh api repos/{owner}/{repo}/contents/\${encodeURIComponent(missionFile)}?ref=\${pr.headRefName} --jq '.content'\`,
+                    { encoding: 'utf8' }
+                  );
+                  const mission = JSON.parse(Buffer.from(content.trim(), 'base64').toString('utf8'));
+
+                  // Score the mission
+                  const result = scoreMission(mission, QUALITY_THRESHOLD);
+                  console.log(\`PR #\${pr.number} (\${pr.title}): score=\${result.score}/100 pass=\${result.pass}\`);
+                  console.log(\`  Breakdown: \${JSON.stringify(result.breakdown)}\`);
+
+                  if (result.pass) {
+                    // Add score comment before merging
+                    execSync(
+                      \`gh pr comment \${pr.number} --body \"Auto-merge: quality score \${result.score}/100 (threshold: \${QUALITY_THRESHOLD}). Breakdown: \${JSON.stringify(result.breakdown)}\"\`,
+                      { encoding: 'utf8' }
+                    );
+                    // Merge the PR
+                    execSync(
+                      \`gh pr merge \${pr.number} --squash --admin --delete-branch\`,
+                      { encoding: 'utf8' }
+                    );
+                    console.log(\`  -> Merged PR #\${pr.number}\`);
+                    merged++;
+                  } else {
+                    // Add comment explaining why it didn't pass
+                    execSync(
+                      \`gh pr comment \${pr.number} --body \"Quality score \${result.score}/100 — below threshold (\${QUALITY_THRESHOLD}). Needs manual review. Breakdown: \${JSON.stringify(result.breakdown)}\"\`,
+                      { encoding: 'utf8' }
+                    );
+                    console.log(\`  -> Below threshold, left open for review\`);
+                    failed++;
+                  }
+                } catch (err) {
+                  console.error(\`PR #\${pr.number}: error - \${err.message}\`);
+                  failed++;
+                }
+              }
+
+              console.log(\`\\nDone: \${merged} merged, \${failed} left for review\`);
+            }
+
+            main().catch(err => { console.error(err); process.exit(1); });
+          "
+      - name: Update workflow summary with merge results
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Auto-Merge Results" >> $GITHUB_STEP_SUMMARY
+          echo "See job logs for per-PR scoring details." >> $GITHUB_STEP_SUMMARY
