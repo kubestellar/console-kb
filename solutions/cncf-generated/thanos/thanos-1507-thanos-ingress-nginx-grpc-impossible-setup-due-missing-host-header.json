@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-1507-thanos-ingress-nginx-grpc-impossible-setup-due-missing-host-header",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: thanos+ingress-nginx+grpc: impossible setup due missing host header",
+    "description": "thanos+ingress-nginx+grpc: impossible setup due missing host header. This issue affects 12+ users.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify thanos deploy symptoms",
+        "description": "Check for the issue in your thanos deployment:\n```bash\nkubectl get pods -n cert-manager -l app=thanos\nkubectl logs -l app.kubernetes.io/name=thanos -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `2 while reading response header from upstream, client: 172.26.81.74, server: sidecar-k8s-live-a.ops.example.com, request`"
+      },
+      {
+        "title": "Check current Service configuration",
+        "description": "Inspect the relevant thanos resources:\n```bash\nkubectl get service -A\nkubectl describe service <name> -n <namespace>\n```\n**Thanos, Prometheus and Golang version used**\nquay.io/thanos/thanos:v0.7.0\n\n**What happened**\ni setup 2 kubernetes clusters, thanos query is in one cluster (and a local prometheus+sidecar) and need t"
+      },
+      {
+        "title": "Apply the fix for thanos+ingress-nginx+grpc: impossible setup due missing host",
+        "description": "To avoid needing a query per remote cluster, get the name to add to\nthe dial options from the dns provider when making the grpc connection.\n```yaml\n---\r\napiVersion: extensions/v1beta1\r\nkind: Ingress\r\nmetadata:\r\n  name: monitoring-ingress\r\n  namespace: monitoring\r\n  annotations:\r\n    kubernetes.io/ingress.class: \"nginx\"\r\nspec:\r\n  rules:\r\n  - host: prometheus-k8s-live-a.ops.example.com\r\n    http:\r\n      paths:\r\n      - path: /\r\n        backend:\r\n          serviceName: prometheus-k8s-live-a\r\n          servicePort: 9090\r\n  - host: prometheus-k8s-live-b.ops.example.com\r\n    http:\r\n      paths:\r\n      - path: /\r\n        backend:\r\n          serviceName: prometheus-k8s-live-b\r\n          servicePort: 9090\r\n  tls:\r\n  - hosts:\r\n    - prometheus-k8s-\n```"
+      },
+      {
+        "title": "Confirm thanos+ingress-nginx+grpc: impossible setup due mi is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=thanos -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `2 while reading response header from upstream, client: 172.26.81.74, server: sidecar-k8s-live-a.ops.example.com, request` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: To avoid needing a query per remote cluster, get the name to add to\nthe dial options from the dns provider when making the grpc connection.. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "---\r\napiVersion: extensions/v1beta1\r\nkind: Ingress\r\nmetadata:\r\n  name: monitoring-ingress\r\n  namespace: monitoring\r\n  annotations:\r\n    kubernetes.io/ingress.class: \"nginx\"\r\nspec:\r\n  rules:\r\n  - host: prometheus-k8s-live-a.ops.example.com\r\n    http:\r\n      paths:\r\n      - path: /\r\n        backend:\r\n          serviceName: prometheus-k8s-live-a\r\n          servicePort: 9090\r\n  - host: prometheus-k8s-live-b.ops.example.com\r\n    http:\r\n      paths:\r\n      - path: /\r\n        backend:\r\n          serviceName: prometheus-k8s-live-b\r\n          servicePort: 9090\r\n  tls:\r\n  - hosts:\r\n    - prometheus-k8s-live-a.ops.example.com\r\n    - prometheus-k8s-live-b.ops.example.com\r\n---\r\napiVersion: extensions/v1beta1\r\nkind: Ingress\r\nmetadata:\r\n  annotations:\r\n    kubernetes.io/ingress.class: \"nginx\"\r\n    nginx.",
+        "--store=sidecar-k8s-live-a.ops.example.com.:443\r\n--store=sidecar-k8s-live-a.ops.example.com.:443",
+        "172.27.119.135 - [172.27.119.135] - - [10/Sep/2019:15:02:40 +0000] \"PRI * HTTP/2.0\" 400 163 \"-\" \"-\" 0 0.001 [] [] - - - - 477873c7a336618ccf06cf9c03fe8d97\r\n172.27.119.135 - [172.27.119.135] - - [10/Sep/2019:15:02:40 +0000] \"PRI * HTTP/2.0\" 400 163 \"-\" \"-\" 0 0.003 [] [] - - - - c32e68975e91159a64326b55d4b72934\r\n2019/09/10 15:02:40 [error] 1137#1137: *7155 upstream rejected request with error 2 while reading response header from upstream, client: 172.26.81.74, server: sidecar-k8s-live-a.ops.example.com, request: \"PRI / HTTP/1.1\", upstream: \"grpc://100.96.136.200:10911\", host: \"sidecar-k8s-live-a.ops.example.com\"\r\n172.26.81.74 - [172.26.81.74] - - [10/Sep/2019:15:02:40 +0000] \"PRI / HTTP/1.1\" 502 163 \"-\" \"curl/7.58.0\" 189 0.002 [monitoring-sidecar-k8s-live-a-10911] [] 100.96.136.200:10911 0 0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "deploy"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "deploy"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/1507",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/2407"
+    },
+    "reactions": 12,
+    "comments": 61,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with thanos installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:24:27.917Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
