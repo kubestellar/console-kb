@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flux-2330-helmrelease-values-from-targetpath-array",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flux: HelmRelease Values from targetPath array",
+    "description": "HelmRelease Values from targetPath array. This issue affects 7+ users.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify flux deploy symptoms",
+        "description": "Check for the issue in your flux deployment:\n```bash\nkubectl get pods -n cert-manager -l app=flux\nkubectl logs -l app.kubernetes.io/name=flux -n cert-manager --tail=100 | grep -i error\n```\nLook for errors related to: HelmRelease Values from targetPath array"
+      },
+      {
+        "title": "Check current Deployment configuration",
+        "description": "Inspect the relevant flux resources:\n```bash\nkubectl get deployment -A\nkubectl describe deployment <name> -n <namespace>\n```\n### Describe the bug\n\nHello, I cannot seem to be able to use the `targetFrom` field to access an existing array within the `valuesFrom` object in a helm release.\n\n### Steps to reproduce\n\nIn the main v"
+      },
+      {
+        "title": "Apply the fix for HelmRelease Values from targetPath array",
+        "description": "Fix: https://github.com/fluxcd/flux2/issues/2330\n\nWhen using Helm with both a values file and --set, the set will always have precedence over the values.yaml. This allows specifying the normal config inside a yaml file and specifying a secret outside that yaml via --set.\n\nWhen using flux, this norma\n```yaml\napiVersion: helm.toolkit.fluxcd.io/v2beta1\r\nkind: HelmRelease\r\nmetadata:\r\n  name: release-name\r\n  namespace: flux-system\r\nspec:\r\n  values:\r\n    confd:\r\n      file.yaml:\r\n        init_config:\r\n          service: kafka-consumers\r\n        instances:\r\n          - kafka_connect_str: xxx:9092\r\n            monitor_unlisted_consumer_groups: true\n```"
+      },
+      {
+        "title": "Confirm HelmRelease Values from targetPath array is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=flux -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: Fix: https://github.com/fluxcd/flux2/issues/2330\n\nWhen using Helm with both a values file and --set, the set will always have precedence over the values.yaml. This allows specifying the normal config inside a yaml file and specifying a secret outside that yaml via --set.\n\nWhen using flux, this normally works too (using inline values to specify most of the config and a reference with targetPath to . This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "apiVersion: helm.toolkit.fluxcd.io/v2beta1\r\nkind: HelmRelease\r\nmetadata:\r\n  name: release-name\r\n  namespace: flux-system\r\nspec:\r\n  values:\r\n    confd:\r\n      file.yaml:\r\n        init_config:\r\n          service: kafka-consumers\r\n        instances:\r\n          - kafka_connect_str: xxx:9092\r\n            monitor_unlisted_consumer_groups: true",
+        "valuesFrom:\r\n    - kind: Secret\r\n      name: secrets\r\n      valuesKey: username\r\n      targetPath: confd.file\\.yaml.instances[0].sasl_plain_username\r\n    - kind: Secret\r\n      name: secrets\r\n      valuesKey: password\r\n      targetPath: confd.file\\.yaml.instances[0].sasl_plain_password",
+        "helm -n flux-system get values release-name"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flux",
+      "graduated",
+      "app-definition",
+      "deploy"
+    ],
+    "cncfProjects": [
+      "flux"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "Configmap",
+      "Secret",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "deploy"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flux2/issues/2330",
+      "repo": "https://github.com/fluxcd/flux2",
+      "pr": "https://github.com/fluxcd/helm-controller/pull/1060"
+    },
+    "reactions": 7,
+    "comments": 3,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flux installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:16:24.221Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
