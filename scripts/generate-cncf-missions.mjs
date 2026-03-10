@@ -646,134 +646,128 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
   const difficulty = estimateDifficulty(issue)
   const filePath = `solutions/cncf-generated/${project.name}/${slug}.json`
 
-  // Build the issue body with all context Copilot needs
-  const body = buildCopilotIssueBody({
-    project,
-    issue,
-    resolution,
-    linkedPR,
-    slug,
-    missionType,
-    difficulty,
-    filePath,
-  })
-
   if (DRY_RUN) {
-    console.log(`    [DRY RUN] Would create issue: ${ISSUE_LABEL_PREFIX} ${project.name}: ${issue.title.slice(0, 60)}`)
+    console.log(`    [DRY RUN] Would create PR for: ${project.name}: ${issue.title.slice(0, 60)}`)
     return { dryRun: true, slug }
   }
 
-  // Create issue using ISSUE_TOKEN (PAT) so the labeled event triggers the ai-fix workflow.
-  // Events from GITHUB_TOKEN don't trigger other workflows (GitHub's infinite-loop prevention).
   const token = ISSUE_TOKEN
   if (!token) {
-    console.warn('    [SKIP] No ISSUE_TOKEN or GITHUB_TOKEN available for issue creation')
+    console.warn('    [SKIP] No ISSUE_TOKEN available for PR creation')
     return null
   }
 
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/vnd.github.v3+json',
+  }
+  const apiBase = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}`
+
   try {
-    const createUrl = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/issues`
-    const response = await fetch(createUrl, {
+    // 1. Get master branch SHA
+    const refResp = await fetch(`${apiBase}/git/ref/heads/master`, { headers })
+    if (!refResp.ok) {
+      console.warn(`    [ERROR] Could not get master ref: ${refResp.status}`)
+      return null
+    }
+    const masterSha = (await refResp.json()).object.sha
+
+    // 2. Create branch
+    const branchName = `cncf-mission/${slug}`
+    const branchResp = await fetch(`${apiBase}/git/refs`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/vnd.github.v3+json',
-      },
+      headers,
+      body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: masterSha }),
+    })
+    if (!branchResp.ok) {
+      const err = await branchResp.text().catch(() => '')
+      // Branch may already exist from a previous run
+      if (!err.includes('Reference already exists')) {
+        console.warn(`    [ERROR] Branch creation failed: ${branchResp.status} ${err.slice(0, 200)}`)
+        return null
+      }
+    }
+
+    // 3. Build and write mission JSON file
+    const missionJson = buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty })
+    const content = Buffer.from(JSON.stringify(missionJson, null, 2) + '\n').toString('base64')
+
+    const fileResp = await fetch(`${apiBase}/contents/${filePath}`, {
+      method: 'PUT',
+      headers,
       body: JSON.stringify({
-        title: `${ISSUE_LABEL_PREFIX} ${project.name}: ${issue.title.slice(0, 100)}`,
-        body,
-        labels: ['ai-fix-requested', 'triage/accepted', 'cncf-mission-gen'],
+        message: `🌱 Add ${project.name}: ${issue.title.slice(0, 60)} mission`,
+        content,
+        branch: branchName,
       }),
     })
-
-    if (!response.ok) {
-      const err = await response.text().catch(() => '')
-      console.warn(`    [ERROR] Issue creation failed: ${response.status} ${err.slice(0, 200)}`)
+    if (!fileResp.ok) {
+      const err = await fileResp.text().catch(() => '')
+      console.warn(`    [ERROR] File creation failed: ${fileResp.status} ${err.slice(0, 200)}`)
       return null
     }
 
-    const created = await response.json()
-    console.log(`    [COPILOT] Created issue #${created.number}: ${created.html_url}`)
+    // 4. Create PR
+    const prBody = buildPRBody({ project, issue, resolution, linkedPR, filePath, missionType })
+    const prResp = await fetch(`${apiBase}/pulls`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: `🌱 ${project.name}: ${issue.title.slice(0, 80)}`,
+        head: branchName,
+        base: 'master',
+        body: prBody,
+      }),
+    })
 
-    // Assign Copilot coding agent
+    if (!prResp.ok) {
+      const err = await prResp.text().catch(() => '')
+      console.warn(`    [ERROR] PR creation failed: ${prResp.status} ${err.slice(0, 200)}`)
+      return null
+    }
+
+    const pr = await prResp.json()
+    console.log(`    [PR] Created #${pr.number}: ${pr.html_url}`)
+
+    // 5. Add labels to the PR
     try {
-      const assignUrl = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/issues/${created.number}/assignees`
-      await fetch(assignUrl, {
+      await fetch(`${apiBase}/issues/${pr.number}/labels`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/vnd.github.v3+json',
-        },
+        headers,
+        body: JSON.stringify({ labels: ['cncf-mission-gen', 'ai-fix-requested', 'triage/accepted'] }),
+      })
+    } catch (labelErr) {
+      console.warn(`    [WARN] Could not add labels: ${labelErr.message}`)
+    }
+
+    // 6. Assign Copilot to enhance the pre-filled content
+    try {
+      await fetch(`${apiBase}/issues/${pr.number}/assignees`, {
+        method: 'POST',
+        headers,
         body: JSON.stringify({ assignees: ['copilot-swe-agent[bot]'] }),
       })
-      console.log(`    [COPILOT] Assigned copilot-swe-agent to issue #${created.number}`)
+      console.log(`    [PR] Assigned Copilot to enhance #${pr.number}`)
     } catch (assignErr) {
       console.warn(`    [WARN] Could not assign Copilot: ${assignErr.message}`)
     }
 
-    return { issueNumber: created.number, slug, url: created.html_url }
+    return { prNumber: pr.number, slug, url: pr.html_url }
   } catch (err) {
-    console.warn(`    [ERROR] Issue creation error: ${err.message}`)
+    console.warn(`    [ERROR] PR creation error: ${err.message}`)
     return null
   }
 }
 
-function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, missionType, difficulty, filePath }) {
-  const sections = []
+/**
+ * Build the full mission JSON object with real pre-filled content.
+ */
+function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty }) {
+  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 500)
+  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 500)
 
-  // Keep it concise — Copilot works better with clear, direct instructions
-  sections.push(`## Task: Create \`${filePath}\``)
-  sections.push('')
-  sections.push(`Write a kc-mission-v1 JSON file based on this ${project.name} issue.`)
-  sections.push('')
-
-  // Source context (brief)
-  sections.push(`**Source:** ${issue.html_url} (${issue.reactions?.total_count || 0} reactions, ${issue.comments || 0} comments)`)
-  if (linkedPR) {
-    sections.push(`**Fix PR:** ${linkedPR.html_url}`)
-  }
-  sections.push('')
-
-  // Problem — compact
-  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 1500)
-  if (cleanDesc) {
-    sections.push('### Problem')
-    sections.push(cleanDesc)
-    sections.push('')
-  }
-
-  // Solution — compact
-  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 1500)
-  if (cleanSolution) {
-    sections.push('### Solution')
-    sections.push(cleanSolution)
-    sections.push('')
-  }
-
-  // Code snippets — compact
-  if (resolution.yamlSnippets?.length > 0) {
-    sections.push('### Code')
-    for (const snippet of resolution.yamlSnippets.slice(0, 2)) {
-      sections.push('```')
-      sections.push(snippet.slice(0, 800))
-      sections.push('```')
-    }
-    sections.push('')
-  }
-
-  // PR diff — compact
-  if (resolution.prDiffSummary) {
-    sections.push('### Fix Diff')
-    sections.push('```')
-    sections.push(resolution.prDiffSummary.slice(0, 1000))
-    sections.push('```')
-    sections.push('')
-  }
-
-  // Pre-filled JSON — Copilot just needs to enhance the steps and resolution
-  const prefilled = {
+  return {
     version: 'kc-mission-v1',
     name: slug,
     missionClass: 'solution',
@@ -784,14 +778,14 @@ function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, mis
       description: buildDescription(issue, resolution),
       type: missionType,
       status: 'completed',
-      steps: buildStepHints(issue, resolution, project),
+      steps: buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution),
       resolution: {
-        summary: buildResolutionHint(resolution),
-        codeSnippets: (resolution.yamlSnippets || []).slice(0, 3),
+        summary: buildResolutionSummary(resolution, cleanSolution),
+        codeSnippets: (resolution.yamlSnippets || []).slice(0, 3).map(s => s.slice(0, 800)),
       },
     },
     metadata: {
-      tags: [project.name, project.maturity, project.category, missionType],
+      tags: [project.name, project.maturity, project.category, missionType].filter(Boolean),
       cncfProjects: [project.name],
       targetResourceKinds: extractResourceKinds({ body: (issue.body || '') + ' ' + (resolution.solution || '') }),
       difficulty,
@@ -814,66 +808,138 @@ function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, mis
       findings: [],
     },
   }
-
-  sections.push('### Instructions')
-  sections.push('')
-  sections.push(`Create \`${filePath}\` with the JSON below. **Improve the steps and resolution** using the source issue context above. Each step MUST have specific kubectl commands, YAML, or config. The resolution MUST explain the root cause.`)
-  sections.push('')
-  sections.push('```json')
-  sections.push(JSON.stringify(prefilled, null, 2))
-  sections.push('```')
-  sections.push('')
-  sections.push('**Rules:** Min 4 steps, at least 2 with commands/code. No generic titles like "Understand the problem" or "Verify the fix". Include the exact error message in the description. Explain WHY the fix works in the resolution. Run `node scripts/scanner.mjs` to validate.')
-
-  return sections.join('\n')
 }
 
 /**
- * Build a description from the issue body, extracting error messages and symptoms.
+ * Build detailed steps from the issue and resolution context.
  */
-function buildDescription(issue, resolution) {
-  const body = (issue.body || '').slice(0, 500)
-  // Try to find an error message in the body
-  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
-  const symptom = errorMatch
-    ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
-    : `${issue.title}. This issue affects ${issue.reactions?.total_count || 0}+ users.`
-  return symptom.slice(0, 300)
-}
-
-/**
- * Build initial step hints from the issue/resolution context.
- */
-function buildStepHints(issue, resolution, project) {
+function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution) {
   const steps = []
+  const body = issue.body || ''
+
+  // Step 1: Identify the problem with specific diagnostics
+  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,120})/)?.[1]
   steps.push({
-    title: `Identify the ${project.name} ${detectMissionType(issue)} symptoms`,
-    description: `Check for the error by running:\n\`\`\`bash\nkubectl describe <resource> -n <namespace>\nkubectl logs -l app=${project.name} -n <namespace> --tail=50\n\`\`\`\nLook for: "${(issue.title || '').slice(0, 80)}"`
+    title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
+    description: [
+      `Check for the issue in your ${project.name} deployment:`,
+      '```bash',
+      `kubectl get pods -n cert-manager -l app=${project.name}`,
+      `kubectl logs -l app.kubernetes.io/name=${project.name} -n cert-manager --tail=100 | grep -i error`,
+      '```',
+      errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+    ].join('\n')
   })
+
+  // Step 2: Check current configuration
+  const resourceKinds = extractResourceKinds({ body })
+  const primaryResource = resourceKinds[0] || 'resource'
   steps.push({
-    title: 'REPLACE: Add specific diagnostic step from the source issue',
-    description: 'REPLACE with a specific kubectl/helm command to diagnose this particular problem'
+    title: `Check current ${primaryResource} configuration`,
+    description: [
+      `Inspect the relevant ${project.name} resources:`,
+      '```bash',
+      `kubectl get ${primaryResource.toLowerCase()} -A`,
+      `kubectl describe ${primaryResource.toLowerCase()} <name> -n <namespace>`,
+      '```',
+      cleanDesc.slice(0, 200),
+    ].join('\n')
   })
+
+  // Step 3: Apply the fix
+  if (resolution.yamlSnippets?.length > 0) {
+    steps.push({
+      title: `Apply the fix for ${issue.title.slice(0, 60)}`,
+      description: [
+        cleanSolution.slice(0, 300) || `Apply the configuration change to resolve the issue:`,
+        '```yaml',
+        resolution.yamlSnippets[0].slice(0, 600),
+        '```',
+      ].join('\n')
+    })
+  } else if (cleanSolution) {
+    steps.push({
+      title: `Apply the fix for ${issue.title.slice(0, 60)}`,
+      description: [
+        cleanSolution.slice(0, 500),
+        '',
+        `See the fix PR for details: ${resolution.prUrl || 'linked PR'}`,
+      ].join('\n')
+    })
+  } else {
+    steps.push({
+      title: `Apply the recommended fix`,
+      description: `Apply the fix as described in the source issue. Check ${issue.html_url} for community-verified solutions.`
+    })
+  }
+
+  // Step 4: Upgrade if there's a version fix
+  if (resolution.prUrl || resolution.solution?.includes('upgrade') || resolution.solution?.includes('version')) {
+    steps.push({
+      title: `Upgrade ${project.name} to include the fix`,
+      description: [
+        `If the fix is included in a newer release, upgrade ${project.name}:`,
+        '```bash',
+        `helm repo update`,
+        `helm upgrade ${project.name} jetstack/${project.name} --namespace cert-manager`,
+        '```',
+        'Verify the upgrade:',
+        '```bash',
+        `kubectl get pods -n cert-manager`,
+        `helm list -n cert-manager`,
+        '```',
+      ].join('\n')
+    })
+  }
+
+  // Step 5: Verify the fix
   steps.push({
-    title: 'REPLACE: Add the fix step with exact commands or YAML',
-    description: 'REPLACE with the actual fix — patch, config change, helm upgrade, etc.'
+    title: `Confirm ${issue.title.slice(0, 50)} is resolved`,
+    description: [
+      `Verify the fix by checking that the original error no longer occurs:`,
+      '```bash',
+      `kubectl logs -l app.kubernetes.io/name=${project.name} -n cert-manager --tail=50 --since=5m`,
+      `kubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10`,
+      '```',
+      errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears in logs.` : 'Confirm that the issue symptoms are gone.',
+    ].join('\n')
   })
-  steps.push({
-    title: 'REPLACE: Verify the fix is applied',
-    description: 'REPLACE with a specific verification command that proves the issue is resolved'
-  })
+
   return steps
 }
 
 /**
- * Build a resolution hint from available context.
+ * Build resolution summary from available context.
  */
-function buildResolutionHint(resolution) {
-  const solution = (resolution.solution || '').slice(0, 300)
-  if (solution.length > 50) {
-    return `The root cause is: ${solution} This fixes the issue because it addresses the underlying problem directly.`
+function buildResolutionSummary(resolution, cleanSolution) {
+  if (cleanSolution && cleanSolution.length > 50) {
+    return `The root cause is: ${cleanSolution.slice(0, 400)}. This fixes the issue because it addresses the underlying problem that was causing the failure.`
   }
-  return 'REPLACE: Explain the root cause — why did this happen and why does the fix work.'
+  return `This issue was resolved by applying the fix from the linked PR. The root cause was identified and addressed by the community.`
+}
+
+/**
+ * Build PR body with context for reviewers and Copilot.
+ */
+function buildPRBody({ project, issue, resolution, linkedPR, filePath, missionType }) {
+  const sections = []
+  sections.push(`## 🌱 New Mission: ${project.name} — ${issue.title}`)
+  sections.push('')
+  sections.push(`**Type:** ${missionType} | **Source:** ${issue.html_url} (${issue.reactions?.total_count || 0} reactions)`)
+  if (linkedPR) sections.push(`**Fix PR:** ${linkedPR.html_url}`)
+  sections.push(`**File:** \`${filePath}\``)
+  sections.push('')
+  sections.push('### Copilot: Please enhance this mission')
+  sections.push('')
+  sections.push('The JSON file has been pre-filled with content from the source issue. Please improve:')
+  sections.push('1. Make step descriptions more specific with exact commands for this issue')
+  sections.push('2. Add the exact error message to the description if missing')
+  sections.push('3. Explain the root cause in the resolution summary')
+  sections.push('4. Add relevant YAML/code snippets to codeSnippets if missing')
+  sections.push('5. Run `node scripts/scanner.mjs` to validate')
+  sections.push('')
+  sections.push(`*Auto-generated by CNCF Mission Generator*`)
+  return sections.join('\n')
 }
 
 function deduplicateAgainstExisting(slug, projectDir) {
@@ -887,7 +953,7 @@ function formatReport(report) {
     '# CNCF Mission Generation Report',
     '',
     `**Date:** ${new Date().toISOString()}`,
-    `**Copilot issues created:** ${report.generated}`,
+    `**Mission PRs created:** ${report.generated}`,
     `**Skipped:** ${report.skipped}`,
     `**Errors:** ${report.errors}`,
     '',
