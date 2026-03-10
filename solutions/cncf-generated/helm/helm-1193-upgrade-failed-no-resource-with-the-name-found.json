@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-1193-upgrade-failed-no-resource-with-the-name-found",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: UPGRADE FAILED: No resource with the name \"\" found",
+    "description": "UPGRADE FAILED: No resource with the name \"\" found. This issue affects 124+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify helm troubleshoot symptoms",
+        "description": "Check for the issue in your helm deployment:\n```bash\nkubectl get pods -n cert-manager -l app=helm\nkubectl logs -l app.kubernetes.io/name=helm -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `UPGRADE FAILED: Looks like there are no changes for cm1`"
+      },
+      {
+        "title": "Check current Configmap configuration",
+        "description": "Inspect the relevant helm resources:\n```bash\nkubectl get configmap -A\nkubectl describe configmap <name> -n <namespace>\n```\n## Repro\n\nCreate a simple Chart.yaml:\n\n``` yaml\nname: upgrade-repro\nversion: 0.1.0\n```\n\nWith a single K8S resource in the `templates/` dir:\n\n``` yaml\nkind: ConfigMap\napiVersion: v1\nmetadata:\n  name: c"
+      },
+      {
+        "title": "Apply the fix for UPGRADE FAILED: No resource with the name \"\" found",
+        "description": "This fixes #1193 by not making an internal cache miss an error, and instead making it a warning. It will default to the original object, if one exists, instead. This should fix at least one scenario of when helm loses track of the real state of the a config.\n\nThis could have issues since it uses the\n```yaml\nWith a single K8S resource in the `templates/` dir:\n```"
+      },
+      {
+        "title": "Confirm UPGRADE FAILED: No resource with the name \"\" found is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=helm -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `UPGRADE FAILED: Looks like there are no changes for cm1` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: This fixes #1193 by not making an internal cache miss an error, and instead making it a warning. It will default to the original object, if one exists, instead. This should fix at least one scenario of when helm loses track of the real state of the a config.\n\nThis could have issues since it uses the existing object in place of the cached one. Let me know if there are better ways of handling this, . This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "With a single K8S resource in the `templates/` dir:",
+        "Install the chart:",
+        "Verify the release exists:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Configmap",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/helm/helm/issues/1193",
+      "repo": "https://github.com/helm/helm",
+      "pr": "https://github.com/helm/helm/pull/4146"
+    },
+    "reactions": 124,
+    "comments": 110,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with helm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T05:31:55.921Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
