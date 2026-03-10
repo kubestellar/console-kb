@@ -723,64 +723,57 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, missionType, difficulty, filePath }) {
   const sections = []
 
-  sections.push(`## Generate Mission: ${project.name} — ${issue.title}`)
+  // Keep it concise — Copilot works better with clear, direct instructions
+  sections.push(`## Task: Create \`${filePath}\``)
   sections.push('')
-  sections.push(`Create a **kc-mission-v1** troubleshooting mission file at \`${filePath}\`.`)
+  sections.push(`Write a kc-mission-v1 JSON file based on this ${project.name} issue.`)
   sections.push('')
 
-  // Source context
-  sections.push('### Source Issue')
-  sections.push(`- **Project:** ${project.name} (${project.maturity})`)
-  sections.push(`- **Source:** ${issue.html_url}`)
-  sections.push(`- **Reactions:** ${issue.reactions?.total_count || 0} | **Comments:** ${issue.comments || 0}`)
+  // Source context (brief)
+  sections.push(`**Source:** ${issue.html_url} (${issue.reactions?.total_count || 0} reactions, ${issue.comments || 0} comments)`)
   if (linkedPR) {
-    sections.push(`- **Fix PR:** ${linkedPR.html_url}`)
+    sections.push(`**Fix PR:** ${linkedPR.html_url}`)
   }
   sections.push('')
 
-  // Problem description
-  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 2000)
+  // Problem — compact
+  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 1500)
   if (cleanDesc) {
-    sections.push('### Problem Description')
+    sections.push('### Problem')
     sections.push(cleanDesc)
     sections.push('')
   }
 
-  // Solution / resolution
-  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 2000)
+  // Solution — compact
+  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 1500)
   if (cleanSolution) {
-    sections.push('### Solution / Resolution')
+    sections.push('### Solution')
     sections.push(cleanSolution)
     sections.push('')
   }
 
-  // Code snippets
+  // Code snippets — compact
   if (resolution.yamlSnippets?.length > 0) {
-    sections.push('### Relevant Code/Config')
-    for (const snippet of resolution.yamlSnippets.slice(0, 3)) {
+    sections.push('### Code')
+    for (const snippet of resolution.yamlSnippets.slice(0, 2)) {
       sections.push('```')
-      sections.push(snippet.slice(0, 1000))
+      sections.push(snippet.slice(0, 800))
       sections.push('```')
     }
     sections.push('')
   }
 
-  // PR diff summary
+  // PR diff — compact
   if (resolution.prDiffSummary) {
-    sections.push('### Key Changes from Fix PR')
+    sections.push('### Fix Diff')
     sections.push('```')
-    sections.push(resolution.prDiffSummary.slice(0, 1500))
+    sections.push(resolution.prDiffSummary.slice(0, 1000))
     sections.push('```')
     sections.push('')
   }
 
-  // Mission schema instructions
-  sections.push('### Mission File Requirements')
-  sections.push('')
-  sections.push(`Create \`${filePath}\` with this exact JSON structure:`)
-  sections.push('')
-  sections.push('```json')
-  sections.push(JSON.stringify({
+  // Pre-filled JSON — Copilot just needs to enhance the steps and resolution
+  const prefilled = {
     version: 'kc-mission-v1',
     name: slug,
     missionClass: 'solution',
@@ -788,21 +781,19 @@ function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, mis
     authorGithub: 'kubestellar',
     mission: {
       title: `${project.name}: ${issue.title}`,
-      description: '1-3 sentences describing the problem with exact error message or symptom.',
+      description: buildDescription(issue, resolution),
       type: missionType,
       status: 'completed',
-      steps: [
-        { title: 'Imperative verb phrase (e.g., Check pod resource limits)', description: 'Detailed instructions with kubectl commands, YAML patches, etc.' },
-      ],
+      steps: buildStepHints(issue, resolution, project),
       resolution: {
-        summary: '2-4 sentences explaining WHY the fix works — the root cause.',
-        codeSnippets: ['Actual YAML/code from the fix'],
+        summary: buildResolutionHint(resolution),
+        codeSnippets: (resolution.yamlSnippets || []).slice(0, 3),
       },
     },
     metadata: {
       tags: [project.name, project.maturity, project.category, missionType],
       cncfProjects: [project.name],
-      targetResourceKinds: [],
+      targetResourceKinds: extractResourceKinds({ body: (issue.body || '') + ' ' + (resolution.solution || '') }),
       difficulty,
       issueTypes: [missionType],
       maturity: project.maturity,
@@ -822,25 +813,67 @@ function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, mis
       sanitized: true,
       findings: [],
     },
-  }, null, 2))
+  }
+
+  sections.push('### Instructions')
+  sections.push('')
+  sections.push(`Create \`${filePath}\` with the JSON below. **Improve the steps and resolution** using the source issue context above. Each step MUST have specific kubectl commands, YAML, or config. The resolution MUST explain the root cause.`)
+  sections.push('')
+  sections.push('```json')
+  sections.push(JSON.stringify(prefilled, null, 2))
   sections.push('```')
   sections.push('')
-
-  // Quality requirements
-  sections.push('### Quality Requirements (MUST follow)')
-  sections.push('')
-  sections.push('1. **Steps must be SPECIFIC and ACTIONABLE** — each must contain kubectl commands, YAML blocks, file paths, or config snippets')
-  sections.push('2. **NEVER use generic titles**: "Understand the problem", "Review the fix", "Verify the fix", "Apply the configuration"')
-  sections.push('3. **Description must include SYMPTOMS** — exact error message, log line, or observable behavior')
-  sections.push('4. **Resolution must explain ROOT CAUSE** — why the fix works, not just what to do')
-  sections.push('5. **Minimum 4 actionable steps** with at least 2 containing commands or code blocks')
-  sections.push('6. **Strip all noise** — no Codecov reports, CI status, bot comments, PR templates, git diffs')
-  sections.push('7. **targetResourceKinds** should list Kubernetes resource types mentioned (Pod, Deployment, Service, etc.)')
-  sections.push('')
-  sections.push('---')
-  sections.push(`*Auto-generated by [CNCF Mission Generator](https://github.com/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/actions/workflows/cncf-mission-gen.yml)*`)
+  sections.push('**Rules:** Min 4 steps, at least 2 with commands/code. No generic titles like "Understand the problem" or "Verify the fix". Include the exact error message in the description. Explain WHY the fix works in the resolution. Run `node scripts/scanner.mjs` to validate.')
 
   return sections.join('\n')
+}
+
+/**
+ * Build a description from the issue body, extracting error messages and symptoms.
+ */
+function buildDescription(issue, resolution) {
+  const body = (issue.body || '').slice(0, 500)
+  // Try to find an error message in the body
+  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
+  const symptom = errorMatch
+    ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
+    : `${issue.title}. This issue affects ${issue.reactions?.total_count || 0}+ users.`
+  return symptom.slice(0, 300)
+}
+
+/**
+ * Build initial step hints from the issue/resolution context.
+ */
+function buildStepHints(issue, resolution, project) {
+  const steps = []
+  steps.push({
+    title: `Identify the ${project.name} ${detectMissionType(issue)} symptoms`,
+    description: `Check for the error by running:\n\`\`\`bash\nkubectl describe <resource> -n <namespace>\nkubectl logs -l app=${project.name} -n <namespace> --tail=50\n\`\`\`\nLook for: "${(issue.title || '').slice(0, 80)}"`
+  })
+  steps.push({
+    title: 'REPLACE: Add specific diagnostic step from the source issue',
+    description: 'REPLACE with a specific kubectl/helm command to diagnose this particular problem'
+  })
+  steps.push({
+    title: 'REPLACE: Add the fix step with exact commands or YAML',
+    description: 'REPLACE with the actual fix — patch, config change, helm upgrade, etc.'
+  })
+  steps.push({
+    title: 'REPLACE: Verify the fix is applied',
+    description: 'REPLACE with a specific verification command that proves the issue is resolved'
+  })
+  return steps
+}
+
+/**
+ * Build a resolution hint from available context.
+ */
+function buildResolutionHint(resolution) {
+  const solution = (resolution.solution || '').slice(0, 300)
+  if (solution.length > 50) {
+    return `The root cause is: ${solution} This fixes the issue because it addresses the underlying problem directly.`
+  }
+  return 'REPLACE: Explain the root cause — why did this happen and why does the fix work.'
 }
 
 function deduplicateAgainstExisting(slug, projectDir) {
