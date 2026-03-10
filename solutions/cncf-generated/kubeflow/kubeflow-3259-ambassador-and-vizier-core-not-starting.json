@@ -1,0 +1,86 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubeflow-3259-ambassador-and-vizier-core-not-starting",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubeflow: ambassador and vizier-core not starting",
+    "description": "ambassador and vizier-core not starting. This issue affects 4+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubeflow troubleshoot symptoms",
+        "description": "Check for the issue in your kubeflow deployment:\n```bash\nkubectl get pods -n cert-manager -l app=kubeflow\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `0          36m`"
+      },
+      {
+        "title": "Check current Pod configuration",
+        "description": "Inspect the relevant kubeflow resources:\n```bash\nkubectl get pod -A\nkubectl describe pod <name> -n <namespace>\n```\nI am using current master (commit 58022fb) and installed kubeflow on a previously created AWS EKS cluster (thus not using `apply platform` provided by kubeflow). (3x t3.large nodes, tested in regions "
+      },
+      {
+        "title": "Apply the fix for ambassador and vizier-core not starting",
+        "description": "As discussed in #3259 I changed the namespace label in the AWS setup for the kubeflow namespace, so that istio injection is by-default disabled.\n\n---\nThis change is [<img src=\"https://reviewable.io/review_button.svg\" height=\"34\" align=\"absmiddle\" alt=\"Reviewable\"/>](https://reviewable.io/reviews/kub\n```yaml\n$ kubectl -nkubeflow get po\r\nNAME                                                        READY     STATUS             RESTARTS   AGE\r\nalb-ingress-controller-596688f5bd-9ls7c                     2/2       Running            1          46m\r\nambassador-796bcd74b5-4p949                                 1/2       CrashLoopBackOff   13         46m\r\nambassador-796bcd74b5-gb4pl                                 1/2       CrashLoopBackOff   13         46m\r\nambassador-796bcd74b5-rxvvb                                 1/2       CrashLoopBackOff   9          46m\r\napp-controller-c6d849967-rmc6q                \n```"
+      },
+      {
+        "title": "Confirm ambassador and vizier-core not starting is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `0          36m` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: As discussed in #3259 I changed the namespace label in the AWS setup for the kubeflow namespace, so that istio injection is by-default disabled.\n\n---\nThis change is [<img src=\"https://reviewable.io/review_button.svg\" height=\"34\" align=\"absmiddle\" alt=\"Reviewable\"/>](https://reviewable.io/reviews/kubeflow/kubeflow/3289). This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "$ kubectl -nkubeflow get po\r\nNAME                                                        READY     STATUS             RESTARTS   AGE\r\nalb-ingress-controller-596688f5bd-9ls7c                     2/2       Running            1          46m\r\nambassador-796bcd74b5-4p949                                 1/2       CrashLoopBackOff   13         46m\r\nambassador-796bcd74b5-gb4pl                                 1/2       CrashLoopBackOff   13         46m\r\nambassador-796bcd74b5-rxvvb                                 1/2       CrashLoopBackOff   9          46m\r\napp-controller-c6d849967-rmc6q                              2/2       Running            0          46m\r\nargo-ui-bd754894c-twrdk                                     2/2       Running            0          46m\r\ncentraldashboard-799849c495-qtxzk   ",
+        "$ kubectl -nistio-system get po\r\nNAME                                                           READY     STATUS                       RESTARTS   AGE\r\ngrafana-5c45779547-nhl4x                                       1/1       Running                      0          36m\r\nistio-citadel-6d7f8c5d-wzb9c                                   1/1       Running                      0          36m\r\nistio-cleanup-secrets-release-1.1-20190111-09-15-hh4ps         0/1       Completed                    0          36m\r\nistio-egressgateway-6f8b444984-p5mt5                           1/1       Running                      0          36m\r\nistio-galley-685ffb6bf4-4pmcc                                  1/1       Running                      0          36m\r\nistio-grafana-post-install-release-1.1-20190111-09-15-tnqs5",
+        "$ kubectl -nkubeflow logs vizier-core-744646bc44-77hhq vizier-core                                                                                                                                                 \r\n[mysql] 2019/05/14 14:45:54 packets.go:36: unexpected EOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubeflow",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubeflow"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service",
+      "Ingress",
+      "Secret",
+      "Namespace",
+      "Serviceaccount",
+      "Replicaset"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeflow/kubeflow/issues/3259",
+      "repo": "https://github.com/kubeflow/kubeflow",
+      "pr": "https://github.com/kubeflow/kubeflow/pull/3289"
+    },
+    "reactions": 4,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubeflow installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:23:52.889Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
