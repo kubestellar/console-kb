@@ -16,7 +16,7 @@
       },
       {
         "title": "Install Kyverno using Helm",
-        "description": "Next, install Kyverno in your Kubernetes cluster with the following command. This will create the necessary namespace and install the latest version of Kyverno:\n```bash\nhelm install kyverno kyverno/kyverno --namespace kyverno --create-namespace --version v1.17.1\n```"
+        "description": "Next, install Kyverno in your Kubernetes cluster with the following command. This will create the necessary namespace and install Kyverno v1.17.1:\n```bash\nhelm install kyverno kyverno/kyverno --namespace kyverno --create-namespace --version 3.7.1\n```\n\n**Note:** The chart version is `3.7.1` (app version v1.17.1). Do not use `--version v1.17.1` — that is the app version, not the chart version.\n\n**OpenShift clusters:** Kyverno pods require Security Context Constraints (SCCs). After install, grant `nonroot-v2` SCC to all Kyverno service accounts:\n```bash\nfor sa in kyverno-admission-controller kyverno-background-controller kyverno-cleanup-controller kyverno-reports-controller; do\n  kubectl create clusterrolebinding \"kyverno-scc-${sa}\" --clusterrole=system:openshift:scc:nonroot-v2 --serviceaccount=\"kyverno:${sa}\"\ndone\nkubectl -n kyverno rollout restart deployment kyverno-admission-controller kyverno-background-controller kyverno-cleanup-controller kyverno-reports-controller\n```"
       },
       {
         "title": "Verify the installation",
@@ -28,14 +28,14 @@
       },
       {
         "title": "Test a sample policy",
-        "description": "To ensure Kyverno is working as expected, you can apply a sample policy. Create a YAML file named `sample-policy.yaml` and apply it:\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-non-root\nspec:\n  validationFailureAction: enforce\n  rules:\n    - name: require-non-root\n      match:\n        resources:\n          kinds:\n            - Pod\n      validate:\n        message: \"Run as non-root user\"\n        pattern:\n          spec:\n            securityContext:\n              runAsUser: 1000\n```\nThen apply it:\n```bash\nkubectl apply -f sample-policy.yaml\n```"
+        "description": "To ensure Kyverno is working as expected, apply a sample audit policy. **Important:** Use `validationFailureAction: Audit` (not `Enforce`) to avoid breaking workloads during initial testing.\n\nCreate a YAML file named `sample-policy.yaml` and apply it:\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-labels\nspec:\n  validationFailureAction: Audit\n  rules:\n    - name: check-team-label\n      match:\n        any:\n        - resources:\n            kinds:\n            - Pod\n      validate:\n        message: \"The label 'team' is required.\"\n        pattern:\n          metadata:\n            labels:\n              team: \"?*\"\n```\nThen apply it:\n```bash\nkubectl apply -f sample-policy.yaml\nkubectl get clusterpolicy\n```"
       }
     ],
     "resolution": {
       "summary": "A successful installation of Kyverno will show the Kyverno pods in a running state when you execute `kubectl get pods --namespace kyverno`. You can also verify the configuration by applying a sample policy and checking for enforcement.",
       "codeSnippets": [
         "helm repo add kyverno https://kyverno.github.io/kyverno\nhelm repo update",
-        "helm install kyverno kyverno/kyverno --namespace kyverno --create-namespace --version v1.17.1",
+        "helm install kyverno kyverno/kyverno --namespace kyverno --create-namespace --version 3.7.1",
         "kubectl get pods --namespace kyverno",
         "helm upgrade kyverno kyverno/kyverno --namespace kyverno --set podSecurityStandard=baseline",
         "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-non-root\nspec:\n  validationFailureAction: enforce\n  rules:\n    - name: require-non-root\n      match:\n        resources:\n          kinds:\n            - Pod\n      validate:\n        message: \"Run as non-root user\"\n        pattern:\n          spec:\n            securityContext:\n              runAsUser: 1000"
