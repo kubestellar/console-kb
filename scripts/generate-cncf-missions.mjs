@@ -25,7 +25,6 @@ import { scoreMission } from './quality-scorer.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const COPILOT_TOKEN = process.env.COPILOT_TOKEN || process.env.GITHUB_TOKEN
 const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
@@ -662,10 +661,10 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     return { dryRun: true, slug }
   }
 
-  // Create issue on console-kb
-  const token = COPILOT_TOKEN
+  // Create issue on console-kb using the workflow GITHUB_TOKEN (has issues:write permission)
+  const token = GITHUB_TOKEN
   if (!token) {
-    console.warn('    [SKIP] No COPILOT_TOKEN or GITHUB_TOKEN for issue creation')
+    console.warn('    [SKIP] No GITHUB_TOKEN available for issue creation')
     return null
   }
 
