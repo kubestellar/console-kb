@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubeflow-5128-notebook-culling-not-working-with-istio-and-rbac",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubeflow: Notebook culling not working with Istio and RBAC",
+    "description": "Notebook culling not working with Istio and RBAC. This issue affects 4+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubeflow troubleshoot symptoms",
+        "description": "Check for the issue in your kubeflow deployment:\n```bash\nkubectl get pods -n cert-manager -l app=kubeflow\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `talking to http://construction-starts.ns.svc.cluster.local/notebook/dsd/construction-starts/api/status\t{\"error\": \"Get ht`"
+      },
+      {
+        "title": "Check current Deployment configuration",
+        "description": "Inspect the relevant kubeflow resources:\n```bash\nkubectl get deployment -A\nkubectl describe deployment <name> -n <namespace>\n```\n**What steps did you take and what happened:**\n\nWe deployed Kubeflow with Istio and Istio RBAC (w/ OIDC) enabled and we were looking to use Notebook culling to cull idle notebooks after a period of ti"
+      },
+      {
+        "title": "Apply the fix for Notebook culling not working with Istio and RBAC",
+        "description": "Hi \n\nThis fixed #5128 according to the guidelines of this comment: https://github.com/kubeflow/kubeflow/issues/5128#issuecomment-859814573 . I wasn't sure where to place the `AuthorizationPolicy`, I think it belongs in the `overlays/kubeflow` directory, as istio is only used in combination with kube\n```yaml\n2020-07-13T21:11:51.792Z\tINFO\tculler\tError talking to http://construction-starts.ns.svc.cluster.local/notebook/dsd/construction-starts/api/status\t{\"error\": \"Get http://construction-starts.dsd.svc.cluster.local/notebook/dsd/construction-starts/api/status: read tcp 172.21.XX.YY:36004->10.0.XX.YY:80: read: connection reset by peer\"}\n```"
+      },
+      {
+        "title": "Confirm Notebook culling not working with Istio and RBAC is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `talking to http://construction-starts.ns.svc.cluster.local/notebook/dsd/construction-starts/api/status\t{\"error\": \"Get ht` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: Hi \n\nThis fixed #5128 according to the guidelines of this comment: https://github.com/kubeflow/kubeflow/issues/5128#issuecomment-859814573 . I wasn't sure where to place the `AuthorizationPolicy`, I think it belongs in the `overlays/kubeflow` directory, as istio is only used in combination with kubeflow. In addition it needs to be created in the `istio-system` namespace and not in the `kubeflow` n. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "2020-07-13T21:11:51.792Z\tINFO\tculler\tError talking to http://construction-starts.ns.svc.cluster.local/notebook/dsd/construction-starts/api/status\t{\"error\": \"Get http://construction-starts.dsd.svc.cluster.local/notebook/dsd/construction-starts/api/status: read tcp 172.21.XX.YY:36004->10.0.XX.YY:80: read: connection reset by peer\"}",
+        "apiVersion: security.istio.io/v1beta1\r\nkind: AuthorizationPolicy\r\nmetadata:\r\n  name: auth-policy-notebooks\r\n  namespace: tdekoninck\r\nspec:\r\n  action: ALLOW\r\n  # Note: the notebook pods do not have a general label to identify them as such, therefore we don't have a selector here.\r\n  # Fortunately the endpoint is specific enough so that this should not cause any security issue.\r\n  rules:\r\n   - to:\r\n     - operation:\r\n        methods: [\"GET\"]\r\n        paths: [\"*/api/status\"] # wildcard for the name of the notebook server",
+        "apiVersion: apps/v1\r\nkind: Deployment\r\nmetadata:\r\n  name: notebook-controller-deployment\r\n  namespace: kubeflow\r\nspec:\r\n  template:\r\n    spec:\r\n      containers:\r\n      - name: manager\r\n        env:\r\n        - name: ENABLE_CULLING\r\n          value: \"true\"\r\n        - name: IDLE_TIME\r\n          value: \"1\" # 1 minute for testing, use something else in production\r\n        - name: CULLING_CHECK_PERIOD\r\n          value: \"1\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubeflow",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubeflow"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "Statefulset",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeflow/kubeflow/issues/5128",
+      "repo": "https://github.com/kubeflow/kubeflow",
+      "pr": "https://github.com/kubeflow/kubeflow/pull/5980"
+    },
+    "reactions": 4,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubeflow installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:24:07.453Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
