@@ -691,28 +691,18 @@ async function generateMission(project, issue, resolution, linkedPR) {
     sourceUrl: issue.html_url,
   })
 
-  let missionSteps, missionDesc, missionResolution, missionDifficulty, missionType
-
-  if (llmResult) {
-    // LLM synthesis succeeded — use its output
-    missionDesc = llmResult.description
-    missionSteps = llmResult.steps
-    missionResolution = llmResult.resolution
-    missionDifficulty = llmResult.difficulty
-    missionType = llmResult.type
-    console.log(`    [LLM] Synthesized: ${missionSteps.length} steps, ${missionDifficulty}`)
-  } else {
-    // Fallback to regex extraction + quality gate
-    if (!passesQualityGate(resolution, issue)) {
-      return null
-    }
-    missionDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 500) || issue.title
-    missionSteps = generateSteps(issue, resolution, linkedPR)
-    missionResolution = stripPRTemplate(resolution.solution || '').slice(0, 1500) || 'See linked PR for implementation details.'
-    missionDifficulty = estimateDifficulty(issue)
-    missionType = detectMissionType(issue)
-    console.log(`    [regex fallback] ${missionSteps.length} steps`)
+  // LLM synthesis is required — no regex fallback (it produces garbage)
+  if (!llmResult) {
+    console.log(`    [SKIP] LLM synthesis failed or skipped — not producing regex garbage`)
+    return null
   }
+
+  const missionDesc = llmResult.description
+  const missionSteps = llmResult.steps
+  const missionResolution = llmResult.resolution
+  const missionDifficulty = llmResult.difficulty
+  const missionType = llmResult.type
+  console.log(`    [LLM] Synthesized: ${missionSteps.length} steps, ${missionDifficulty}`)
 
   const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
 
