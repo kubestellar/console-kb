@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "spire-4473-provide-the-ability-to-disable-jwt-svid-support-in-spire",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "spire: Provide the ability to disable JWT-SVID support in SPIRE",
+    "description": "Provide the ability to disable JWT-SVID support in SPIRE. This issue affects 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify spire feature symptoms",
+        "description": "Check for the issue in your spire deployment:\n```bash\nkubectl get pods -n cert-manager -l app=spire\nkubectl logs -l app.kubernetes.io/name=spire -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `code in case that a profile is disabled is not defined by the specification. We need to address that at the specificatio`"
+      },
+      {
+        "title": "Check current Deployment configuration",
+        "description": "Inspect the relevant spire resources:\n```bash\nkubectl get deployment -A\nkubectl describe deployment <name> -n <namespace>\n```\nThere are some scenarios where JWT-SVID support is not needed, and servers could avoid having to maintain JWT authorities and the rotation of JWT keys.\n\nThere is consensus that having the ability to d"
+      },
+      {
+        "title": "Apply the fix for Provide the ability to disable JWT-SVID support in SPIRE",
+        "description": "**Pull Request check list**\n\n**Affected functionality**\n\nSpire server JWT-SVID\n\n**Description of change**\n\nNew option to disable JWT-SVID in spire server. JWT keys are no longer managed. Server and Agent api endpoints related to JWT return precondition failed grpc code\n\nAnswers from the issue:\n- ret\n```yaml\ntime=\"2025-08-26T13:35:22Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=transport method=MintJWTSVID request_id=5f535de6-d5e5-466a-beb4-ceab4f32e88f service=svid.v1.SVID subsystem_name=api\r\ntime=\"2025-08-26T13:35:22Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=transport method=PrepareJWTAuthority request_id=a756696c-c986-4e10-8f41-7c10a769f9e3 service=localauthority.v1.LocalAuthority subsystem_name=api\r\ntime=\"2025-08-26T13:35:23Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=tra\n```"
+      },
+      {
+        "title": "Confirm Provide the ability to disable JWT-SVID support in is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=spire -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code in case that a profile is disabled is not defined by the specification. We need to address that at the specificatio` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: **Pull Request check list**\n\n**Affected functionality**\n\nSpire server JWT-SVID\n\n**Description of change**\n\nNew option to disable JWT-SVID in spire server. JWT keys are no longer managed. Server and Agent api endpoints related to JWT return precondition failed grpc code\n\nAnswers from the issue:\n- returning FailedPrecondition grpc code in JWT related endpoints\n\n- decided to go with disable_jwt so do. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "time=\"2025-08-26T13:35:22Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=transport method=MintJWTSVID request_id=5f535de6-d5e5-466a-beb4-ceab4f32e88f service=svid.v1.SVID subsystem_name=api\r\ntime=\"2025-08-26T13:35:22Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=transport method=PrepareJWTAuthority request_id=a756696c-c986-4e10-8f41-7c10a769f9e3 service=localauthority.v1.LocalAuthority subsystem_name=api\r\ntime=\"2025-08-26T13:35:23Z\" level=error msg=\"JWT functionality is disabled\" authorized_as=local authorized_via=transport method=GetJWTAuthorityState request_id=4bdbcaf6-cfbd-4a6b-abe4-0982d2502f88 service=localauthority.v1.LocalAuthority subsystem_name=api\r\ntime=\"2025-08-26T13:35:23Z\" level=error msg=\"JWT functio",
+        "func (p *PCAPlugin) PublishJWTKeyAndSubscribe(_ *upstreamauthorityv1.PublishJWTKeyRequest, server upstreamauthorityv1.UpstreamAuthority_PublishJWTKeyAndSubscribeServer) error {\n\treturn server.Send(&upstreamauthorityv1.PublishJWTKeyResponse{\n\t\tUpstreamJwtKeys: []*types.JWTKey{},\n\t})\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "spire",
+      "graduated",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "spire"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/spiffe/spire/issues/4473",
+      "repo": "https://github.com/spiffe/spire",
+      "pr": "https://github.com/spiffe/spire/pull/6272"
+    },
+    "reactions": 5,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with spire installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:16:34.783Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
