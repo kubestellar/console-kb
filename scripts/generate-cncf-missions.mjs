@@ -25,6 +25,8 @@ import { scoreMission } from './quality-scorer.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+// PAT for issue creation — events from PATs trigger workflows (GITHUB_TOKEN events don't)
+const ISSUE_TOKEN = process.env.ISSUE_TOKEN || process.env.GITHUB_TOKEN
 const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
@@ -661,10 +663,11 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     return { dryRun: true, slug }
   }
 
-  // Create issue on console-kb using the workflow GITHUB_TOKEN (has issues:write permission)
-  const token = GITHUB_TOKEN
+  // Create issue using ISSUE_TOKEN (PAT) so the labeled event triggers the ai-fix workflow.
+  // Events from GITHUB_TOKEN don't trigger other workflows (GitHub's infinite-loop prevention).
+  const token = ISSUE_TOKEN
   if (!token) {
-    console.warn('    [SKIP] No GITHUB_TOKEN available for issue creation')
+    console.warn('    [SKIP] No ISSUE_TOKEN or GITHUB_TOKEN available for issue creation')
     return null
   }
 
