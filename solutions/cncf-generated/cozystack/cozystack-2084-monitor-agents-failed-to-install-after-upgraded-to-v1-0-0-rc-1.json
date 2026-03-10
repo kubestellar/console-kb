@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cozystack-2084-monitor-agents-failed-to-install-after-upgraded-to-v1-0-0-rc-1",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cozystack: monitor-agents  failed to install after upgraded to v1.0.0-rc.1",
+    "description": "monitor-agents  failed to install after upgraded to v1.0.0-rc.1. This issue affects 1+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cozystack troubleshoot symptoms",
+        "description": "Check for the issue in your cozystack deployment:\n```bash\nkubectl get pods -n cert-manager -l app=cozystack\nkubectl logs -l app.kubernetes.io/name=cozystack -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `calling include: template: cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml:16:9: executing \"cozy-monit`"
+      },
+      {
+        "title": "Check current Configmap configuration",
+        "description": "Inspect the relevant cozystack resources:\n```bash\nkubectl get configmap -A\nkubectl describe configmap <name> -n <namespace>\n```\n**Describe the bug**\nmonitor-agents  failed to install after upgraded to v1.0.0-rc.1.\n\nHelmRelease event decoded:\n```\nWarning InstallFailed 5s (x6 over 53s) helm-controller Helm install failed for rel"
+      },
+      {
+        "title": "Apply the fix for monitor-agents  failed to install after upgraded to v1.0.0-r",
+        "description": "PR #2075 introduced `_cluster.cluster-domain` references in monitoring-agents `values.yaml` for FQDN resolution in tenant clusters. This broke the fluent-bit subchart because `_cluster` values are not accessible from the Helm subchart context — only `global` values are shared with subcharts.\n\nThis P\n```yaml\nWarning InstallFailed 5s (x6 over 53s) helm-controller Helm install failed for release cozy-monitoring/monitoring-agents with chart cozy-monitoring-agents@0.0.0+1b5894e823dc: template: cozy-monitoring-agents/charts/fluent-bit/templates/daemonset.yaml:37:28: executing \"cozy-monitoring-agents/charts/fluent-bit/templates/daemonset.yaml\" at <include (print $.Template.BasePath \"/configmap.yaml\")>: error calling include: template: cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml:16:9: executing \"cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml\" at <tpl .Values.confi\n```"
+      },
+      {
+        "title": "Confirm monitor-agents  failed to install after upgraded t is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cozystack -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `calling include: template: cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml:16:9: executing \"cozy-monit` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: PR #2075 introduced `_cluster.cluster-domain` references in monitoring-agents `values.yaml` for FQDN resolution in tenant clusters. This broke the fluent-bit subchart because `_cluster` values are not accessible from the Helm subchart context — only `global` values are shared with subcharts.\n\nThis PR replaces `_cluster` references with a new `global.clusterDomain` variable:\n- Empty by default (man. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "Warning InstallFailed 5s (x6 over 53s) helm-controller Helm install failed for release cozy-monitoring/monitoring-agents with chart cozy-monitoring-agents@0.0.0+1b5894e823dc: template: cozy-monitoring-agents/charts/fluent-bit/templates/daemonset.yaml:37:28: executing \"cozy-monitoring-agents/charts/fluent-bit/templates/daemonset.yaml\" at <include (print $.Template.BasePath \"/configmap.yaml\")>: error calling include: template: cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml:16:9: executing \"cozy-monitoring-agents/charts/fluent-bit/templates/configmap.yaml\" at <tpl .Values.config.outputs .>: error calling tpl: error during tpl function execution for \"[OUTPUT]\n    Name http\n    Match kube.*\n    Host vlogs-generic.{{ .Values.global.target }}.svc.{{ (index .Values._cluster \\\"cl",
+        "Paste any relevant logs here. Please redact tokens, passwords, private keys.",
+        "2. Does `cozy-monitoring` have the required label?"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cozystack",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cozystack"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Configmap",
+      "Daemonset",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/cozystack/cozystack/issues/2084",
+      "repo": "https://github.com/cozystack/cozystack",
+      "pr": "https://github.com/cozystack/cozystack/pull/2086"
+    },
+    "reactions": 1,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cozystack installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:28:39.706Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
