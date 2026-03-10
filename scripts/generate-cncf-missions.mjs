@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Crawls CNCF project repos for high-engagement issues and generates
- * kc-mission-v1 formatted missions from them.
+ * Crawls CNCF project repos for high-engagement issues and creates
+ * GitHub issues for Copilot coding agent to synthesize into kc-mission-v1 missions.
+ *
+ * Flow: discover CNCF issues → create console-kb issues → Copilot generates mission PRs.
  *
  * Supports multiple knowledge sources (GitHub issues, Reddit, Stack Overflow,
  * GitHub Discussions) configured via knowledge-sources.yaml.
@@ -14,16 +16,16 @@ import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './cncf-projects.mjs'
 import { OTHER_PROJECTS } from './other-projects.mjs'
 import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
 import { slugify as baseSlugify } from './sources/base-source.mjs'
-import { validateMissionExport } from './scanner.mjs'
 import { RedditSource } from './sources/reddit.mjs'
 import { StackOverflowSource } from './sources/stackoverflow.mjs'
 import { GitHubDiscussionsSource } from './sources/github-discussions.mjs'
-import { synthesizeMission } from './sources/llm-synthesizer.mjs'
+import { validateMissionExport } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+const COPILOT_TOKEN = process.env.COPILOT_TOKEN || process.env.GITHUB_TOKEN
 const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
@@ -39,6 +41,10 @@ const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-generated')
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
+const MAX_COPILOT_ISSUES_PER_RUN = parseInt(process.env.MAX_COPILOT_ISSUES || '10', 10)
+const ISSUE_LABEL_PREFIX = '[Mission Gen]'
+const COPILOT_REPO_OWNER = process.env.COPILOT_REPO_OWNER || 'kubestellar'
+const COPILOT_REPO_NAME = process.env.COPILOT_REPO_NAME || 'console-kb'
 
 /**
  * Load knowledge-sources.yaml config. Falls back to defaults if missing.
@@ -530,54 +536,6 @@ function passesQualityGate(resolution, issue) {
   return true
 }
 
-/** Generate actionable steps from issue content */
-function generateSteps(issue, resolution, linkedPR) {
-  const steps = []
-
-  // Step 1: Always start with understanding the problem
-  const problemSummary = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 200)
-  if (problemSummary) {
-    steps.push({
-      title: 'Understand the problem',
-      description: problemSummary,
-    })
-  }
-
-  // Step 2: Add extracted numbered steps from the solution
-  if (resolution.steps.length > 0) {
-    for (const s of resolution.steps.slice(0, 5)) {
-      steps.push({
-        title: s.length > 80 ? s.slice(0, 77) + '...' : s,
-        description: s,
-      })
-    }
-  }
-
-  // Step 3: Add code/YAML application steps
-  if (resolution.yamlSnippets.length > 0) {
-    steps.push({
-      title: 'Apply the configuration',
-      description: `Apply the following configuration to your cluster:\n\`\`\`yaml\n${resolution.yamlSnippets[0].slice(0, 500)}\n\`\`\``,
-    })
-  }
-
-  // Step 4: If linked PR, add a review step
-  if (linkedPR) {
-    steps.push({
-      title: 'Review the fix',
-      description: `The fix was implemented in ${linkedPR.html_url || 'the linked pull request'}. Review the changes to understand the solution.`,
-    })
-  }
-
-  // Step 5: Verification
-  steps.push({
-    title: 'Verify the fix',
-    description: 'Confirm that the issue is resolved in your environment by testing the affected functionality.',
-  })
-
-  return steps
-}
-
 function slugify(text) {
   return text
     .toLowerCase()
@@ -677,36 +635,150 @@ function estimateDifficulty(issue) {
   return 'expert'
 }
 
-async function generateMission(project, issue, resolution, linkedPR) {
-  // Try LLM synthesis first for highest quality
-  const llmResult = await synthesizeMission({
-    projectName: project.name,
-    issueTitle: issue.title,
-    issueBody: stripPRTemplate(issue.body || ''),
-    labels: (issue.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean),
-    solution: stripPRTemplate(resolution.solution || ''),
-    codeSnippets: resolution.yamlSnippets,
-    prUrl: linkedPR?.html_url || null,
-    prDiff: resolution.prDiffSummary || null,
-    sourceUrl: issue.html_url,
+/**
+ * Create a GitHub issue for Copilot to generate a mission from.
+ * Returns the issue number if created, null if skipped/failed.
+ */
+async function createCopilotIssue(project, issue, resolution, linkedPR) {
+  const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+  const missionType = detectMissionType(issue)
+  const difficulty = estimateDifficulty(issue)
+  const filePath = `solutions/cncf-generated/${project.name}/${slug}.json`
+
+  // Build the issue body with all context Copilot needs
+  const body = buildCopilotIssueBody({
+    project,
+    issue,
+    resolution,
+    linkedPR,
+    slug,
+    missionType,
+    difficulty,
+    filePath,
   })
 
-  // LLM synthesis is required — no regex fallback (it produces garbage)
-  if (!llmResult) {
-    console.log(`    [SKIP] LLM synthesis failed or skipped — not producing regex garbage`)
+  if (DRY_RUN) {
+    console.log(`    [DRY RUN] Would create issue: ${ISSUE_LABEL_PREFIX} ${project.name}: ${issue.title.slice(0, 60)}`)
+    return { dryRun: true, slug }
+  }
+
+  // Create issue on console-kb
+  const token = COPILOT_TOKEN
+  if (!token) {
+    console.warn('    [SKIP] No COPILOT_TOKEN or GITHUB_TOKEN for issue creation')
     return null
   }
 
-  const missionDesc = llmResult.description
-  const missionSteps = llmResult.steps
-  const missionResolution = llmResult.resolution
-  const missionDifficulty = llmResult.difficulty
-  const missionType = llmResult.type
-  console.log(`    [LLM] Synthesized: ${missionSteps.length} steps, ${missionDifficulty}`)
+  try {
+    const createUrl = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/issues`
+    const response = await fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/vnd.github.v3+json',
+      },
+      body: JSON.stringify({
+        title: `${ISSUE_LABEL_PREFIX} ${project.name}: ${issue.title.slice(0, 100)}`,
+        body,
+        labels: ['ai-fix-requested', 'triage/accepted', 'cncf-mission-gen'],
+      }),
+    })
 
-  const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+    if (!response.ok) {
+      const err = await response.text().catch(() => '')
+      console.warn(`    [ERROR] Issue creation failed: ${response.status} ${err.slice(0, 200)}`)
+      return null
+    }
 
-  const mission = {
+    const created = await response.json()
+    console.log(`    [COPILOT] Created issue #${created.number}: ${created.html_url}`)
+
+    // Assign Copilot coding agent
+    try {
+      const assignUrl = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/issues/${created.number}/assignees`
+      await fetch(assignUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/vnd.github.v3+json',
+        },
+        body: JSON.stringify({ assignees: ['copilot-swe-agent[bot]'] }),
+      })
+      console.log(`    [COPILOT] Assigned copilot-swe-agent to issue #${created.number}`)
+    } catch (assignErr) {
+      console.warn(`    [WARN] Could not assign Copilot: ${assignErr.message}`)
+    }
+
+    return { issueNumber: created.number, slug, url: created.html_url }
+  } catch (err) {
+    console.warn(`    [ERROR] Issue creation error: ${err.message}`)
+    return null
+  }
+}
+
+function buildCopilotIssueBody({ project, issue, resolution, linkedPR, slug, missionType, difficulty, filePath }) {
+  const sections = []
+
+  sections.push(`## Generate Mission: ${project.name} — ${issue.title}`)
+  sections.push('')
+  sections.push(`Create a **kc-mission-v1** troubleshooting mission file at \`${filePath}\`.`)
+  sections.push('')
+
+  // Source context
+  sections.push('### Source Issue')
+  sections.push(`- **Project:** ${project.name} (${project.maturity})`)
+  sections.push(`- **Source:** ${issue.html_url}`)
+  sections.push(`- **Reactions:** ${issue.reactions?.total_count || 0} | **Comments:** ${issue.comments || 0}`)
+  if (linkedPR) {
+    sections.push(`- **Fix PR:** ${linkedPR.html_url}`)
+  }
+  sections.push('')
+
+  // Problem description
+  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 2000)
+  if (cleanDesc) {
+    sections.push('### Problem Description')
+    sections.push(cleanDesc)
+    sections.push('')
+  }
+
+  // Solution / resolution
+  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 2000)
+  if (cleanSolution) {
+    sections.push('### Solution / Resolution')
+    sections.push(cleanSolution)
+    sections.push('')
+  }
+
+  // Code snippets
+  if (resolution.yamlSnippets?.length > 0) {
+    sections.push('### Relevant Code/Config')
+    for (const snippet of resolution.yamlSnippets.slice(0, 3)) {
+      sections.push('```')
+      sections.push(snippet.slice(0, 1000))
+      sections.push('```')
+    }
+    sections.push('')
+  }
+
+  // PR diff summary
+  if (resolution.prDiffSummary) {
+    sections.push('### Key Changes from Fix PR')
+    sections.push('```')
+    sections.push(resolution.prDiffSummary.slice(0, 1500))
+    sections.push('```')
+    sections.push('')
+  }
+
+  // Mission schema instructions
+  sections.push('### Mission File Requirements')
+  sections.push('')
+  sections.push(`Create \`${filePath}\` with this exact JSON structure:`)
+  sections.push('')
+  sections.push('```json')
+  sections.push(JSON.stringify({
     version: 'kc-mission-v1',
     name: slug,
     missionClass: 'solution',
@@ -714,29 +786,22 @@ async function generateMission(project, issue, resolution, linkedPR) {
     authorGithub: 'kubestellar',
     mission: {
       title: `${project.name}: ${issue.title}`,
-      description: missionDesc,
+      description: '1-3 sentences describing the problem with exact error message or symptom.',
       type: missionType,
       status: 'completed',
-      steps: missionSteps.map(s => ({
-        title: s.title.slice(0, 120),
-        description: (s.description || '').slice(0, 3000),
-      })),
+      steps: [
+        { title: 'Imperative verb phrase (e.g., Check pod resource limits)', description: 'Detailed instructions with kubectl commands, YAML patches, etc.' },
+      ],
       resolution: {
-        summary: missionResolution,
-        codeSnippets: extractCodeSnippets(missionSteps, resolution),
+        summary: '2-4 sentences explaining WHY the fix works — the root cause.',
+        codeSnippets: ['Actual YAML/code from the fix'],
       },
     },
     metadata: {
-      tags: [
-        project.name,
-        project.maturity,
-        project.category,
-        missionType,
-        ...extractLabels(issue),
-      ].filter((v, i, a) => a.indexOf(v) === i),
+      tags: [project.name, project.maturity, project.category, missionType],
       cncfProjects: [project.name],
-      targetResourceKinds: extractResourceKinds(issue, project),
-      difficulty: missionDifficulty,
+      targetResourceKinds: [],
+      difficulty,
       issueTypes: [missionType],
       maturity: project.maturity,
       sourceUrls: {
@@ -746,36 +811,34 @@ async function generateMission(project, issue, resolution, linkedPR) {
       },
       reactions: issue.reactions?.total_count || 0,
       comments: issue.comments || 0,
-      synthesizedBy: llmResult ? 'llm' : 'regex',
+      synthesizedBy: 'copilot',
     },
     prerequisites: generatePrerequisites(project),
     security: {
       scannedAt: new Date().toISOString(),
-      scannerVersion: 'cncf-gen-2.0.0',
+      scannerVersion: 'cncf-gen-3.0.0',
       sanitized: true,
       findings: [],
     },
-  }
+  }, null, 2))
+  sections.push('```')
+  sections.push('')
 
-  return mission
-}
+  // Quality requirements
+  sections.push('### Quality Requirements (MUST follow)')
+  sections.push('')
+  sections.push('1. **Steps must be SPECIFIC and ACTIONABLE** — each must contain kubectl commands, YAML blocks, file paths, or config snippets')
+  sections.push('2. **NEVER use generic titles**: "Understand the problem", "Review the fix", "Verify the fix", "Apply the configuration"')
+  sections.push('3. **Description must include SYMPTOMS** — exact error message, log line, or observable behavior')
+  sections.push('4. **Resolution must explain ROOT CAUSE** — why the fix works, not just what to do')
+  sections.push('5. **Minimum 4 actionable steps** with at least 2 containing commands or code blocks')
+  sections.push('6. **Strip all noise** — no Codecov reports, CI status, bot comments, PR templates, git diffs')
+  sections.push('7. **targetResourceKinds** should list Kubernetes resource types mentioned (Pod, Deployment, Service, etc.)')
+  sections.push('')
+  sections.push('---')
+  sections.push(`*Auto-generated by [CNCF Mission Generator](https://github.com/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}/actions/workflows/cncf-mission-gen.yml)*`)
 
-function extractCodeSnippets(steps, resolution) {
-  const snippets = []
-  for (const step of steps) {
-    const matches = (step.description || '').matchAll(/```[\w]*\n([\s\S]*?)```/g)
-    for (const m of matches) {
-      if (m[1].trim().length > 10) snippets.push(m[1].trim())
-      if (snippets.length >= 5) return snippets
-    }
-  }
-  if (resolution.yamlSnippets) {
-    for (const s of resolution.yamlSnippets) {
-      if (snippets.length >= 5) break
-      if (s.trim().length > 10) snippets.push(s.trim())
-    }
-  }
-  return snippets
+  return sections.join('\n')
 }
 
 function deduplicateAgainstExisting(slug, projectDir) {
@@ -785,26 +848,18 @@ function deduplicateAgainstExisting(slug, projectDir) {
 }
 
 function formatReport(report) {
-  // Calculate quality stats
-  const scores = (report.missions || []).map(m => m.qualityScore).filter(s => s != null)
-  const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A'
-  const llmCount = (report.missions || []).filter(m => m.synthesizedBy === 'llm').length
-  const regexCount = (report.missions || []).filter(m => m.synthesizedBy === 'regex').length
-
   const lines = [
     '# CNCF Mission Generation Report',
     '',
     `**Date:** ${new Date().toISOString()}`,
-    `**Total generated:** ${report.generated}`,
+    `**Copilot issues created:** ${report.generated}`,
     `**Skipped:** ${report.skipped}`,
     `**Errors:** ${report.errors}`,
-    `**Avg Quality Score:** ${avgScore}/100`,
-    `**LLM synthesized:** ${llmCount} | **Regex fallback:** ${regexCount}`,
     '',
     '## Projects Processed',
     '',
-    '| Project | Maturity | Items Found | Missions Generated | Errors |',
-    '|---------|----------|------------|-------------------|--------|',
+    '| Project | Maturity | Items Found | Issues Created | Errors |',
+    '|---------|----------|------------|---------------|--------|',
   ]
 
   for (const p of report.projects) {
@@ -814,12 +869,12 @@ function formatReport(report) {
   }
 
   if (report.generated > 0) {
-    lines.push('', '## Generated Missions', '')
-    lines.push('| Mission | Difficulty | Quality | Source |')
-    lines.push('|---------|-----------|---------|--------|')
+    lines.push('', '## Copilot Issues Created', '')
+    lines.push('| Mission | Difficulty | Source | Issue |')
+    lines.push('|---------|-----------|--------|-------|')
     for (const m of report.missions || []) {
-      const scoreStr = m.qualityScore != null ? `${m.qualityScore}/100` : 'N/A'
-      lines.push(`| ${m.title} | ${m.difficulty} | ${scoreStr} | [link](${m.sourceIssue}) |`)
+      const issueLink = m.issueUrl ? `[#${m.issueNumber}](${m.issueUrl})` : 'dry-run'
+      lines.push(`| ${m.title} | ${m.difficulty} | [source](${m.sourceIssue}) | ${issueLink} |`)
     }
   }
 
@@ -921,60 +976,46 @@ async function main() {
 
               const resolution = extractResolutionFromIssue(details.issue, details.comments, details.linkedPR)
 
-              // Fetch PR diff summary for richer LLM context
+              // Fetch PR diff summary for richer Copilot context
               if (details.linkedPR?.number) {
                 resolution.prDiffSummary = await fetchPRDiffSummary(owner, repo, details.linkedPR.number)
               }
 
-              const mission = await generateMission(project, details.issue, resolution, details.linkedPR)
-
-              if (!mission) {
+              // Quality gate — ensure enough content for Copilot to work with
+              if (!passesQualityGate(resolution, details.issue)) {
                 console.log(`  Skipped #${issue.number} (quality gate: insufficient actionable content)`)
-                report.skipped++
-                newIds.push(canonicalId) // Mark as processed so we don't retry
-                continue
-              }
-
-              // Quality scoring — reject missions below threshold
-              const qualityResult = scoreMission(mission)
-              mission.metadata.qualityScore = qualityResult.score
-
-              if (!qualityResult.pass) {
-                console.log(`  Skipped #${issue.number} (quality score: ${qualityResult.score}/100 — below threshold)`)
                 report.skipped++
                 newIds.push(canonicalId)
                 continue
               }
 
-              const filePath = join(projectDir, `${slug}.json`)
-
-              // Schema validation before writing
-              const schemaResult = validateMissionExport(mission)
-              if (!schemaResult.valid) {
-                console.warn(`  ⚠️ Schema validation failed for ${slug}: ${schemaResult.errors.join(', ')}`)
-                report.skipped++
-                projectReport.skipped++
-                continue
+              // Enforce per-run issue limit to avoid flooding
+              if (report.generated >= MAX_COPILOT_ISSUES_PER_RUN) {
+                console.log(`  [LIMIT] Reached max ${MAX_COPILOT_ISSUES_PER_RUN} Copilot issues per run`)
+                break
               }
 
-              if (DRY_RUN) {
-                console.log(`  [DRY RUN] Would write: ${filePath} (score: ${qualityResult.score})`)
-              } else {
-                writeFileSync(filePath, JSON.stringify(mission, null, 2) + '\n')
-                console.log(`  Written: ${slug}.json (${mission.mission.steps.length} steps, score: ${qualityResult.score})`)
+              // Create GitHub issue for Copilot to generate the mission
+              const result = await createCopilotIssue(project, details.issue, resolution, details.linkedPR)
+
+              if (!result) {
+                console.log(`  Skipped #${issue.number} (issue creation failed)`)
+                report.skipped++
+                newIds.push(canonicalId)
+                continue
               }
 
               newIds.push(canonicalId)
               report.generated++
               projectReport.generated++
               report.missions.push({
-                title: mission.mission.title,
-                difficulty: mission.metadata.difficulty,
-                sourceIssue: mission.metadata.sourceUrls?.issue || '',
-                qualityScore: qualityResult.score,
-                synthesizedBy: mission.metadata.synthesizedBy,
+                title: `${project.name}: ${issue.title}`,
+                difficulty: estimateDifficulty(issue),
+                sourceIssue: issue.html_url,
+                issueNumber: result.issueNumber,
+                issueUrl: result.url,
               })
-              await sleep(200)
+              await sleep(1000) // Rate limit: 1 issue per second
             } catch (err) {
               console.error(`  Error processing issue #${issue.number}: ${err.message}`)
               projectReport.errors++
@@ -1105,4 +1146,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, extractResolutionFromIssue, formatReport }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, createCopilotIssue, extractResolutionFromIssue, formatReport }

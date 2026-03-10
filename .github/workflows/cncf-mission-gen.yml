@@ -16,7 +16,7 @@ on:
         required: false
         default: '20'
       dry_run:
-        description: 'Dry run (no PR created)'
+        description: 'Dry run (no issues created)'
         required: false
         type: boolean
         default: false
@@ -28,11 +28,15 @@ on:
         required: false
         type: boolean
         default: false
+      max_issues:
+        description: 'Max Copilot issues to create per run'
+        required: false
+        default: '10'
 
 permissions:
   contents: write
   pull-requests: write
-  models: read
+  issues: write
 
 jobs:
   # Compute batch matrix from total project count
@@ -81,11 +85,10 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: cd scripts && npm install --no-audit
-      - name: Generate missions (batch ${{ matrix.batch }})
+      - name: Discover issues and create Copilot tasks (batch ${{ matrix.batch }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          COPILOT_MODEL: claude-opus-4.6
           MIN_REACTIONS: ${{ inputs.min_reactions || '10' }}
           TARGET_PROJECTS: ${{ inputs.projects || '' }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
@@ -93,13 +96,13 @@ jobs:
           BATCH_SIZE: ${{ inputs.batch_size || '20' }}
           ENABLED_SOURCES: ${{ inputs.sources || '' }}
           FORCE_RESCAN: ${{ inputs.force_rescan || 'false' }}
+          MAX_COPILOT_ISSUES: ${{ inputs.max_issues || '10' }}
         run: node scripts/generate-cncf-missions.mjs
-      - name: Upload generated missions
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: missions-batch-${{ matrix.batch }}
+          name: report-batch-${{ matrix.batch }}
           path: |
-            solutions/cncf-generated/
             generation-report*.md
             search-state.json
           if-no-files-found: ignore
@@ -113,7 +116,7 @@ jobs:
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: missions-batch-*
+          pattern: report-batch-*
           merge-multiple: true
       - name: Merge reports
         run: |
@@ -130,22 +133,15 @@ jobs:
               echo "" >> generation-report.md
             fi
           done
-          # If only single report exists (targeted run)
-          if [ ! -f generation-report-0.md ] && [ -f generation-report.md ]; then
-            echo "Single report mode"
-          fi
       - name: Merge search state files
         run: |
           # Deep merge search-state.json files from each batch by project key
           node -e "
             const fs = require('fs');
-            const glob = require('path');
             const merged = { version: 1, lastUpdated: new Date().toISOString(), projects: {} };
-            // Load existing state if present
             if (fs.existsSync('search-state.json')) {
               try { Object.assign(merged, JSON.parse(fs.readFileSync('search-state.json', 'utf8'))); } catch {}
             }
-            // Merge any batch-specific states (uploaded as artifacts)
             const batchStates = fs.readdirSync('.').filter(f => f.match(/search-state-\d+\.json/));
             for (const f of batchStates) {
               try {
@@ -167,104 +163,28 @@ jobs:
             fs.writeFileSync('search-state.json', JSON.stringify(merged, null, 2));
             console.log('Merged search state: ' + Object.keys(merged.projects).length + ' projects');
           "
-      - name: Deduplicate missions across batches
+      - name: Commit search state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # If the same mission file exists from multiple batches, keep the one with higher quality score
-          if [ -d "solutions/cncf-generated" ]; then
-            node -e "
-              const fs = require('fs');
-              const path = require('path');
-              const dir = 'solutions/cncf-generated';
-              let deduped = 0;
-              // Walk all project dirs
-              for (const project of fs.readdirSync(dir)) {
-                const pDir = path.join(dir, project);
-                if (!fs.statSync(pDir).isDirectory()) continue;
-                const seen = new Map();
-                for (const f of fs.readdirSync(pDir).filter(f => f.endsWith('.json'))) {
-                  try {
-                    const data = JSON.parse(fs.readFileSync(path.join(pDir, f), 'utf8'));
-                    const title = data.mission?.title || f;
-                    if (seen.has(title)) {
-                      const prev = seen.get(title);
-                      const prevScore = prev.data?.metadata?.qualityScore || 0;
-                      const curScore = data?.metadata?.qualityScore || 0;
-                      if (curScore > prevScore) {
-                        fs.unlinkSync(path.join(pDir, prev.file));
-                        seen.set(title, { file: f, data });
-                      } else {
-                        fs.unlinkSync(path.join(pDir, f));
-                      }
-                      deduped++;
-                    } else {
-                      seen.set(title, { file: f, data });
-                    }
-                  } catch {}
-                }
-              }
-              console.log('Deduplicated ' + deduped + ' missions');
-            "
+          if [ -f search-state.json ] && ! git diff --quiet search-state.json 2>/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add search-state.json
+            git commit -s -m "🌱 Update CNCF mission search state ($(date +%Y-%m-%d))"
+            git push origin master
           fi
-      - name: Check for new missions
-        id: check
-        run: |
-          if [ -d "solutions/cncf-generated" ]; then
-            COUNT=$(find solutions/cncf-generated -name '*.json' | wc -l | tr -d ' ')
-          else
-            COUNT=0
-          fi
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          echo "Found $COUNT mission files"
       - name: Write workflow summary
         run: |
           echo "## 🌱 CNCF Mission Generation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Total missions | ${{ steps.check.outputs.count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Batches | ${{ needs.plan.outputs.batch_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f generation-report.md ]; then
-            # Extract quality stats from report
-            AVG_SCORE=$(grep -o 'Avg Quality Score: [0-9.]*' generation-report.md | head -1 | grep -o '[0-9.]*' || echo "N/A")
-            echo "| Avg Quality Score | $AVG_SCORE/100 |" >> $GITHUB_STEP_SUMMARY
+            ISSUES_CREATED=$(grep -o 'Copilot issues created: [0-9]*' generation-report.md | head -1 | grep -o '[0-9]*' || echo "0")
+            echo "| Copilot issues created | $ISSUES_CREATED |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "See the full report in the PR body." >> $GITHUB_STEP_SUMMARY
-      - name: Create PR
-        if: steps.check.outputs.count != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BRANCH="cncf-gen-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH"
-          git add solutions/cncf-generated/
-          # Commit search state if present (tracks processed items)
-          if [ -f search-state.json ]; then
-            git add search-state.json
-          fi
-
-          # Determine PR mode based on quality
-          DRAFT_FLAG=""
-          if [ -f generation-report.md ]; then
-            AVG_SCORE=$(grep -o 'Avg Quality Score: [0-9.]*' generation-report.md | head -1 | grep -o '[0-9.]*' || echo "0")
-            COUNT="${{ steps.check.outputs.count }}"
-            if [ "$(echo "$AVG_SCORE < 50" | bc -l 2>/dev/null || echo 0)" = "1" ] || [ "$COUNT" -lt 10 ]; then
-              DRAFT_FLAG="--draft"
-              echo "⚠️ Creating draft PR: avg quality $AVG_SCORE or mission count $COUNT below threshold"
-            fi
-          fi
-
-          git commit -s -m "🌱 Auto-generate CNCF missions ($(date +%Y-%m-%d))
-
-          Generated from multiple knowledge sources across ${{ needs.plan.outputs.batch_count }} batches.
-          Quality: avg score ${AVG_SCORE:-N/A}/100, ${COUNT:-0} missions."
-          git push origin "$BRANCH"
-          gh pr create \
-            --title "🌱 CNCF mission generation $(date +%Y-%m-%d)" \
-            --body "$(cat generation-report.md | head -500)" \
-            --base master \
-            --head "$BRANCH" \
-            $DRAFT_FLAG
+          echo "Copilot coding agent will create PRs for each issue." >> $GITHUB_STEP_SUMMARY
