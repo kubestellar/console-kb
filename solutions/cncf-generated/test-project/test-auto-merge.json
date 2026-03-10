@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cert-manager-7540-cloudflare-dns-challenge-broken",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cert-manager: Cloudflare - DNS Challenge Broken",
+    "description": "Cloudflare - DNS Challenge Broken. This issue affects 79+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cert-manager troubleshoot symptoms",
+        "description": "Check for the issue in your cert-manager deployment:\n```bash\nkubectl get pods -n cert-manager -l app=cert-manager\nkubectl logs -l app.kubernetes.io/name=cert-manager -n cert-manager --tail=100 | grep -i error\n```\nLook for errors related to: Cloudflare - DNS Challenge Broken"
+      },
+      {
+        "title": "Check current resource configuration",
+        "description": "Inspect the relevant cert-manager resources:\n```bash\nkubectl get resource -A\nkubectl describe resource <name> -n <namespace>\n```\n**Describe the bug**:\nCloudflare is no longer returning [zone information in individual dns records](https://developers.cloudflare.com/fundamentals/api/reference/deprecations/#2024-11-30). This is now"
+      },
+      {
+        "title": "Apply the fix for Cloudflare - DNS Challenge Broken",
+        "description": "### Pull Request Motivation\n\nFixes [this issue](https://github.com/cert-manager/cert-manager/issues/7540), where zone id is no longer being returned from the cloudflare api on dns records.\n\n### Kind\n\nZoneID` property\n```\n```yaml\nOf note, we could keep `cloudFlareRecord struct` as is, and just patch [the returned record](https://github.com/cert-manager/cert-manager/blob/master/pkg/issuer/acme/dns/cloudflare/cloudflare.go#L236) with the `zoneID` from [here](https://github.com/cert-manager/cert-manager/blob/master/pkg/issuer/acme/dns/cloudflare/cloudflare.go#L213).\nI have noticed this as well on my end as well:\n```"
+      },
+      {
+        "title": "Confirm Cloudflare - DNS Challenge Broken is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cert-manager -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: ### Pull Request Motivation\n\nFixes [this issue](https://github.com/cert-manager/cert-manager/issues/7540), where zone id is no longer being returned from the cloudflare api on dns records.\n\n### Kind\n\nZoneID` property\n```. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "Of note, we could keep `cloudFlareRecord struct` as is, and just patch [the returned record](https://github.com/cert-manager/cert-manager/blob/master/pkg/issuer/acme/dns/cloudflare/cloudflare.go#L236) with the `zoneID` from [here](https://github.com/cert-manager/cert-manager/blob/master/pkg/issuer/acme/dns/cloudflare/cloudflare.go#L213).\nI have noticed this as well on my end as well:",
+        "The certificate status is `Issuing certificate as Secret does not exist`\n> After November 30th, 2024, Cloudflare will stop including the zone_id and zone_name fields on individual DNS records in API responses. These fields are currently ignored when sent to the API as part of a request body, so no changes to request bodies are required.\n\nIt only took them 2 months after the date they gave to actually update their API. 😢 \nI've had the same issue in my testing environment.\n\nI was able to at least get the certificate request working by logging in to cloudflare and manually modfiy the new txt record adding\"\" (so for example \"recordadccd...\").\n\nIt still doesn't delete the record but it's still possibile to generate a certificate if needed.\nThe DNS record is successfully created and verified us",
+        "A small workaround that worked for us yesterday was to manually delete the TXT Record _acme_challenge created in Cloudflare by the Cert Manager.\n@dev-ago \n> A small workaround that worked for us yesterday was to manually delete the TXT Record _acme_challenge created in Cloudflare by the Cert Manager.\n\nAlso worked for us, good workaround for now\nWhen you delete that txt record, how long should it take for the Kubernetes cluster to stop throwing the error?  Do I need to force a refresh with a specific command?  I tried resetting my cluster, but it just re-created the TXT entry in cloudflare.\n\n**Update** it seems to have finally gone through.  Thanks for the workaround!\n> Of note, we could keep `cloudFlareRecord struct` as is, and just patch [the returned record](https://github.com/cert-manag"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cert-manager",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cert-manager"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cert-manager/cert-manager/issues/7540",
+      "repo": "https://github.com/cert-manager/cert-manager",
+      "pr": "https://github.com/cert-manager/cert-manager/pull/7541"
+    },
+    "reactions": 79,
+    "comments": 32,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cert-manager installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T05:14:02.270Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
