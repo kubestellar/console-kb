@@ -328,16 +328,16 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
   const body = issue.body || ''
   const problemMatch = body.match(/#{1,4}\s*(?:problem|description|bug\s*report|issue|context|summary|background)\s*\n([\s\S]*?)(?=\n#{1,4}\s|\n---|\Z)/i)
   resolution.problem = problemMatch
-    ? cleanText(problemMatch[1]).slice(0, 1000)
-    : cleanText(body).slice(0, 1000)
+    ? truncateAtWordBoundary(cleanText(problemMatch[1]), 1000)
+    : truncateAtWordBoundary(cleanText(body), 1000)
 
   // Extract solution from linked PR body first, then fallback to comments
   if (linkedPR?.body) {
     const prBody = linkedPR.body
     const solutionMatch = prBody.match(/#{1,4}\s*(?:solution|fix|changes|description|approach|implementation|what\s+this\s+pr\s+does)\s*\n([\s\S]*?)(?=\n#{1,4}\s|\n---|\Z)/i)
     resolution.solution = solutionMatch
-      ? cleanText(solutionMatch[1]).slice(0, 1500)
-      : cleanText(prBody).slice(0, 1500)
+      ? truncateAtWordBoundary(cleanText(solutionMatch[1]), 1500)
+      : truncateAtWordBoundary(cleanText(prBody), 1500)
   }
 
   // If no PR-based solution, score comments and pick the best resolution
@@ -368,7 +368,7 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
       .sort((a, b) => b.score - a.score)
 
     if (scoredComments.length > 0 && scoredComments[0].score > 0) {
-      resolution.solution = cleanText(scoredComments[0].comment.body).slice(0, 1500)
+      resolution.solution = truncateAtWordBoundary(cleanText(scoredComments[0].comment.body), 1500)
     }
   }
 
@@ -486,6 +486,20 @@ function generatePrerequisites(project) {
     tools: tools.length > 0 ? tools : [project.name],
     description: `A working ${project.displayName || project.name} installation or development environment.`,
   }
+}
+
+/**
+ * Truncate a string at the last word boundary before maxLen.
+ * Avoids cutting words mid-character (e.g., "clea" instead of "clean up code").
+ */
+function truncateAtWordBoundary(text, maxLen) {
+  if (!text || text.length <= maxLen) return text || ''
+  const truncated = text.slice(0, maxLen)
+  const lastSpace = truncated.lastIndexOf(' ')
+  // If no space found within first 20 chars, just use the hard cutoff
+  const MIN_TRUNCATION_POINT = 20
+  if (lastSpace < MIN_TRUNCATION_POINT) return truncated
+  return truncated.slice(0, lastSpace)
 }
 
 /** Strip PR template boilerplate and return useful content only */
@@ -647,7 +661,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
   const filePath = `solutions/cncf-generated/${project.name}/${slug}.json`
 
   if (DRY_RUN) {
-    console.log(`    [DRY RUN] Would create PR for: ${project.name}: ${issue.title.slice(0, 60)}`)
+    console.log(`    [DRY RUN] Would create PR for: ${project.name}: ${truncateAtWordBoundary(issue.title, 60)}`)
     return { dryRun: true, slug }
   }
 
@@ -697,7 +711,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
       method: 'PUT',
       headers,
       body: JSON.stringify({
-        message: `🌱 Add ${project.name}: ${issue.title.slice(0, 60)} mission`,
+        message: `🌱 Add ${project.name}: ${truncateAtWordBoundary(issue.title, 60)} mission`,
         content,
         branch: branchName,
       }),
@@ -714,7 +728,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        title: `🌱 ${project.name}: ${issue.title.slice(0, 80)}`,
+        title: `🌱 ${project.name}: ${truncateAtWordBoundary(issue.title, 80)}`,
         head: branchName,
         base: 'master',
         body: prBody,
@@ -764,20 +778,20 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
  * Build a description from the issue body, extracting error messages and symptoms.
  */
 function buildDescription(issue, resolution) {
-  const body = (issue.body || '').slice(0, 500)
+  const body = truncateAtWordBoundary(issue.body || '', 500)
   const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
   const symptom = errorMatch
     ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
     : `${issue.title}. This issue affects ${issue.reactions?.total_count || 0}+ users.`
-  return symptom.slice(0, 300)
+  return truncateAtWordBoundary(symptom, 300)
 }
 
 /**
  * Build the full mission JSON object with real pre-filled content.
  */
 function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty }) {
-  const cleanDesc = stripPRTemplate(resolution.problem || issue.body || '').slice(0, 500)
-  const cleanSolution = stripPRTemplate(resolution.solution || '').slice(0, 500)
+  const cleanDesc = truncateAtWordBoundary(stripPRTemplate(resolution.problem || issue.body || ''), 500)
+  const cleanSolution = truncateAtWordBoundary(stripPRTemplate(resolution.solution || ''), 500)
 
   return {
     version: 'kc-mission-v1',
@@ -824,46 +838,79 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
 
 /**
  * Build detailed steps from the issue and resolution context.
+ * Uses project-aware namespaces and commands instead of hardcoded cert-manager.
+ * Non-Kubernetes projects get application-specific steps instead of kubectl commands.
  */
 function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution) {
   const steps = []
   const body = issue.body || ''
+  const k8sNative = isKubernetesNative(project)
+
+  // Derive project-specific namespace and helm repo (not hardcoded cert-manager)
+  const namespace = project.namespace || project.name
+  const helmRepo = project.helmRepo || project.name
 
   // Step 1: Identify the problem with specific diagnostics
   const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,120})/)?.[1]
-  steps.push({
-    title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
-    description: [
-      `Check for the issue in your ${project.name} deployment:`,
-      '```bash',
-      `kubectl get pods -n cert-manager -l app=${project.name}`,
-      `kubectl logs -l app.kubernetes.io/name=${project.name} -n cert-manager --tail=100 | grep -i error`,
-      '```',
-      errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
-    ].join('\n')
-  })
+
+  if (k8sNative) {
+    steps.push({
+      title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
+      description: [
+        `Check for the issue in your ${project.name} deployment:`,
+        '```bash',
+        `kubectl get pods -n ${namespace} -l app=${project.name}`,
+        `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=100 | grep -i error`,
+        '```',
+        errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+      ].join('\n')
+    })
+  } else {
+    steps.push({
+      title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
+      description: [
+        `Check for the issue in your ${project.name} installation:`,
+        '```bash',
+        `${project.name} version`,
+        `${project.name} status 2>&1 | head -20`,
+        '```',
+        errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+      ].join('\n')
+    })
+  }
 
   // Step 2: Check current configuration
   const resourceKinds = extractResourceKinds({ body })
-  const primaryResource = resourceKinds[0] || 'resource'
-  steps.push({
-    title: `Check current ${primaryResource} configuration`,
-    description: [
-      `Inspect the relevant ${project.name} resources:`,
-      '```bash',
-      `kubectl get ${primaryResource.toLowerCase()} -A`,
-      `kubectl describe ${primaryResource.toLowerCase()} <name> -n <namespace>`,
-      '```',
-      cleanDesc.slice(0, 200),
-    ].join('\n')
-  })
+  const primaryResource = resourceKinds[0] || ''
+
+  if (k8sNative && primaryResource) {
+    steps.push({
+      title: `Check current ${primaryResource} configuration`,
+      description: [
+        `Inspect the relevant ${project.name} resources:`,
+        '```bash',
+        `kubectl get ${primaryResource.toLowerCase()} -A`,
+        `kubectl describe ${primaryResource.toLowerCase()} <name> -n ${namespace}`,
+        '```',
+        truncateAtWordBoundary(cleanDesc, 200),
+      ].join('\n')
+    })
+  } else {
+    steps.push({
+      title: `Check current ${project.name} configuration`,
+      description: [
+        `Review the relevant ${project.name} configuration:`,
+        truncateAtWordBoundary(cleanDesc, 300),
+      ].join('\n')
+    })
+  }
 
   // Step 3: Apply the fix
   if (resolution.yamlSnippets?.length > 0) {
     steps.push({
-      title: `Apply the fix for ${issue.title.slice(0, 60)}`,
+      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60)}`,
       description: [
-        cleanSolution.slice(0, 300) || `Apply the configuration change to resolve the issue:`,
+        truncateAtWordBoundary(cleanSolution, 300) || `Apply the configuration change to resolve the issue:`,
         '```yaml',
         resolution.yamlSnippets[0].slice(0, 600),
         '```',
@@ -871,9 +918,9 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
     })
   } else if (cleanSolution) {
     steps.push({
-      title: `Apply the fix for ${issue.title.slice(0, 60)}`,
+      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60)}`,
       description: [
-        cleanSolution.slice(0, 500),
+        truncateAtWordBoundary(cleanSolution, 500),
         '',
         `See the fix PR for details: ${resolution.prUrl || 'linked PR'}`,
       ].join('\n')
@@ -885,47 +932,71 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
     })
   }
 
-  // Step 4: Upgrade if there's a version fix
-  if (resolution.prUrl || resolution.solution?.includes('upgrade') || resolution.solution?.includes('version')) {
+  // Step 4: Upgrade if there's a version fix (only for K8s-native projects with Helm)
+  if (k8sNative && (resolution.prUrl || resolution.solution?.includes('upgrade') || resolution.solution?.includes('version'))) {
     steps.push({
       title: `Upgrade ${project.name} to include the fix`,
       description: [
         `If the fix is included in a newer release, upgrade ${project.name}:`,
         '```bash',
         `helm repo update`,
-        `helm upgrade ${project.name} jetstack/${project.name} --namespace cert-manager`,
+        `helm upgrade ${project.name} ${helmRepo}/${project.name} --namespace ${namespace}`,
         '```',
         'Verify the upgrade:',
         '```bash',
-        `kubectl get pods -n cert-manager`,
-        `helm list -n cert-manager`,
+        `kubectl get pods -n ${namespace}`,
+        `helm list -n ${namespace}`,
+        '```',
+      ].join('\n')
+    })
+  } else if (!k8sNative && (resolution.prUrl || resolution.solution?.includes('upgrade') || resolution.solution?.includes('version'))) {
+    steps.push({
+      title: `Upgrade ${project.name} to include the fix`,
+      description: [
+        `If the fix is included in a newer release, upgrade ${project.name}:`,
+        '```bash',
+        `# Check current version`,
+        `${project.name} version`,
+        `# Follow the project's upgrade guide at https://github.com/${project.repo}`,
         '```',
       ].join('\n')
     })
   }
 
   // Step 5: Verify the fix
-  steps.push({
-    title: `Confirm ${issue.title.slice(0, 50)} is resolved`,
-    description: [
-      `Verify the fix by checking that the original error no longer occurs:`,
-      '```bash',
-      `kubectl logs -l app.kubernetes.io/name=${project.name} -n cert-manager --tail=50 --since=5m`,
-      `kubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10`,
-      '```',
-      errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears in logs.` : 'Confirm that the issue symptoms are gone.',
-    ].join('\n')
-  })
+  if (k8sNative) {
+    steps.push({
+      title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+      description: [
+        `Verify the fix by checking that the original error no longer occurs:`,
+        '```bash',
+        `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=50 --since=5m`,
+        `kubectl get events -n ${namespace} --sort-by='.lastTimestamp' | tail -10`,
+        '```',
+        errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears in logs.` : 'Confirm that the issue symptoms are gone.',
+      ].join('\n')
+    })
+  } else {
+    steps.push({
+      title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+      description: [
+        `Verify the fix by checking that the original error no longer occurs:`,
+        `Test ${project.name} to confirm the issue is resolved.`,
+        errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears.` : 'Confirm that the issue symptoms are gone.',
+      ].join('\n')
+    })
+  }
 
   return steps
 }
 
 /**
  * Build resolution summary from available context.
+ * Strips PR template boilerplate and avoids tautological filler text.
  */
 function buildResolutionSummary(resolution, cleanSolution) {
   if (cleanSolution && cleanSolution.length > 50) {
-    return `The root cause is: ${cleanSolution.slice(0, 400)}. This fixes the issue because it addresses the underlying problem that was causing the failure.`
+    return `The root cause is: ${truncateAtWordBoundary(cleanSolution, 400)}.`
   }
   return `This issue was resolved by applying the fix from the linked PR. The root cause was identified and addressed by the community.`
 }
