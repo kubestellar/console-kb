@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-4435-support-for-deletenamespace-syncpolicy",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: Support for DeleteNamespace SyncPolicy",
+    "description": "Support for DeleteNamespace SyncPolicy. This issue affects 95+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo feature symptoms",
+        "description": "Check for the issue in your argo deployment:\n```bash\nkubectl get pods -n argo -l app=argo\nkubectl logs -l app.kubernetes.io/name=argo -n argo --tail=100 | grep -i error\n```\nLook for errors related to: Support for DeleteNamespace SyncPolicy"
+      },
+      {
+        "title": "Check current Namespace configuration",
+        "description": "Inspect the relevant argo resources:\n```bash\nkubectl get namespace -A\nkubectl describe namespace <name> -n argo\n```\nAdding support for some mechanism to allow ArgoCD to delete the namespace of its underlying app. This could be limited to apps that were created with a `CreateNamespace` SyncPolicy set."
+      },
+      {
+        "title": "Apply the fix for Support for DeleteNamespace SyncPolicy",
+        "description": "- After this PR is merged, we can specify `DeleteNamespace` syncOption, which enables a feature to delete an auto-created namespace.\n- We can delete a namespace only when:\n  - `CreateNamespace=true` and `DeleteNamespace=true`\n  - The target namespace is tracked by an application. \n    - e.g.) The\n```yaml\napiVersion: argoproj.io/v1alpha1\r\nkind: Application\r\nmetadata:\r\n  name: guestbook\r\n  namespace: argocd\r\nspec:\r\n  project: default\r\n  destination:\r\n    server: https://kubernetes.default.svc/\r\n    namespace: test\r\n  source:\r\n    repoURL: https://github.com/argoproj/argocd-example-apps.git\r\n    path: guestbook\r\n    targetRevision: HEAD\r\n  syncPolicy:\r\n    syncOptions:\r\n    - CreateNamespace=true\r\n    - DeleteNamespace=true\r\n    managedNamespaceMetadata:\r\n      labels:\r\n        app.kubernetes.io/instance: guestbook\n```"
+      },
+      {
+        "title": "Confirm Support for DeleteNamespace SyncPolicy is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo -n argo --tail=50 --since=5m\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: - After this PR is merged, we can specify `DeleteNamespace` syncOption, which enables a feature to delete an auto-created namespace.\n- We can delete a namespace only when:\n  - `CreateNamespace=true` and `DeleteNamespace=true`\n  - The target namespace is tracked by an application. \n    - e.g.) The namespace must have a label, `app.kubernetes.io/instance=${applicationName}`.",
+      "codeSnippets": [
+        "apiVersion: argoproj.io/v1alpha1\r\nkind: Application\r\nmetadata:\r\n  name: guestbook\r\n  namespace: argocd\r\nspec:\r\n  project: default\r\n  destination:\r\n    server: https://kubernetes.default.svc/\r\n    namespace: test\r\n  source:\r\n    repoURL: https://github.com/argoproj/argocd-example-apps.git\r\n    path: guestbook\r\n    targetRevision: HEAD\r\n  syncPolicy:\r\n    syncOptions:\r\n    - CreateNamespace=true\r\n    - DeleteNamespace=true\r\n    managedNamespaceMetadata:\r\n      labels:\r\n        app.kubernetes.io/instance: guestbook",
+        "apiVersion: argoproj.io/v1alpha1\r\nkind: Application\r\nmetadata:\r\n  name: guestbook\r\n  namespace: argocd\r\nspec:\r\n  project: default\r\n  destination:\r\n    server: https://kubernetes.default.svc\r\n    namespace: test\r\n  source:\r\n    repoURL: https://github.com/argoproj/argocd-example-apps.git\r\n    path: guestbook\r\n    targetRevision: HEAD\r\n  syncPolicy:\r\n    syncOptions:\r\n    - CreateNamespace=true\r\n    - DeleteNamespace=true\r\n    managedNamespaceMetadata:\r\n      labels:\r\n        app.kubernetes.io/instance: guestbook"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/4435",
+      "repo": "https://github.com/argoproj/argo-cd",
+      "pr": "https://github.com/argoproj/argo-cd/pull/11821"
+    },
+    "reactions": 95,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T21:33:23.201Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
