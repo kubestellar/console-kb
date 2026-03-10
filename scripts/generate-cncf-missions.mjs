@@ -365,12 +365,12 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
     }
   }
 
-  // Extract YAML/code blocks from all sources
+  // Extract YAML/code blocks from all sources, filtering out CI/bot garbage
   const allText = [body, linkedPR?.body || '', ...comments.map(c => c.body || '')].join('\n')
   const codeBlocks = allText.matchAll(/```(?:ya?ml|json|bash|shell|sh)?\s*\n([\s\S]*?)```/g)
   for (const match of codeBlocks) {
     const snippet = match[1].trim()
-    if (snippet.length > 10 && snippet.length < 5000) {
+    if (snippet.length > 10 && snippet.length < 5000 && !isGarbageSnippet(snippet)) {
       resolution.yamlSnippets.push(snippet)
     }
     if (resolution.yamlSnippets.length >= 5) break
@@ -392,9 +392,93 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
 function cleanText(text) {
   return text
     .replace(/<!--[\s\S]*?-->/g, '')
+    // Strip Codecov report blocks
+    .replace(/# \[?Codecov\]?[\s\S]*?(?=\n#{1,4}\s|\n---|\n\n\n|$)/gi, '')
+    // Strip image markdown that's just screenshots/badges (not content)
+    .replace(/!\[.*?\]\(https?:\/\/[^)]+\)/g, '')
+    // Strip Codecov table rows
+    .replace(/\|[^|]*codecov[^|]*\|[^|]*\|[^|]*\|/gi, '')
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/**
+ * Detects garbage snippets that shouldn't be used as mission content.
+ * Catches Codecov tables, CI bot messages, git diffs, image references, etc.
+ */
+function isGarbageSnippet(snippet) {
+  const lower = snippet.toLowerCase()
+
+  // Codecov coverage tables
+  if (lower.includes('codecov') || lower.includes('coverage δ') || lower.includes('impacted files')) return true
+
+  // Git diff output (not actionable YAML/config)
+  if (snippet.startsWith('diff --git') || /^[+-]{3} [ab]\//.test(snippet)) return true
+
+  // GitHub image references (not config)
+  if ((snippet.match(/!\[.*?\]\(https?:\/\//g) || []).length > 2) return true
+
+  // CI bot messages
+  if (lower.includes('invalid pr title') || lower.includes('has been automatically marked as stale')) return true
+
+  // Benchmark/performance tables without actionable content
+  if (lower.includes('query performance') && lower.includes('![image]')) return true
+
+  // Pure comment quoting (starts with >) without actionable content
+  const lines = snippet.split('\n')
+  const quotedLines = lines.filter(l => l.trim().startsWith('>')).length
+  if (quotedLines > lines.length * 0.7 && lines.length > 3) return true
+
+  return false
+}
+
+/**
+ * Check if a project is Kubernetes-native (runs on or extends K8s).
+ * Non-K8s projects (databases, web servers, etc.) should not get K8s prerequisites.
+ */
+const K8S_NATIVE_CATEGORIES = new Set([
+  'orchestration', 'networking', 'security', 'observability',
+  'runtime', 'storage', 'app-definition', 'ai-agents', 'llm-serving',
+])
+
+const NON_K8S_PROJECTS = new Set([
+  'clickhouse', 'caddy', 'gitea', 'surrealdb', 'valkey', 'vault',
+  'milvus', 'netdata', 'ollama', 'langflow', 'grpc', 'vllm',
+  'podman-container-tools', 'lima', 'buildpacks', 'spin', 'cedar',
+])
+
+function isKubernetesNative(project) {
+  if (NON_K8S_PROJECTS.has(project.name)) return false
+  if (project.category && K8S_NATIVE_CATEGORIES.has(project.category)) return true
+  // Projects with k8sVersions field are K8s-related
+  if (project.k8sVersions && project.k8sVersions.length > 0) return true
+  return true // default to true for CNCF projects
+}
+
+/**
+ * Generate project-aware prerequisites instead of hardcoding K8s.
+ */
+function generatePrerequisites(project) {
+  if (isKubernetesNative(project)) {
+    return {
+      kubernetes: '>=1.24',
+      tools: ['kubectl'],
+      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
+    }
+  }
+
+  // Non-K8s project — tailor prerequisites
+  const tools = []
+  if (project.type === 'ai-platform') tools.push('python', 'pip')
+  else if (project.category === 'analytics-db') tools.push(project.name)
+  else if (project.category === 'git-hosting') tools.push('docker', 'git')
+  else tools.push(project.name)
+
+  return {
+    tools: tools.length > 0 ? tools : [project.name],
+    description: `A working ${project.displayName || project.name} installation or development environment.`,
+  }
 }
 
 /** Strip PR template boilerplate and return useful content only */
@@ -509,7 +593,9 @@ function detectMissionType(issue) {
   if (text.includes('deploy') || text.includes('install') || text.includes('setup') || text.includes('helm')) return 'deploy'
   if (text.includes('performance') || text.includes('slow') || text.includes('memory') || text.includes('cpu') || text.includes('leak')) return 'analyze'
   if (text.includes('security') || text.includes('cve') || text.includes('vulnerab')) return 'troubleshoot'
-  return 'troubleshoot'
+  // Feature/enhancement keywords — default for PRs that add new functionality
+  if (text.includes('feat') || text.includes('add') || text.includes('implement') || text.includes('support') || text.includes('new') || text.includes('enhance') || text.includes('introduce')) return 'feature'
+  return 'feature'
 }
 
 function extractLabels(issue) {
@@ -520,24 +606,45 @@ function extractLabels(issue) {
     .slice(0, 10)
 }
 
-function extractResourceKinds(issue) {
+function extractResourceKinds(issue, project) {
+  // Only extract K8s resource kinds for K8s-native projects
+  if (project && !isKubernetesNative(project)) return []
+
   const text = `${issue.title} ${issue.body || ''}`.toLowerCase()
   const kinds = []
+  // Use word-boundary matching to avoid false positives (e.g., "role" in "user role")
   const k8sResources = [
     'pod', 'deployment', 'service', 'ingress', 'configmap', 'secret',
-    'statefulset', 'daemonset', 'job', 'cronjob', 'namespace',
+    'statefulset', 'daemonset', 'cronjob', 'namespace',
     'persistentvolumeclaim', 'persistentvolume', 'storageclass',
     'serviceaccount', 'clusterrole', 'clusterrolebinding',
-    'role', 'rolebinding', 'networkpolicy', 'node',
+    'rolebinding', 'networkpolicy',
     'replicaset', 'horizontalpodautoscaler', 'poddisruptionbudget',
     'customresourcedefinition', 'mutatingwebhookconfiguration',
     'validatingwebhookconfiguration',
   ]
+  // Ambiguous words that need K8s context to count
+  const AMBIGUOUS_KINDS = new Set(['job', 'role', 'node'])
+  const hasK8sContext = /\bkubectl\b|\bkubernetes\b|\bk8s\b|\bhelm\b|\bkubeconfig\b/i.test(text)
+
   for (const kind of k8sResources) {
-    if (text.includes(kind)) {
+    // Use word boundary regex to avoid substring matches
+    const regex = new RegExp(`\\b${kind}s?\\b`, 'i')
+    if (regex.test(text)) {
       kinds.push(kind.charAt(0).toUpperCase() + kind.slice(1))
     }
   }
+
+  // Only include ambiguous kinds if there's clear K8s context
+  if (hasK8sContext) {
+    for (const kind of AMBIGUOUS_KINDS) {
+      const regex = new RegExp(`\\b${kind}s?\\b`, 'i')
+      if (regex.test(text)) {
+        kinds.push(kind.charAt(0).toUpperCase() + kind.slice(1))
+      }
+    }
+  }
+
   return [...new Set(kinds)].slice(0, 8)
 }
 
@@ -638,7 +745,7 @@ async function generateMission(project, issue, resolution, linkedPR) {
         ...extractLabels(issue),
       ].filter((v, i, a) => a.indexOf(v) === i),
       cncfProjects: [project.name],
-      targetResourceKinds: extractResourceKinds(issue),
+      targetResourceKinds: extractResourceKinds(issue, project),
       difficulty: missionDifficulty,
       issueTypes: [missionType],
       maturity: project.maturity,
@@ -651,11 +758,7 @@ async function generateMission(project, issue, resolution, linkedPR) {
       comments: issue.comments || 0,
       synthesizedBy: llmResult ? 'llm' : 'regex',
     },
-    prerequisites: {
-      kubernetes: '>=1.24',
-      tools: ['kubectl'],
-      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
-    },
+    prerequisites: generatePrerequisites(project),
     security: {
       scannedAt: new Date().toISOString(),
       scannerVersion: 'cncf-gen-2.0.0',

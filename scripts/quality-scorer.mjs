@@ -4,7 +4,7 @@
  * Missions below the threshold are dropped.
  */
 
-const DEFAULT_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
+const DEFAULT_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10)
 
 /**
  * Score a mission object on quality dimensions.
@@ -187,6 +187,10 @@ function scoreUniqueness(mission) {
   const resSum = (mission.resolution?.summary || '').toLowerCase()
   const allText = desc + ' ' + resSum
 
+  // Collect all step/snippet text for garbage detection
+  const allSnippets = (mission.resolution?.codeSnippets || []).join('\n').toLowerCase()
+  const allStepDescs = (mission.steps || []).map(s => (s.description || '').toLowerCase()).join('\n')
+
   // Penalize generic filler phrases
   const genericPhrases = [
     'review the issue',
@@ -200,6 +204,26 @@ function scoreUniqueness(mission) {
   ]
   for (const phrase of genericPhrases) {
     if (allText.includes(phrase)) score -= 2
+  }
+
+  // HEAVY penalty for Codecov/CI bot garbage in content (-10 points)
+  if (allSnippets.includes('codecov') || allSnippets.includes('coverage δ') || allStepDescs.includes('codecov')) {
+    score -= 10
+  }
+
+  // Penalty for CI bot messages in resolution (-5 points)
+  if (resSum.includes('invalid pr title') || resSum.includes('has been automatically marked as stale') || resSum.includes('rerun ut')) {
+    score -= 5
+  }
+
+  // Penalty for git diff in steps (-5 points, not actionable config)
+  if (allStepDescs.includes('diff --git') || allStepDescs.includes('index ') && allStepDescs.includes('--- a/')) {
+    score -= 5
+  }
+
+  // Penalty for "Changelog category" PR template in description (-3 points)
+  if (desc.includes('changelog category') || desc.includes('changelog entry')) {
+    score -= 3
   }
 
   // Penalize if steps are all generic titles
