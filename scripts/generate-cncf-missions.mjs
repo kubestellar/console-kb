@@ -564,6 +564,8 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/^\s*\/\w+.*$/gm, '')
   // Remove GitHub asset URLs (screenshots uploaded to github — not useful in text)
   cleaned = cleaned.replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
+  // Remove @username mentions (not useful outside GitHub context)
+  cleaned = cleaned.replace(/@[a-zA-Z0-9_-]+/g, '')
   // Remove "Credit where credit is due:" attribution lines
   cleaned = cleaned.replace(/^\s*Credit where credit is due:.*$/gm, '')
   // Remove "Demo:" lines with GitHub URLs
