@@ -42,7 +42,7 @@ const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-generated')
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
-const MAX_COPILOT_ISSUES_PER_RUN = parseInt(process.env.MAX_COPILOT_ISSUES || '10', 10)
+const MAX_COPILOT_ISSUES_PER_RUN = parseInt(process.env.MAX_COPILOT_ISSUES || '5', 10)
 const ISSUE_LABEL_PREFIX = '[Mission Gen]'
 const COPILOT_REPO_OWNER = process.env.COPILOT_REPO_OWNER || 'kubestellar'
 const COPILOT_REPO_NAME = process.env.COPILOT_REPO_NAME || 'console-kb'
@@ -405,6 +405,14 @@ function cleanText(text) {
     .replace(/!\[.*?\]\(https?:\/\/[^)]+\)/g, '')
     // Strip Codecov table rows
     .replace(/\|[^|]*codecov[^|]*\|[^|]*\|[^|]*\|/gi, '')
+    // Strip "Checklist:" sections and everything after (PR template boilerplate)
+    .replace(/\n\s*Checklist:?\s*\n[\s\S]*$/gi, '')
+    // Strip "Note on DCO:" sections
+    .replace(/\n\s*Note on DCO:?\s*\n[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip checkbox lines (DCO, PR template checklists)
+    .replace(/^\s*[-*]\s*\[[ x]\]\s*.*/gm, '')
+    // Strip GitHub asset URLs
+    .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -502,6 +510,26 @@ function truncateAtWordBoundary(text, maxLen) {
   return truncated.slice(0, lastSpace)
 }
 
+/**
+ * Truncate at the last sentence boundary (period followed by space or end)
+ * within maxLen. Falls back to word boundary if no sentence break found.
+ */
+const MIN_SENTENCE_TRUNCATION_POINT = 50
+function truncateAtSentenceBoundary(text, maxLen) {
+  if (!text || text.length <= maxLen) return text || ''
+  const truncated = text.slice(0, maxLen)
+  // Find last sentence-ending punctuation followed by space or end
+  const sentenceEnd = Math.max(
+    truncated.lastIndexOf('. '),
+    truncated.lastIndexOf('.\n'),
+  )
+  if (sentenceEnd >= MIN_SENTENCE_TRUNCATION_POINT) {
+    return truncated.slice(0, sentenceEnd + 1) // include the period
+  }
+  // Fall back to word boundary
+  return truncateAtWordBoundary(text, maxLen)
+}
+
 /** Strip PR template boilerplate and return useful content only */
 function stripPRTemplate(text) {
   if (!text) return ''
@@ -522,14 +550,24 @@ function stripPRTemplate(text) {
   for (const re of templateHeaders) {
     cleaned = cleaned.replace(re, '')
   }
-  // Remove checkbox lines
-  cleaned = cleaned.replace(/^\s*-\s*\[[ x]\]\s*.*/gm, '')
+  // Remove checkbox lines (including DCO checklists like "* [x] Either (a) I've created...")
+  cleaned = cleaned.replace(/^\s*[-*]\s*\[[ x]\]\s*.*/gm, '')
+  // Remove "Checklist:" header and everything after it (common PR template section)
+  cleaned = cleaned.replace(/\n\s*Checklist:?\s*\n[\s\S]*$/gi, '')
+  // Remove "Note on DCO:" blocks
+  cleaned = cleaned.replace(/\n\s*Note on DCO:?\s*\n[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
   // Remove "Closes #N" / "Fixes #N" lines
-  cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?)\s+#\d+.*$/gim, '')
+  cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?)\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
   // Remove Signed-off-by
   cleaned = cleaned.replace(/^\s*Signed-off-by:.*$/gm, '')
   // Remove /kind /lgtm /approve bot commands
   cleaned = cleaned.replace(/^\s*\/\w+.*$/gm, '')
+  // Remove GitHub asset URLs (screenshots uploaded to github — not useful in text)
+  cleaned = cleaned.replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
+  // Remove "Credit where credit is due:" attribution lines
+  cleaned = cleaned.replace(/^\s*Credit where credit is due:.*$/gm, '')
+  // Remove "Demo:" lines with GitHub URLs
+  cleaned = cleaned.replace(/^\s*Demo:.*github\.com.*$/gm, '')
   // Collapse whitespace
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
   return cleaned
@@ -776,13 +814,25 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 
 /**
  * Build a description from the issue body, extracting error messages and symptoms.
+ * Varies phrasing by mission type — features don't "encounter errors".
  */
 function buildDescription(issue, resolution) {
   const body = truncateAtWordBoundary(issue.body || '', 500)
+  const reactions = issue.reactions?.total_count || 0
+  const mType = detectMissionType(issue)
+  const isFeature = mType === 'feature' || mType === 'deploy'
+
+  if (isFeature) {
+    return truncateAtWordBoundary(
+      `${issue.title}. Requested by ${reactions}+ users.`,
+      300,
+    )
+  }
+
   const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
   const symptom = errorMatch
     ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
-    : `${issue.title}. This issue affects ${issue.reactions?.total_count || 0}+ users.`
+    : `${issue.title}. This issue affects ${reactions}+ users.`
   return truncateAtWordBoundary(symptom, 300)
 }
 
@@ -806,7 +856,7 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
       status: 'completed',
       steps: buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution),
       resolution: {
-        summary: buildResolutionSummary(resolution, cleanSolution),
+        summary: buildResolutionSummary(resolution, cleanSolution, missionType),
         codeSnippets: (resolution.yamlSnippets || []).slice(0, 3).map(s => s.slice(0, 800)),
       },
     },
@@ -849,34 +899,65 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
   // Derive project-specific namespace and helm repo (not hardcoded cert-manager)
   const namespace = project.namespace || project.name
   const helmRepo = project.helmRepo || project.name
+  const mType = detectMissionType(issue)
+  const isFeature = mType === 'feature' || mType === 'deploy'
 
-  // Step 1: Identify the problem with specific diagnostics
+  // Step 1: Context — varies by mission type
   const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,120})/)?.[1]
 
-  if (k8sNative) {
-    steps.push({
-      title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
-      description: [
-        `Check for the issue in your ${project.name} deployment:`,
-        '```bash',
-        `kubectl get pods -n ${namespace} -l app=${project.name}`,
-        `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=100 | grep -i error`,
-        '```',
-        errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
-      ].join('\n')
-    })
+  if (isFeature) {
+    // Feature requests: check current state, not "look for errors"
+    if (k8sNative) {
+      steps.push({
+        title: `Check current ${project.name} deployment`,
+        description: [
+          `Verify your ${project.name} version and configuration:`,
+          '```bash',
+          `kubectl get pods -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
+          `helm list -n ${namespace} 2>/dev/null || echo "Not installed via Helm"`,
+          '```',
+          `This feature requires a working ${project.name} installation.`,
+        ].join('\n')
+      })
+    } else {
+      steps.push({
+        title: `Check current ${project.name} setup`,
+        description: [
+          `Verify your ${project.name} version and configuration:`,
+          '```bash',
+          `${project.name} version`,
+          '```',
+          `This feature requires a working ${project.name} installation.`,
+        ].join('\n')
+      })
+    }
   } else {
-    steps.push({
-      title: `Identify ${project.name} ${detectMissionType(issue)} symptoms`,
-      description: [
-        `Check for the issue in your ${project.name} installation:`,
-        '```bash',
-        `${project.name} version`,
-        `${project.name} status 2>&1 | head -20`,
-        '```',
-        errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
-      ].join('\n')
-    })
+    // Troubleshoot/analyze: look for specific errors
+    if (k8sNative) {
+      steps.push({
+        title: `Identify ${project.name} ${mType} symptoms`,
+        description: [
+          `Check for the issue in your ${project.name} deployment:`,
+          '```bash',
+          `kubectl get pods -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
+          `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=100 | grep -i error`,
+          '```',
+          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+        ].join('\n')
+      })
+    } else {
+      steps.push({
+        title: `Identify ${project.name} ${mType} symptoms`,
+        description: [
+          `Check for the issue in your ${project.name} installation:`,
+          '```bash',
+          `${project.name} version`,
+          `${project.name} status 2>&1 | head -20`,
+          '```',
+          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+        ].join('\n')
+      })
+    }
   }
 
   // Step 2: Check current configuration
@@ -963,28 +1044,52 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
     })
   }
 
-  // Step 5: Verify the fix
-  if (k8sNative) {
-    steps.push({
-      title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
-      description: [
-        `Verify the fix by checking that the original error no longer occurs:`,
-        '```bash',
-        `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=50 --since=5m`,
-        `kubectl get events -n ${namespace} --sort-by='.lastTimestamp' | tail -10`,
-        '```',
-        errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears in logs.` : 'Confirm that the issue symptoms are gone.',
-      ].join('\n')
-    })
+  // Step 5: Verify — varies by mission type
+  if (isFeature) {
+    if (k8sNative) {
+      steps.push({
+        title: `Verify the feature works`,
+        description: [
+          `Test that the new capability is working as expected:`,
+          '```bash',
+          `kubectl get pods -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
+          `kubectl get events -n ${namespace} --sort-by='.lastTimestamp' | tail -10`,
+          '```',
+          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60)}" is functioning correctly.`,
+        ].join('\n')
+      })
+    } else {
+      steps.push({
+        title: `Verify the feature works`,
+        description: [
+          `Test that the new capability is working as expected.`,
+          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60)}" is functioning correctly.`,
+        ].join('\n')
+      })
+    }
   } else {
-    steps.push({
-      title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
-      description: [
-        `Verify the fix by checking that the original error no longer occurs:`,
-        `Test ${project.name} to confirm the issue is resolved.`,
-        errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears.` : 'Confirm that the issue symptoms are gone.',
-      ].join('\n')
-    })
+    if (k8sNative) {
+      steps.push({
+        title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+        description: [
+          `Verify the fix by checking that the original error no longer occurs:`,
+          '```bash',
+          `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=50 --since=5m`,
+          `kubectl get events -n ${namespace} --sort-by='.lastTimestamp' | tail -10`,
+          '```',
+          errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears in logs.` : 'Confirm that the issue symptoms are gone.',
+        ].join('\n')
+      })
+    } else {
+      steps.push({
+        title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+        description: [
+          `Verify the fix by checking that the original error no longer occurs:`,
+          `Test ${project.name} to confirm the issue is resolved.`,
+          errorMatch ? `Confirm that \`${errorMatch.trim()}\` no longer appears.` : 'Confirm that the issue symptoms are gone.',
+        ].join('\n')
+      })
+    }
   }
 
   return steps
@@ -993,12 +1098,18 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
 /**
  * Build resolution summary from available context.
  * Strips PR template boilerplate and avoids tautological filler text.
+ * Ensures the summary ends at a sentence boundary (period, not mid-word).
  */
-function buildResolutionSummary(resolution, cleanSolution) {
+function buildResolutionSummary(resolution, cleanSolution, missionType) {
   if (cleanSolution && cleanSolution.length > 50) {
-    return `The root cause is: ${truncateAtWordBoundary(cleanSolution, 400)}.`
+    const summary = truncateAtSentenceBoundary(cleanSolution, 400)
+    // Skip if after cleaning it's just empty or too short to be useful
+    if (summary.length < 30) {
+      return `See the linked issue and PR for the community-verified solution.`
+    }
+    return summary
   }
-  return `This issue was resolved by applying the fix from the linked PR. The root cause was identified and addressed by the community.`
+  return `See the linked issue and PR for the community-verified solution.`
 }
 
 /**
