@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubeflow-6228-kfam-is-unprotected-and-any-user-can-manage-all-profiles-namespace",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubeflow: KFAM is unprotected and any user can manage all profiles / namespaces of other users.",
+    "description": "KFAM is unprotected and any user can manage all profiles / namespaces of other users.. This issue affects 9+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubeflow troubleshoot symptoms",
+        "description": "Check for the issue in your kubeflow deployment:\n```bash\nkubectl get pods -n cert-manager -l app=kubeflow\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `HTTP/1.1 403 Forbidden`"
+      },
+      {
+        "title": "Check current Pod configuration",
+        "description": "Inspect the relevant kubeflow resources:\n```bash\nkubectl get pod -A\nkubectl describe pod <name> -n <namespace>\n```\nKubeflow version: 1.4\nKFAM is completely unprotected.\n\nAny user can just start a Jupyterlab and add itself to other namespaces , delete profiles / namespaces and create new ones according to https://g"
+      },
+      {
+        "title": "Apply the fix for KFAM is unprotected and any user can manage all profiles / n",
+        "description": "Solves: https://github.com/kubeflow/kubeflow/issues/6228\n\nThis PR secures access to KFAM so it is not accessible to users.\n```yaml\napiVersion: security.istio.io/v1beta1\r\nkind: AuthorizationPolicy\r\nmetadata:\r\n  name: kfam\r\n  namespace: kubeflow\r\n  labels:\r\n    kustomize.component: profiles\r\nspec:\r\n  action: ALLOW\r\n  rules:\r\n  - from:\r\n    - source:\r\n        principals: [cluster.local/ns/kubeflow/sa/centraldashboard]\r\n    to:\r\n    - operation:\r\n        methods: [\"GET\"]\r\n    - operation:\r\n        methods: [\"POST\"]\r\n    - operation:\r\n        methods: [\"DELETE\"]\r\n  selector:\r\n    matchLabels:\r\n      kustomize.component: profiles\n```"
+      },
+      {
+        "title": "Confirm KFAM is unprotected and any user can manage all pr is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubeflow -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `HTTP/1.1 403 Forbidden` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: Solves: https://github.com/kubeflow/kubeflow/issues/6228\n\nThis PR secures access to KFAM so it is not accessible to users.. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "apiVersion: security.istio.io/v1beta1\r\nkind: AuthorizationPolicy\r\nmetadata:\r\n  name: kfam\r\n  namespace: kubeflow\r\n  labels:\r\n    kustomize.component: profiles\r\nspec:\r\n  action: ALLOW\r\n  rules:\r\n  - from:\r\n    - source:\r\n        principals: [cluster.local/ns/kubeflow/sa/centraldashboard]\r\n    to:\r\n    - operation:\r\n        methods: [\"GET\"]\r\n    - operation:\r\n        methods: [\"POST\"]\r\n    - operation:\r\n        methods: [\"DELETE\"]\r\n  selector:\r\n    matchLabels:\r\n      kustomize.component: profiles",
+        "kind: Deployment\r\napiVersion: apps/v1\r\nmetadata:\r\n  name: centraldashboard\r\n  namespace: kubeflow\r\nspec:\r\n  template:\r\n    metadata:\r\n      annotations:\r\n        sidecar.istio.io/inject: 'true'\r\n---\r\napiVersion: apps/v1\r\nkind: Deployment\r\nmetadata:\r\n  labels:\r\n    kustomize.component: profiles\r\n  name: profiles-deployment\r\n  namespace: kubeflow\r\nspec:\r\n  replicas: 1\r\n  selector:\r\n    matchLabels:\r\n      kustomize.component: profiles\r\n  template:\r\n    metadata:\r\n      annotations:\r\n        sidecar.istio.io/inject: \"true\"",
+        "kind: NetworkPolicy\r\napiVersion: networking.k8s.io/v1\r\nmetadata:\r\n  name: kubeflow\r\n  namespace: kubeflow\r\nspec:\r\n  podSelector:\r\n    matchExpressions:\r\n      - key: app\r\n        operator: NotIn\r\n        values:\r\n          - minio        # artifact storage\r\n          - ml-pipeline  # pipeline api server\r\n          - poddefaults  # mutating webhook \r\n          - cache-server # mutating webhook\r\n      - key: component\r\n        operator: NotIn\r\n        values:\r\n          - metadata-grpc-server # metadata server\r\n      - key: katib.kubeflow.org/component\r\n        operator: NotIn\r\n        values:\r\n          - controller # katib mutating webhook to add metrics logger\r\n          - db-manager # the metrics loggers write directly to this database\r\n      - key: control-plane\r\n        operator: NotIn"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubeflow",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubeflow"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Ingress",
+      "Namespace",
+      "Networkpolicy"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeflow/kubeflow/issues/6228",
+      "repo": "https://github.com/kubeflow/kubeflow",
+      "pr": "https://github.com/kubeflow/kubeflow/pull/6077"
+    },
+    "reactions": 9,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubeflow installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:23:16.944Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
