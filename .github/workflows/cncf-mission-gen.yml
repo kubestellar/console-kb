@@ -170,9 +170,21 @@ jobs:
           if [ -f search-state.json ] && ! git diff --quiet search-state.json 2>/dev/null; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add search-state.json
-            git commit -s -m "🌱 Update CNCF mission search state ($(date +%Y-%m-%d))"
-            git push origin master
+            # Retry loop handles concurrent push conflicts from parallel batch runs
+            MAX_RETRIES=3
+            for attempt in $(seq 1 $MAX_RETRIES); do
+              git fetch origin master
+              git rebase origin/master || git rebase --abort
+              git add search-state.json
+              git diff --cached --quiet && break  # nothing to commit after rebase
+              git commit -s -m "🌱 Update CNCF mission search state ($(date +%Y-%m-%d))" || true
+              if git push origin master; then
+                echo "Search state pushed (attempt $attempt)"
+                break
+              fi
+              echo "Push failed (attempt $attempt/$MAX_RETRIES), retrying..."
+              sleep 2
+            done
           fi
       - name: Write workflow summary
         run: |
