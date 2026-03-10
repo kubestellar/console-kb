@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cert-manager-7138-failed-to-generate-serving-certificate",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cert-manager: Failed to generate serving certificate",
+    "description": "Failed to generate serving certificate. Users encounter: \"in the logs of cert-manager webhook pod:\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cert-manager troubleshoot symptoms",
+        "description": "Check for the issue in your cert-manager deployment:\n```bash\nkubectl get pods -n cert-manager -l app=cert-manager\nkubectl logs -l app.kubernetes.io/name=cert-manager -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `in the logs of cert-manager webhook pod:`"
+      },
+      {
+        "title": "Check current Pod configuration",
+        "description": "Inspect the relevant cert-manager resources:\n```bash\nkubectl get pod -A\nkubectl describe pod <name> -n <namespace>\n```\n**Describe the bug**:\n\nAfter we updated cert-manager to `v1.15.0`, we started to see the following error in the logs of cert-manager webhook pod:\n`\"Failed to generate serving certificate, retrying...\""
+      },
+      {
+        "title": "Apply the fix for Failed to generate serving certificate",
+        "description": "Adds unit tests and intruces a few minor changes to improve logging and make the test work as expected. Should make the logs a lot more insightful.\n\n### Kind\n\n### Release Note\n```yaml\n$ kc -n cert-manager logs cert-manager-webhook-7476bf949b-95hzh\r\nW0627 11:55:43.185374       1 client_config.go:659] Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.\r\nI0627 11:55:43.186580       1 webhook.go:128] \"using dynamic certificate generating using CA stored in Secret resource\" logger=\"cert-manager.webhook.webhook\" secret_namespace=\"cert-manager\" secret_name=\"cert-manager-webhook-ca\"\r\nI0627 11:55:43.279927       1 server.go:152] \"listening for insecure healthz connections\" logger=\"cert-manager.webhook\" address=6080\r\nI0627 11:55:43.28018\n```"
+      },
+      {
+        "title": "Confirm Failed to generate serving certificate is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cert-manager -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `in the logs of cert-manager webhook pod:` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: Adds unit tests and intruces a few minor changes to improve logging and make the test work as expected. Should make the logs a lot more insightful.\n\n### Kind\n\n### Release Note. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "$ kc -n cert-manager logs cert-manager-webhook-7476bf949b-95hzh\r\nW0627 11:55:43.185374       1 client_config.go:659] Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.\r\nI0627 11:55:43.186580       1 webhook.go:128] \"using dynamic certificate generating using CA stored in Secret resource\" logger=\"cert-manager.webhook.webhook\" secret_namespace=\"cert-manager\" secret_name=\"cert-manager-webhook-ca\"\r\nI0627 11:55:43.279927       1 server.go:152] \"listening for insecure healthz connections\" logger=\"cert-manager.webhook\" address=6080\r\nI0627 11:55:43.280188       1 server.go:183] \"Registering webhook\" logger=\"cert-manager.controller-runtime.webhook\" path=\"/mutate\"\r\nI0627 11:55:43.280265       1 server.go:183] \"Registering webhook\" logger=\"cert-manager.",
+        "I encounter the same error in:\r\n\r\n        Environment details:\r\n        \r\n        Kubernetes version: 1.30.0\r\n        Cloud-provider/provisioner: KUBEADM BareMetal\r\n        cert-manager version: 1.15.1\r\n        Install method: helm\n+1 confirmed also having same issue during upgrade from 1.14.6 to 1.15.1.\n+2 We have recently faced the same issue while upgrading cert manager from 1.14.6 to 1.15.1 \n+3 same issue\n\"+\"\n/priority important-soon\nI'm having this issue as well with 1.15.1.\n+0\r\nKubernetes: v1.30.3\r\nCert Manager: v1.15.1\r\nCustom CA cert\r\nHelm\r\n\r\nEdit: for me 1.29.7 works with 1.15.2 \r\nactual issue was with flannel upgrade to 0.24.5 (webhook was not reachable)\nAlso seeing this in 1.15.3\nalso seeing the same problem with 1.15.3\nFor a freshly created cluster and cert manager installation",
+        "Same issue here @yinxulai \n> matic signing started working correctly. This workaround successfully resolved the problem in my environment.\r\n\r\nNo, it is not just registration in my case... when it is a new deployment of Cert Manager it does not register the certificate and therefore does not initialize correctly, however if it is an upgrade and you already had the certificate, the startup occurs without problem.\n@yinxulai Thanks for the log output. The logging of this was improved for cert-manager 1.16.x. And I only see one \"error\" in your log:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cert-manager",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cert-manager"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Secret",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cert-manager/cert-manager/issues/7138",
+      "repo": "https://github.com/cert-manager/cert-manager",
+      "pr": "https://github.com/cert-manager/cert-manager/pull/7229"
+    },
+    "reactions": 39,
+    "comments": 47,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cert-manager installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T05:29:15.364Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
