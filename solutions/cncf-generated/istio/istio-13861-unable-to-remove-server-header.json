@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "istio-13861-unable-to-remove-server-header",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "istio: Unable to remove server header",
+    "description": "Unable to remove server header. Requested by 29+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current istio deployment",
+        "description": "Verify your istio version and configuration:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nhelm list -n istio 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working istio installation."
+      },
+      {
+        "title": "Review istio configuration",
+        "description": "Inspect the relevant istio configuration:\n```bash\nkubectl get all -n istio -l app.kubernetes.io/name=istio\nkubectl get configmap -n istio -l app.kubernetes.io/part-of=istio\n```\n**Bug description**\nI should be able to remove/disable the server: istio-envoy when using istio  \n\n**Expected behavior**\n\nusing the following configuration on a virtual service, I should be able to \n\nHeaders:\n      Response:\n        Remove:\n        "
+      },
+      {
+        "title": "Apply the fix for Unable to remove server header",
+        "description": "any suggestions/concerns in elevating this configuration option to a first class API so users don't need to rely on EnvoyFilter? Happy to discuss it during Networking WG but let's do the first round of back and forth on this issue.\n```yaml\napiVersion: config.istio.io/v1alpha2\r\nkind: rule\r\nmetadata:\r\n  name: remove-server\r\n  namespace: istio-system\r\nspec:\r\n  match: source.workload.name == \"istio-ingressgateway\"\r\n  responseHeaderOperations:\r\n    - name: server\r\n      operation: REMOVE\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nkubectl get events -n istio --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Unable to remove server header\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "any suggestions/concerns in elevating this configuration option to a first class API so users don't need to rely on EnvoyFilter? Happy to discuss it during Networking WG but let's do the first round of back and forth on this issue.",
+      "codeSnippets": [
+        "apiVersion: config.istio.io/v1alpha2\r\nkind: rule\r\nmetadata:\r\n  name: remove-server\r\n  namespace: istio-system\r\nspec:\r\n  match: source.workload.name == \"istio-ingressgateway\"\r\n  responseHeaderOperations:\r\n    - name: server\r\n      operation: REMOVE",
+        "apiVersion: networking.istio.io/v1alpha3\r\nkind: Gateway\r\nmetadata:\r\n  name: ingress\r\nspec:\r\n  selector:\r\n    istio: ingressgateway\r\n  httpOptions:\r\n    server_name: Apache",
+        "apiVersion: networking.istio.io/v1alpha3\r\nkind: EnvoyFilter\r\nmetadata:\r\n  name: server-name-tweaks\r\n  namespace: istio-system\r\nspec:\r\n  configPatches:\r\n  - applyTo: NETWORK_FILTER # http connection manager is a filter in Envoy\r\n    match:\r\n      listener:\r\n        filterChain:\r\n          filter:\r\n            name: \"envoy.http_connection_manager\"\r\n    patch:\r\n      operation: MERGE\r\n      value:\r\n        config:\r\n          server_name: \"custom server name\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "istio",
+      "graduated",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "istio"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/istio/istio/issues/13861",
+      "repo": "https://github.com/istio/istio"
+    },
+    "reactions": 29,
+    "comments": 53,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with istio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T23:46:35.784Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
