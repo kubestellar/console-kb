@@ -761,6 +761,18 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 }
 
 /**
+ * Build a description from the issue body, extracting error messages and symptoms.
+ */
+function buildDescription(issue, resolution) {
+  const body = (issue.body || '').slice(0, 500)
+  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
+  const symptom = errorMatch
+    ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
+    : `${issue.title}. This issue affects ${issue.reactions?.total_count || 0}+ users.`
+  return symptom.slice(0, 300)
+}
+
+/**
  * Build the full mission JSON object with real pre-filled content.
  */
 function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty }) {
