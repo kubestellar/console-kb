@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-1014-compact-offline-deduplication",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: Compact: Offline deduplication",
+    "description": "Compact: Offline deduplication. This issue affects 31+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify thanos feature symptoms",
+        "description": "Check for the issue in your thanos deployment:\n```bash\nkubectl get pods -n cert-manager -l app=thanos\nkubectl logs -l app.kubernetes.io/name=thanos -n cert-manager --tail=100 | grep -i error\n```\nLook for errors related to: Compact: Offline deduplication"
+      },
+      {
+        "title": "Check current resource configuration",
+        "description": "Inspect the relevant thanos resources:\n```bash\nkubectl get resource -A\nkubectl describe resource <name> -n <namespace>\n```\nCurrently Thanos provides dedup function in Query component, it can merge the data on the fly from Prometheus HA pairs or remote object storage.\nHowever, the Query dedup function is not query efficien"
+      },
+      {
+        "title": "Apply the fix for Compact: Offline deduplication",
+        "description": "As the discussion in #1014, implement a new feature in compactor which provides offline deduplication function for the data from different replicas.\n\nThe offline deduplication follow the same design with [query deduplication](https://thanos.io/components/query.md/#deduplication). The user needs to s\n```yaml\n| 01E4N18DW7663APZ5V0B3D3CY1 | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          | false       | replica=thanos-receive-0 | 0s         | receive   |\r\n| 01E4N18DW8A4Z0ES2GCXBFEVVH | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          | false       | replica=thanos-receive-2 | 0s         | receive   |\r\n| 01E4N18DW8AR0CRXN0F4N0F7VY | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          \n```"
+      },
+      {
+        "title": "Confirm Compact: Offline deduplication is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=thanos -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: As the discussion in #1014, implement a new feature in compactor which provides offline deduplication function for the data from different replicas.\n\nThe offline deduplication follow the same design with [query deduplication](https://thanos.io/components/query.md/#deduplication). The user needs to specify replica label by config `dedup.replica-label` before enable it, and the function uses current. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "| 01E4N18DW7663APZ5V0B3D3CY1 | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          | false       | replica=thanos-receive-0 | 0s         | receive   |\r\n| 01E4N18DW8A4Z0ES2GCXBFEVVH | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          | false       | replica=thanos-receive-2 | 0s         | receive   |\r\n| 01E4N18DW8AR0CRXN0F4N0F7VY | 30-03-2020 05:30:00 | 30-03-2020 06:00:00 | 30m0s    | 39h30m0s   | 545,049    | 50,824,911     | 545,054     | 1          | false       | replica=thanos-receive-1 | 0s         | receive   |",
+        "level=info ts=2020-03-30T02:24:48.810475048Z caller=compact.go:441 msg=\"compact blocks\" count=3 mint=1583366400000 maxt=1584576000000 ulid=01E4M5KHECGZQ1BV66E6SQGH78 sources=\"[01E3V4JCD9Z5BK5B8A5KSYGMV3 01E3WMG1NXY78KB6GKXR594FMS 01E3T3609JKQ5V1TKZ8NYTGE58]\" duration=4h13m14.923098503s\r\nlevel=info ts=2020-03-30T02:24:48.955331391Z caller=compact.go:704 compactionGroup=0@{} compactionGroupKey=0@17241709254077376921 msg=\"compacted blocks\" blocks=\"[/data/compact/0@17241709254077376921/01E3V4JCD9Z5BK5B8A5KSYGMV3 /data/compact/0@17241709254077376921/01E3WMG1NXY78KB6GKXR594FMS /data/compact/0@17241709254077376921/01E3T3609JKQ5V1TKZ8NYTGE58]\" duration=4h13m15.067940785s overlapping_blocks=true\r\nlevel=info ts=2020-03-30T02:27:09.523306206Z caller=bucket.go:487 msg=\"synchronizing block metadata\"\r\nl"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/1014",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/1275"
+    },
+    "reactions": 31,
+    "comments": 43,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with thanos installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:24:07.276Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
