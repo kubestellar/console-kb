@@ -601,7 +601,10 @@ function slugify(text) {
 
 function detectMissionType(issue) {
   const text = `${issue.title} ${(issue.labels || []).map(l => l.name).join(' ')}`.toLowerCase()
+  // Bug/error patterns — check first since these override feature keywords
   if (text.includes('bug') || text.includes('crash') || text.includes('error') || text.includes('fix')) return 'troubleshoot'
+  // Session/auth issues are troubleshooting, not features
+  if (text.includes('logged out') || text.includes('timeout') || text.includes('session expir') || text.includes('stopped working') || text.includes('not working') || text.includes('fails') || text.includes('failing') || text.includes('broken')) return 'troubleshoot'
   if (text.includes('upgrade') || text.includes('migration') || text.includes('breaking') || text.includes('deprecat')) return 'upgrade'
   if (text.includes('deploy') || text.includes('install') || text.includes('setup') || text.includes('helm')) return 'deploy'
   if (text.includes('performance') || text.includes('slow') || text.includes('memory') || text.includes('cpu') || text.includes('leak')) return 'analyze'
@@ -627,7 +630,7 @@ function extractResourceKinds(issue, project) {
   const kinds = []
   // Use word-boundary matching to avoid false positives (e.g., "role" in "user role")
   const k8sResources = [
-    'pod', 'deployment', 'service', 'ingress', 'configmap', 'secret',
+    'pod', 'deployment', 'ingress', 'configmap',
     'statefulset', 'daemonset', 'cronjob', 'namespace',
     'persistentvolumeclaim', 'persistentvolume', 'storageclass',
     'serviceaccount', 'clusterrole', 'clusterrolebinding',
@@ -636,8 +639,10 @@ function extractResourceKinds(issue, project) {
     'customresourcedefinition', 'mutatingwebhookconfiguration',
     'validatingwebhookconfiguration',
   ]
-  // Ambiguous words that need K8s context to count
-  const AMBIGUOUS_KINDS = new Set(['job', 'role', 'node'])
+  // Ambiguous words that need explicit K8s context (kubectl/helm/k8s mention) to count
+  // "service" matches microservice/web service, "secret" matches client secret,
+  // "role" matches user role, "node" matches Node.js
+  const AMBIGUOUS_KINDS = new Set(['job', 'role', 'node', 'service', 'secret'])
   const hasK8sContext = /\bkubectl\b|\bkubernetes\b|\bk8s\b|\bhelm\b|\bkubeconfig\b/i.test(text)
 
   for (const kind of k8sResources) {
@@ -962,28 +967,29 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
     }
   }
 
-  // Step 2: Check current configuration
-  const resourceKinds = extractResourceKinds({ body })
-  const primaryResource = resourceKinds[0] || ''
-
-  if (k8sNative && primaryResource) {
+  // Step 2: Understand the issue context
+  // Don't use auto-detected resourceKinds for kubectl commands — they produce
+  // false positives (e.g., "service" from "microservice", "role" from "user role").
+  // Instead, describe the issue context with the project-specific configuration.
+  const descSnippet = truncateAtSentenceBoundary(cleanDesc, 250)
+  if (k8sNative) {
     steps.push({
-      title: `Check current ${primaryResource} configuration`,
+      title: `Review ${project.name} configuration`,
       description: [
-        `Inspect the relevant ${project.name} resources:`,
+        `Inspect the relevant ${project.name} configuration:`,
         '```bash',
-        `kubectl get ${primaryResource.toLowerCase()} -A`,
-        `kubectl describe ${primaryResource.toLowerCase()} <name> -n ${namespace}`,
+        `kubectl get all -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
+        `kubectl get configmap -n ${namespace} -l app.kubernetes.io/part-of=${project.name}`,
         '```',
-        truncateAtWordBoundary(cleanDesc, 200),
+        descSnippet,
       ].join('\n')
     })
   } else {
     steps.push({
-      title: `Check current ${project.name} configuration`,
+      title: `Review ${project.name} configuration`,
       description: [
         `Review the relevant ${project.name} configuration:`,
-        truncateAtWordBoundary(cleanDesc, 300),
+        descSnippet,
       ].join('\n')
     })
   }
