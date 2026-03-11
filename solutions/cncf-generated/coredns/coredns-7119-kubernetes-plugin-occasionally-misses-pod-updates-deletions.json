@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "coredns-7119-kubernetes-plugin-occasionally-misses-pod-updates-deletions",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "coredns: kubernetes plugin occasionally misses pod updates/deletions",
+    "description": "kubernetes plugin occasionally misses pod updates/deletions. This issue affects 5+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify coredns troubleshoot symptoms",
+        "description": "Check for the issue in your coredns deployment:\n```bash\nkubectl get pods -n coredns -l app.kubernetes.io/name=coredns\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=100 | grep -i error\n```\nLook for error: `just drops deltas silently and nothing happens, watches are not restarted and  there are no error messages. Maybe in cas`"
+      },
+      {
+        "title": "Review coredns configuration",
+        "description": "Inspect the relevant coredns configuration:\n```bash\nkubectl get all -n coredns -l app.kubernetes.io/name=coredns\nkubectl get configmap -n coredns -l app.kubernetes.io/part-of=coredns\n```\n**What happened**:\nIn my k8s cluster, I am using `kubernetes` plugin with `pods` set to `verified`. CoreDNS should resolve pod names like `1-2-3-4.ns.pod.cluster.local.` only for pods existing in given namespace."
+      },
+      {
+        "title": "Apply the fix for kubernetes plugin occasionally misses pod updates/deletions",
+        "description": "### 1. Why is this pull request needed and what does it do?\nThis PR fixes handling of pods having `DeletionTimestamp` set what ocassionally leads to deltas being lost.\n\n### 2. Which issues (if any) are related?\nThis PR fixes #7119.\n\n### 3. Which documentation changes (if any) need to be\n```yaml\nwhich escapes the loop in case of error. One of the errors returned by `convert()` is `errPodTerminating` which is caused by pods having `deletionTimestamp` set. This is normal for a pod to have `deletionTimestamp` set in `cache.Updated` delta before `cache.Deleted` comes.\nThe problem is that such pod exits the loop and following deltas are not processed. Usually we have only one delta and everything works, but from time to time more deltas are provided by informer and we drop events.\n\nIn my case, a `cache.Updated` delta is followed by `cache.Deleted` delta for the same pod. When this happens,\n```"
+      },
+      {
+        "title": "Confirm kubernetes plugin occasionally misses pod is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=50 --since=5m\nkubectl get events -n coredns --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `just drops deltas silently and nothing happens, watches are not restarted and  there are no error messages. Maybe in cas` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "### 1. Why is this pull request needed and what does it do?\nThis PR fixes handling of pods having `DeletionTimestamp` set what ocassionally leads to deltas being lost.\n\n### 2. Which issues (if any) are related?\nThis PR fixes #7119.\n\n### 3. Which documentation changes (if any) need to be made?\nN/A\n\n### 4. Does this introduce a backward incompatible change or deprecation?\nNo",
+      "codeSnippets": [
+        "which escapes the loop in case of error. One of the errors returned by `convert()` is `errPodTerminating` which is caused by pods having `deletionTimestamp` set. This is normal for a pod to have `deletionTimestamp` set in `cache.Updated` delta before `cache.Deleted` comes.\nThe problem is that such pod exits the loop and following deltas are not processed. Usually we have only one delta and everything works, but from time to time more deltas are provided by informer and we drop events.\n\nIn my case, a `cache.Updated` delta is followed by `cache.Deleted` delta for the same pod. When this happens, CoreDNS does not ever remove this pod from internal state.\n\nA simple patch resolves the issue and server works as expected:",
+        "Note that similar check is present in `cache.Deleted` case below, so pods containing `deletionTimestamp` are removed correctly if they are not preceeded by a delta returning error.\n\nThere are more ways of exiting aforementioned loop with error, although I have never encoutered them. I am not sure if we should ever return with error. From my observation returning error just drops deltas silently and nothing happens, watches are not restarted and  there are no error messages. Maybe in case of any errors we should just `continue` and proces all deltas?\n\nI can provide PR with above patch.\n\n**Environment**:\n- the version of CoreDNS: 1.11.4 (the same code present in master)\n- Corefile: (relevant fragment)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "coredns",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "coredns"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/coredns/coredns/issues/7119",
+      "repo": "https://github.com/coredns/coredns",
+      "pr": "https://github.com/coredns/coredns/pull/7131"
+    },
+    "reactions": 5,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with coredns installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:52:15.628Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
