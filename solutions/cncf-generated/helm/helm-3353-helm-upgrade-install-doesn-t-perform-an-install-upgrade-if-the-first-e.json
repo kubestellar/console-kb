@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-3353-helm-upgrade-install-doesn-t-perform-an-install-upgrade-if-the-first-e",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: `helm upgrade --install` doesn't perform an install/upgrade if the first ever install fails",
+    "description": "`helm upgrade --install` doesn't perform an install/upgrade if the first ever install fails. This issue affects 87+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify helm troubleshoot symptoms",
+        "description": "Check for the issue in your helm deployment:\n```bash\nkubectl get pods -n helm -l app.kubernetes.io/name=helm\nkubectl logs -l app.kubernetes.io/name=helm -n helm --tail=100 | grep -i error\n```\nLook for error: `UPGRADE FAILED: \"foo\" has no deployed releases`"
+      },
+      {
+        "title": "Review helm configuration",
+        "description": "Inspect the relevant helm configuration:\n```bash\nkubectl get all -n helm -l app.kubernetes.io/name=helm\nkubectl get configmap -n helm -l app.kubernetes.io/part-of=helm\n```\nUsing `helm upgrade --install` is a nice way to install or upgrade depending on if the release exists. But it looks like there's a bug in the logic; its not handling failed installs."
+      },
+      {
+        "title": "Apply the fix for `helm upgrade --install` doesn't perform an install/upgrade",
+        "description": "If the first `upgrade --install` results in a state FAILED, you can not\nrun the same command `upgrade --install` again without a failure.\nThis happens becuase we are search only for releases with the status DEPLOYED.\nThis change will if the search for DEPLOYED fails, then try to search for a\n```yaml\n$ helm list\r\nNAME           \tREVISION\tUPDATED                 \tSTATUS  \tCHART                         \tNAMESPACE\r\nfoo            \t2       \tWed Jan 17 11:48:08 2018\tFAILED\tsomething-0.0.1                     \tdefault\r\n\r\n$ helm upgrade \"foo\" . --install \r\nError: UPGRADE FAILED: \"foo\" has no deployed releases\n```"
+      },
+      {
+        "title": "Upgrade helm to include the fix",
+        "description": "If the fix is included in a newer release, upgrade helm:\n```bash\nhelm repo update\nhelm upgrade helm helm/helm --namespace helm\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n helm\nhelm list -n helm\n```"
+      },
+      {
+        "title": "Confirm `helm upgrade --install` doesn't perform an is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=helm -n helm --tail=50 --since=5m\nkubectl get events -n helm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `UPGRADE FAILED: \"foo\" has no deployed releases` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "If the first `upgrade --install` results in a state FAILED, you can not\nrun the same command `upgrade --install` again without a failure.\nThis happens becuase we are search only for releases with the status DEPLOYED.\nThis change will if the search for DEPLOYED fails, then try to search for a release\nwith the state FAILED, and if found upgrade that.\n\nThis fixes issue #3353",
+      "codeSnippets": [
+        "$ helm list\r\nNAME           \tREVISION\tUPDATED                 \tSTATUS  \tCHART                         \tNAMESPACE\r\nfoo            \t2       \tWed Jan 17 11:48:08 2018\tFAILED\tsomething-0.0.1                     \tdefault\r\n\r\n$ helm upgrade \"foo\" . --install \r\nError: UPGRADE FAILED: \"foo\" has no deployed releases",
+        "History prints historical revisions for a given release.\r\n\r\nA default maximum of 256 revisions will be returned. Setting '--max'\r\nconfigures the maximum length of the revision list returned.\r\n\r\nThe historical release set is printed as a formatted table, e.g:\r\n\r\n    $ helm history angry-bird --max=4\r\n    REVISION   UPDATED                      STATUS           CHART        DESCRIPTION\r\n    1           Mon Oct 3 10:15:13 2016     SUPERSEDED      alpine-0.1.0  Initial install\r\n    2           Mon Oct 3 10:15:13 2016     SUPERSEDED      alpine-0.1.0  Upgraded successfully\r\n    3           Mon Oct 3 10:15:13 2016     SUPERSEDED      alpine-0.1.0  Rolled back to 2\r\n    4           Mon Oct 3 10:15:13 2016     DEPLOYED        alpine-0.1.0  Upgraded successfully",
+        "if helm history --max 1 \"$name\" 2>/dev/null | grep FAILED | cut -f1 | grep -q 1; then\r\n    helm delete --purge \"$name\"\r\nfi\r\n\r\nhelm upgrade --install --wait \"$release\" chart/"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/helm/helm/issues/3353",
+      "repo": "https://github.com/helm/helm",
+      "pr": "https://github.com/helm/helm/pull/3437"
+    },
+    "reactions": 87,
+    "comments": 34,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with helm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:14:34.269Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
