@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-7723-ssh-connections-to-github-com-stopped-working-with-host-key-mismatch",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: SSH connections to github.com stopped working with host key mismatch",
+    "description": "SSH connections to github.com stopped working with host key mismatch. Users encounter: \"code = Unknown desc = ssh: handshake failed: knownhosts: key mismatch\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo troubleshoot symptoms",
+        "description": "Check for the issue in your argo deployment:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl logs -l app.kubernetes.io/name=argo -n argo --tail=100 | grep -i error\n```\nLook for error: `code = Unknown desc = ssh: handshake failed: knownhosts: key mismatch`"
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\nOn Nov. 16th, GitHub.com has made changes to their SSH endpoint that prevents Argo CD to connect to github.com repositories when using the SSH protocol."
+      },
+      {
+        "title": "Apply the fix for SSH connections to github.com stopped working with host key",
+        "description": "Fixed by https://github.com/argoproj/argo-cd/pull/7722 . The fix is available in v2.1.7 release\n```yaml\nrpc error: code = Unknown desc = ssh: handshake failed: knownhosts: key mismatch\n```"
+      },
+      {
+        "title": "Confirm SSH connections to github.com stopped working is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo -n argo --tail=50 --since=5m\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = Unknown desc = ssh: handshake failed: knownhosts: key mismatch` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Fixed by https://github.com/argoproj/argo-cd/pull/7722 . The fix is available in v2.1.7 release",
+      "codeSnippets": [
+        "rpc error: code = Unknown desc = ssh: handshake failed: knownhosts: key mismatch",
+        "$ ssh-keyscan github.com\n# github.com:22 SSH-2.0-babeld-a73e1397\ngithub.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==\n# github.com:22 SSH-2.0-babeld-a73e1397\ngithub.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=\n# github.com:22 SSH-2.0-babeld-a73e1397\ngithub.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl",
+        "apiVersion: v1\nkind: ConfigMap\n\nmetadata:\n  name: argocd-ssh-known-hosts-cm\n  labels:\n    app.kubernetes.io/name: argocd-ssh-known-hosts-cm\n\ndata:\n  ssh_known_hosts: |\n    bitbucket.org ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAubiN81eDcafrgMeLzaFPsw2kNvEcqTKl/VqLat/MaB33pZy0y3rJZtnqwR2qOOvbwKZYKiEO1O6VqNEBxKvJJelCq0dTXWT5pbO2gDXC6h6QDXCaHo6pOHGPUy+YBaGQRGuSusMEASYiWunYN0vCAI8QaXnWMXNMdFP3jHAJH0eDsoiGnLPBlBp4TNm6rYI74nMzgz3B9IikW4WVK+dc8KZJZWYjAuORU3jc1c/NPskD2ASinf8v3xnfXeukU0sJ5N6m5E8VLjObPEO+mN2t/FZTMZLiFqPWc/ALSqnMnnhwrNi2rbfg/rd/IpL8Le3pSBne8+seeFVBoGqzHM9yXw==\n    github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n    github.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCO"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Configmap"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/7723",
+      "repo": "https://github.com/argoproj/argo-cd"
+    },
+    "reactions": 87,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:17:42.186Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
