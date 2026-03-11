@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-9949-etcd-go-client-fails-when-querying-a-cluster-with-a-down-node",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "etcd: etcd go client fails when querying a cluster with a down node",
+    "description": "etcd go client fails when querying a cluster with a down node. This issue affects 19+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify etcd troubleshoot symptoms",
+        "description": "Check for the issue in your etcd deployment:\n```bash\nkubectl get pods -n etcd -l app.kubernetes.io/name=etcd\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review etcd configuration",
+        "description": "Inspect the relevant etcd configuration:\n```bash\nkubectl get all -n etcd -l app.kubernetes.io/name=etcd\nkubectl get configmap -n etcd -l app.kubernetes.io/part-of=etcd\n```\nThe etcd go client fails if multiple https endpoints are specified when the client is initialised and the first etcd endpoint is unavailable.\n\n**To Reproduce**\nI setup an etcd cluster with http (port 2378) and https (port 2379) listeners."
+      },
+      {
+        "title": "Apply the fix for etcd go client fails when querying a cluster with a down",
+        "description": "Log only when it errors + some clarification.\n\nFYI. I am debugging around https://github.com/etcd-io/etcd/issues/9949.\nAnd resolve https://github.com/kubernetes/kubernetes/issues/72102.\n```yaml\nctx, _ := context.WithTimeout(context.Background(), requestTimeout)\n\n\tcfg := clientv3.Config{\n\t\tEndpoints:   []string{\"https://10.53.82.119:2379\" ,\"https://10.53.82.150:2379\", \"https://10.53.82.157:2379\"},\n\t\tDialTimeout: 5 * time.Second,\n\t}\n\n\tcert := \"/home/liam/tls_vault_certs/etcd-cert.pem\"\n\tkey := \"/home/liam/tls_vault_certs/etcd.key\"\n\tca := \"/home/liam/tls_vault_certs/etcd-ca.pem\"\n\ttls := transport.TLSInfo{\n\t\tTrustedCAFile: ca,\n\t\tCertFile:      cert,\n\t\tKeyFile:       key,\n\t}\n\n\ttlscfg, err := tls.ClientConfig()\n\tcfg.TLS = tlscfg\n\n\tcli, err := clientv3.New(cfg)\n\tif err != nil {\n\t\tlog.Fatal(e\n```"
+      },
+      {
+        "title": "Confirm etcd go client fails when querying a cluster with is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=50 --since=5m\nkubectl get events -n etcd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Log only when it errors + some clarification.\n\nFYI. I am debugging around https://github.com/etcd-io/etcd/issues/9949.\nAnd resolve https://github.com/kubernetes/kubernetes/issues/72102.",
+      "codeSnippets": [
+        "ctx, _ := context.WithTimeout(context.Background(), requestTimeout)\n\n\tcfg := clientv3.Config{\n\t\tEndpoints:   []string{\"https://10.53.82.119:2379\" ,\"https://10.53.82.150:2379\", \"https://10.53.82.157:2379\"},\n\t\tDialTimeout: 5 * time.Second,\n\t}\n\n\tcert := \"/home/liam/tls_vault_certs/etcd-cert.pem\"\n\tkey := \"/home/liam/tls_vault_certs/etcd.key\"\n\tca := \"/home/liam/tls_vault_certs/etcd-ca.pem\"\n\ttls := transport.TLSInfo{\n\t\tTrustedCAFile: ca,\n\t\tCertFile:      cert,\n\t\tKeyFile:       key,\n\t}\n\n\ttlscfg, err := tls.ClientConfig()\n\tcfg.TLS = tlscfg\n\n\tcli, err := clientv3.New(cfg)\n\tif err != nil {\n\t\tlog.Fatal(err)\n\t}\n\tdefer cli.Close()\n\tkv := clientv3.NewKV(cli)",
+        "**http client**:",
+        "2) client.dial in turn calls DialContext from  **./vendor/google.golang.org/grpc/clientconn.go**"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/etcd-io/etcd/issues/9949",
+      "repo": "https://github.com/etcd-io/etcd",
+      "pr": "https://github.com/etcd-io/etcd/pull/10475"
+    },
+    "reactions": 19,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with etcd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T03:22:13.777Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
