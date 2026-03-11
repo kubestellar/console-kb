@@ -435,8 +435,10 @@ function cleanText(text) {
     .replace(/\bcc\s*$/gm, '')
     // Strip numbered PR template headers
     .replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
-    // Strip bold-header PR template questions
-    .replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context)[^*]*\*\*/gi, '')
+    // Strip bold-header PR template questions (Falco, KEDA, cert-manager, etc.)
+    .replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context|Describe the bug|Describe the solution|Is your feature request|Expected behavi|Actual behavi|Steps to reproduce|Environment|Additional information|How to reproduce|Anything else)[^*]*\*\*:?\s*/gi, '')
+    // Strip WIP/draft strikethrough text
+    .replace(/~[^~]+(?:not ready|work in progress|WIP|draft|do not merge)[^~]*~/gi, '')
     // Strip /kind, /area, /sig bot commands
     .replace(/^\s*>?\s*\/(?:kind|area|sig)\s+\w+.*$/gm, '')
     .replace(/^\s*>\s*Uncomment\s+.*/gm, '')
@@ -449,6 +451,8 @@ function cleanText(text) {
     // Strip GitHub asset URLs
     .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
     .replace(/\r\n/g, '\n')
+    // Strip leading colons left after bold-header removal (e.g. "**Description:** text" → ": text")
+    .replace(/^\s*:\s*/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -677,7 +681,9 @@ function stripPRTemplate(text) {
   // Remove "Please provide a description of this PR:" boilerplate
   cleaned = cleaned.replace(/^\s*Please provide a description of this PR:?\s*$/gm, '')
   // Remove bold-header PR template questions (**What type of PR is this?**, etc.)
-  cleaned = cleaned.replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context)[^*]*\*\*/gi, '')
+  cleaned = cleaned.replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context|Describe the bug|Describe the solution|Is your feature request|Expected behavi|Actual behavi|Steps to reproduce|Environment|Additional information|How to reproduce|Anything else)[^*]*\*\*:?\s*/gi, '')
+  // Remove WIP/draft strikethrough text
+  cleaned = cleaned.replace(/~[^~]+(?:not ready|work in progress|WIP|draft|do not merge)[^~]*~/gi, '')
   // Remove /kind, /area, /sig lines (Prow/bot commands in PR templates)
   cleaned = cleaned.replace(/^\s*>?\s*\/(?:kind|area|sig)\s+\w+.*$/gm, '')
   // Remove "> Uncomment one" instruction lines
@@ -703,6 +709,8 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
   // Strip bare issue references left over from template sections (e.g., "#6661\n#6638")
   cleaned = cleaned.replace(/^\s*#\d+\s*$/gm, '')
+  // Strip leading colons left after bold-header removal
+  cleaned = cleaned.replace(/^\s*:\s*/gm, '')
   // Collapse whitespace
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
   return cleaned
@@ -744,6 +752,10 @@ function passesQualityGate(resolution, issue) {
   // Reject non-English content (heuristic: check solution and problem text)
   if (!isLikelyEnglish(resolution.solution || '') && (resolution.solution || '').length > 50) return false
   if (!isLikelyEnglish(resolution.problem || '') && (resolution.problem || '').length > 50) return false
+
+  // Reject if solution starts with a lone colon (stripped bold-header artifact)
+  const rawSolution = (resolution.solution || '').trim()
+  if (rawSolution.startsWith(':')) return false
 
   // Reject if solution is empty after stripping — means no real fix was found
   const strippedSolution = stripPRTemplate(resolution.solution || '')
