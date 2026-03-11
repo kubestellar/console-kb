@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "jaeger-422-how-to-support-plugins",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "jaeger: How to support plugins",
+    "description": "How to support plugins. Requested by 10+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current jaeger deployment",
+        "description": "Verify your jaeger version and configuration:\n```bash\nkubectl get pods -n jaeger -l app.kubernetes.io/name=jaeger\nhelm list -n jaeger 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working jaeger installation."
+      },
+      {
+        "title": "Review jaeger configuration",
+        "description": "Inspect the relevant jaeger configuration:\n```bash\nkubectl get all -n jaeger -l app.kubernetes.io/name=jaeger\nkubectl get configmap -n jaeger -l app.kubernetes.io/part-of=jaeger\n```\nWe continue to be asked if we can \"support X as storage backend\" (e.g. #331, #421)."
+      },
+      {
+        "title": "Apply the fix for How to support plugins",
+        "description": "Main changes:\n  * deprecate `--span-storage.type` CLI flag \n  * instead use env variable `SPAN_STORAGE` (and optionally `DEPENDENCY_STORAGE`)\n  * CLI options only include flags relevant to the selected storage type(s)\n  * introduce `storage.Factory` interface for creating different storage\n```yaml\napiVersion: extensions/v1beta1\nkind: Deployment\nmetadata:\n  name: kanali\n  namespace: default\nspec:\n  template:\n    metadata:\n      labels:\n        app: kanali\n    spec:\n      serviceAccountName: kanali\n      containers:\n      - name: kanali\n        image: northwesternmutual/kanali\n        command: [\"/kanali\", \"start\"]\n        volumeMounts:\n        - name: plugins\n          mountPath: /plugins\n          readOnly: true\n      initContainers:\n      - name: kanali-plugin-apikey\n        image: fbgrecojr/kanali-plugin-apikey:local\n        imagePullPolicy: IfNotPresent\n        command: [\"cp\", \"/apiKe\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n jaeger -l app.kubernetes.io/name=jaeger\nkubectl get events -n jaeger --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"How to support plugins\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Main changes:\n  * deprecate `--span-storage.type` CLI flag \n  * instead use env variable `SPAN_STORAGE` (and optionally `DEPENDENCY_STORAGE`)\n  * CLI options only include flags relevant to the selected storage type(s)\n  * introduce `storage.Factory` interface for creating different storage components like `spanstore.Reader`\n  * introduce meta-factory `plugin/storage.Factory` that instantiates",
+      "codeSnippets": [
+        "apiVersion: extensions/v1beta1\nkind: Deployment\nmetadata:\n  name: kanali\n  namespace: default\nspec:\n  template:\n    metadata:\n      labels:\n        app: kanali\n    spec:\n      serviceAccountName: kanali\n      containers:\n      - name: kanali\n        image: northwesternmutual/kanali\n        command: [\"/kanali\", \"start\"]\n        volumeMounts:\n        - name: plugins\n          mountPath: /plugins\n          readOnly: true\n      initContainers:\n      - name: kanali-plugin-apikey\n        image: fbgrecojr/kanali-plugin-apikey:local\n        imagePullPolicy: IfNotPresent\n        command: [\"cp\", \"/apiKey_v2.0.0-rc.1.so\", \"/plugins/\"]\n        volumeMounts:\n        - name: plugins\n          mountPath: /plugins\n      volumes:\n      - name: plugins\n        emptyDir: {}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "jaeger",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "jaeger"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/jaegertracing/jaeger/issues/422",
+      "repo": "https://github.com/jaegertracing/jaeger",
+      "pr": "https://github.com/jaegertracing/jaeger/pull/625"
+    },
+    "reactions": 10,
+    "comments": 51,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with jaeger installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:49:53.550Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
