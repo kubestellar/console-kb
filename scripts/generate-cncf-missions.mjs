@@ -267,6 +267,7 @@ async function getIssueDetails(owner, repo, issueNumber) {
   if (!issue) return null
 
   // Try to find linked PR from timeline events
+  // Only accept PRs from the SAME repo — forks/other projects produce wrong resolutions
   let linkedPR = null
   try {
     const events = await githubApi(eventsUrl)
@@ -276,7 +277,13 @@ async function getIssueDetails(owner, repo, issueNumber) {
       )
       if (crossRef) {
         const prUrl = crossRef.source.issue.pull_request.url
-        linkedPR = await githubApi(prUrl)
+        // Verify the PR is from the same repo (not a fork or different project)
+        const expectedPrefix = `https://api.github.com/repos/${owner}/${repo}/pulls/`
+        if (prUrl.startsWith(expectedPrefix)) {
+          linkedPR = await githubApi(prUrl)
+        } else {
+          console.log(`    [SKIP PR] Cross-repo PR ignored: ${prUrl} (expected ${owner}/${repo})`)
+        }
       }
     }
   } catch {
@@ -376,7 +383,7 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
   const allText = [body, linkedPR?.body || '', ...comments.map(c => c.body || '')].join('\n')
   const codeBlocks = allText.matchAll(/```(?:ya?ml|json|bash|shell|sh)?\s*\n([\s\S]*?)```/g)
   for (const match of codeBlocks) {
-    const snippet = match[1].trim()
+    const snippet = match[1].trim().replace(/\r\n/g, '\n')
     if (snippet.length > 10 && snippet.length < 5000 && !isGarbageSnippet(snippet)) {
       resolution.yamlSnippets.push(snippet)
     }
@@ -411,6 +418,13 @@ function cleanText(text) {
     .replace(/\n\s*Note on DCO:?\s*\n[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
     // Strip checkbox lines (DCO, PR template checklists)
     .replace(/^\s*[-*]\s*\[[ x]\]\s*.*/gm, '')
+    // Strip "Please ensure your pull request adheres to the following guidelines" boilerplate
+    .replace(/Please ensure your pull request adheres[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip "For first time contributors" boilerplate
+    .replace(/For first.time contributors[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip orphaned "cc @user" and standalone "cc"
+    .replace(/\bcc\s+@[a-zA-Z0-9_-]+/g, '')
+    .replace(/\bcc\s*$/gm, '')
     // Strip GitHub asset URLs
     .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
     .replace(/\r\n/g, '\n')
@@ -436,6 +450,19 @@ function isGarbageSnippet(snippet) {
 
   // CI bot messages
   if (lower.includes('invalid pr title') || lower.includes('has been automatically marked as stale')) return true
+
+  // Casual GitHub comment text (not code)
+  if (lower.includes('yay thanks') || lower.includes('sorry about') || lower.includes('lgtm') || lower.includes('btw ')) return true
+
+  // @mentions in snippet content (raw GitHub comments, not actual code)
+  if ((snippet.match(/@[a-zA-Z0-9_-]+/g) || []).length >= 2) return true
+
+  // Sentence fragments that aren't code (no special chars like =, {, }, :, $)
+  const codeChars = /[={}$:;|><\[\]()]/
+  if (!codeChars.test(snippet) && snippet.length < 200) return true
+
+  // PR contribution guidelines
+  if (lower.includes('for first time contributors') || lower.includes('please ensure your pull request')) return true
 
   // Benchmark/performance tables without actionable content
   if (lower.includes('query performance') && lower.includes('![image]')) return true
@@ -556,6 +583,11 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/\n\s*Checklist:?\s*\n[\s\S]*$/gi, '')
   // Remove "Note on DCO:" blocks
   cleaned = cleaned.replace(/\n\s*Note on DCO:?\s*\n[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  // Remove PR contribution guidelines boilerplate
+  cleaned = cleaned.replace(/Please ensure your pull request adheres[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  cleaned = cleaned.replace(/For first.time contributors[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  // Remove "Please provide a description of this PR:" boilerplate
+  cleaned = cleaned.replace(/^\s*Please provide a description of this PR:?\s*$/gm, '')
   // Remove "Closes #N" / "Fixes #N" lines
   cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?)\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
   // Remove Signed-off-by
@@ -564,8 +596,11 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/^\s*\/\w+.*$/gm, '')
   // Remove GitHub asset URLs (screenshots uploaded to github — not useful in text)
   cleaned = cleaned.replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
-  // Remove @username mentions (not useful outside GitHub context)
+  // Remove @username mentions and orphaned "cc" prefixes (e.g., "cc @user" → "cc " → "")
+  cleaned = cleaned.replace(/\bcc\s+@[a-zA-Z0-9_-]+/g, '')
   cleaned = cleaned.replace(/@[a-zA-Z0-9_-]+/g, '')
+  // Remove standalone orphaned "cc" left after mention stripping
+  cleaned = cleaned.replace(/\bcc\s*$/gm, '')
   // Remove "Credit where credit is due:" attribution lines
   cleaned = cleaned.replace(/^\s*Credit where credit is due:.*$/gm, '')
   // Remove "Demo:" lines with GitHub URLs
@@ -573,6 +608,26 @@ function stripPRTemplate(text) {
   // Collapse whitespace
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
   return cleaned
+}
+
+/**
+ * Basic heuristic to detect non-English text.
+ * Checks for common English stopwords — if fewer than 10% of words are English
+ * stopwords, the text is likely non-English.
+ */
+const ENGLISH_STOPWORDS = new Set([
+  'the', 'is', 'in', 'it', 'of', 'and', 'to', 'a', 'for', 'that', 'this',
+  'with', 'on', 'are', 'was', 'be', 'as', 'by', 'or', 'an', 'not', 'but',
+  'from', 'at', 'have', 'has', 'had', 'will', 'can', 'do', 'if', 'when',
+  'which', 'their', 'would', 'been', 'were', 'there', 'should', 'we', 'you',
+])
+const MIN_ENGLISH_STOPWORD_RATIO = 0.08
+function isLikelyEnglish(text) {
+  if (!text || text.length < 50) return true // too short to judge
+  const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 1)
+  if (words.length < 10) return true // too few words to judge
+  const stopwordCount = words.filter(w => ENGLISH_STOPWORDS.has(w)).length
+  return (stopwordCount / words.length) >= MIN_ENGLISH_STOPWORD_RATIO
 }
 
 /** Check if a mission has enough quality to be useful */
@@ -587,6 +642,14 @@ function passesQualityGate(resolution, issue) {
   const hasCode = resolution.yamlSnippets.length > 0
 
   if (!hasSteps && !hasSolution && !hasCode) return false
+
+  // Reject non-English content (heuristic: check solution and problem text)
+  if (!isLikelyEnglish(resolution.solution || '') && (resolution.solution || '').length > 50) return false
+  if (!isLikelyEnglish(resolution.problem || '') && (resolution.problem || '').length > 50) return false
+
+  // Reject if solution is empty after stripping — means no real fix was found
+  const strippedSolution = stripPRTemplate(resolution.solution || '')
+  if (strippedSolution.length < 30 && resolution.yamlSnippets.length === 0) return false
 
   return true
 }
@@ -604,7 +667,7 @@ function detectMissionType(issue) {
   // Bug/error patterns — check first since these override feature keywords
   if (text.includes('bug') || text.includes('crash') || text.includes('error') || text.includes('fix')) return 'troubleshoot'
   // Session/auth issues are troubleshooting, not features
-  if (text.includes('logged out') || text.includes('timeout') || text.includes('session expir') || text.includes('stopped working') || text.includes('not working') || text.includes('fails') || text.includes('failing') || text.includes('broken')) return 'troubleshoot'
+  if (text.includes('logged out') || text.includes('timeout') || text.includes('session expir') || text.includes('stopped working') || text.includes('not working') || text.includes('fails') || text.includes('failing') || text.includes('broken') || text.includes('unable') || text.includes('does not work') || text.includes('doesn\'t work') || text.includes('cannot') || text.includes('can\'t')) return 'troubleshoot'
   if (text.includes('upgrade') || text.includes('migration') || text.includes('breaking') || text.includes('deprecat')) return 'upgrade'
   if (text.includes('deploy') || text.includes('install') || text.includes('setup') || text.includes('helm')) return 'deploy'
   if (text.includes('performance') || text.includes('slow') || text.includes('memory') || text.includes('cpu') || text.includes('leak')) return 'analyze'
@@ -688,6 +751,15 @@ function estimateDifficulty(issue) {
   if (text.includes('race condition') || text.includes('deadlock') || text.includes('data loss')) score += 3
   if (text.includes('upgrade') || text.includes('migration')) score += 2
   if (text.includes('config') || text.includes('flag') || text.includes('env var')) score -= 1
+  // Multi-component setups are harder (e.g., EKS + VPC CNI + Cilium chaining)
+  if (text.includes('chaining') || text.includes('cni') || text.includes('vpc')) score += 2
+  if (text.includes('wireguard') || text.includes('encryption') || text.includes('ipsec')) score += 1
+  if (text.includes('bpf') || text.includes('ebpf') || text.includes('datapath')) score += 2
+  if (text.includes('kernel') || text.includes('iptables') || text.includes('nftables')) score += 1
+  // Integration scenarios with multiple products
+  const productMentions = ['eks', 'gke', 'aks', 'openshift', 'rancher', 'aws', 'azure', 'gcp'].filter(p => text.includes(p))
+  if (productMentions.length >= 2) score += 2
+  else if (productMentions.length >= 1) score += 1
 
   if (score <= 0) return 'beginner'
   if (score <= 2) return 'intermediate'
@@ -870,7 +942,7 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
     metadata: {
       tags: [project.name, project.maturity, project.category, missionType].filter(Boolean),
       cncfProjects: [project.name],
-      targetResourceKinds: extractResourceKinds({ body: (issue.body || '') + ' ' + (resolution.solution || '') }),
+      targetResourceKinds: extractResourceKinds({ body: (issue.body || '') + ' ' + (resolution.solution || ''), title: issue.title || '' }, project),
       difficulty,
       issueTypes: [missionType],
       maturity: project.maturity,
