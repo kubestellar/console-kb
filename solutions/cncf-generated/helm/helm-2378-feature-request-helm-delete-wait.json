@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-2378-feature-request-helm-delete-wait",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: Feature Request: helm delete --wait",
+    "description": "Feature Request: helm delete --wait. Requested by 111+ users.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current helm deployment",
+        "description": "Verify your helm version and configuration:\n```bash\nkubectl get pods -n helm -l app.kubernetes.io/name=helm\nhelm list -n helm 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working helm installation."
+      },
+      {
+        "title": "Review helm configuration",
+        "description": "Inspect the relevant helm configuration:\n```bash\nkubectl get all -n helm -l app.kubernetes.io/name=helm\nkubectl get configmap -n helm -l app.kubernetes.io/part-of=helm\n```\n`helm install --wait` can wait for everything to be ready. Can a new `helm delete --wait` do something similar? I'm using `helm delete --purge` in my build pipeline followed by this script (to do something similar to `--wait`)."
+      },
+      {
+        "title": "Apply the fix for Feature Request: helm delete --wait",
+        "description": "Without https://github.com/helm/helm/issues/2378 there isn't a way to\ndeterministically know when all resources are finished being removed. A\nsimple thing we can do is warn the user on a ES_FORCE_INSTALL=true.\n```yaml\n#!/usr/bin/env bash\r\n\r\nset -euo pipefail\r\n\r\nmain() {\r\n\tlocal kinds=( Service Deployment Pod Secret ConfigMap )\r\n\tlocal counter=0 attempts=30\r\n\r\n\tfor release in \"$@\"; do\r\n\t\techo \"--> Deleting release ${release}\"\r\n\r\n\t\tif helm ls --kube-context \"${KUBE_CONTEXT}\" | grep -qF \"${release}\"; then\r\n\t\t\techo \"==> Found helm release; deleting with --purge\"\r\n\t\t\thelm delete \"${release}\" --purge  --kube-context \"${KUBE_CONTEXT}\"\r\n\t\telse\r\n\t\t\techo \"==> No release found; deleting manually\"\r\n\r\n\t\t\tfor kind in \"${kinds[@]}\"; do\r\n\t\t\t\techo \"==> Deleting any dangling ${kind}\"\r\n\r\n\t\t\t\tkubectl delete \"${kind}\" \\\r\n\t\t\t\t\t-\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n helm -l app.kubernetes.io/name=helm\nkubectl get events -n helm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Feature Request: helm delete --wait\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Without https://github.com/helm/helm/issues/2378 there isn't a way to\ndeterministically know when all resources are finished being removed. A\nsimple thing we can do is warn the user on a ES_FORCE_INSTALL=true.",
+      "codeSnippets": [
+        "#!/usr/bin/env bash\r\n\r\nset -euo pipefail\r\n\r\nmain() {\r\n\tlocal kinds=( Service Deployment Pod Secret ConfigMap )\r\n\tlocal counter=0 attempts=30\r\n\r\n\tfor release in \"$@\"; do\r\n\t\techo \"--> Deleting release ${release}\"\r\n\r\n\t\tif helm ls --kube-context \"${KUBE_CONTEXT}\" | grep -qF \"${release}\"; then\r\n\t\t\techo \"==> Found helm release; deleting with --purge\"\r\n\t\t\thelm delete \"${release}\" --purge  --kube-context \"${KUBE_CONTEXT}\"\r\n\t\telse\r\n\t\t\techo \"==> No release found; deleting manually\"\r\n\r\n\t\t\tfor kind in \"${kinds[@]}\"; do\r\n\t\t\t\techo \"==> Deleting any dangling ${kind}\"\r\n\r\n\t\t\t\tkubectl delete \"${kind}\" \\\r\n\t\t\t\t\t-l \"release=${release}\" \\\r\n\t\t\t\t\t-n \"${KUBE_NAMESPACE}\" \\\r\n\t\t\t\t\t--force \\\r\n\t\t\t\t\t--grace-period 0 \\\r\n\t\t\t\t\t--context \"${KUBE_CONTEXT}\" 2>/dev/null\r\n\t\t\tdone\r\n\t\tfi\r\n\r\n\t\techo \"--> Awaiting resource deleting "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "graduated",
+      "app-definition",
+      "deploy"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Configmap",
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "deploy"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/helm/helm/issues/2378",
+      "repo": "https://github.com/helm/helm",
+      "pr": "https://github.com/lightbend/console-charts/pull/147"
+    },
+    "reactions": 111,
+    "comments": 31,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with helm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:14:13.494Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
