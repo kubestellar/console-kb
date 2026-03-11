@@ -788,7 +788,8 @@ function extractResourceKinds(issue, project) {
     }
   }
 
-  return [...new Set(kinds)].slice(0, 8)
+  const MAX_RESOURCE_KINDS = 3
+  return [...new Set(kinds)].slice(0, MAX_RESOURCE_KINDS)
 }
 
 function estimateDifficulty(issue) {
@@ -970,7 +971,7 @@ function buildDescription(issue, resolution) {
     )
   }
 
-  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,100})/)?.[1]
+  const errorMatch = body.match(/(?:error|ERROR|panic|fatal|FATAL|failed to)[:=]\s*([^\n]{10,100})/)?.[1]
   const symptom = errorMatch
     ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
     : `${issue.title}. This issue affects ${reactions}+ users.`
@@ -1045,8 +1046,8 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
 
   // Step 1: Context — varies by mission type
   // Only use actual error patterns from the body, never the issue title
-  // Match: "error: ...", "Error ...", "ERROR: ...", "failed to ...", "panic: ..."
-  const errorMatch = body.match(/(?:error|ERROR|panic|fatal|FATAL|failed to)[:\s]+([^\n]{10,120})/)?.[1]
+  // Require colon/equals after keyword to avoid matching prose like "error output, etc"
+  const errorMatch = body.match(/(?:error|ERROR|panic|fatal|FATAL|failed to)[:=]\s*([^\n]{10,120})/)?.[1]
 
   if (isFeature) {
     // Feature requests: check current state, not "look for errors"
