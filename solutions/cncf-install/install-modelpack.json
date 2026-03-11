@@ -1,0 +1,144 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-modelpack",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Modelpack on Kubernetes",
+    "description": "ModelPack is an open standard for packaging, distributing, and running AI models in cloud-native environments. Installing ModelPack allows you to create standard-compliant implementations for AI/ML projects, facilitating interoperability and compatibility across different platforms.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Clone the ModelPack repository",
+        "description": "Clone the ModelPack specification repository to your local machine using the following command:\n```bash\ngit clone https://github.com/modelpack/model-spec.git\ncd model-spec\n```"
+      },
+      {
+        "title": "Build the ModelPack Docker image",
+        "description": "Build the Docker image for ModelPack using the provided Dockerfile. Ensure you have Docker installed and running:\n```bash\ndocker build -t modelpack:1.0 .\n```"
+      },
+      {
+        "title": "Deploy ModelPack to Kubernetes",
+        "description": "Create a Kubernetes deployment using the Docker image you built. Save the following YAML to a file named `modelpack-deployment.yaml`:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: modelpack\n  namespace: modelpack\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: modelpack\n  template:\n    metadata:\n      labels:\n        app: modelpack\n    spec:\n      containers:\n      - name: modelpack\n        image: modelpack:1.0\n        ports:\n        - containerPort: 8080\n``` \nThen apply the deployment:\n```bash\nkubectl apply -f modelpack-deployment.yaml --create-namespace\n```"
+      },
+      {
+        "title": "Expose ModelPack service",
+        "description": "Create a service to expose your ModelPack deployment. Save the following YAML to a file named `modelpack-service.yaml`:\n```yaml\napiVersion: v1\nkind: Service\nmetadata:\n  name: modelpack\n  namespace: modelpack\nspec:\n  type: NodePort\n  ports:\n  - port: 8080\n    targetPort: 8080\n  selector:\n    app: modelpack\n```\nThen apply the service:\n```bash\nkubectl apply -f modelpack-service.yaml\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check if the ModelPack pods are running:\n```bash\nkubectl get pods -n modelpack\n```\nYou can also port-forward to access the service locally:\n```bash\nkubectl port-forward service/modelpack 8080:8080 -n modelpack\n```"
+      },
+      {
+        "title": "Post-install configuration",
+        "description": "Configure resource limits for the ModelPack deployment. Edit the `modelpack-deployment.yaml` file to include resource limits:\n```yaml\nresources:\n  requests:\n    memory: \"256Mi\"\n    cpu: \"500m\"\n  limits:\n    memory: \"512Mi\"\n    cpu: \"1\"\n```\nThen reapply the deployment:\n```bash\nkubectl apply -f modelpack-deployment.yaml -n modelpack\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the ModelPack service",
+        "description": "Delete the service you created:\n```bash\nkubectl delete -f modelpack-service.yaml -n modelpack\n```"
+      },
+      {
+        "title": "Remove the ModelPack deployment",
+        "description": "Delete the deployment:\n```bash\nkubectl delete -f modelpack-deployment.yaml -n modelpack\n```"
+      },
+      {
+        "title": "Clean up the namespace",
+        "description": "Delete the namespace created for ModelPack:\n```bash\nkubectl delete namespace modelpack\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current deployment configuration to a YAML file:\n```bash\nkubectl get deployment modelpack -n modelpack -o yaml > modelpack-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Docker image",
+        "description": "Make any necessary changes to the code or Dockerfile, then rebuild the Docker image:\n```bash\ndocker build -t modelpack:1.1 .\n```"
+      },
+      {
+        "title": "Upgrade the deployment",
+        "description": "Update the deployment to use the new image version:\n```bash\nkubectl set image deployment/modelpack modelpack=modelpack:1.1 -n modelpack\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check if the ModelPack pods are running with the new image:\n```bash\nkubectl get pods -n modelpack\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods not starting",
+        "description": "If the pods are in a 'Pending' state, check the events for the namespace:\n```bash\nkubectl describe pod <pod-name> -n modelpack\n```\nEnsure that there are sufficient resources available in the cluster."
+      },
+      {
+        "title": "Service not reachable",
+        "description": "If you cannot access the service, check the service configuration:\n```bash\nkubectl get svc -n modelpack\n```\nEnsure that the service type is set to NodePort or LoadBalancer and that the correct ports are exposed."
+      },
+      {
+        "title": "CrashLoopBackOff error",
+        "description": "If the pods are in a 'CrashLoopBackOff' state, check the logs:\n```bash\nkubectl logs <pod-name> -n modelpack\n```\nInvestigate the logs for any application errors or misconfigurations."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of ModelPack will have the deployment running with the specified number of replicas, and the service will be accessible through the defined port. You can verify the installation by checking the pod status and accessing the service via port-forwarding.",
+      "codeSnippets": [
+        "git clone https://github.com/modelpack/model-spec.git\ncd model-spec",
+        "docker build -t modelpack:1.0 .",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: modelpack\n  namespace: modelpack\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: modelpack\n  template:\n    metadata:\n      labels:\n        app: modelpack\n    spec:\n      containers:\n      - name: modelpack\n        image: modelpack:1.0\n        ports:\n        - containerPort: 8080",
+        "kubectl apply -f modelpack-deployment.yaml --create-namespace",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: modelpack\n  namespace: modelpack\nspec:\n  type: NodePort\n  ports:\n  - port: 8080\n    targetPort: 8080\n  selector:\n    app: modelpack"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "app-definition",
+      "sandbox"
+    ],
+    "cncfProjects": [
+      "modelpack"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "kubectl"
+    ],
+    "maturity": "sandbox",
+    "projectVersion": "latest",
+    "containerImages": [
+      "modelpack:1.0"
+    ],
+    "sourceUrls": {
+      "docs": "https://modelpack.org",
+      "repo": "https://github.com/modelpack/model-spec"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "docker",
+      "kubectl"
+    ],
+    "description": "Ensure you have a Kubernetes cluster running and Docker installed for building the image."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:59.363Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
