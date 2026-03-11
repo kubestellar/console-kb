@@ -431,8 +431,9 @@ function cleanText(text) {
     .replace(/\bcc\s*$/gm, '')
     // Strip numbered PR template headers
     .replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
-    // Strip bare issue references (e.g., "#6661")
+    // Strip bare issue references (e.g., "#6661") and "Closes: #N" lines
     .replace(/^\s*#\d+\s*$/gm, '')
+    .replace(/^\s*(?:closes?|fixes?|resolves?):?\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
     // Strip GitHub asset URLs
     .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
     .replace(/\r\n/g, '\n')
@@ -474,6 +475,16 @@ function isGarbageSnippet(snippet) {
 
   // Benchmark/performance tables without actionable content
   if (lower.includes('query performance') && lower.includes('![image]')) return true
+
+  // GitHub API JSON responses (not actionable config)
+  if (lower.includes('"tag_name"') || lower.includes('"html_url"') || lower.includes('"created_at"')) return true
+  if (lower.includes('api.github.com')) return true
+
+  // Prose paragraphs pretending to be code — high ratio of English words to code tokens
+  const words = snippet.split(/\s+/)
+  const englishWords = words.filter(w => ENGLISH_STOPWORDS.has(w.toLowerCase()))
+  const PROSE_THRESHOLD = 0.25 // if >25% of words are English stopwords, it's prose
+  if (words.length > 10 && (englishWords.length / words.length) > PROSE_THRESHOLD) return true
 
   // Pure comment quoting (starts with >) without actionable content
   const lines = snippet.split('\n')
@@ -581,11 +592,15 @@ function extractFromNumberedTemplate(text) {
   const contentParts = parts
     .map(p => p.trim())
     .filter(p => {
-      if (p.length < 10) return false
+      if (p.length < 20) return false
       // Skip sections that are just issue references
       if (/^#\d+\s*$/.test(p) || /^https:\/\/github\.com/.test(p)) return false
       // Skip "Yes/No" answers to template questions
       if (/^(yes|no|none|n\/a)\.?\s*$/i.test(p)) return false
+      // Skip conversational one-liners that aren't technical content
+      if (p.length < 80 && /^(not that|i think|i believe|possibly|maybe|probably|sure|thanks|thank you)/i.test(p)) return false
+      // Skip lines that are just issue/PR references
+      if (/^#\d+[\s\n]*(?:#\d+[\s\n]*)*$/.test(p)) return false
       return true
     })
 
@@ -623,8 +638,8 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/For first.time contributors[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
   // Remove "Please provide a description of this PR:" boilerplate
   cleaned = cleaned.replace(/^\s*Please provide a description of this PR:?\s*$/gm, '')
-  // Remove "Closes #N" / "Fixes #N" lines
-  cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?)\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
+  // Remove "Closes #N" / "Fixes #N" / "Closes: #N" lines (with or without colon)
+  cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?):?\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
   // Remove Signed-off-by
   cleaned = cleaned.replace(/^\s*Signed-off-by:.*$/gm, '')
   // Remove /kind /lgtm /approve bot commands
@@ -688,7 +703,15 @@ function passesQualityGate(resolution, issue) {
 
   // Reject if solution is empty after stripping — means no real fix was found
   const strippedSolution = stripPRTemplate(resolution.solution || '')
-  if (strippedSolution.length < 30 && resolution.yamlSnippets.length === 0) return false
+  const MIN_SOLUTION_LENGTH = 80
+  if (strippedSolution.length < MIN_SOLUTION_LENGTH && resolution.yamlSnippets.length === 0) {
+    return false
+  }
+
+  // Reject if solution is mostly a commit message (short + contains "Closes:" or "Fixes:")
+  if (strippedSolution.length < 150 && /(?:closes?|fixes?|resolves?):?\s*#\d+/i.test(strippedSolution)) {
+    return false
+  }
 
   return true
 }
@@ -1021,7 +1044,9 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
   const isFeature = mType === 'feature' || mType === 'deploy'
 
   // Step 1: Context — varies by mission type
-  const errorMatch = body.match(/(?:error|Error|ERROR)[:\s]+([^\n]{10,120})/)?.[1]
+  // Only use actual error patterns from the body, never the issue title
+  // Match: "error: ...", "Error ...", "ERROR: ...", "failed to ...", "panic: ..."
+  const errorMatch = body.match(/(?:error|ERROR|panic|fatal|FATAL|failed to)[:\s]+([^\n]{10,120})/)?.[1]
 
   if (isFeature) {
     // Feature requests: check current state, not "look for errors"
@@ -1060,7 +1085,7 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
           `kubectl get pods -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
           `kubectl logs -l app.kubernetes.io/name=${project.name} -n ${namespace} --tail=100 | grep -i error`,
           '```',
-          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors or warnings in the logs that may indicate the issue.`,
         ].join('\n')
       })
     } else {
@@ -1072,7 +1097,7 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
           `${project.name} version`,
           `${project.name} status 2>&1 | head -20`,
           '```',
-          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors related to: ${issue.title}`,
+          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors or warnings that may indicate the issue.`,
         ].join('\n')
       })
     }
