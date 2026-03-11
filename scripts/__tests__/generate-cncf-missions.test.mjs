@@ -8,6 +8,9 @@ import {
   generateMission,
   extractResolutionFromIssue,
   formatReport,
+  truncateAtWordBoundary,
+  buildDescription,
+  buildResolutionSummary,
 } from '../generate-cncf-missions.mjs'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../cncf-projects.mjs'
 
@@ -44,8 +47,29 @@ describe('detectMissionType', () => {
   })
 
   it('returns deploy for issue with "deploy" keyword', () => {
+    // "Cannot deploy" triggers troubleshoot (broken deployment), not deploy (new install)
     const issue = mockIssue({ title: 'Cannot deploy with helm chart' })
+    expect(detectMissionType(issue)).toBe('troubleshoot')
+  })
+
+  it('returns deploy for issue with "install" keyword', () => {
+    const issue = mockIssue({ title: 'How to install via helm chart' })
     expect(detectMissionType(issue)).toBe('deploy')
+  })
+
+  it('returns feature for RFC issues', () => {
+    const issue = mockIssue({ title: '[RFC] Automatic Prefix Caching' })
+    expect(detectMissionType(issue)).toBe('feature')
+  })
+
+  it('returns feature when label says enhancement', () => {
+    const issue = mockIssue({ title: 'Add support for X', labels: [{ name: 'enhancement' }] })
+    expect(detectMissionType(issue)).toBe('feature')
+  })
+
+  it('returns troubleshoot when label says bug', () => {
+    const issue = mockIssue({ title: 'Add support for feature X', labels: [{ name: 'kind/bug' }] })
+    expect(detectMissionType(issue)).toBe('troubleshoot')
   })
 
   it('returns analyze for issue with "performance" keyword', () => {
@@ -168,5 +192,67 @@ describe('CATEGORY_TO_DIR', () => {
     for (const cat of categories) {
       expect(CATEGORY_TO_DIR[cat]).toBeDefined()
     }
+  })
+})
+
+describe('truncateAtWordBoundary', () => {
+  it('returns text unchanged when under maxLen', () => {
+    expect(truncateAtWordBoundary('short text', 100)).toBe('short text')
+  })
+
+  it('truncates at word boundary when space is past MIN_TRUNCATION_POINT', () => {
+    // "this is a much longer sentence that..." at maxLen 30 → "this is a much longer"
+    // (last space at index 21 in the 30-char slice, which is >= MIN_TRUNCATION_POINT of 20)
+    const result = truncateAtWordBoundary('this is a much longer sentence that should be cut', 30)
+    expect(result).toBe('this is a much longer')
+  })
+
+  it('adds ellipsis when option is set', () => {
+    const result = truncateAtWordBoundary('this is a much longer sentence that should be cut', 30, { ellipsis: true })
+    expect(result).toBe('this is a much longer…')
+  })
+
+  it('does not add ellipsis when text is under maxLen', () => {
+    const result = truncateAtWordBoundary('short', 100, { ellipsis: true })
+    expect(result).toBe('short')
+  })
+})
+
+describe('buildDescription', () => {
+  it('hides reaction count when under 5', () => {
+    const issue = mockIssue({ title: 'Some issue', reactions: { total_count: 2 } })
+    const desc = buildDescription(issue, {})
+    expect(desc).not.toContain('2+ users')
+    expect(desc).toContain('Community-')
+  })
+
+  it('shows reaction count when 5 or more', () => {
+    const issue = mockIssue({ title: 'Some issue', reactions: { total_count: 42 } })
+    const desc = buildDescription(issue, {})
+    expect(desc).toContain('42+ users')
+  })
+
+  it('does not show 0+ users', () => {
+    const issue = mockIssue({ title: 'Some issue', reactions: { total_count: 0 } })
+    const desc = buildDescription(issue, {})
+    expect(desc).not.toContain('0+ users')
+  })
+})
+
+describe('buildResolutionSummary', () => {
+  it('includes PR URL when no clean solution available', () => {
+    const result = buildResolutionSummary({}, '', 'troubleshoot', { pr: 'https://github.com/org/repo/pull/123' })
+    expect(result).toContain('https://github.com/org/repo/pull/123')
+  })
+
+  it('includes issue URL when no PR available', () => {
+    const result = buildResolutionSummary({}, '', 'troubleshoot', { issue: 'https://github.com/org/repo/issues/456' })
+    expect(result).toContain('https://github.com/org/repo/issues/456')
+  })
+
+  it('uses clean solution when long enough', () => {
+    const longSolution = 'This is a detailed solution that explains how to fix the problem by changing the configuration. The root cause was a missing env var.'
+    const result = buildResolutionSummary({}, longSolution, 'troubleshoot', {})
+    expect(result).toContain('missing env var')
   })
 })
