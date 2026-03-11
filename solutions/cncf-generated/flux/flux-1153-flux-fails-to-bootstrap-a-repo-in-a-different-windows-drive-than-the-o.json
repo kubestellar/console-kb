@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flux-1153-flux-fails-to-bootstrap-a-repo-in-a-different-windows-drive-than-the-o",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flux: flux fails to bootstrap a repo in a different Windows drive than the one in $env:TEMP",
+    "description": "flux fails to bootstrap a repo in a different Windows drive than the one in $env:TEMP. This issue affects 13+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify flux troubleshoot symptoms",
+        "description": "Check for the issue in your flux deployment:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nkubectl logs -l app.kubernetes.io/name=flux -n flux --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review flux configuration",
+        "description": "Inspect the relevant flux configuration:\n```bash\nkubectl get all -n flux -l app.kubernetes.io/name=flux\nkubectl get configmap -n flux -l app.kubernetes.io/part-of=flux\n```\n### Describe the bug\n\nWhen trying to bootstrap a new flux repository on Windows, if the target directory is in a different drive than $env:TEMP, flux will fail to bootstrap it, with the error below:\n\n```\ngithub.com/pellegrino/test-flux2-windows on"
+      },
+      {
+        "title": "Apply the fix for flux fails to bootstrap a repo in a different Windows drive",
+        "description": "When running `flux bootstrap` (or `flux install`) from a drive different than where `%TEMP%` lives (e.g. working dir on `D:\\`, temp on `C:\\`), Go's `filepath.Rel` returns an error because it can't compute a relative path across Windows drive letters. The CLI just propagated that error and\n```yaml\ngithub.com/pellegrino/test-flux2-windows on ☁️  (eu-central-1)\n❯ pwd\n\nPath\n----\nD:\\src\\github.com\\pellegrino\\test-flux2-windows\n\ngithub.com/pellegrino/test-flux2-windows on ☁️  (eu-central-1)\n❯ flux bootstrap github --owner=pellegrino --repository=my-repo --branch=main --path .\\clusters\\dok8s --personal\n► connecting to github.com\n✔ repository cloned\n✚ generating manifests\n✗ generating install manifests failed: Rel: can't make C:\\Users\\VITORP~1\\AppData\\Local\\Temp\\flux-system445357215 relative to D:\\src\\github.com\\pellegrino\\test-flux2-windows\n```"
+      },
+      {
+        "title": "Upgrade flux to include the fix",
+        "description": "If the fix is included in a newer release, upgrade flux:\n```bash\nhelm repo update\nhelm upgrade flux flux/flux --namespace flux\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n flux\nhelm list -n flux\n```"
+      },
+      {
+        "title": "Confirm flux fails to bootstrap a repo in a different is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=flux -n flux --tail=50 --since=5m\nkubectl get events -n flux --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "When running `flux bootstrap` (or `flux install`) from a drive different than where `%TEMP%` lives (e.g. working dir on `D:\\`, temp on `C:\\`), Go's `filepath.Rel` returns an error because it can't compute a relative path across Windows drive letters. The CLI just propagated that error and died.",
+      "codeSnippets": [
+        "github.com/pellegrino/test-flux2-windows on ☁️  (eu-central-1)\n❯ pwd\n\nPath\n----\nD:\\src\\github.com\\pellegrino\\test-flux2-windows\n\ngithub.com/pellegrino/test-flux2-windows on ☁️  (eu-central-1)\n❯ flux bootstrap github --owner=pellegrino --repository=my-repo --branch=main --path .\\clusters\\dok8s --personal\n► connecting to github.com\n✔ repository cloned\n✚ generating manifests\n✗ generating install manifests failed: Rel: can't make C:\\Users\\VITORP~1\\AppData\\Local\\Temp\\flux-system445357215 relative to D:\\src\\github.com\\pellegrino\\test-flux2-windows",
+        "❯ echo $env:TEMP\nC:\\Users\\VITORP~1\\AppData\\Local\\Temp",
+        "❯ flux check --pre\n► checking prerequisites\n✔ kubectl 1.19.7 >=1.18.0-0\n✔ Kubernetes 1.20.2 >=1.16.0-0\n✔ prerequisites checks passed"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flux",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "flux"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flux2/issues/1153",
+      "repo": "https://github.com/fluxcd/flux2",
+      "pr": "https://github.com/fluxcd/flux2/pull/5726"
+    },
+    "reactions": 13,
+    "comments": 24,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flux installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T03:06:28.814Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
