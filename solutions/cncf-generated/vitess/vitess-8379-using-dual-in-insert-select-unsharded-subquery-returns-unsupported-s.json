@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "vitess-8379-using-dual-in-insert-select-unsharded-subquery-returns-unsupported-s",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "vitess: Using DUAL in `INSERT ... SELECT` unsharded subquery returns `unsupported sharded subquery in insert values`",
+    "description": "Using DUAL in `INSERT ... SELECT` unsharded subquery returns `unsupported sharded subquery in insert values`. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify vitess troubleshoot symptoms",
+        "description": "Check for the issue in your vitess deployment:\n```bash\nkubectl get pods -n vitess -l app.kubernetes.io/name=vitess\nkubectl logs -l app.kubernetes.io/name=vitess -n vitess --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review vitess configuration",
+        "description": "Inspect the relevant vitess configuration:\n```bash\nkubectl get all -n vitess -l app.kubernetes.io/name=vitess\nkubectl get configmap -n vitess -l app.kubernetes.io/part-of=vitess\n```\nAdding a reference to `DUAL` in an `INSERT ... SELECT` query, where the keyspace is unsharded, makes VTGate think the query is cross-shard and fail with `unsupported: sharded subquery in insert values`."
+      },
+      {
+        "title": "Apply the fix for Using DUAL in `INSERT ... SELECT` unsharded subquery",
+        "description": "This PR adds support for planning and executing `INSERT` queries that take their input from a `SELECT` or `UNION` query.\n\n```sql\ninsert into ... select query ...\n```\n```yaml\nThis works:\n```"
+      },
+      {
+        "title": "Confirm Using DUAL in `INSERT ... SELECT` unsharded is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=vitess -n vitess --tail=50 --since=5m\nkubectl get events -n vitess --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR adds support for planning and executing `INSERT` queries that take their input from a `SELECT` or `UNION` query.\n\n```sql\ninsert into ... select query ...\n```",
+      "codeSnippets": [
+        "This works:",
+        "This does not:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "vitess",
+      "graduated",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "vitess"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/vitessio/vitess/issues/8379",
+      "repo": "https://github.com/vitessio/vitess",
+      "pr": "https://github.com/vitessio/vitess/pull/9748"
+    },
+    "reactions": 6,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with vitess installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T03:11:13.863Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
