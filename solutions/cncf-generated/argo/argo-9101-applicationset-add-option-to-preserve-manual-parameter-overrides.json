@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-9101-applicationset-add-option-to-preserve-manual-parameter-overrides",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: ApplicationSet: Add option to preserve manual parameter overrides",
+    "description": "ApplicationSet: Add option to preserve manual parameter overrides. Requested by 66+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo deployment",
+        "description": "Verify your argo version and configuration:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nhelm list -n argo 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo installation."
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\nApplicationSets automatically override manual Application parameter overrides, e.g. performed with argocd client (argocd app set command)."
+      },
+      {
+        "title": "Apply the fix for ApplicationSet: Add option to preserve manual parameter",
+        "description": "ref: https://github.com/argoproj/argo-cd/issues/9101#issuecomment-1295192668\n\nAdd a `create-delete` policy to create or delete in ApplicationSet.\n\n> My team is having trouble because we are using the Pull Request Generator + Image Updater.\n> \n> The `create-only` policy alleviates this problem.\n```yaml\n❯ tree\n.\n├── application.yaml\n├── base\n│   ├── applications\n│   │   ├── example-component.yaml\n│   │   ├── example-component-2.yaml\n│   │   ├── example-component-3.yaml\n│   │   ├── example-component-4.yaml\n│   │   └── example-component-5.yaml\n│   └── kustomization.yaml\n├── kustomization.yaml\n└── overlays\n    ├── dev\n    │   ├── appproject.yaml\n    │   └── kustomization.yaml\n    ├── pro\n    │   ├── applications\n    │   │   ├── pro-only-example-component.yaml\n    │   │   └── pro-only-example-component-1.yaml\n    │   ├── appproject.yaml\n    │   └── kustomization.yaml\n    └── stg\n        ├── appli\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"ApplicationSet: Add option to preserve manual parameter\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "ref: https://github.com/argoproj/argo-cd/issues/9101#issuecomment-1295192668\n\nAdd a `create-delete` policy to create or delete in ApplicationSet.\n\n> My team is having trouble because we are using the Pull Request Generator + Image Updater.\n> \n> The `create-only` policy alleviates this problem. However, it is difficult to use because it is not deleted when the pull request is closed.",
+      "codeSnippets": [
+        "❯ tree\n.\n├── application.yaml\n├── base\n│   ├── applications\n│   │   ├── example-component.yaml\n│   │   ├── example-component-2.yaml\n│   │   ├── example-component-3.yaml\n│   │   ├── example-component-4.yaml\n│   │   └── example-component-5.yaml\n│   └── kustomization.yaml\n├── kustomization.yaml\n└── overlays\n    ├── dev\n    │   ├── appproject.yaml\n    │   └── kustomization.yaml\n    ├── pro\n    │   ├── applications\n    │   │   ├── pro-only-example-component.yaml\n    │   │   └── pro-only-example-component-1.yaml\n    │   ├── appproject.yaml\n    │   └── kustomization.yaml\n    └── stg\n        ├── applications\n        │   └── stg-only-example-component.yaml\n        ├── appproject.yaml\n        └── kustomization.yaml",
+        "resources:\n  - overlays/dev\n  - overlays/stg\n  - overlays/pro",
+        "bases:\n  - ../../base\n\nresources:\n  - appproject.yaml\n  - applications/pro-only-example-component.yaml\n  - applications/pro-only-example-component-1.yaml\n\ntransformers:\n  - |-\n    apiVersion: builtin\n    kind: PrefixSuffixTransformer\n    metadata:\n      name: prefix\n    prefix: workload-pro-\n    fieldSpecs:\n      - kind: Application\n        path: metadata/name\n  - |-\n    apiVersion: builtin\n    kind: PrefixSuffixTransformer\n    metadata:\n      name: source-path-prefix\n    prefix: manifests/workload/pro\n    fieldSpecs:\n      - kind: Application\n        path: spec/source/path\npatches:\n  - patch: |-\n      - op: replace\n        path: /spec/project\n        value: workload-pro\n      - op: replace\n        path: /spec/destination\n        value:\n          server: https://api.pro-cluster-fqdn:6443\n "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/9101",
+      "repo": "https://github.com/argoproj/argo-cd",
+      "pr": "https://github.com/argoproj/argo-cd/pull/11107"
+    },
+    "reactions": 66,
+    "comments": 26,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:12.532Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
