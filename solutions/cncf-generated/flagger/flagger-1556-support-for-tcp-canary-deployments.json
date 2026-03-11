@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flagger-1556-support-for-tcp-canary-deployments",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flagger: Support for TCP Canary Deployments",
+    "description": "Support for TCP Canary Deployments. Requested by 7+ users.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current flagger deployment",
+        "description": "Verify your flagger version and configuration:\n```bash\nkubectl get pods -n flagger -l app.kubernetes.io/name=flagger\nhelm list -n flagger 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working flagger installation."
+      },
+      {
+        "title": "Review flagger configuration",
+        "description": "Inspect the relevant flagger configuration:\n```bash\nkubectl get all -n flagger -l app.kubernetes.io/name=flagger\nkubectl get configmap -n flagger -l app.kubernetes.io/part-of=flagger\n```\n## Describe the feature\n\nWould be great if Flagger was able to support Canary deployments for TCP services too!\n\nI found this comment buried inside of an issue:"
+      },
+      {
+        "title": "Apply the fix for Support for TCP Canary Deployments",
+        "description": "This PR is a response to the feature requested in https://github.com/fluxcd/flagger/issues/1556\n\nThe changes contained in the PR only add support for TCP Canary deployments if the user has configured Flagger to use the istio `meshProvider`.\nWhen the user deploys their `Canary` document, Flagger\n```yaml\napiVersion: flagger.app/v1beta1\nkind: Canary\nmetadata:\n...\nspec:\n...\n  service:\n    appProtocol: tcp\n...\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n flagger -l app.kubernetes.io/name=flagger\nkubectl get events -n flagger --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support for TCP Canary Deployments\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR is a response to the feature requested in https://github.com/fluxcd/flagger/issues/1556\n\nThe changes contained in the PR only add support for TCP Canary deployments if the user has configured Flagger to use the istio `meshProvider`.\nWhen the user deploys their `Canary` document, Flagger will check if the `Canary.service.appProtocol` key has been set to `TCP` (case insensitive).",
+      "codeSnippets": [
+        "apiVersion: flagger.app/v1beta1\nkind: Canary\nmetadata:\n...\nspec:\n...\n  service:\n    appProtocol: tcp\n...",
+        "apiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n   name: tcp-service\n  namespace: test\n  ownerReferences:\n  - apiVersion: flagger.app/v1beta1\n    blockOwnerDeletion: true\n    controller: true\n    kind: Canary\n    name: tcp-service\nspec:\n  gateways:\n  - istio-ingress/tcp-service-gateway\n  hosts:\n  - '*'\n  tcp:\n  - route:\n    - destination:\n        host: tcp-service-primary\n        port:\n          number: 7070\n      weight: 100\n    - destination:\n        host: tcp-service-canary\n        port:\n          number: 7070\n      weight: 0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flagger",
+      "graduated",
+      "app-definition",
+      "deploy"
+    ],
+    "cncfProjects": [
+      "flagger"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "deploy"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flagger/issues/1556",
+      "repo": "https://github.com/fluxcd/flagger",
+      "pr": "https://github.com/fluxcd/flagger/pull/1564"
+    },
+    "reactions": 7,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flagger installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:09:59.775Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
