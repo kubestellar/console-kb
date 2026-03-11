@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentofu-300-dynamic-provider-configuration-assignment",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentofu: Dynamic provider configuration assignment",
+    "description": "Dynamic provider configuration assignment. Requested by 280+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current opentofu deployment",
+        "description": "Verify your opentofu version and configuration:\n```bash\nkubectl get pods -n opentofu -l app.kubernetes.io/name=opentofu\nhelm list -n opentofu 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working opentofu installation."
+      },
+      {
+        "title": "Review opentofu configuration",
+        "description": "Inspect the relevant opentofu configuration:\n```bash\nkubectl get all -n opentofu -l app.kubernetes.io/name=opentofu\nkubectl get configmap -n opentofu -l app.kubernetes.io/part-of=opentofu\n```\nSuggest an existing issue in legacy Terraform to fix in OpenTF. \n\nTo increase automation we struggle many times when configuring providers."
+      },
+      {
+        "title": "Apply the fix for Dynamic provider configuration assignment",
+        "description": "There is a tricky situation that I don't see discussed in [the current RFC](https://github.com/opentofu/opentofu/blob/0cc4301cd51bf3ef1de4d87edfef2ab81cb678b8/rfc/20240513-static-evaluation-providers.md). :thinking: \n\nConsider the following configuration:\n\n```hcl\nvariable \"regions\" {\n  type =\n```yaml\nprovider \"aws\" {\n  region = \"eu-central-1\"\n  alias  = \"x1\"\n}\n\nprovider \"aws\" {\n  region = \"eu-west-1\"\n  alias  = \"x2\"\n}\n\n\n\nresource \"aws_resource\" \"x1\" {\n  provider = aws.x1\n}\n\nresource \"aws_resource\" \"x2\" {\n  provider = aws.x2\n}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n opentofu -l app.kubernetes.io/name=opentofu\nkubectl get events -n opentofu --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Dynamic provider configuration assignment\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "There is a tricky situation that I don't see discussed in [the current RFC](https://github.com/opentofu/opentofu/blob/0cc4301cd51bf3ef1de4d87edfef2ab81cb678b8/rfc/20240513-static-evaluation-providers.md).",
+      "codeSnippets": [
+        "provider \"aws\" {\n  region = \"eu-central-1\"\n  alias  = \"x1\"\n}\n\nprovider \"aws\" {\n  region = \"eu-west-1\"\n  alias  = \"x2\"\n}\n\n\n\nresource \"aws_resource\" \"x1\" {\n  provider = aws.x1\n}\n\nresource \"aws_resource\" \"x2\" {\n  provider = aws.x2\n}",
+        "provider \"aws\" {\n  region = \"eu-central-1\"\n  alias  = \"x1\"\n}\n\nprovider \"aws\" {\n  region = \"eu-west-1\"\n  alias  = \"x2\"\n}\n\nresource \"aws_resource\" \"x1\" {\n  provider = providers.aws[\"x1\"]\n}\n\nresource \"aws_resource\" \"x2\" {\n  provider = providers.aws[\"x2\"]\n}",
+        "locals {\n  aws_accounts = [\n    { \"aws_account_id\": \"123456789012\", \"foo_value\": \"foo\",    \"bar_value\": \"bar\"    },\n    { \"aws_account_id\": \"987654321098\", \"foo_value\": \"foofoo\", \"bar_value\": \"barbar\" },\n    ]\n}\n\n## Here's the proposed magic... `provider.for_each`\nprovider \"aws\" {\n  for_each = local.aws_accounts\n  alias = each.value.aws_account_id\n\n  assume_role {\n    role_arn    = \"arn:aws:iam::${each.value.aws_account_id}:role/TerraformAccessRole\"\n  }\n}\n\n## Here is the magic of referencing them in our resources \n\nresource \"aws_resource\" \"x1\" {\n  for_each = local.aws_accounts\n\n  provider = providers.aws[each.value.aws_account_id]\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentofu",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "opentofu"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/opentofu/opentofu/issues/300",
+      "repo": "https://github.com/opentofu/opentofu"
+    },
+    "reactions": 280,
+    "comments": 51,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentofu installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:41:17.431Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
