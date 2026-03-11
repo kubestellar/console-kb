@@ -342,9 +342,13 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
   if (linkedPR?.body) {
     const prBody = linkedPR.body
     const solutionMatch = prBody.match(/#{1,4}\s*(?:solution|fix|changes|description|approach|implementation|what\s+this\s+pr\s+does)\s*\n([\s\S]*?)(?=\n#{1,4}\s|\n---|\Z)/i)
-    resolution.solution = solutionMatch
-      ? truncateAtWordBoundary(cleanText(solutionMatch[1]), 1500)
-      : truncateAtWordBoundary(cleanText(prBody), 1500)
+    if (solutionMatch) {
+      resolution.solution = truncateAtWordBoundary(cleanText(solutionMatch[1]), 1500)
+    } else {
+      // Try extracting from numbered template format (### 1. Why is this PR needed?)
+      const extracted = extractFromNumberedTemplate(prBody)
+      resolution.solution = truncateAtWordBoundary(cleanText(extracted), 1500)
+    }
   }
 
   // If no PR-based solution, score comments and pick the best resolution
@@ -425,6 +429,10 @@ function cleanText(text) {
     // Strip orphaned "cc @user" and standalone "cc"
     .replace(/\bcc\s+@[a-zA-Z0-9_-]+/g, '')
     .replace(/\bcc\s*$/gm, '')
+    // Strip numbered PR template headers
+    .replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
+    // Strip bare issue references (e.g., "#6661")
+    .replace(/^\s*#\d+\s*$/gm, '')
     // Strip GitHub asset URLs
     .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/assets\/\S+/g, '')
     .replace(/\r\n/g, '\n')
@@ -557,6 +565,33 @@ function truncateAtSentenceBoundary(text, maxLen) {
   return truncateAtWordBoundary(text, maxLen)
 }
 
+/**
+ * Extract useful content from numbered PR templates.
+ * Handles formats like "### 1. Why is this PR needed?\n...content...\n### 2. Which issues..."
+ * Returns just the content paragraphs, stripping template question headers.
+ */
+function extractFromNumberedTemplate(text) {
+  if (!text) return ''
+  // Detect numbered template format: ### N. Question text
+  const numberedSections = text.match(/#{1,4}\s*\d+\.\s+.+/g)
+  if (!numberedSections || numberedSections.length < 2) return text // not a numbered template
+
+  // Extract content between numbered headers
+  const parts = text.split(/#{1,4}\s*\d+\.\s+.+\n?/)
+  const contentParts = parts
+    .map(p => p.trim())
+    .filter(p => {
+      if (p.length < 10) return false
+      // Skip sections that are just issue references
+      if (/^#\d+\s*$/.test(p) || /^https:\/\/github\.com/.test(p)) return false
+      // Skip "Yes/No" answers to template questions
+      if (/^(yes|no|none|n\/a)\.?\s*$/i.test(p)) return false
+      return true
+    })
+
+  return contentParts.join('\n\n')
+}
+
 /** Strip PR template boilerplate and return useful content only */
 function stripPRTemplate(text) {
   if (!text) return ''
@@ -605,6 +640,10 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/^\s*Credit where credit is due:.*$/gm, '')
   // Remove "Demo:" lines with GitHub URLs
   cleaned = cleaned.replace(/^\s*Demo:.*github\.com.*$/gm, '')
+  // Strip numbered PR template headers (### 1. Why is this PR needed?, ### 2. Which issues?, etc.)
+  cleaned = cleaned.replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
+  // Strip bare issue references left over from template sections (e.g., "#6661\n#6638")
+  cleaned = cleaned.replace(/^\s*#\d+\s*$/gm, '')
   // Collapse whitespace
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
   return cleaned
