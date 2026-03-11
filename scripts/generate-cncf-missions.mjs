@@ -346,7 +346,11 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
       resolution.solution = truncateAtWordBoundary(cleanText(solutionMatch[1]), 1500)
     } else {
       // Try extracting from numbered template format (### 1. Why is this PR needed?)
-      const extracted = extractFromNumberedTemplate(prBody)
+      let extracted = extractFromNumberedTemplate(prBody)
+      // Try extracting from bold-header template (**What type of PR is this?**)
+      if (extracted === prBody) {
+        extracted = extractFromBoldTemplate(prBody)
+      }
       resolution.solution = truncateAtWordBoundary(cleanText(extracted), 1500)
     }
   }
@@ -431,6 +435,14 @@ function cleanText(text) {
     .replace(/\bcc\s*$/gm, '')
     // Strip numbered PR template headers
     .replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
+    // Strip bold-header PR template questions
+    .replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context)[^*]*\*\*/gi, '')
+    // Strip /kind, /area, /sig bot commands
+    .replace(/^\s*>?\s*\/(?:kind|area|sig)\s+\w+.*$/gm, '')
+    .replace(/^\s*>\s*Uncomment\s+.*/gm, '')
+    // Strip common empty PR template section headers (Kyverno, Falco, etc.)
+    .replace(/^\s*#{1,4}\s*(?:Checklist|Further Comments?|Milestone|Related issue|Proposed Changes?|Explanation)\s*$/gim, '')
+    .replace(/^\s*#{1,4}\s*Milestone of this PR.*$/gim, '')
     // Strip bare issue references (e.g., "#6661") and "Closes: #N" lines
     .replace(/^\s*#\d+\s*$/gm, '')
     .replace(/^\s*(?:closes?|fixes?|resolves?):?\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
@@ -607,6 +619,32 @@ function extractFromNumberedTemplate(text) {
   return contentParts.join('\n\n')
 }
 
+/**
+ * Extract content from bold-header PR templates (Falco, KEDA, etc).
+ * Handles: "**What type of PR is this?**\n> Uncomment...\n**What this PR does:**\n..."
+ * Returns only the content answers, not the template questions or uncomment instructions.
+ */
+function extractFromBoldTemplate(text) {
+  if (!text) return ''
+  const boldHeaders = text.match(/\*\*[^*]+\*\*/g)
+  if (!boldHeaders || boldHeaders.length < 2) return text // not a bold-header template
+
+  // Split on bold headers and extract content between them
+  const parts = text.split(/\*\*[^*]+\*\*\s*\n?/)
+  const contentParts = parts
+    .map(p => p.trim())
+    .filter(p => {
+      if (p.length < 20) return false
+      // Skip template instructions ("> Uncomment one...", "> /kind bug")
+      if (/^>\s*(?:Uncomment|\/kind|\/area|\/sig)/m.test(p)) return false
+      // Skip lines that are only /kind or /area commands
+      if (/^(?:>\s*)?\/(?:kind|area|sig)\s+\w+$/gm.test(p) && p.length < 100) return false
+      return true
+    })
+
+  return contentParts.join('\n\n')
+}
+
 /** Strip PR template boilerplate and return useful content only */
 function stripPRTemplate(text) {
   if (!text) return ''
@@ -638,6 +676,12 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/For first.time contributors[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
   // Remove "Please provide a description of this PR:" boilerplate
   cleaned = cleaned.replace(/^\s*Please provide a description of this PR:?\s*$/gm, '')
+  // Remove bold-header PR template questions (**What type of PR is this?**, etc.)
+  cleaned = cleaned.replace(/\*\*(?:What type of PR|Any specific area|What this PR does|Which issue|Does this introduce|Additional context)[^*]*\*\*/gi, '')
+  // Remove /kind, /area, /sig lines (Prow/bot commands in PR templates)
+  cleaned = cleaned.replace(/^\s*>?\s*\/(?:kind|area|sig)\s+\w+.*$/gm, '')
+  // Remove "> Uncomment one" instruction lines
+  cleaned = cleaned.replace(/^\s*>\s*Uncomment\s+.*/gm, '')
   // Remove "Closes #N" / "Fixes #N" / "Closes: #N" lines (with or without colon)
   cleaned = cleaned.replace(/^\s*(?:closes?|fixes?|resolves?):?\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
   // Remove Signed-off-by
