@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flux-2240-ingress-docs-for-flux-webhook-receiver-are-missing-important-details",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flux: Ingress docs for Flux webhook receiver are missing important details",
+    "description": "Ingress docs for Flux webhook receiver are missing important details. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current flux deployment",
+        "description": "Verify your flux version and configuration:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nhelm list -n flux 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working flux installation."
+      },
+      {
+        "title": "Review flux configuration",
+        "description": "Inspect the relevant flux configuration:\n```bash\nkubectl get all -n flux -l app.kubernetes.io/name=flux\nkubectl get configmap -n flux -l app.kubernetes.io/part-of=flux\n```\n### Describe the bug\n\nI wrote parts of these webhook receiver docs, in \"[Expose the webhook receiver](https://fluxcd.io/docs/guides/webhook-receivers/#expose-the-webhook-receiver)\" I mentioned cert-manager and proudly stated that you can use the"
+      },
+      {
+        "title": "Apply the fix for Ingress docs for Flux webhook receiver are missing",
+        "description": "I haven't been able to make a \"good\" least-required policy that works - it might be a problem with my cluster's CNI topology:\n\n```\n% k -n default get endpoints kubernetes\nNAME         ENDPOINTS          AGE\nkubernetes   10.96.59.56:6443   14d\nyebyen cert-manager % k -n default get svc\n```yaml\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: webhook-receiver\n  namespace: flux-system\n  annotations:\n    cert-manager.io/cluster-issuer: letsencrypt\nspec:\n  rules:\n    - host: fluxwebhook.example\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: webhook-receiver\n                port:\n                  number: 80\n  tls:\n    - hosts:\n        - fluxwebhook.example\n      secretName: webhook-receiver-https\n---\nkind: NetworkPolicy\napiVersion: networking.k8s.io/v1\nmetadata:\n  name: all\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nkubectl get events -n flux --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Ingress docs for Flux webhook receiver are missing\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I haven't been able to make a \"good\" least-required policy that works - it might be a problem with my cluster's CNI topology:\n\n```\n% k -n default get endpoints kubernetes\nNAME         ENDPOINTS          AGE\nkubernetes   10.96.59.56:6443   14d\nyebyen cert-manager % k -n default get svc kubernetes\nNAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE\nkubernetes   ClusterIP   10.95.0.1  ",
+      "codeSnippets": [
+        "---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: webhook-receiver\n  namespace: flux-system\n  annotations:\n    cert-manager.io/cluster-issuer: letsencrypt\nspec:\n  rules:\n    - host: fluxwebhook.example\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: webhook-receiver\n                port:\n                  number: 80\n  tls:\n    - hosts:\n        - fluxwebhook.example\n      secretName: webhook-receiver-https\n---\nkind: NetworkPolicy\napiVersion: networking.k8s.io/v1\nmetadata:\n  name: allow-cert-manager-resolver-reverse\n  namespace: cert-manager\nspec:\n  podSelector:\n    matchLabels:\n      app.kubernetes.io/instance: cert-manager\n  egress:\n    - to:\n        - namespaceSelector:\n       ",
+        "---\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: allow-cert-manager-http-solver\n  namespace: flux-system\nspec:\n  policyTypes:\n    - Ingress\n  podSelector:\n    matchLabels:\n      acme.cert-manager.io/http01-solver: \"true\"\n  ingress:\n    - {}",
+        "cert-manager   allow-cert-manager-resolver-reverse   app.kubernetes.io/instance=cert-manager   116m\nflux-system    allow-cert-manager-resolver           acme.cert-manager.io/http01-solver=true   116m"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flux",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "flux"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flux2/issues/2240",
+      "repo": "https://github.com/fluxcd/flux2"
+    },
+    "reactions": 5,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flux installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:00.108Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
