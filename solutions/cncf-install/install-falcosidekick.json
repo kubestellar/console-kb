@@ -5,86 +5,73 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Falcosidekick (Falco) on Kubernetes",
-    "description": "Falcosidekick is a daemon that connects Falco to your ecosystem, forwarding Falco events to various outputs. Installing Falcosidekick allows you to enhance your security monitoring by integrating Falco alerts with your existing tools and workflows.",
+    "title": "Install and Configure Falcosidekick on Kubernetes",
+    "description": "Falcosidekick is a daemon that connects Falco to your ecosystem, forwarding Falco events to various outputs such as Slack, Teams, Elasticsearch, Loki, and many more. Installing Falcosidekick enhances your security monitoring by integrating Falco alerts with your existing tools and workflows.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Falcosidekick Helm repository",
-        "description": "Add the official Falcosidekick Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add falcosidekick https://falcosecurity.github.io/charts\nhelm repo update\n```"
+        "title": "Add the Falco Security Helm repository",
+        "description": "Add the official Falco Security Helm chart repository to your Helm configuration:\n```bash\nhelm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update\n```"
       },
       {
         "title": "Install Falcosidekick using Helm",
-        "description": "Install Falcosidekick in your Kubernetes cluster using the following command. This command creates a namespace called 'falcosidekick' if it doesn't exist:\n```bash\nhelm install falcosidekick falcosidekick/falcosidekick --namespace falcosidekick --create-namespace --version 2.32.0\n```"
+        "description": "Install Falcosidekick in your Kubernetes cluster. This creates a dedicated namespace for Falcosidekick:\n```bash\nhelm install falcosidekick falcosecurity/falcosidekick --namespace falcosidekick --create-namespace --version 0.13.0\n```\n\nNote: Falcosidekick requires Falco to be running in your cluster to receive events. You can install Falco with Falcosidekick enabled together:\n```bash\nhelm install falco falcosecurity/falco --namespace falco --create-namespace --set falcosidekick.enabled=true\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Falcosidekick pod is running by executing:\n```bash\nkubectl get pods --namespace falcosidekick\n```"
+        "description": "Check that the Falcosidekick pod is running:\n```bash\nkubectl get pods --namespace falcosidekick\n```\n\nYou should see one or more pods with STATUS 'Running'."
       },
       {
-        "title": "Configure resource limits",
-        "description": "To ensure optimal performance, configure resource limits for the Falcosidekick deployment. Edit the deployment with:\n```bash\nkubectl edit deployment falcosidekick --namespace falcosidekick\n```\nThen, add the following resource limits under the containers section:\n```yaml\nresources:\n  limits:\n    memory: \"256Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"128Mi\"\n    cpu: \"250m\"\n```"
-      },
-      {
-        "title": "Set up port forwarding for access",
-        "description": "To access the Falcosidekick service, set up port forwarding with the following command:\n```bash\nkubectl port-forward svc/falcosidekick --namespace falcosidekick 2801:2801\n```"
+        "title": "Verify Falcosidekick is receiving events",
+        "description": "Set up port forwarding to access the Falcosidekick web UI and verify events are flowing:\n```bash\nkubectl port-forward svc/falcosidekick --namespace falcosidekick 2801:2801\n```\n\nThen check the health endpoint:\n```bash\ncurl http://localhost:2801/healthz\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Falcosidekick will show the pod running in the 'falcosidekick' namespace, and you will be able to access the service via port forwarding. Additionally, resource limits will be configured to ensure efficient operation.",
+      "summary": "A successful installation shows the Falcosidekick pod running in the 'falcosidekick' namespace. The service is accessible on port 2801 and forwards Falco events to configured outputs.",
       "codeSnippets": [
-        "helm repo add falcosidekick https://falcosecurity.github.io/charts\nhelm repo update",
-        "helm install falcosidekick falcosidekick/falcosidekick --namespace falcosidekick --create-namespace --version 2.32.0",
+        "helm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update",
+        "helm install falcosidekick falcosecurity/falcosidekick --namespace falcosidekick --create-namespace --version 0.13.0",
         "kubectl get pods --namespace falcosidekick",
-        "kubectl edit deployment falcosidekick --namespace falcosidekick",
-        "resources:\n  limits:\n    memory: \"256Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"128Mi\"\n    cpu: \"250m\""
+        "kubectl port-forward svc/falcosidekick --namespace falcosidekick 2801:2801"
       ]
     },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Falcosidekick Helm release from your Kubernetes cluster with the following command. This will remove the deployment and associated resources:\n```bash\nhelm uninstall falcosidekick --namespace falcosidekick\n```"
+        "description": "Uninstall the Falcosidekick Helm release:\n```bash\nhelm uninstall falcosidekick --namespace falcosidekick\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent resources that were created during the installation. Use the following commands:\n```bash\nkubectl delete crd falcosidekick.falcosecurity.io\nkubectl delete pvc --all --namespace falcosidekick\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'falcosidekick' namespace to clean up any remaining resources. Verify that the namespace has been removed:\n```bash\nkubectl delete namespace falcosidekick\nkubectl get namespaces\n```"
+        "title": "Remove the namespace",
+        "description": "Delete the 'falcosidekick' namespace to clean up all remaining resources:\n```bash\nkubectl delete namespace falcosidekick\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current configuration and state of Falcosidekick. You can do this by exporting the current configuration:\n```bash\nkubectl get all --namespace falcosidekick -o yaml > falcosidekick-backup.yaml\n```"
+        "title": "Update Helm repository",
+        "description": "Update the Helm repository to get the latest chart versions:\n```bash\nhelm repo update\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the Falcosidekick release to the latest version. Run the following commands:\n```bash\nhelm repo update\nhelm upgrade falcosidekick falcosidekick/falcosidekick --namespace falcosidekick --version 2.33.0\n```"
+        "title": "Upgrade Falcosidekick",
+        "description": "Upgrade to a newer chart version:\n```bash\nhelm upgrade falcosidekick falcosecurity/falcosidekick --namespace falcosidekick\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Falcosidekick pod is running the new version after the upgrade. Use the following command to verify:\n```bash\nkubectl get pods --namespace falcosidekick\n```"
+        "description": "Check that the Falcosidekick pod is running the new version:\n```bash\nkubectl get pods --namespace falcosidekick\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If the Falcosidekick pod is in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace falcosidekick\n```\nCommon issues include misconfigured environment variables or resource limits."
+        "title": "Pod in CrashLoopBackOff",
+        "description": "If the Falcosidekick pod is in CrashLoopBackOff, check the logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=falcosidekick --namespace falcosidekick\n```\nCommon causes include misconfigured output destinations or connectivity issues."
+      },
+      {
+        "title": "No events received",
+        "description": "If Falcosidekick is running but not receiving events, verify that Falco is installed and configured to send events to Falcosidekick. Check Falco's configuration:\n```bash\nkubectl get pods --namespace falco\nkubectl logs -l app.kubernetes.io/name=falco --namespace falco | tail -20\n```"
       },
       {
         "title": "Service not reachable",
-        "description": "If you cannot access the Falcosidekick service, ensure that the port forwarding is set up correctly. Check the service configuration:\n```bash\nkubectl get svc --namespace falcosidekick\n```\nIf the service is not running, restart it with:\n```bash\nkubectl delete svc falcosidekick --namespace falcosidekick\nhelm install falcosidekick falcosidekick/falcosidekick --namespace falcosidekick\n```"
-      },
-      {
-        "title": "High memory usage",
-        "description": "If you notice high memory usage, check the resource limits set for the Falcosidekick deployment. You can edit the deployment with:\n```bash\nkubectl edit deployment falcosidekick --namespace falcosidekick\n```\nAdjust the resource limits as necessary."
-      },
-      {
-        "title": "Failed to connect to Falco",
-        "description": "If Falcosidekick fails to connect to Falco, verify that the Falco service is running and reachable. Check the Falco pod status:\n```bash\nkubectl get pods --namespace falco\n```\nIf it's not running, troubleshoot the Falco installation."
+        "description": "If port forwarding fails, verify the service exists:\n```bash\nkubectl get svc --namespace falcosidekick\n```"
       }
     ]
   },
@@ -115,13 +102,14 @@
       "helm"
     ],
     "maturity": "graduated",
-    "projectVersion": "2.32.0",
+    "projectVersion": "2.31.1",
     "containerImages": [
-      "falcosecurity/falcosidekick:2.32.0"
+      "falcosecurity/falcosidekick:2.31.1"
     ],
     "sourceUrls": {
       "docs": "https://github.com/falcosecurity/falcosidekick",
-      "repo": "https://github.com/falcosecurity/falcosidekick"
+      "repo": "https://github.com/falcosecurity/falcosidekick",
+      "helm": "https://falcosecurity.github.io/charts"
     },
     "qualityScore": 100
   },
@@ -131,11 +119,11 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running with Helm and kubectl installed."
+    "description": "Requires a Kubernetes cluster with Helm and kubectl installed. Falco should be running in the cluster to generate security events that Falcosidekick forwards to configured outputs."
   },
   "security": {
-    "scannedAt": "2026-02-28T22:39:09.621Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-11T15:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }

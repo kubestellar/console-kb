@@ -6,91 +6,73 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Armada on Kubernetes",
-    "description": "Armada is a multi-cluster batch queuing system designed for high-throughput workloads on Kubernetes. It enables efficient scheduling and management of jobs across multiple clusters, making it ideal for enterprises with large compute needs.",
+    "description": "Armada is a CNCF sandbox project for multi-cluster batch job scheduling. It enables efficient queuing, scheduling, and management of high-throughput compute workloads across multiple Kubernetes clusters, ideal for enterprises with large-scale batch processing needs.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the G-Research Helm repository to your Helm configuration to access the Armada chart.\n```bash\nhelm repo add g-research https://g-research.github.io/charts\nhelm repo update\n```"
+        "title": "Install prerequisites",
+        "description": "Armada requires several dependencies to be installed first. Ensure the following are running in your cluster:\n\n- **PostgreSQL** — persistent storage for job metadata\n- **Redis** — caching layer\n- **Apache Pulsar** — message broker for inter-component communication\n\nYou can install these via Helm:\n```bash\nhelm repo add bitnami https://charts.bitnami.com/bitnami\nhelm install postgresql bitnami/postgresql --namespace armada --create-namespace\nhelm install redis bitnami/redis --namespace armada\nhelm repo add apache https://pulsar.apache.org/charts\nhelm install pulsar apache/pulsar --namespace armada\n```"
       },
       {
-        "title": "Install Armada using Helm",
-        "description": "Install Armada in the desired namespace (e.g., 'armada') with the specified version.\n```bash\nhelm install armada g-research/armada --version 0.20.36 --namespace armada --create-namespace\n```"
+        "title": "Add the Armada Helm repository",
+        "description": "Add the G-Research Helm repository:\n```bash\nhelm repo add gresearch https://g-research.github.io/charts\nhelm repo update\n```"
+      },
+      {
+        "title": "Install Armada server using Helm",
+        "description": "Install the Armada server. You will need to configure the values to point to your PostgreSQL, Redis, and Pulsar instances:\n```bash\nhelm install armada-server gresearch/armada --namespace armada --version 0.20.36\n```\n\nFor a complete deployment, you also need the executor (per worker cluster) and scheduler:\n```bash\nhelm install armada-executor gresearch/armada-executor --namespace armada\nhelm install armada-scheduler gresearch/armada-scheduler --namespace armada\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check the status of the Armada pods to ensure they are running correctly.\n```bash\nkubectl get pods --namespace armada\n```"
-      },
-      {
-        "title": "Configure resource limits",
-        "description": "Set resource limits for the Armada deployment to ensure optimal performance.\n```bash\nkubectl patch deployment armada --namespace armada -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"armada\",\"resources\":{\"limits\":{\"cpu\":\"1000m\",\"memory\":\"512Mi\"}}}]}}}}' \n```"
-      },
-      {
-        "title": "Set up Prometheus monitoring",
-        "description": "Ensure that Prometheus is configured to scrape metrics from Armada for monitoring purposes. This may involve adding annotations to the deployment.\n```bash\nkubectl annotate deployment armada --namespace armada prometheus.io/scrape=true prometheus.io/port=8080\n```"
+        "description": "Check that the Armada components are running:\n```bash\nkubectl get pods --namespace armada\n```\n\nYou should see pods for armada-server, armada-executor, and armada-scheduler."
       }
     ],
+    "resolution": {
+      "summary": "A successful installation shows the Armada server, executor, and scheduler pods running in the 'armada' namespace, with connectivity to PostgreSQL, Redis, and Pulsar.",
+      "codeSnippets": [
+        "helm repo add gresearch https://g-research.github.io/charts\nhelm repo update",
+        "helm install armada-server gresearch/armada --namespace armada --create-namespace --version 0.20.36",
+        "kubectl get pods --namespace armada"
+      ]
+    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Armada release from your Kubernetes cluster.\n```bash\nhelm uninstall armada --namespace armada\n```"
-      },
-      {
-        "title": "Clean up CRDs and resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) associated with Armada.\n```bash\nkubectl delete crd armadajobs.armada.gresearch.io\nkubectl delete crd armadaschedules.armada.gresearch.io\n```"
+        "title": "Remove Armada Helm releases",
+        "description": "Uninstall all Armada components:\n```bash\nhelm uninstall armada-server --namespace armada\nhelm uninstall armada-executor --namespace armada\nhelm uninstall armada-scheduler --namespace armada\n```"
       },
       {
         "title": "Remove the namespace",
-        "description": "Delete the namespace used for Armada to clean up any remaining resources.\n```bash\nkubectl delete namespace armada\n```"
+        "description": "Delete the namespace and all remaining resources:\n```bash\nkubectl delete namespace armada\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up your current configuration and any important data.\n```bash\nkubectl get all --namespace armada -o yaml > armada-backup.yaml\n```"
+        "title": "Update Helm repository",
+        "description": "Update the repository to get the latest chart versions:\n```bash\nhelm repo update\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Ensure your Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade the Armada release",
-        "description": "Upgrade the Armada release to the latest version.\n```bash\nhelm upgrade armada g-research/armada --version 0.20.36 --namespace armada\n```"
+        "title": "Upgrade Armada",
+        "description": "Upgrade the Armada server:\n```bash\nhelm upgrade armada-server gresearch/armada --namespace armada\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check the status of the pods after the upgrade to ensure everything is functioning correctly.\n```bash\nkubectl get pods --namespace armada\n```"
+        "description": "Check pod status after upgrade:\n```bash\nkubectl get pods --namespace armada\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If you see pods in a CrashLoopBackOff state, check the logs for the pod to diagnose the issue.\n```bash\nkubectl logs <pod-name> --namespace armada\n```"
+        "title": "Pods in CrashLoopBackOff",
+        "description": "Usually caused by missing or misconfigured dependencies. Check the logs:\n```bash\nkubectl logs -l app=armada-server --namespace armada\n```\n\nVerify that PostgreSQL, Redis, and Pulsar are running and accessible."
       },
       {
-        "title": "Service not reachable",
-        "description": "If the Armada service is not reachable, ensure that the service is correctly configured and check the endpoints.\n```bash\nkubectl get svc --namespace armada\nkubectl describe svc armada --namespace armada\n```"
+        "title": "Database connection errors",
+        "description": "Verify PostgreSQL is running and the connection string is correct:\n```bash\nkubectl get pods --namespace armada | grep postgresql\nkubectl logs -l app=armada-server --namespace armada | grep -i database\n```"
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter errors related to insufficient resources, check the resource requests and limits set for the deployment.\n```bash\nkubectl describe deployment armada --namespace armada\n```"
-      },
-      {
-        "title": "Prometheus metrics not scraping",
-        "description": "If Prometheus is not scraping metrics, verify the annotations on the Armada deployment and ensure Prometheus is configured to scrape the correct port.\n```bash\nkubectl get deployment armada --namespace armada -o yaml | grep annotations\n```"
+        "title": "Pulsar connection issues",
+        "description": "Verify Pulsar is running:\n```bash\nkubectl get pods --namespace armada | grep pulsar\n```"
       }
-    ],
-    "resolution": {
-      "summary": "A successful installation of Armada will have all pods in the 'Running' state and the service accessible. You should also see metrics being scraped by Prometheus if configured correctly.",
-      "codeSnippets": [
-        "helm repo add g-research https://g-research.github.io/charts\nhelm repo update",
-        "helm install armada g-research/armada --version 0.20.36 --namespace armada --create-namespace",
-        "kubectl get pods --namespace armada",
-        "kubectl patch deployment armada --namespace armada -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"armada\",\"resources\":{\"limits\":{\"cpu\":\"1000m\",\"memory\":\"512Mi\"}}}]}}}}'",
-        "kubectl annotate deployment armada --namespace armada prometheus.io/scrape=true prometheus.io/port=8080"
-      ]
-    }
+    ]
   },
   "metadata": {
     "tags": [
@@ -105,9 +87,10 @@
     ],
     "targetResourceKinds": [
       "Deployment",
-      "Namespace"
+      "Namespace",
+      "Service"
     ],
-    "difficulty": "intermediate",
+    "difficulty": "advanced",
     "issueTypes": [
       "installation",
       "configuration"
@@ -118,7 +101,7 @@
     "maturity": "sandbox",
     "projectVersion": "v0.20.36",
     "containerImages": [
-      "g-research/armada:v0.20.36"
+      "gresearch/armada-server:v0.20.36"
     ],
     "sourceUrls": {
       "docs": "https://armadaproject.io",
@@ -133,11 +116,11 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have Kubernetes cluster access and Helm installed."
+    "description": "Requires a Kubernetes cluster with Helm and kubectl. Armada depends on PostgreSQL, Redis, and Apache Pulsar, which must be installed before deploying Armada."
   },
   "security": {
-    "scannedAt": "2026-03-05T22:25:41.459Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-11T15:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }
