@@ -6,51 +6,56 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Oxia on Kubernetes",
-    "description": "Oxia is a robust and scalable metadata store and coordination system designed for large-scale distributed systems. Installing Oxia allows you to efficiently manage metadata in cloud-native applications, ensuring scalability and high availability.",
+    "description": "Oxia is a scalable metadata store and coordination system designed for large-scale distributed systems. It provides a ZooKeeper-compatible API with horizontal scalability. Installing Oxia via Helm deploys a StatefulSet-based cluster with configurable replication.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "Create a dedicated namespace for Oxia to isolate its resources."
+        "title": "Add the Oxia Helm repository",
+        "description": "Add the Oxia Helm chart repository:\n```bash\nhelm repo add oxia https://oxia-db.github.io/helm-charts/\nhelm repo update\n```"
       },
       {
-        "title": "Deploy Oxia Components",
-        "description": "Apply the necessary manifests to deploy Oxia components."
+        "title": "Create a namespace",
+        "description": "Create a dedicated namespace for the Oxia cluster:\n```bash\nkubectl create namespace oxia\n```"
       },
       {
-        "title": "Verify Deployment",
-        "description": "Check the status of the pods to ensure that Oxia is running correctly."
+        "title": "Install Oxia using Helm",
+        "description": "Install the Oxia cluster chart in the oxia namespace:\n```bash\nhelm install oxia oxia/oxia-cluster --namespace oxia\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the Oxia server and coordinator pods are running:\n```bash\nkubectl get pods -n oxia\nkubectl get svc -n oxia\n```\nThe primary client endpoint is on port 6648."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Oxia will show the Oxia pods running in the 'oxia' namespace. You will also be able to access the service via port 8080 on your local machine.",
-      "codeSnippets": []
+      "summary": "A successful installation will show Oxia server (StatefulSet) and coordinator (Deployment) pods running in the oxia namespace. The client endpoint is available on port 6648.",
+      "codeSnippets": [
+        "helm repo add oxia https://oxia-db.github.io/helm-charts/\nhelm repo update",
+        "kubectl create namespace oxia",
+        "helm install oxia oxia/oxia-cluster --namespace oxia",
+        "kubectl get pods -n oxia"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Oxia Deployment",
-        "description": "Delete the Oxia resources and the namespace."
+        "title": "Remove Oxia",
+        "description": "Uninstall the Helm release and clean up:\n```bash\nhelm uninstall oxia --namespace oxia\nkubectl delete namespace oxia\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Oxia",
-        "description": "To upgrade Oxia, apply the updated manifests from the repository."
+        "description": "Update the Helm repo and upgrade:\n```bash\nhelm repo update\nhelm upgrade oxia oxia/oxia-cluster --namespace oxia\nkubectl get pods -n oxia\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If the Oxia pod is not starting, check the pod logs for errors."
+        "title": "Server pods not starting",
+        "description": "Oxia servers run as a StatefulSet requiring PersistentVolumes. Check if a StorageClass is available:\n```bash\nkubectl get sc\nkubectl describe pod -n oxia -l app=oxia-server\n```"
       },
       {
-        "title": "Service Not Accessible",
-        "description": "If the service is not accessible, ensure that the service type is set correctly (e.g., LoadBalancer or NodePort)."
-      },
-      {
-        "title": "Insufficient Resources",
-        "description": "If pods are in a pending state, check if there are sufficient resources available in the cluster."
+        "title": "Connection refused on port 6648",
+        "description": "Verify the service is running and port-forward for testing:\n```bash\nkubectl get svc -n oxia\nkubectl port-forward svc/oxia-server -n oxia 6648:6648\n```"
       }
     ]
   },
@@ -66,35 +71,40 @@
       "oxia"
     ],
     "targetResourceKinds": [
+      "StatefulSet",
       "Deployment",
       "Service",
+      "ConfigMap",
+      "ServiceAccount",
       "Namespace"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
-    "projectVersion": "v0.15.3",
+    "projectVersion": "v0.16.0",
     "containerImages": [
-      "registry/org/image:tag"
+      "oxia/oxia:v0.16.0"
     ],
     "sourceUrls": {
       "docs": "https://oxia-db.github.io",
-      "repo": "https://github.com/oxia-db/oxia"
+      "repo": "https://github.com/oxia-db/oxia",
+      "helm": "https://oxia-db.github.io/helm-charts/"
     },
-    "qualityScore": 100
+    "qualityScore": 80
   },
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
-    "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
+    "description": "Requires a Kubernetes cluster with a StorageClass for persistent volumes and Helm 3 installed."
   },
   "security": {
     "scannedAt": "2026-03-01T22:59:48.011Z",

@@ -23,12 +23,8 @@
         "description": "Check if the K8GB pods are running successfully in the 'k8gb' namespace.\n```bash\nkubectl get pods -n k8gb\n```"
       },
       {
-        "title": "Configure Resource Limits",
-        "description": "Edit the K8GB deployment to set resource limits for better performance and stability.\n```bash\nkubectl edit deployment k8gb -n k8gb\n# Add the following under spec.template.spec.containers.resources:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n#   requests:\n#     cpu: \"250m\"\n#     memory: \"256Mi\"\n```"
-      },
-      {
         "title": "Set up a Global Load Balancer",
-        "description": "Create a sample GSLB resource to manage your services globally.\n```bash\nkubectl apply -f - <<EOF\napiVersion: k8gb.absa.oss/v1beta1\nkind: Gslb\nmetadata:\n  name: hello-world-gslb\n  namespace: default\n  annotations:\n    k8gb.io/hostname: \"hello.lb.mycompany.com\"\nspec:\n  resourceRef:\n    apiVersion: v1\n    kind: Service\n    matchLabels:\n      app: hello-world\n  strategy:\n    type: failover\n    primaryGeoTag: \"eu\"\n    dnsTtlSeconds: 30\n  splitBrainThresholdSeconds: 300\nEOF\n```"
+        "description": "Create a sample GSLB resource to manage your services globally. Note: K8gb requires a custom values.yaml with your DNS zone, edge DNS servers, and cluster geo tags configured.\n```bash\nkubectl apply -f - <<EOF\napiVersion: k8gb.absa.oss/v1beta1\nkind: Gslb\nmetadata:\n  name: hello-world-gslb\n  namespace: default\n  annotations:\n    k8gb.io/hostname: \"hello.lb.mycompany.com\"\nspec:\n  resourceRef:\n    apiVersion: v1\n    kind: Service\n    matchLabels:\n      app: hello-world\n  strategy:\n    type: failover\n    primaryGeoTag: \"eu\"\n    dnsTtlSeconds: 30\nEOF\n```"
       }
     ],
     "resolution": {
@@ -37,36 +33,23 @@
         "helm repo add k8gb https://www.k8gb.io\nhelm repo update",
         "helm install k8gb k8gb/k8gb --namespace k8gb --create-namespace --version v0.18.1",
         "kubectl get pods -n k8gb",
-        "kubectl edit deployment k8gb -n k8gb\n# Add the following under spec.template.spec.containers.resources:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n#   requests:\n#     cpu: \"250m\"\n#     memory: \"256Mi\"",
         "kubectl apply -f - <<EOF\napiVersion: k8gb.absa.oss/v1beta1\nkind: Gslb\nmetadata:\n  name: hello-world-gslb\n  namespace: default\n  annotations:\n    k8gb.io/hostname: \"hello.lb.mycompany.com\"\nspec:\n  resourceRef:\n    apiVersion: v1\n    kind: Service\n    matchLabels:\n      app: hello-world\n  strategy:\n    type: failover\n    primaryGeoTag: \"eu\"\n    dnsTtlSeconds: 30\n  splitBrainThresholdSeconds: 300\nEOF"
       ]
     },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the K8GB release from the 'k8gb' namespace to remove all associated resources managed by Helm."
+        "description": "Uninstall the K8GB release:\n```bash\nhelm uninstall k8gb -n k8gb\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volumes that were created during the installation."
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'k8gb' namespace and verify that all resources have been removed."
+        "title": "Clean up CRDs and namespace",
+        "description": "Delete the CRDs and namespace:\n```bash\nkubectl delete crd gslbs.k8gb.absa.oss dnsendpoints.externaldns.k8s.io\nkubectl delete namespace k8gb\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of your K8GB installation by exporting the existing GSLB resources."
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the K8GB release to the latest version."
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the K8GB pods to ensure they are running the new version successfully."
+        "title": "Backup and upgrade",
+        "description": "Back up current values and upgrade:\n```bash\nhelm get values k8gb -n k8gb > k8gb-backup.yaml\nhelm repo update\nhelm upgrade k8gb k8gb/k8gb -n k8gb -f k8gb-backup.yaml\nkubectl get pods -n k8gb\n```"
       }
     ],
     "troubleshooting": [
@@ -115,7 +98,7 @@
     "maturity": "sandbox",
     "projectVersion": "v0.18.1",
     "containerImages": [
-      "gcr.io/distroless/static:nonroot"
+      "absaoss/k8gb:v0.18.1"
     ],
     "sourceUrls": {
       "docs": "https://www.k8gb.io",
@@ -130,7 +113,7 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
+    "description": "Requires an Ingress Controller (NGINX, Istio, or AWS ALB), an EdgeDNS provider (Route53, Cloudflare, Infoblox, NS1, etc.), and a custom values.yaml with DNS zone and cluster geo tag configuration."
   },
   "security": {
     "scannedAt": "2026-03-01T14:58:48.646Z",
