@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubeflow-3259-ambassador-and-vizier-core-not-starting",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubeflow: ambassador and vizier-core not starting",
+    "description": "ambassador and vizier-core not starting. This issue affects 4+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubeflow troubleshoot symptoms",
+        "description": "Check for the issue in your kubeflow deployment:\n```bash\nkubectl get pods -n kubeflow -l app.kubernetes.io/name=kubeflow\nkubectl logs -l app.kubernetes.io/name=kubeflow -n kubeflow --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kubeflow configuration",
+        "description": "Inspect the relevant kubeflow configuration:\n```bash\nkubectl get all -n kubeflow -l app.kubernetes.io/name=kubeflow\nkubectl get configmap -n kubeflow -l app.kubernetes.io/part-of=kubeflow\n```\nI am using current master (commit 58022fb) and installed kubeflow on a previously created AWS EKS cluster (thus not using `apply platform` provided by kubeflow)."
+      },
+      {
+        "title": "Apply the fix for ambassador and vizier-core not starting",
+        "description": "As discussed in #3259 I changed the namespace label in the AWS setup for the kubeflow namespace, so that istio injection is by-default disabled.\n\n---\nThis change is [<img src=\"https://reviewable.io/review_button.svg\" height=\"34\" align=\"absmiddle\"\n```yaml\n$ kubectl -nkubeflow get po\nNAME                                                        READY     STATUS             RESTARTS   AGE\nalb-ingress-controller-596688f5bd-9ls7c                     2/2       Running            1          46m\nambassador-796bcd74b5-4p949                                 1/2       CrashLoopBackOff   13         46m\nambassador-796bcd74b5-gb4pl                                 1/2       CrashLoopBackOff   13         46m\nambassador-796bcd74b5-rxvvb                                 1/2       CrashLoopBackOff   9          46m\napp-controller-c6d849967-rmc6q                      \n```"
+      },
+      {
+        "title": "Confirm ambassador and vizier-core not starting is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubeflow -n kubeflow --tail=50 --since=5m\nkubectl get events -n kubeflow --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "As discussed in #3259 I changed the namespace label in the AWS setup for the kubeflow namespace, so that istio injection is by-default disabled.\n\n---\nThis change is [<img src=\"https://reviewable.io/review_button.svg\" height=\"34\" align=\"absmiddle\" alt=\"Reviewable\"/>](https://reviewable.io/reviews/kubeflow/kubeflow/3289)",
+      "codeSnippets": [
+        "$ kubectl -nkubeflow get po\nNAME                                                        READY     STATUS             RESTARTS   AGE\nalb-ingress-controller-596688f5bd-9ls7c                     2/2       Running            1          46m\nambassador-796bcd74b5-4p949                                 1/2       CrashLoopBackOff   13         46m\nambassador-796bcd74b5-gb4pl                                 1/2       CrashLoopBackOff   13         46m\nambassador-796bcd74b5-rxvvb                                 1/2       CrashLoopBackOff   9          46m\napp-controller-c6d849967-rmc6q                              2/2       Running            0          46m\nargo-ui-bd754894c-twrdk                                     2/2       Running            0          46m\ncentraldashboard-799849c495-qtxzk           ",
+        "$ kubectl -nistio-system get po\nNAME                                                           READY     STATUS                       RESTARTS   AGE\ngrafana-5c45779547-nhl4x                                       1/1       Running                      0          36m\nistio-citadel-6d7f8c5d-wzb9c                                   1/1       Running                      0          36m\nistio-cleanup-secrets-release-1.1-20190111-09-15-hh4ps         0/1       Completed                    0          36m\nistio-egressgateway-6f8b444984-p5mt5                           1/1       Running                      0          36m\nistio-galley-685ffb6bf4-4pmcc                                  1/1       Running                      0          36m\nistio-grafana-post-install-release-1.1-20190111-09-15-tnqs5    0/1",
+        "$ kubectl -nkubeflow logs vizier-core-744646bc44-77hhq vizier-core                                                                                                                                                 \n[mysql] 2019/05/14 14:45:54 packets.go:36: unexpected EOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubeflow",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubeflow"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Ingress"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeflow/kubeflow/issues/3259",
+      "repo": "https://github.com/kubeflow/kubeflow",
+      "pr": "https://github.com/kubeflow/kubeflow/pull/3289"
+    },
+    "reactions": 4,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubeflow installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:25:34.765Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
