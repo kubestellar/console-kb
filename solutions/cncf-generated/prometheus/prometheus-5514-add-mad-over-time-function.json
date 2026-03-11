@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-5514-add-mad-over-time-function",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: Add `mad_over_time` function",
+    "description": "Add `mad_over_time` function. Requested by 41+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current prometheus deployment",
+        "description": "Verify your prometheus version and configuration:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nhelm list -n prometheus 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working prometheus installation."
+      },
+      {
+        "title": "Review prometheus configuration",
+        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\n## Proposal\n**Use case. Why is this important?**\n[MAD using median](https://en.wikipedia.org/wiki/Median_absolute_deviation)\n[MAD using mean](https://en.wikipedia.org/wiki/Average_absolute_deviation)\nMean/Median absolute deviation around a central"
+      },
+      {
+        "title": "Apply the fix for Add `mad_over_time` function",
+        "description": "This PR adds User Defined Functions (UDFs) to PromQL.\n\nWhy use UDFs?\n- Users have asked for functions that we are reluctant to include, e.g. [mad_over_time](https://github.com/prometheus/prometheus/issues/5514) (Median absolute deviation, similar to standard deviation but ignores outliers)\n-\n```yaml\nXm = median(X1, X2, ..., Xn)\r\nFor each X from (X1, X2, ..., Xn) -> build new set of abs(X - Xm)\r\nMAD = median(new set of absolute deviations)\r\n\r\nFor example: Consider the data (1, 1, 2, 2, 4, 6, 999). It has a median value of 2.\r\nThe absolute deviations from 2 are (1, 1, 0, 0, 2, 4, 997)\r\nwhich in turn have a median value of 1\r\n(because the sorted absolute deviations are (0, 0, 1, 1, 2, 4, 997)).\r\nSo the MAD for this data is 1.\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Add `mad_over_time` function\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR adds User Defined Functions (UDFs) to PromQL.\n\nWhy use UDFs?\n- Users have asked for functions that we are reluctant to include, e.g.",
+      "codeSnippets": [
+        "Xm = median(X1, X2, ..., Xn)\r\nFor each X from (X1, X2, ..., Xn) -> build new set of abs(X - Xm)\r\nMAD = median(new set of absolute deviations)\r\n\r\nFor example: Consider the data (1, 1, 2, 2, 4, 6, 999). It has a median value of 2.\r\nThe absolute deviations from 2 are (1, 1, 0, 0, 2, 4, 997)\r\nwhich in turn have a median value of 1\r\n(because the sorted absolute deviations are (0, 0, 1, 1, 2, 4, 997)).\r\nSo the MAD for this data is 1.",
+        "udfs:\r\n  - name: mad_over_time\r\n    input_types:\r\n      - matrix\r\n    modules:\r\n      - math\r\n    util: true\r\n    src: |\r\n      math := import(\"math\")\r\n      util := import(\"util\")\r\n\r\n      mad := func(seq) {\r\n        median := util.median(seq)\r\n        if is_error(median) {\r\n          return error(\"cannot compute median\")\r\n        }\r\n        deltas := []\r\n        for x in seq {\r\n          deltas = append(deltas, math.abs(x-median))\r\n        }\r\n        return util.median(deltas)\r\n      }\r\n\r\n      output := mad(input0)",
+        "goos: linux\r\ngoarch: amd64\r\npkg: github.com/prometheus/prometheus/promql\r\ncpu: 11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz\r\n                  │ BenchmarkStdDevOverTime_before.txt │  BenchmarkStdDevOverTime_after.txt   │\r\n                  │               sec/op               │   sec/op     vs base                 │\r\nStdDevOverTime-16                          16.22µ ± 1%   52.71µ ± 3%  +224.97% (p=0.000 n=10)\r\n\r\n                  │ BenchmarkStdDevOverTime_before.txt │   BenchmarkStdDevOverTime_after.txt    │\r\n                  │                B/op                │     B/op       vs base                 │\r\nStdDevOverTime-16                         10.32Ki ± 0%   109.33Ki ± 0%  +959.63% (p=0.000 n=10)\r\n\r\n                  │ BenchmarkStdDevOverTime_before.txt │  BenchmarkStdDevOverTime_aft"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/issues/5514",
+      "repo": "https://github.com/prometheus/prometheus",
+      "pr": "https://github.com/prometheus/prometheus/pull/12851"
+    },
+    "reactions": 41,
+    "comments": 25,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:24:38.690Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
