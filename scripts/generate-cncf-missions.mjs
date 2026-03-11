@@ -523,6 +523,10 @@ const NON_K8S_PROJECTS = new Set([
   'clickhouse', 'caddy', 'gitea', 'surrealdb', 'valkey', 'vault',
   'milvus', 'netdata', 'ollama', 'langflow', 'grpc', 'vllm',
   'podman-container-tools', 'lima', 'buildpacks', 'spin', 'cedar',
+  // CLI tools, runtimes, and libraries — not deployed as K8s workloads
+  'sops', 'wasmedge-runtime', 'connect-rpc', 'slimtoolkit',
+  'visual-studio-code-kubernetes-tools', 'container2wasm', 'score',
+  'dify', 'keycloak',
 ])
 
 function isKubernetesNative(project) {
@@ -562,14 +566,14 @@ function generatePrerequisites(project) {
  * Truncate a string at the last word boundary before maxLen.
  * Avoids cutting words mid-character (e.g., "clea" instead of "clean up code").
  */
-function truncateAtWordBoundary(text, maxLen) {
+function truncateAtWordBoundary(text, maxLen, { ellipsis = false } = {}) {
   if (!text || text.length <= maxLen) return text || ''
   const truncated = text.slice(0, maxLen)
   const lastSpace = truncated.lastIndexOf(' ')
   // If no space found within first 20 chars, just use the hard cutoff
   const MIN_TRUNCATION_POINT = 20
-  if (lastSpace < MIN_TRUNCATION_POINT) return truncated
-  return truncated.slice(0, lastSpace)
+  const result = lastSpace < MIN_TRUNCATION_POINT ? truncated : truncated.slice(0, lastSpace)
+  return ellipsis ? `${result}…` : result
 }
 
 /**
@@ -782,6 +786,16 @@ function slugify(text) {
 
 function detectMissionType(issue) {
   const text = `${issue.title} ${(issue.labels || []).map(l => l.name).join(' ')}`.toLowerCase()
+
+  // Label-based classification takes priority — labels are human-curated
+  const labels = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name || '').toLowerCase())
+  if (labels.some(l => l.includes('bug') || l === 'type/bug' || l === 'kind/bug')) return 'troubleshoot'
+  if (labels.some(l => l.includes('feature') || l === 'enhancement' || l === 'kind/feature')) return 'feature'
+
+  // RFCs and proposals are features, not troubleshoot — check before bug keywords
+  // since RFCs may contain words like "fix" or "error" in their descriptions
+  if (text.includes('[rfc]') || text.includes('rfc:') || text.includes('proposal') || text.includes('design doc')) return 'feature'
+
   // Bug/error patterns — check first since these override feature keywords
   if (text.includes('bug') || text.includes('crash') || text.includes('error') || text.includes('fix')) return 'troubleshoot'
   // Session/auth issues are troubleshooting, not features
@@ -1020,17 +1034,26 @@ function buildDescription(issue, resolution) {
   const mType = detectMissionType(issue)
   const isFeature = mType === 'feature' || mType === 'deploy'
 
+  // Minimum reactions to include count in description — avoids "0+ users" or "2+ users"
+  const MIN_REACTIONS_FOR_DISPLAY = 5
+
   if (isFeature) {
+    const suffix = reactions >= MIN_REACTIONS_FOR_DISPLAY
+      ? `Requested by ${reactions}+ users.`
+      : `Community-requested feature.`
     return truncateAtWordBoundary(
-      `${issue.title}. Requested by ${reactions}+ users.`,
+      `${issue.title}. ${suffix}`,
       300,
     )
   }
 
   const errorMatch = body.match(/(?:error|ERROR|panic|fatal|FATAL|failed to)[:=]\s*([^\n]{10,100})/)?.[1]
+  const suffix = reactions >= MIN_REACTIONS_FOR_DISPLAY
+    ? `This issue affects ${reactions}+ users.`
+    : `Community-reported issue.`
   const symptom = errorMatch
     ? `${issue.title}. Users encounter: "${errorMatch.trim()}".`
-    : `${issue.title}. This issue affects ${reactions}+ users.`
+    : `${issue.title}. ${suffix}`
   return truncateAtWordBoundary(symptom, 300)
 }
 
@@ -1054,7 +1077,10 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
       status: 'completed',
       steps: buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution),
       resolution: {
-        summary: buildResolutionSummary(resolution, cleanSolution, missionType),
+        summary: buildResolutionSummary(resolution, cleanSolution, missionType, {
+          issue: issue.html_url,
+          ...(linkedPR ? { pr: linkedPR.html_url } : {}),
+        }),
         codeSnippets: (resolution.yamlSnippets || []).slice(0, 3).map(s => s.slice(0, 800)),
       },
     },
@@ -1190,7 +1216,7 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
   // Step 3: Apply the fix
   if (resolution.yamlSnippets?.length > 0) {
     steps.push({
-      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60)}`,
+      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60, { ellipsis: true })}`,
       description: [
         truncateAtWordBoundary(cleanSolution, 300) || `Apply the configuration change to resolve the issue:`,
         '```yaml',
@@ -1200,11 +1226,13 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
     })
   } else if (cleanSolution) {
     steps.push({
-      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60)}`,
+      title: `Apply the fix for ${truncateAtWordBoundary(issue.title, 60, { ellipsis: true })}`,
       description: [
         truncateAtWordBoundary(cleanSolution, 500),
         '',
-        `See the fix PR for details: ${resolution.prUrl || 'linked PR'}`,
+        resolution.prUrl
+          ? `See the fix PR for details: ${resolution.prUrl}`
+          : `See the source issue for community-verified solutions.`,
       ].join('\n')
     })
   } else {
@@ -1256,7 +1284,7 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
           `kubectl get pods -n ${namespace} -l app.kubernetes.io/name=${project.name}`,
           `kubectl get events -n ${namespace} --sort-by='.lastTimestamp' | tail -10`,
           '```',
-          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60)}" is functioning correctly.`,
+          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60, { ellipsis: true })}" is functioning correctly.`,
         ].join('\n')
       })
     } else {
@@ -1264,14 +1292,14 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
         title: `Verify the feature works`,
         description: [
           `Test that the new capability is working as expected.`,
-          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60)}" is functioning correctly.`,
+          `Confirm the feature described in "${truncateAtWordBoundary(issue.title, 60, { ellipsis: true })}" is functioning correctly.`,
         ].join('\n')
       })
     }
   } else {
     if (k8sNative) {
       steps.push({
-        title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+        title: `Confirm ${truncateAtWordBoundary(issue.title, 50, { ellipsis: true })} is resolved`,
         description: [
           `Verify the fix by checking that the original error no longer occurs:`,
           '```bash',
@@ -1283,7 +1311,7 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
       })
     } else {
       steps.push({
-        title: `Confirm ${truncateAtWordBoundary(issue.title, 50)} is resolved`,
+        title: `Confirm ${truncateAtWordBoundary(issue.title, 50, { ellipsis: true })} is resolved`,
         description: [
           `Verify the fix by checking that the original error no longer occurs:`,
           `Test ${project.name} to confirm the issue is resolved.`,
@@ -1301,15 +1329,22 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
  * Strips PR template boilerplate and avoids tautological filler text.
  * Ensures the summary ends at a sentence boundary (period, not mid-word).
  */
-function buildResolutionSummary(resolution, cleanSolution, missionType) {
+function buildResolutionSummary(resolution, cleanSolution, missionType, sourceUrls) {
   if (cleanSolution && cleanSolution.length > 50) {
     const summary = truncateAtSentenceBoundary(cleanSolution, 400)
     // Skip if after cleaning it's just empty or too short to be useful
     if (summary.length < 30) {
-      return `See the linked issue and PR for the community-verified solution.`
+      return buildResolutionFallback(sourceUrls)
     }
     return summary
   }
+  return buildResolutionFallback(sourceUrls)
+}
+
+/** Build a useful fallback when no clean solution text is available. */
+function buildResolutionFallback(sourceUrls) {
+  if (sourceUrls?.pr) return `See the fix PR for the community-verified solution: ${sourceUrls.pr}`
+  if (sourceUrls?.issue) return `See the source issue for the community-verified solution: ${sourceUrls.issue}`
   return `See the linked issue and PR for the community-verified solution.`
 }
 
@@ -1642,4 +1677,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, createCopilotIssue, extractResolutionFromIssue, formatReport }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary }
