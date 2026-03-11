@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "containerd-4604-failed-to-reserve-container-name",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "containerd: 'failed to reserve container name'",
+    "description": "'failed to reserve container name'. This issue affects 28+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify containerd troubleshoot symptoms",
+        "description": "Check for the issue in your containerd deployment:\n```bash\nkubectl get pods -n containerd -l app.kubernetes.io/name=containerd\nkubectl logs -l app.kubernetes.io/name=containerd -n containerd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review containerd configuration",
+        "description": "Inspect the relevant containerd configuration:\n```bash\nkubectl get all -n containerd -l app.kubernetes.io/name=containerd\nkubectl get configmap -n containerd -l app.kubernetes.io/part-of=containerd\n```\n**Description**\n\nHi! \n\nWe are running containerd on GKE with pretty much all defaults. A dozen nodes, and a few hundreds pods. Plenty of memory and disk free."
+      },
+      {
+        "title": "Apply the fix for 'failed to reserve container name'",
+        "description": "Provide an option to limit the speed of the container's stdout/stderr logs.\nSee [#4604](https://github.com/containerd/containerd/issues/4604)\n\nWhen use containerd directly in Kubernetes, the container's stdout/stderr logs will be written to persistent disk through CRI plugin. If the application\n```yaml\n2020-10-07T08:01:45Z Successfully assigned default/apps-abcd-6b6cb5876b-nn9md to gke-bap-mtl-1-preemptible-e2-s4-e6a8ddb4-ng3v I \n2020-10-07T08:01:50Z Pulling image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10-07T08:16:45Z Successfully pulled image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10-07T08:18:45Z Error: context deadline exceeded W \n2020-10-07T08:18:45Z Container image \"redis:4.0-alpine\" already present on machine I \n2020-10-07T08:18:53Z Created container redis I \n2020-10-07T08:18:53Z Started container redis I \n2020-10-07T08:18:53\n```"
+      },
+      {
+        "title": "Confirm 'failed to reserve container name' is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=containerd -n containerd --tail=50 --since=5m\nkubectl get events -n containerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Provide an option to limit the speed of the container's stdout/stderr logs.\nSee [#4604](https://github.com/containerd/containerd/issues/4604)\n\nWhen use containerd directly in Kubernetes, the container's stdout/stderr logs will be written to persistent disk through CRI plugin.",
+      "codeSnippets": [
+        "2020-10-07T08:01:45Z Successfully assigned default/apps-abcd-6b6cb5876b-nn9md to gke-bap-mtl-1-preemptible-e2-s4-e6a8ddb4-ng3v I \n2020-10-07T08:01:50Z Pulling image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10-07T08:16:45Z Successfully pulled image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10-07T08:18:45Z Error: context deadline exceeded W \n2020-10-07T08:18:45Z Container image \"redis:4.0-alpine\" already present on machine I \n2020-10-07T08:18:53Z Created container redis I \n2020-10-07T08:18:53Z Started container redis I \n2020-10-07T08:18:53Z Pulling image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10-07T08:19:02Z Successfully pulled image \"gcr.io/my/appImage:223c133ff631c41e1bc21a8b7d7554036da4fb4e\" I \n2020-10",
+        "Normal   Scheduled  2m21s               default-scheduler  Successfully assigned ***-77c979f8bf-px4v9 to gke-***-389a7e33-t1hl\n  Warning  Failed     20s                 kubelet            Error: context deadline exceeded\n  Normal   Pulled     7s (x3 over 2m20s)  kubelet            Container image \"***\" already present on machine\n  Warning  Failed     7s (x2 over 19s)    kubelet            Error: failed to reserve container name ***-77c979f8bf-px4v9_***\": name \"***-77c979f8bf-px4v9_***\" is reserved for \"818fcfef09165d91ac8c86ed88714bb159a8358c3eca473ec07611a51d72b140\"",
+        "kubectl get nodes -o json | jq '.items[].status.nodeInfo.containerRuntimeVersion' |uniq\n\"containerd://1.4.3\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Node"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/containerd/containerd/issues/4604",
+      "repo": "https://github.com/containerd/containerd",
+      "pr": "https://github.com/containerd/containerd/pull/5055"
+    },
+    "reactions": 28,
+    "comments": 50,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with containerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T03:19:33.732Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
