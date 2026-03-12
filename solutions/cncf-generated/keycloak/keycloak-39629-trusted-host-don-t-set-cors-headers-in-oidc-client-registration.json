@@ -1,0 +1,72 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-39629-trusted-host-don-t-set-cors-headers-in-oidc-client-registration",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: Trusted Host don't set CORS headers in OIDC Client Registration",
+    "description": "Trusted Host don't set CORS headers in OIDC Client Registration. This issue affects 35+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the CORS issue with OIDC Client Registration",
+        "description": "Check if your Keycloak OIDC dynamic client registration endpoint is missing CORS headers:\n```bash\n# Test the CORS headers on the client registration endpoint:\ncurl -I -X OPTIONS \\\n  -H \"Origin: https://your-app.example.com\" \\\n  -H \"Access-Control-Request-Method: POST\" \\\n  https://your-keycloak/realms/your-realm/clients-registrations/openid-connect\n```\nIf CORS headers (`Access-Control-Allow-Origin`) are missing in the response, this issue affects you."
+      },
+      {
+        "title": "Understand the root cause",
+        "description": "The `trusted-hosts` client policy in Keycloak's Client Registration controls which hosts are allowed to register clients. However, the trusted host policy was never intended to set CORS headers on the registration endpoint.\n\nSetting `trusted-hosts` does NOT automatically add CORS headers for those hosts. CORS support for dynamic client registration is tracked as a separate feature request."
+      },
+      {
+        "title": "Apply the workaround",
+        "description": "Since the trusted-hosts policy does not control CORS, configure CORS at your reverse proxy or load balancer level:\n1. If using a reverse proxy (nginx, HAProxy, etc.), add the appropriate CORS headers for the `/clients-registrations/` path\n2. Alternatively, configure the Keycloak client's **Web Origins** setting to include the calling application's origin\n3. Check the [source PR](https://github.com/keycloak/keycloak/pull/40528) for the upstream fix that adds proper CORS support to the registration endpoint"
+      },
+      {
+        "title": "Verify CORS headers are present",
+        "description": "After applying the fix (either via proxy configuration or upgrading to a Keycloak version with the fix):\n```bash\ncurl -I -X OPTIONS \\\n  -H \"Origin: https://your-app.example.com\" \\\n  -H \"Access-Control-Request-Method: POST\" \\\n  https://your-keycloak/realms/your-realm/clients-registrations/openid-connect\n```\nConfirm that `Access-Control-Allow-Origin` is present in the response."
+      }
+    ],
+    "resolution": {
+      "summary": "The trusted-hosts client policy was never intended to affect CORS headers. CORS support for the OIDC dynamic client registration endpoint was added in a separate PR. Users on older versions can work around this by configuring CORS at the reverse proxy level.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/39629",
+      "repo": "https://github.com/keycloak/keycloak",
+      "pr": "https://github.com/keycloak/keycloak/pull/40528"
+    },
+    "reactions": 35,
+    "comments": 5,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes with the Keycloak Operator) with Admin Console access."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:48:32.703Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
