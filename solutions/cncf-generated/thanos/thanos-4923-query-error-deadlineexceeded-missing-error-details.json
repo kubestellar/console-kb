@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-4923-query-error-deadlineexceeded-missing-error-details",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: query: error DeadlineExceeded missing error details",
+    "description": "query: error DeadlineExceeded missing error details. This issue affects 10+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify thanos troubleshoot symptoms",
+        "description": "Check for the issue in your thanos deployment:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=100 | grep -i error\n```\nLook for error: `code = DeadlineExceeded desc = context deadline exceeded\"`"
+      },
+      {
+        "title": "Review thanos configuration",
+        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\n**Thanos, Prometheus and Golang version used**:\nThe Docker images:\nThanos: 0.23.0 and newer\ngo: go1.16.8\n\n**What happened**:\nWhen the query fails to connect to a store/sidecar it does not display certificates issues like before."
+      },
+      {
+        "title": "Apply the fix for query: error DeadlineExceeded missing error details",
+        "description": "The sidecar did not validate the certificate and key while starting; Reading and parsing of the certificate were done only when the client initiated the TLS handshake with the sidecar. This is when the certificate related issues surfaced.\n\nWith this code change, these files are now loaded and\n```yaml\nlevel=warn\nts=2021-12-03T16:11:21.556102388Z\ncaller=endpointset.go:500\ncomponent=endpointset\nmsg=\"update of node failed\" err=\"getting metadata: fallback fetching info from prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local:10901: rpc error: code = DeadlineExceeded desc = context deadline exceeded\"\naddress=prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local:10901\n```"
+      },
+      {
+        "title": "Confirm query: error DeadlineExceeded missing error\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=50 --since=5m\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = DeadlineExceeded desc = context deadline exceeded\"` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The sidecar did not validate the certificate and key while starting; Reading and parsing of the certificate were done only when the client initiated the TLS handshake with the sidecar. This is when the certificate related issues surfaced.\n\nWith this code change, these files are now loaded and checked by the sidecar when it starts.",
+      "codeSnippets": [
+        "level=warn\nts=2021-12-03T16:11:21.556102388Z\ncaller=endpointset.go:500\ncomponent=endpointset\nmsg=\"update of node failed\" err=\"getting metadata: fallback fetching info from prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local:10901: rpc error: code = DeadlineExceeded desc = context deadline exceeded\"\naddress=prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local:10901",
+        "level=warn ts=2021-12-03T16:30:14.55260649Z\ncaller=endpointset.go:512\ncomponent=endpointset\nmsg=\"update of node failed\" err=\"getting metadata: fallback fetching info from prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local:10901 after err: rpc error: code = DeadlineExceeded desc = latest balancer error: connection error: desc = \\\"transport: authentication handshake failed: x509: certificate is valid for prometheus-sidecar-blockstorage-1-0.prometheus-operated.scrape-blockstorage.svc.cluster.local, not prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blockstorage.svc.cluster.local\\\": rpc error: code = DeadlineExceeded desc = context deadline exceeded\"\naddress=prometheus-sidecar-blockstorage-1-0.prometheus-operated.cpe-scrape-blo",
+        "* inspecting differences between grpc versions `v1.39.0` and `v1.40.0` show a simplification in the errors returned:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/4923",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/5995"
+    },
+    "reactions": 10,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "thanos"
+    ],
+    "description": "A running Kubernetes cluster with Thanos deployed (sidecar, query, store gateway, compactor as needed). The thanos binary provides subcommands for each component."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:26:47.071Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
