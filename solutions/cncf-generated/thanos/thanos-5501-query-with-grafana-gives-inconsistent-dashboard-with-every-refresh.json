@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-5501-query-with-grafana-gives-inconsistent-dashboard-with-every-refresh",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: query: with grafana gives inconsistent dashboard with every refresh",
+    "description": "query: with grafana gives inconsistent dashboard with every refresh. This issue affects 8+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify thanos troubleshoot symptoms",
+        "description": "Check for the issue in your thanos deployment:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review thanos configuration",
+        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\n**Thanos, Prometheus and Golang version used**:\n* Thanos: 11.1.0, deployed through [Bitnami helm chart](https://github.com/bitnami/charts/tree/master/bitnami/thanos), quay.io/thanos/thanos:v0.25.2\n* Prometheus: 0.57.0 deployed through"
+      },
+      {
+        "title": "Apply the fix for query: with grafana gives inconsistent dashboard with every\u2026",
+        "description": "Fix a data race between Respond() and query/queryRange functions by\nreturning an extra optional function from instrumented functions that\nreleases the resources i.e. calls Close().\n\nCannot reproduce the following race:\n\n```\n==================\nWARNING: DATA RACE\nWrite at 0x00c00566fa00 by goroutine\n```yaml\nthanos:\n  storegateway:\n    enabled: false\n  query:\n    enabled: true\n    replicaLabel:\n      - prometheus_replica\n    dnsDiscovery:\n      sidecarsService: 'prometheus-stack-kube-prom-thanos-discovery'\n      sidecarsNamespace: 'prometheus'\n\nkube-prometheus-stack:\n  grafana:\n    sidecar:\n      datasources:\n        url: http://prometheus-stack-thanos-query:9090/\n        initDatasources: true\n      dashboards:\n        searchNamespace: ALL\n        labelValue: null # Needs to be null in order to load our dashboards\n  prometheus:\n    replicas: 3\n    thanosService:\n      enabled: true\n    thanosServi\n```"
+      },
+      {
+        "title": "Confirm query: with grafana gives inconsistent dashboard\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=50 --since=5m\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Fix a data race between Respond() and query/queryRange functions by\nreturning an extra optional function from instrumented functions that\nreleases the resources i.e. calls Close().",
+      "codeSnippets": [
+        "thanos:\n  storegateway:\n    enabled: false\n  query:\n    enabled: true\n    replicaLabel:\n      - prometheus_replica\n    dnsDiscovery:\n      sidecarsService: 'prometheus-stack-kube-prom-thanos-discovery'\n      sidecarsNamespace: 'prometheus'\n\nkube-prometheus-stack:\n  grafana:\n    sidecar:\n      datasources:\n        url: http://prometheus-stack-thanos-query:9090/\n        initDatasources: true\n      dashboards:\n        searchNamespace: ALL\n        labelValue: null # Needs to be null in order to load our dashboards\n  prometheus:\n    replicas: 3\n    thanosService:\n      enabled: true\n    thanosServiceMonitor:\n      enabled: true\n    service:\n      sessionAffinity: 'ClientIP'\n    prometheusSpec:\n      thanos:\n        objectStorageConfig:\n          key: config-file.yaml\n          name: thanos-secr",
+        "- name: kube-prometheus-stack\n    version: 36.6.2\n    repository: https://prometheus-community.github.io/helm-charts\n  - name: thanos\n    version: 10.5.5\n    repository: https://charts.bitnami.com/bitnami"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/5501",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/5583"
+    },
+    "reactions": 8,
+    "comments": 23,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "thanos"
+    ],
+    "description": "A running Kubernetes cluster with Thanos deployed (sidecar, query, store gateway, compactor as needed). The thanos binary provides subcommands for each component."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:27:21.034Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
