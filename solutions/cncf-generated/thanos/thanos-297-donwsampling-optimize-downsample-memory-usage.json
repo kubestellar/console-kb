@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-297-donwsampling-optimize-downsample-memory-usage",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: donwsampling: Optimize downsample memory usage ",
+    "description": "donwsampling: Optimize downsample memory usage . Requested by 9+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current thanos deployment",
+        "description": "Verify your thanos version and configuration:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nhelm list -n thanos 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working thanos installation."
+      },
+      {
+        "title": "Review thanos configuration",
+        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\nDownsample can OOM easily with 16GB.. wonder if we can improve that in any way. \n\nIt uses a lot of memory when downsampling my 2-week block (on top of other mem usage after lot's of compactions maybe). Wonder if that's not some lazy GC issue."
+      },
+      {
+        "title": "Apply the fix for donwsampling: Optimize downsample memory usage ",
+        "description": "PTAL\n```yaml\ngsutil du -sh \"gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G/\" \n13.82 GiB   gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"donwsampling: Optimize downsample memory usage \" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "See the fix PR for the community-verified solution: https://github.com/thanos-io/thanos/pull/515\n\nSee the source issue and linked PR for the complete solution details.",
+      "codeSnippets": [
+        "gsutil du -sh \"gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G/\" \n13.82 GiB   gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G",
+        "gsutil du -sh \"gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G/chunks/\"\n12.58 GiB   gs://thanos-beta/01CB8HB76TAETC189K7V77VB8G/chunks",
+        "(pprof) top 5\nShowing nodes accounting for 55.07GB, 62.78% of 87.71GB total\nDropped 356 nodes (cum <= 0.44GB)\nShowing top 5 nodes out of 58\n      flat  flat%   sum%        cum   cum%\n   21.22GB 24.19% 24.19%    21.22GB 24.19%  github.com/improbable-eng/thanos/pkg/compact/downsample.EncodeAggrChunk\n   10.97GB 12.50% 36.70%    10.97GB 12.50%  github.com/improbable-eng/thanos/vendor/github.com/prometheus/tsdb/chunkenc.(*bstream).writeByte\n    8.49GB  9.68% 46.38%    14.14GB 16.12%  github.com/improbable-eng/thanos/vendor/github.com/prometheus/tsdb/chunkenc.(*XORChunk).iterator\n    7.62GB  8.68% 55.06%     7.62GB  8.68%  github.com/improbable-eng/thanos/vendor/github.com/prometheus/tsdb/chunkenc.NewXORChunk\n    6.77GB  7.72% 62.78%     6.77GB  7.72%  github.com/improbable-eng/thanos/vendor/git"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/297",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/515"
+    },
+    "reactions": 9,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "thanos"
+    ],
+    "description": "A running Kubernetes cluster with Thanos deployed (sidecar, query, store gateway, compactor as needed). The thanos binary provides subcommands for each component."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:27:07.773Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
