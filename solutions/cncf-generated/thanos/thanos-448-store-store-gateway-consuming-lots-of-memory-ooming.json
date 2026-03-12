@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-448-store-store-gateway-consuming-lots-of-memory-ooming",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: store: Store gateway consuming lots of memory / OOMing",
+    "description": "store: Store gateway consuming lots of memory / OOMing. This issue affects 9+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify thanos troubleshoot symptoms",
+        "description": "Check for the issue in your thanos deployment:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review thanos configuration",
+        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\n**Thanos, Prometheus and Golang version used**\nthanos v0.1.0rc2\n\n**What happened**\nThanos-store is consuming 50gb of memory during startup\n\n**What you expected to happen**\nThanos-store does not consume so much memory for starting up\n\n**Full logs to"
+      },
+      {
+        "title": "Apply the fix for store: Store gateway consuming lots of memory / OOMing",
+        "description": "V2 of https://github.com/improbable-eng/thanos/pull/957/files\n\nDoesn't involve any deletions & adds support for durations\n\nhttps://github.com/improbable-eng/thanos/issues/814\n```yaml\nlevel=debug ts=2018-07-27T15:51:21.415788856Z caller=cluster.go:132 component=cluster msg=\"resolved peers to following addresses\" peers=100.96.232.51:10900,100.99.70.149:10900,100.110.182.241:10900,100.126.12.148:10900\nlevel=debug ts=2018-07-27T15:51:21.416254389Z caller=store.go:112 msg=\"initializing bucket store\"\nlevel=warn ts=2018-07-27T15:52:05.28837034Z caller=bucket.go:240 msg=\"loading block failed\" id=01CKE41VDSJMSAJMN6N6K8SABE err=\"new bucket block: load index cache: download index file: copy object to file: write /var/thanos/store/01CKE41VDSJMSAJMN6N6K8SABE/index: cannot allocate memo\n```"
+      },
+      {
+        "title": "Confirm store: Store gateway consuming lots of memory /\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=thanos -n thanos --tail=50 --since=5m\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "V2 of https://github.com/improbable-eng/thanos/pull/957/files\n\nDoesn't involve any deletions & adds support for durations\n\nhttps://github.com/improbable-eng/thanos/issues/814\n\nSee the source issue and linked PR for the complete solution details.",
+      "codeSnippets": [
+        "level=debug ts=2018-07-27T15:51:21.415788856Z caller=cluster.go:132 component=cluster msg=\"resolved peers to following addresses\" peers=100.96.232.51:10900,100.99.70.149:10900,100.110.182.241:10900,100.126.12.148:10900\nlevel=debug ts=2018-07-27T15:51:21.416254389Z caller=store.go:112 msg=\"initializing bucket store\"\nlevel=warn ts=2018-07-27T15:52:05.28837034Z caller=bucket.go:240 msg=\"loading block failed\" id=01CKE41VDSJMSAJMN6N6K8SABE err=\"new bucket block: load index cache: download index file: copy object to file: write /var/thanos/store/01CKE41VDSJMSAJMN6N6K8SABE/index: cannot allocate memory\"\nlevel=warn ts=2018-07-27T15:52:05.293692332Z caller=bucket.go:240 msg=\"loading block failed\" id=01CKE41VE4XXTN9N55YPCJSPP2 err=\"new bucket block: load index cache: download index file: copy object",
+        "containers:\n      - args:\n        - store\n        - --log.level=debug\n        - --tsdb.path=/var/thanos/store\n        - --s3.endpoint=s3.amazonaws.com\n        - --s3.access-key=xxx\n        - --s3.bucket=xxx\n        - --cluster.peers=thanos-peers.monitoring.svc.cluster.local:10900\n        - --index-cache-size=2GB\n        - --chunk-pool-size=8GB",
+        "./thanos store --log.level=debug --min-block-start-time=2020-01-01T00:00:00Z --max-block-start-time=2019-01-01T23:59:59Z --objstore.config-file=$UBUNTU_HOME/thanos/dev-telecom.yaml\nlevel=info ts=2019-05-24T12:07:19.750115246Z caller=flags.go:87 msg=\"gossip is disabled\"\nstore command failed: invalid argument: --min-block-start-time '2020-01-01 00:00:00 +0000 UTC' can't be greater than --max-block-start-time  '2019-01-01 23:59:59 +0000 UTC'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/448",
+      "repo": "https://github.com/thanos-io/thanos",
+      "pr": "https://github.com/thanos-io/thanos/pull/1077"
+    },
+    "reactions": 9,
+    "comments": 41,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "thanos"
+    ],
+    "description": "A running Kubernetes cluster with Thanos deployed (sidecar, query, store gateway, compactor as needed). The thanos binary provides subcommands for each component."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:27:14.329Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
