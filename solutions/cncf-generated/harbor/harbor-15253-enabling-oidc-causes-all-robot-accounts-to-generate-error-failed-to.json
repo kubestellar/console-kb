@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "harbor-15253-enabling-oidc-causes-all-robot-accounts-to-generate-error-failed-to",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "harbor: Enabling OIDC causes all robot accounts to generate error: failed to verify secret, username: robot$gitlab, error: failed to get oidc user info, error: <QuerySeter> no row",
+    "description": "Enabling OIDC causes all robot accounts to generate error: failed to verify secret, username: robot$gitlab, error: failed to get oidc user info, error: <QuerySeter> no row. Users encounter: \"failed to get oidc user info, error: <QuerySeter> no row `\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify harbor troubleshoot symptoms",
+        "description": "Check for the issue in your harbor deployment:\n```bash\nkubectl get pods -n harbor -l app.kubernetes.io/name=harbor\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=100 | grep -i error\n```\nLook for error: `failed to get oidc user info, error: <QuerySeter> no row ``"
+      },
+      {
+        "title": "Review harbor configuration",
+        "description": "Inspect the relevant harbor configuration:\n```bash\nkubectl get all -n harbor -l app.kubernetes.io/name=harbor\nkubectl get configmap -n harbor -l app.kubernetes.io/part-of=harbor\n```\nIt appears when OIDC is enabled the auth goes through OIDC even if the account is a robot account with no OIDC."
+      },
+      {
+        "title": "Upgrade Harbor to include the OIDC robot account fix",
+        "description": "Upgrade Harbor to a version that includes the fix for robot accounts with OIDC:\n```bash\n# Update the Harbor Helm repo\nhelm repo update harbor\n\n# Upgrade Harbor (use the version that includes the fix)\nhelm upgrade harbor harbor/harbor -n harbor -f values.yaml\n\n# Verify pods restart successfully\nkubectl rollout status deployment/harbor-core -n harbor\n```\nAfter upgrading, verify robot accounts can authenticate without OIDC errors."
+      },
+      {
+        "title": "Confirm Enabling OIDC causes all robot accounts to\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=50 --since=5m\nkubectl get events -n harbor --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `failed to get oidc user info, error: <QuerySeter> no row `` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "When OIDC authentication is enabled in Harbor, robot accounts fail with 'failed to get oidc user info' because the auth middleware incorrectly routes robot account credentials through the OIDC verification path. Robot accounts do not have OIDC entries in the database, causing a 'no row found' error. The fix ensures that robot account authentication bypasses the OIDC verification middleware and uses the robot token verification path instead.",
+      "codeSnippets": [
+        "# Upgrade Harbor to a version with the OIDC robot account fix\nhelm repo update harbor\nhelm upgrade harbor harbor/harbor -n harbor -f values.yaml\n\n# Verify pods restart successfully\nkubectl rollout status deployment/harbor-core -n harbor",
+        "# Test robot account authentication after upgrade\ndocker login <harbor-host> -u 'robot$<account-name>' -p '<robot-secret>'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "harbor",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "harbor"
+    ],
+    "targetResourceKinds": [
+      "Ingress"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/goharbor/harbor/issues/15253",
+      "repo": "https://github.com/goharbor/harbor"
+    },
+    "reactions": 25,
+    "comments": 73,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A running Kubernetes cluster with harbor installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:19:51.155Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
