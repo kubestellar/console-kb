@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "distribution-1960-in-2-5-1-garbage-collection-stops-when-running-into-failed-to-",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "distribution: In 2.5.1 garbage-collection stops when running into failed to garbage collect: failed to mark: invalid checksum digest format",
+    "description": "In 2.5.1 garbage-collection stops when running into failed to garbage collect: failed to mark: invalid checksum digest format. Requested by 16+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current distribution deployment",
+        "description": "Verify your distribution version and configuration:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nhelm list -n distribution 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working distribution installation."
+      },
+      {
+        "title": "Review distribution configuration",
+        "description": "Inspect the relevant distribution configuration:\n```bash\nkubectl get all -n distribution -l app.kubernetes.io/name=distribution\nkubectl get configmap -n distribution -l app.kubernetes.io/part-of=distribution\n```\nI guess this is more of a question than a bug, since I assume the issue lies with my environment, but: \nTrying to run garbage-collection, it stops with:\n failed to garbage collect: failed to mark: invalid checksum digest format\n\nThen switched to"
+      },
+      {
+        "title": "Apply the fix for In 2.5.1 garbage-collection stops when running into failed\u2026",
+        "description": "This issue is due to an empty or corrupted (does not contain a valid digest) tag link file (`/docker/registry/v2/repositories/<name>/_manifests/tags/<tag>/current/link`).\n\nWhile the root cause is yet unknown, I think it's safe to log a warn message and skip to the next tag instead of stoping GC. By\n```yaml\nmv data/registry/docker/registry/v2/repositories/some-app data/some-app\n\ndocker run -it --name gc --rm -v /opt/registry/data/registry:/var/lib/registry -v /opt/registry/conf/registry/config.yml:/etc/docker/registry/config.yml registry:2.6.2 garbage-collect /etc/docker/registry/config.yml\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nkubectl get events -n distribution --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"In 2.5.1 garbage-collection stops when running into failed\u2026\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This issue is due to an empty or corrupted (does not contain a valid digest) tag link file (`/docker/registry/v2/repositories/<name>/_manifests/tags/<tag>/current/link`).\n\nWhile the root cause is yet unknown, I think it's safe to log a warn message and skip to the next tag instead of stoping GC.",
+      "codeSnippets": [
+        "mv data/registry/docker/registry/v2/repositories/some-app data/some-app\n\ndocker run -it --name gc --rm -v /opt/registry/data/registry:/var/lib/registry -v /opt/registry/conf/registry/config.yml:/etc/docker/registry/config.yml registry:2.6.2 garbage-collect /etc/docker/registry/config.yml",
+        "rm $(find /path/to/registry_data -iname link -size 0)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "distribution",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "distribution"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/distribution/distribution/issues/1960",
+      "repo": "https://github.com/distribution/distribution"
+    },
+    "reactions": 16,
+    "comments": 29,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "docker",
+      "curl"
+    ],
+    "description": "A running Kubernetes cluster with distribution installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:31:48.955Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
