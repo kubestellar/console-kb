@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "harbor-12948-gc-performance-the-performance-of-v2-manifest-deletion-is-not-good-",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "harbor: [GC performance] The performance of v2 manifest deletion is not good in S3 environment",
+    "description": "[GC performance] The performance of v2 manifest deletion is not good in S3 environment. This issue affects 17+ users.",
+    "type": "analyze",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify harbor analyze symptoms",
+        "description": "Check for the issue in your harbor deployment:\n```bash\nkubectl get pods -n harbor -l app.kubernetes.io/name=harbor\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review harbor configuration",
+        "description": "Inspect the relevant harbor configuration:\n```bash\nkubectl get all -n harbor -l app.kubernetes.io/name=harbor\nkubectl get configmap -n harbor -l app.kubernetes.io/part-of=harbor\n```\nIn S3 backend environment, we found that it took about 39 seconds to delete a manifest via v2 API."
+      },
+      {
+        "title": "Optimize GC configuration for S3 storage",
+        "description": "Tune Harbor's garbage collection settings for better performance with S3 storage:\n```bash\n# Check current GC job configuration\nkubectl get configmap -n harbor harbor-core -o yaml | grep -A 20 'GC'\n\n# Trigger a GC dry-run to estimate the scope\n# Use the Harbor API or web UI: Administration > Garbage Collection\ncurl -u admin:Harbor12345 -X POST \\\n  'https://<harbor-host>/api/v2.0/system/gc/schedule' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"parameters\":{\"delete_untagged\":true,\"dry_run\":true},\"schedule\":{\"type\":\"Manual\"}}'\n```\nFor large registries on S3/MinIO with HDD storage, consider scheduling GC during low-traffic windows and upgrading to a Harbor version with improved GC parallelism."
+      },
+      {
+        "title": "Confirm [GC performance] The performance of v2 manifest\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=50 --since=5m\nkubectl get events -n harbor --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Garbage collection (GC) performance for v2 manifests on S3-compatible storage (e.g., MinIO) is poor because deletion of individual blob layers is slow on HDD-backed object storage. The root cause is that GC performs sequential delete operations for each manifest layer. Improvements include batching delete requests, parallelizing deletions, and optimizing the storage driver's delete path for S3-compatible backends.",
+      "codeSnippets": [
+        "Sep 1 12:56:35 192.168.144.1 registry[1146]: time=\"2020-09-01T12:56:35.750530108Z\" level=info msg=\"authorized request\" go.version=go1.13.8 http.request.host=\"registry:5000\" http.request.id=c9a4d5ad-4157-4091-a023-93d8e20a5746 http.request.method=DELETE http.request.remoteaddr=\"192.168.144.9:44072\" http.request.uri=\"/v2/library/testingg/manifests/sha256:20f39c20df7c5605f77862b711c3d28731e4d569171ec852ce34a06432611faa\" http.request.useragent=harbor-registry-client vars.name=\"library/testingg\" \nvars.reference=\"sha256:20f39c20df7c5605f77862b711c3d28731e4d569171ec852ce34a06432611faa\" \nSep 1 12:57:14 192.168.144.1 registry[1146]: time=\"2020-09-01T12:57:14.340710966Z\" level=info msg=\"response completed\" go.version=go1.13.8 http.request.host=\"registry:5000\" http.request.id=c9a4d5ad-4157-4091-a023-",
+        "2020-11-03T16:44:21Z [INFO] [/jobservice/job/impl/gc/garbage_collection.go:259]: delete the manifest with registry v2 API: fastly/demo-go-app, application/vnd.docker.distribution.manifest.v2+json, sha256:0f20ddd7f417cae5d685a3ea653617241135644575744db58cf5091dcd6cdf5c\n\n2020-11-03T17:14:21Z [ERROR] [/jobservice/job/impl/gc/garbage_collection.go:262]: failed to delete manifest with v2 API, fastly/demo-go-app, sha256:0f20ddd7f417cae5d685a3ea653617241135644575744db58cf5091dcd6cdf5c, Delete \"http://harbor-registry:5000/v2/fastly/demo-go-app/manifests/sha256:0f20ddd7f417cae5d685a3ea653617241135644575744db58cf5091dcd6cdf5c\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)\n\n2020-11-03T17:14:21Z [ERROR] [/jobservice/job/impl/gc/garbage_collection.go:165]: failed to execut",
+        "[harbor-registry-b4fbbb8df-xcgt4 registry] 127.0.0.1 - - [03/Nov/2020:16:44:21 +0000] \"DELETE /v2/fastly/demo-go-app/manifests/sha256:0f20ddd7f417cae5d685a3ea653617241135644575744db58cf5091dcd6cdf5c HTTP/1.1\" 202 0 \"\" \"harbor-registry-client\"\n\n[harbor-registry-b4fbbb8df-xcgt4 registry] time=\"2020-11-03T17:56:14.798548519Z\" level=info msg=\"response completed\" go.version=go1.14.7 http.request.host=\"harbor-registry:5000\" http.request.id=3b01c244-6b14-49ba-bfde-1bfd7934c15e http.request.method=DELETE http.request.remoteaddr=\"127.0.0.1:59854\" http.request.uri=\"/v2/fastly/demo-go-app/manifests/sha256:0f20ddd7f417cae5d685a3ea653617241135644575744db58cf5091dcd6cdf5c\" http.request.useragent=harbor-registry-client http.response.duration=1h11m53.181188629s http.response.status=202 http.response.writt"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "harbor",
+      "graduated",
+      "security",
+      "analyze"
+    ],
+    "cncfProjects": [
+      "harbor"
+    ],
+    "targetResourceKinds": [
+      "Job"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "analyze"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/goharbor/harbor/issues/12948",
+      "repo": "https://github.com/goharbor/harbor"
+    },
+    "reactions": 17,
+    "comments": 52,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A running Kubernetes cluster with harbor installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:20:08.797Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
