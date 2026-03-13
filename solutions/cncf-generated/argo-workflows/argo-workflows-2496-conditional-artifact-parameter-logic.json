@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-2496-conditional-artifact-parameter-logic",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: Conditional artifact/parameter logic",
+    "description": "Conditional artifact/parameter logic. Requested by 27+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nIn some steps/dag templates, there is a `when` conditional specifying which of two (or more) steps should run."
+      },
+      {
+        "title": "Apply the fix for Conditional artifact/parameter logic",
+        "description": "Use conditional expressions in artifact output references to handle branching workflows:\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  generateName: coinflip-\nspec:\n  entrypoint: coinflip\n  templates:\n  - name: coinflip\n    steps:\n    - - name: flip-coin\n        template: flip-coin\n    - - name: heads\n        template: heads\n        when: \"{{steps.flip-coin.outputs.result}} == heads\"\n      - name: tails\n        template: coinflip\n        when: \"{{steps.flip-coin.outputs.result}} == tails\"\n  - name: flip-coin\n    script:\n      image: python:alpine3.6\n      command: [python]\n      source: |\n        import random\n        result = \"heads\" if random.randint(0,1) == 0 else \"tails\"\n        print(result)\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Conditional artifact/parameter logic\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Added conditional artifact and parameter logic allowing workflows to reference outputs from conditionally-executed steps. Use expressions like fromExpression to select artifacts based on which branch executed.",
+      "codeSnippets": [
+        "apiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  generateName: coinflip-recursive-\nspec:\n  entrypoint: coinflip\n  templates:\n  - name: coinflip\n    steps:\n    - - name: flip-coin\n        template: flip-coin\n    - - name: heads\n        template: heads\n        when: \"{{steps.flip-coin.outputs.result}} == heads\"\n      - name: tails\n        template: coinflip\n        when: \"{{steps.flip-coin.outputs.result}} == tails\"\n    outputs:\n      artifacts:\n      - name: heads-result\n        from: ????\n\n  - name: flip-coin\n    script:\n      image: python:alpine3.6\n      command: [python]\n      source: |\n        import random\n        result = \"heads\" if random.randint(0,1) == 0 else \"tails\"\n        print(result)\n  - name: heads\n    container:\n      image: alpine:3.6\n      command: [sh, -c]\n   ",
+        "outputs:\n      artifacts:\n      - name: heads-result\n        from: \"{{steps.heads.outputs.artifacts.heads-result}} if {{steps.flip-coin.outputs.result}} == heads else {{steps.tails.outputs.artifacts.heads-result}}\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/2496",
+      "repo": "https://github.com/argoproj/argo-workflows",
+      "pr": "https://github.com/argoproj/argo-workflows/pull/4987"
+    },
+    "reactions": 27,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:19:03.251Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
