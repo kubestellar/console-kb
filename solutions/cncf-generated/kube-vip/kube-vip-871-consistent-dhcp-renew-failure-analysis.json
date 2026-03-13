@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-vip-871-consistent-dhcp-renew-failure-analysis",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-vip: Consistent DHCP renew failure analysis",
+    "description": "Consistent DHCP renew failure analysis. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kube-vip deployment",
+        "description": "Verify your kube-vip version and configuration:\n```bash\nkubectl get pods -A | grep kube-vip\nkubectl get daemonset -n kube-system kube-vip-ds 2>/dev/null || echo \"May be running as a static pod\"\n```\nThis feature requires a working kube-vip installation."
+      },
+      {
+        "title": "Review kube-vip configuration",
+        "description": "Inspect the relevant kube-vip configuration:\n```bash\nkubectl get pods -A | grep kube-vip\nkubectl get configmap -n kube-system kube-vip 2>/dev/null\n```\nPotentially related issues: #572, #580\n\n> ### **TL;DR** \n> **In certain network setups, DHCP renewals performed by `kube-vip` generally fail.** Further implementation issues result in ARP announcements of an IP for which a lease is no longer held."
+      },
+      {
+        "title": "Apply the fix for Consistent DHCP renew failure analysis",
+        "description": "When using DHCP for LB services, the resulting IP was assigned to the `serviceInterface` while most (not all) DHCP communication was done through a per-service `macvlan` interface that is created on demand.\n\nThis has been the cause of DHCP lease renewal failures for some users, as the response\n```yaml\napiVersion: apps/v1\nkind: DaemonSet\nmetadata:\n  labels:\n    app.kubernetes.io/instance: kube-vip\n    name: kube-vip\n  name: kube-vip\n  namespace: kube-vip\nspec:\n  revisionHistoryLimit: 10\n  selector:\n    matchLabels:\n      app.kubernetes.io/instance: kube-vip\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/instance: kube-vip\n    spec:\n      containers:\n      - args:\n        - manager\n        env:\n        - name: svc_enable\n          value: \"true\"\n        - name: vip_arp\n          value: \"true\"\n        - name: vip_leaderelection\n          value: \"true\"\n        - name: vip_serv\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -A | grep kube-vip\nkubectl get events -n kube-system --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Consistent DHCP renew failure analysis\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "When using DHCP for LB services, the resulting IP was assigned to the `serviceInterface` while most (not all) DHCP communication was done through a per-service `macvlan` interface that is created on demand.\n\nThis has been the cause of DHCP lease renewal failures for some users, as the response packets from the server never reached kube-vip. For more details, see issue #871.",
+      "codeSnippets": [
+        "apiVersion: apps/v1\nkind: DaemonSet\nmetadata:\n  labels:\n    app.kubernetes.io/instance: kube-vip\n    name: kube-vip\n  name: kube-vip\n  namespace: kube-vip\nspec:\n  revisionHistoryLimit: 10\n  selector:\n    matchLabels:\n      app.kubernetes.io/instance: kube-vip\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/instance: kube-vip\n    spec:\n      containers:\n      - args:\n        - manager\n        env:\n        - name: svc_enable\n          value: \"true\"\n        - name: vip_arp\n          value: \"true\"\n        - name: vip_leaderelection\n          value: \"true\"\n        - name: vip_servicesinterface\n          value: eth0\n        - name: svc_election\n          value: \"true\"\n        - name: cp_namespace\n          value: kube-vip\n        - name: enable_node_labeling\n          value: \"t"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-vip",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kube-vip"
+    ],
+    "targetResourceKinds": [
+      "Role",
+      "Service"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kube-vip/kube-vip/issues/871",
+      "repo": "https://github.com/kube-vip/kube-vip",
+      "pr": "https://github.com/kube-vip/kube-vip/pull/897"
+    },
+    "reactions": 4,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kube-vip installed as a static pod or DaemonSet."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:38:56.418Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
