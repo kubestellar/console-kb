@@ -357,11 +357,13 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
 
   // If no PR-based solution, score comments and pick the best resolution
   if (!resolution.solution && comments.length > 0) {
+    const MIN_COMMENT_LENGTH = 50
     const scoredComments = comments
-      .filter(c => c.body && c.body.length > 20)
+      .filter(c => c.body && c.body.length > MIN_COMMENT_LENGTH)
       .map(c => {
         let score = 0
         const bodyLower = (c.body || '').toLowerCase()
+        const bodyTrimmed = c.body.trim()
         // Author authority
         if (c.author_association === 'OWNER') score += 10
         else if (c.author_association === 'MEMBER') score += 8
@@ -378,11 +380,22 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
         // Length bonus (more detail = better)
         if (c.body.length > 200) score += 2
         if (c.body.length > 500) score += 2
+        // NEGATIVE: question-heavy comments are not solutions
+        const questionMarks = (bodyTrimmed.match(/\?/g) || []).length
+        const sentences = (bodyTrimmed.match(/[.!?]/g) || []).length || 1
+        if (questionMarks / sentences > 0.5) score -= 5
+        // NEGATIVE: short comments that are just reactions/greetings
+        if (bodyLower.match(/^(thanks|thank you|yay|great|lgtm|nice|awesome|👍|🎉|\+1)/)) score -= 8
+        // NEGATIVE: "me too" / "same issue" comments
+        if (bodyLower.match(/^(me too|same (?:issue|problem|here)|i (?:also|too) (?:have|see|get))/)) score -= 6
+        // NEGATIVE: bot-generated comments (codecov, stale bot, CI bots)
+        if (c.user?.type === 'Bot' || bodyLower.includes('codecov') || bodyLower.includes('stale bot')) score -= 10
         return { comment: c, score }
       })
       .sort((a, b) => b.score - a.score)
 
-    if (scoredComments.length > 0 && scoredComments[0].score > 0) {
+    const MIN_COMMENT_SCORE = 3
+    if (scoredComments.length > 0 && scoredComments[0].score >= MIN_COMMENT_SCORE) {
       resolution.solution = truncateAtWordBoundary(cleanText(scoredComments[0].comment.body), 1500)
     }
   }
@@ -445,6 +458,16 @@ function cleanText(text) {
     // Strip common empty PR template section headers (Kyverno, Falco, etc.)
     .replace(/^\s*#{1,4}\s*(?:Checklist|Further Comments?|Milestone|Related issue|Proposed Changes?|Explanation)\s*$/gim, '')
     .replace(/^\s*#{1,4}\s*Milestone of this PR.*$/gim, '')
+    // Strip "Self Checks" sections (Dify, LangFlow templates)
+    .replace(/#{1,4}\s*Self Checks?[\s\S]*?(?=\n#{1,4}\s[^#]|\n---|\s*$)/gi, '')
+    // Strip CLA/contributor agreement text
+    .replace(/(?:By submitting this pull request|I have signed the CLA|Contributor License Agreement|I certify that)[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip "HashiCorp employees" notes
+    .replace(/HashiCorp employees[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip Harbor contribution guidelines
+    .replace(/Harbor is an open source project[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+    // Strip "This is a" self-classification lines (e.g., "This is a bug fix / feature / improvement")
+    .replace(/^\s*This is a\s*(?:bug fix|feature|improvement|enhancement|refactor|doc(?:umentation)?)\s*\.?\s*$/gim, '')
     // Strip bare issue references (e.g., "#6661") and "Closes: #N" lines
     .replace(/^\s*#\d+\s*$/gm, '')
     .replace(/^\s*(?:closes?|fixes?|resolves?):?\s+(?:#\d+|https:\/\/github\.com\/[^\s]+).*$/gim, '')
@@ -507,6 +530,12 @@ function isGarbageSnippet(snippet) {
   const quotedLines = lines.filter(l => l.trim().startsWith('>')).length
   if (quotedLines > lines.length * 0.7 && lines.length > 3) return true
 
+  // CLA/DCO/contributor agreement text inside code blocks
+  if (lower.includes('contributor license') || lower.includes('signed the cla') || lower.includes('developer certificate')) return true
+
+  // GitHub Actions workflow output (CI logs, not useful config)
+  if (lower.includes('run actions/') || lower.includes('##[error]') || lower.includes('##[warning]')) return true
+
   return false
 }
 
@@ -520,13 +549,29 @@ const K8S_NATIVE_CATEGORIES = new Set([
 ])
 
 const NON_K8S_PROJECTS = new Set([
-  'clickhouse', 'caddy', 'gitea', 'surrealdb', 'valkey', 'vault',
-  'milvus', 'netdata', 'ollama', 'langflow', 'grpc', 'vllm',
-  'podman-container-tools', 'lima', 'buildpacks', 'spin', 'cedar',
-  // CLI tools, runtimes, and libraries — not deployed as K8s workloads
-  'sops', 'wasmedge-runtime', 'connect-rpc', 'slimtoolkit',
-  'visual-studio-code-kubernetes-tools', 'container2wasm', 'score',
-  'dify', 'keycloak',
+  // Databases and data stores — standalone servers, not K8s operators
+  'clickhouse', 'surrealdb', 'valkey', 'milvus', 'tikv', 'vitess',
+  // Web servers and reverse proxies
+  'caddy',
+  // Self-hosted platforms — can run on K8s but have their own CLI/admin UI
+  'gitea', 'vault', 'keycloak', 'harbor', 'backstage', 'dify',
+  // Monitoring/observability — standalone installs
+  'netdata',
+  // AI/ML tools — pip-installed, not K8s workloads
+  'ollama', 'langflow', 'vllm',
+  // Libraries and frameworks — no runtime binary, used via language package managers
+  'grpc', 'connect-rpc', 'cloudevents', 'in-toto',
+  'the-update-framework-tuf-', 'kube-rs', 'client-go',
+  // CLI tools — run locally, not deployed as K8s workloads
+  'buildpacks', 'ko', 'helm', 'kpt', 'opentofu', 'oras',
+  'notation', 'sops', 'slimtoolkit', 'score',
+  'podman-container-tools', 'lima',
+  // Container/wasm runtimes — low-level, not K8s workloads
+  'spin', 'wasmedge-runtime', 'container2wasm',
+  // IDE extensions and desktop tools
+  'visual-studio-code-kubernetes-tools',
+  // Policy language — library/CLI, not a K8s workload
+  'cedar',
 ])
 
 function isKubernetesNative(project) {
@@ -535,6 +580,82 @@ function isKubernetesNative(project) {
   // Projects with k8sVersions field are K8s-related
   if (project.k8sVersions && project.k8sVersions.length > 0) return true
   return true // default to true for CNCF projects
+}
+
+/**
+ * Project-specific CLI commands for version checks and status checks.
+ * Entries with `null` for versionCmd mean the project has no CLI binary
+ * (it's a library or framework used via a package manager).
+ */
+const PROJECT_CLI_MAP = {
+  // Databases and data stores
+  clickhouse: { versionCmd: 'clickhouse-client --version', statusCmd: 'clickhouse-client -q "SELECT version()"', tools: ['clickhouse-client'] },
+  surrealdb: { versionCmd: 'surreal version', statusCmd: 'surreal is-ready', tools: ['surreal'] },
+  valkey: { versionCmd: 'valkey-server --version', statusCmd: 'valkey-cli ping', tools: ['valkey-server', 'valkey-cli'] },
+  milvus: { versionCmd: 'pip show pymilvus | grep Version', statusCmd: null, tools: ['python', 'pip'], ecosystem: 'python' },
+  tikv: { versionCmd: 'tikv-server --version', statusCmd: null, tools: ['tikv-server'] },
+  vitess: { versionCmd: 'vtctldclient --version', statusCmd: null, tools: ['vtctldclient'] },
+  // Web servers
+  caddy: { versionCmd: 'caddy version', statusCmd: 'caddy validate --config /etc/caddy/Caddyfile', tools: ['caddy'] },
+  // Self-hosted platforms
+  gitea: { versionCmd: 'gitea --version', statusCmd: null, tools: ['docker', 'git'] },
+  vault: { versionCmd: 'vault version', statusCmd: 'vault status', tools: ['vault'] },
+  keycloak: { versionCmd: 'kc.sh --version 2>/dev/null || bin/kc.sh --version', statusCmd: null, tools: ['java'], ecosystem: 'java' },
+  harbor: { versionCmd: null, statusCmd: 'curl -s http://localhost/api/v2.0/health | jq .status', tools: ['docker-compose', 'curl'] },
+  backstage: { versionCmd: 'npx backstage-cli info', statusCmd: null, tools: ['node', 'npm'], ecosystem: 'node' },
+  dify: { versionCmd: 'docker compose version', statusCmd: 'docker compose ps', tools: ['docker', 'docker-compose'] },
+  // Monitoring
+  netdata: { versionCmd: 'netdata -v', statusCmd: 'curl -s http://localhost:19999/api/v1/info | jq .version', tools: ['netdata'] },
+  // AI/ML
+  ollama: { versionCmd: 'ollama --version', statusCmd: 'ollama list', tools: ['ollama'] },
+  langflow: { versionCmd: 'langflow --version', statusCmd: null, tools: ['python', 'pip'], ecosystem: 'python' },
+  vllm: { versionCmd: 'pip show vllm | grep Version', statusCmd: 'python -c "import vllm; print(vllm.__version__)"', tools: ['python', 'pip'], ecosystem: 'python' },
+  // Libraries — no CLI binary
+  grpc: { versionCmd: null, statusCmd: null, tools: ['protoc'], ecosystem: 'multi', description: 'gRPC library — check your language-specific package (e.g., pip show grpcio, npm ls @grpc/grpc-js)' },
+  'connect-rpc': { versionCmd: null, statusCmd: null, tools: ['buf'], ecosystem: 'multi', description: 'Connect-RPC library — check your language-specific package' },
+  cloudevents: { versionCmd: null, statusCmd: null, tools: [], ecosystem: 'multi', description: 'CloudEvents is a specification — check your SDK version (e.g., pip show cloudevents)' },
+  'in-toto': { versionCmd: 'pip show in-toto | grep Version', statusCmd: null, tools: ['python', 'pip'], ecosystem: 'python' },
+  'the-update-framework-tuf-': { versionCmd: 'pip show tuf | grep Version', statusCmd: null, tools: ['python', 'pip'], ecosystem: 'python' },
+  'kube-rs': { versionCmd: null, statusCmd: null, tools: ['rustc', 'cargo'], ecosystem: 'rust', description: 'kube-rs is a Rust library — check Cargo.toml for the version' },
+  // CLI tools
+  buildpacks: { versionCmd: 'pack version', statusCmd: 'pack builder suggest', tools: ['pack'] },
+  ko: { versionCmd: 'ko version', statusCmd: null, tools: ['ko', 'go'] },
+  helm: { versionCmd: 'helm version --short', statusCmd: 'helm repo list', tools: ['helm'] },
+  kpt: { versionCmd: 'kpt version', statusCmd: null, tools: ['kpt'] },
+  opentofu: { versionCmd: 'tofu version', statusCmd: null, tools: ['tofu'] },
+  oras: { versionCmd: 'oras version', statusCmd: null, tools: ['oras'] },
+  notation: { versionCmd: 'notation version', statusCmd: null, tools: ['notation'] },
+  'notary-project': { versionCmd: 'notation version', statusCmd: null, tools: ['notation'] },
+  sops: { versionCmd: 'sops --version', statusCmd: null, tools: ['sops'] },
+  slimtoolkit: { versionCmd: 'slim version', statusCmd: null, tools: ['slim'] },
+  score: { versionCmd: 'score-compose version', statusCmd: null, tools: ['score-compose'] },
+  'podman-container-tools': { versionCmd: 'podman --version', statusCmd: 'podman info --format json | jq .version', tools: ['podman'] },
+  lima: { versionCmd: 'limactl --version', statusCmd: 'limactl list', tools: ['limactl'] },
+  // Container/wasm runtimes
+  spin: { versionCmd: 'spin --version', statusCmd: null, tools: ['spin'] },
+  'wasmedge-runtime': { versionCmd: 'wasmedge --version', statusCmd: null, tools: ['wasmedge'] },
+  container2wasm: { versionCmd: null, statusCmd: null, tools: ['docker'], ecosystem: 'go' },
+  cedar: { versionCmd: 'cedar --version 2>/dev/null || cargo install --list | grep cedar', statusCmd: null, tools: ['cedar'], ecosystem: 'rust' },
+}
+
+/**
+ * Get the CLI version-check command for a project.
+ * Returns the specific command if mapped, or null for libraries with no CLI.
+ */
+function getProjectVersionCmd(project) {
+  const mapped = PROJECT_CLI_MAP[project.name]
+  if (mapped) return mapped.versionCmd
+  return `${project.name} version`
+}
+
+/**
+ * Get the CLI status-check command for a project.
+ * Returns the specific command if mapped, or null if not applicable.
+ */
+function getProjectStatusCmd(project) {
+  const mapped = PROJECT_CLI_MAP[project.name]
+  if (mapped) return mapped.statusCmd
+  return `${project.name} status 2>&1 | head -20`
 }
 
 /**
@@ -549,16 +670,19 @@ function generatePrerequisites(project) {
     }
   }
 
-  // Non-K8s project — tailor prerequisites
-  const tools = []
-  if (project.type === 'ai-platform') tools.push('python', 'pip')
-  else if (project.category === 'analytics-db') tools.push(project.name)
-  else if (project.category === 'git-hosting') tools.push('docker', 'git')
-  else tools.push(project.name)
+  // Check project-specific CLI mapping first
+  const mapped = PROJECT_CLI_MAP[project.name]
+  if (mapped) {
+    return {
+      tools: mapped.tools.length > 0 ? mapped.tools : [project.name],
+      description: mapped.description || `A working ${project.name} installation or development environment.`,
+    }
+  }
 
+  // Fallback for unmapped non-K8s projects
   return {
-    tools: tools.length > 0 ? tools : [project.name],
-    description: `A working ${project.displayName || project.name} installation or development environment.`,
+    tools: [project.name],
+    description: `A working ${project.name} installation or development environment.`,
   }
 }
 
@@ -709,6 +833,16 @@ function stripPRTemplate(text) {
   cleaned = cleaned.replace(/^\s*Credit where credit is due:.*$/gm, '')
   // Remove "Demo:" lines with GitHub URLs
   cleaned = cleaned.replace(/^\s*Demo:.*github\.com.*$/gm, '')
+  // Remove "Self Checks" sections (Dify, LangFlow templates)
+  cleaned = cleaned.replace(/#{1,4}\s*Self Checks?[\s\S]*?(?=\n#{1,4}\s[^#]|\n---|\s*$)/gi, '')
+  // Remove CLA/contributor agreement boilerplate
+  cleaned = cleaned.replace(/(?:By submitting this pull request|I have signed the CLA|Contributor License Agreement|I certify that)[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  // Remove "HashiCorp employees" notes
+  cleaned = cleaned.replace(/HashiCorp employees[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  // Remove Harbor contribution guidelines
+  cleaned = cleaned.replace(/Harbor is an open source project[\s\S]*?(?=\n#{1,4}\s|\n\n[A-Z]|\n---|\s*$)/gi, '')
+  // Remove bare self-classification lines
+  cleaned = cleaned.replace(/^\s*This is a\s*(?:bug fix|feature|improvement|enhancement|refactor|doc(?:umentation)?)\s*\.?\s*$/gim, '')
   // Strip numbered PR template headers (### 1. Why is this PR needed?, ### 2. Which issues?, etc.)
   cleaned = cleaned.replace(/#{1,4}\s*\d+\.\s+(?:Why is this|Which issue|Which documentation|Does this introduce|Special notes|If applicable|Release note|What type|How has this|Additional context)[^\n]*/gi, '')
   // Strip bare issue references left over from template sections (e.g., "#6661\n#6638")
@@ -770,6 +904,19 @@ function passesQualityGate(resolution, issue) {
 
   // Reject if solution is mostly a commit message (short + contains "Closes:" or "Fixes:")
   if (strippedSolution.length < 150 && /(?:closes?|fixes?|resolves?):?\s*#\d+/i.test(strippedSolution)) {
+    return false
+  }
+
+  // Reject if solution is mostly questions (not an actual resolution)
+  const questionMarks = (strippedSolution.match(/\?/g) || []).length
+  const periods = (strippedSolution.match(/\./g) || []).length || 1
+  if (questionMarks > periods && strippedSolution.length < 300) {
+    return false
+  }
+
+  // Reject if solution is just a "me too" or "+1" comment
+  const solutionLower = strippedSolution.toLowerCase()
+  if (/^(me too|same (?:issue|problem|here)|\+1|i (?:also|too) (?:have|see|get) this)/i.test(solutionLower.trim())) {
     return false
   }
 
@@ -1127,6 +1274,8 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
 
   // Derive project-specific namespace and helm repo (not hardcoded cert-manager)
   const namespace = project.namespace || project.name
+  const versionCmd = getProjectVersionCmd(project)
+  const statusCmd = getProjectStatusCmd(project)
   const helmRepo = project.helmRepo || project.name
   const mType = detectMissionType(issue)
   const isFeature = mType === 'feature' || mType === 'deploy'
@@ -1150,15 +1299,27 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
           `This feature requires a working ${project.name} installation.`,
         ].join('\n')
       })
-    } else {
+    } else if (versionCmd) {
       steps.push({
         title: `Check current ${project.name} setup`,
         description: [
           `Verify your ${project.name} version and configuration:`,
           '```bash',
-          `${project.name} version`,
+          versionCmd,
           '```',
           `This feature requires a working ${project.name} installation.`,
+        ].join('\n')
+      })
+    } else {
+      // Library/framework with no CLI — describe how to check the dependency
+      const mapped = PROJECT_CLI_MAP[project.name]
+      const checkDesc = mapped?.description || `Check your ${project.name} dependency version in your project manifest (package.json, go.mod, Cargo.toml, requirements.txt, etc.).`
+      steps.push({
+        title: `Check current ${project.name} setup`,
+        description: [
+          `Verify your ${project.name} version:`,
+          checkDesc,
+          `This feature requires ${project.name} as a dependency.`,
         ].join('\n')
       })
     }
@@ -1176,16 +1337,29 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
           errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors or warnings in the logs that may indicate the issue.`,
         ].join('\n')
       })
-    } else {
+    } else if (versionCmd) {
+      const cmdLines = [versionCmd]
+      if (statusCmd) cmdLines.push(statusCmd)
       steps.push({
         title: `Identify ${project.name} ${mType} symptoms`,
         description: [
           `Check for the issue in your ${project.name} installation:`,
           '```bash',
-          `${project.name} version`,
-          `${project.name} status 2>&1 | head -20`,
+          ...cmdLines,
           '```',
           errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Look for errors or warnings that may indicate the issue.`,
+        ].join('\n')
+      })
+    } else {
+      // Library with no CLI — describe how to reproduce
+      const mapped = PROJECT_CLI_MAP[project.name]
+      const checkDesc = mapped?.description || `Check your ${project.name} dependency version in your project manifest.`
+      steps.push({
+        title: `Identify ${project.name} ${mType} symptoms`,
+        description: [
+          `Check for the issue in your ${project.name} setup:`,
+          checkDesc,
+          errorMatch ? `Look for error: \`${errorMatch.trim()}\`` : `Check your build output and test logs for errors related to this issue.`,
         ].join('\n')
       })
     }
@@ -1265,16 +1439,17 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
       ].join('\n')
     })
   } else if (!k8sNative && (resolution.prUrl || resolution.solution?.includes('upgrade') || resolution.solution?.includes('version'))) {
+    const upgradeLines = [`If the fix is included in a newer release, upgrade ${project.name}:`]
+    if (versionCmd) {
+      upgradeLines.push('```bash', `# Check current version`, versionCmd)
+      upgradeLines.push(`# Follow the project's upgrade guide at https://github.com/${project.repo}`, '```')
+    } else {
+      upgradeLines.push(`Update the ${project.name} dependency in your project manifest to the latest version.`)
+      upgradeLines.push(`See the project's releases: https://github.com/${project.repo}/releases`)
+    }
     steps.push({
       title: `Upgrade ${project.name} to include the fix`,
-      description: [
-        `If the fix is included in a newer release, upgrade ${project.name}:`,
-        '```bash',
-        `# Check current version`,
-        `${project.name} version`,
-        `# Follow the project's upgrade guide at https://github.com/${project.repo}`,
-        '```',
-      ].join('\n')
+      description: upgradeLines.join('\n')
     })
   }
 
