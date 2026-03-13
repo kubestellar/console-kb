@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "oauth2-proxy-46-support-for-traefik",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "oauth2-proxy: Support for Traefik",
+    "description": "Support for Traefik. Requested by 30+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current oauth2-proxy deployment",
+        "description": "Verify your oauth2-proxy version and configuration:\n```bash\nkubectl get pods -n oauth2-proxy -l app.kubernetes.io/name=oauth2-proxy\nhelm list -n oauth2-proxy 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working oauth2-proxy installation."
+      },
+      {
+        "title": "Review oauth2-proxy configuration",
+        "description": "Inspect the relevant oauth2-proxy configuration:\n```bash\nkubectl get all -n oauth2-proxy -l app.kubernetes.io/name=oauth2-proxy\nkubectl get configmap -n oauth2-proxy -l app.kubernetes.io/part-of=oauth2-proxy\n```\nI'd like to ask if any of you has the experience to configure oauth2-proxy with Traefik? Is it supported out of the box?"
+      },
+      {
+        "title": "Apply the fix for Support for Traefik",
+        "description": "I had a quick check through the docs and it looks like you might be able to use [Forward Authentication](https://docs.traefik.io/configuration/entrypoints/#forward-authentication)\n\nYou could check against `/oauth2/auth` the same way the Nginx `auth_request` module does, but Traefik doesn't have a\n```yaml\nservices:\n  oauth2:\n    command:\n    - \"-cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}\"\n    - \"-cookie-secure=false\"\n    - \"-email-domain=*\"\n    - \"-github-org=dispenserinc\" # doesn't seem to work, see requests below\n    - \"-provider=github\"\n    - \"-redirect-url=http://login.${DOMAIN}/oauth2/callback\"\n    - \"-set-xauthrequest\"\n    - \"-set-authorization-header\"\n    - \"-http-address=0.0.0.0:4180\"\n    environment:\n      - \"OAUTH2_PROXY_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}\"\n      - \"OAUTH2_PROXY_CLIENT_SECRET=${GITHUB_OAUTH_CLIENT_SECRET}\"\n    expose:\n      - \"4180\"\n    image: quay.io/pusher/oauth2_p\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n oauth2-proxy -l app.kubernetes.io/name=oauth2-proxy\nkubectl get events -n oauth2-proxy --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support for Traefik\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I had a quick check through the docs and it looks like you might be able to use [Forward Authentication](https://docs.traefik.io/configuration/entrypoints/#forward-authentication)\n\nYou could check against `/oauth2/auth` the same way the Nginx `auth_request` module does, but Traefik doesn't have a redirection option if that request fails.",
+      "codeSnippets": [
+        "services:\n  oauth2:\n    command:\n    - \"-cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}\"\n    - \"-cookie-secure=false\"\n    - \"-email-domain=*\"\n    - \"-github-org=dispenserinc\" # doesn't seem to work, see requests below\n    - \"-provider=github\"\n    - \"-redirect-url=http://login.${DOMAIN}/oauth2/callback\"\n    - \"-set-xauthrequest\"\n    - \"-set-authorization-header\"\n    - \"-http-address=0.0.0.0:4180\"\n    environment:\n      - \"OAUTH2_PROXY_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}\"\n      - \"OAUTH2_PROXY_CLIENT_SECRET=${GITHUB_OAUTH_CLIENT_SECRET}\"\n    expose:\n      - \"4180\"\n    image: quay.io/pusher/oauth2_proxy:v3.1.0\n    labels:\n      - \"traefik.frontend.rule=Host:login.${DOMAIN},${DOMAIN},PathPrefix=/oauth2\"\n      # this should be both login and normal domain and with the PathPrefix for the redirect\n ",
+        "403 Permission Denied\nhttp: named cookie not present\n\nSign In",
+        "and I can't continue.\n\nSome logs from oauth2-proxy:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "oauth2-proxy",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "oauth2-proxy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/oauth2-proxy/oauth2-proxy/issues/46",
+      "repo": "https://github.com/oauth2-proxy/oauth2-proxy"
+    },
+    "reactions": 30,
+    "comments": 61,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with oauth2-proxy installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:39:16.595Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
