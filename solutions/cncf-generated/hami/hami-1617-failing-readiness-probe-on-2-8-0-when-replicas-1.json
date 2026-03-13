@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "hami-1617-failing-readiness-probe-on-2-8-0-when-replicas-1",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "hami: Failing readiness probe on 2.8.0 when replicas>1",
+    "description": "Failing readiness probe on 2.8.0 when replicas>1. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify hami troubleshoot symptoms",
+        "description": "Check for the issue in your hami deployment:\n```bash\nkubectl get pods -n hami -l app.kubernetes.io/name=hami\nkubectl logs -l app.kubernetes.io/name=hami -n hami --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review hami configuration",
+        "description": "Inspect the relevant hami configuration:\n```bash\nkubectl get all -n hami -l app.kubernetes.io/name=hami\nkubectl get configmap -n hami -l app.kubernetes.io/part-of=hami\n```\n**What happened**:\nAfter upgrading from `2.7.1` to `2.8.0` readiness probe is failing on 2 of 3 replicas of `hami-scheduler/vgpu-scheduler-extender`. Looks that only currently elected master is green, rest is yellow."
+      },
+      {
+        "title": "Apply the fix for Failing readiness probe on 2.8.0 when replicas>1",
+        "description": "As described in #1617, the PR #1553 brings the readinessProbe check for vgpu-scheduler-extender container in hami-scheduler Pod, however it the current implementation don't work well with the rolling update strategy of deployment.\n\nSo in this PR, A new label is introduced to make sure that only the\n```yaml\nscheduler:\n  replicas: 3\n  leaderElect: true\n```"
+      },
+      {
+        "title": "Confirm Failing readiness probe on 2.8.0 when replicas>1 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=hami -n hami --tail=50 --since=5m\nkubectl get events -n hami --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "As described in #1617, the PR #1553 brings the readinessProbe check for vgpu-scheduler-extender container in hami-scheduler Pod, however it the current implementation don't work well with the rolling update strategy of deployment.\n\nSo in this PR, A new label is introduced to make sure that only the leader is selected by the service\nI used kimi-cli to generate the testing code",
+      "codeSnippets": [
+        "scheduler:\n  replicas: 3\n  leaderElect: true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "hami",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "hami"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/Project-HAMi/HAMi/issues/1617",
+      "repo": "https://github.com/Project-HAMi/HAMi",
+      "pr": "https://github.com/Project-HAMi/HAMi/pull/1677"
+    },
+    "reactions": 4,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with hami installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:34:01.556Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
