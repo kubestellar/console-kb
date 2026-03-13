@@ -1,8 +1,16 @@
 name: Scan Mission Files
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
     paths: ['solutions/**']
+  push:
+    branches: [master]
+    paths:
+      - 'solutions/**'
+      - '!solutions/index.json'
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6:00am UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,22 +21,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Install dependencies
         run: cd scripts && npm install --no-audit
-      - name: Find changed mission files
+      - name: Find mission files to scan
         id: changed
         run: |
-          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          else
+            # For push, schedule, and workflow_dispatch: scan all mission files
+            FILES=$(find solutions -type f \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) ! -name 'index.json' | tr '\n' ' ')
+          fi
           echo "files=$FILES" >> $GITHUB_OUTPUT
           echo "count=$(echo $FILES | wc -w | tr -d ' ')" >> $GITHUB_OUTPUT
       - name: Scan missions
         if: steps.changed.outputs.count != '0'
         run: node scripts/scan-pr.mjs ${{ steps.changed.outputs.files }}
       - name: Post results
-        if: always() && steps.changed.outputs.count != '0'
+        if: always() && steps.changed.outputs.count != '0' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
