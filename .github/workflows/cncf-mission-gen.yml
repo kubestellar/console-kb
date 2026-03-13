@@ -170,19 +170,36 @@ jobs:
           if [ -f search-state.json ] && ! git diff --quiet search-state.json 2>/dev/null; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            # Stage and stash first — git rebase requires a clean working tree.
+            # The previous step writes search-state.json as an unstaged change;
+            # rebasing with unstaged changes causes "cannot rebase: You have
+            # unstaged changes" (exit 128).
+            git add search-state.json
+            git stash
+
             # Retry loop handles concurrent push conflicts from parallel batch runs
             MAX_RETRIES=3
             for attempt in $(seq 1 $MAX_RETRIES); do
               git fetch origin master
-              git rebase origin/master || git rebase --abort
+              git rebase origin/master || {
+                echo "Rebase failed on attempt $attempt, aborting and retrying..."
+                git rebase --abort || true
+                sleep 2
+                continue
+              }
+              git stash pop || true
               git add search-state.json
-              git diff --cached --quiet && break  # nothing to commit after rebase
+              git diff --cached --quiet && { echo "No changes after rebase"; break; }
               git commit -s -m "🌱 Update CNCF mission search state ($(date +%Y-%m-%d))" || true
               if git push origin master; then
                 echo "Search state pushed (attempt $attempt)"
                 break
               fi
               echo "Push failed (attempt $attempt/$MAX_RETRIES), retrying..."
+              # Undo the commit so next iteration can retry after fetching
+              git reset --soft HEAD~1 2>/dev/null || true
+              git stash
               sleep 2
             done
           fi
