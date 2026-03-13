@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-2551-container-sequences",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: Container sequences",
+    "description": "Container sequences. Requested by 32+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nIt should be possible to run multiple steps within the same pod ~using ephemeral containers~."
+      },
+      {
+        "title": "Apply the fix for Container sequences",
+        "description": "Use container sequences to run multiple steps within the same pod, avoiding the need to pass artifacts through an external provider when intermediary artifacts can be discarded after use.\n```yaml\n- name: sequence\n  sequence:\n    - - name: create-artifact\n        template: gen-data\n    - - name: consume-artifact\n        template: process-data\n\n- name: gen-data\n  container:\n    image: alpine:latest\n  outputs:\n    artifacts:\n      - name: file\n        path: /tmp/output\n\n- name: process-data\n  inputs:\n    artifacts:\n      - name: file\n        path: /tmp/input\n  container:\n    image: alpine:latest\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Container sequences\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Implemented container sequences to allow running multiple steps within the same pod using shared volumes, avoiding the need for external artifact storage for intermediary data.",
+      "codeSnippets": [
+        "- name: sequence\n  sequence:\n    - - name: create-artifact\n        template: gen-data\n    - - name: consume-artifact\n        template: process-data\n\n- name: gen-data\n  container:\n    ...\n  outputs:\n    artifacts:\n      file: ...\n\n- name: process-data\n  inputs:\n    artifacts:\n      file: ...\n  container:\n    ..."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/2551",
+      "repo": "https://github.com/argoproj/argo-workflows",
+      "pr": "https://github.com/argoproj/argo-workflows/pull/5099"
+    },
+    "reactions": 32,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:20:07.641Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
