@@ -1,23 +1,38 @@
 name: Validate Mission Schema
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
     paths: ['solutions/**']
+  push:
+    branches: [master]
+    paths:
+      - 'solutions/**'
+      - '!solutions/index.json'
+  schedule:
+    - cron: '30 5 * * 1'  # Weekly Monday 5:30am UTC
+  workflow_dispatch:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Install dependencies
         run: cd scripts && npm install --no-audit
-      - name: Find changed files
+      - name: Find files to validate
         id: changed
         run: |
-          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' | tr '\n' ' ')
+          else
+            # For push, schedule, and workflow_dispatch: validate all mission files
+            FILES=$(find solutions -type f \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) ! -name 'index.json' | tr '\n' ' ')
+          fi
           echo "files=$FILES" >> $GITHUB_OUTPUT
       - name: Validate schema
         if: steps.changed.outputs.files != ''
