@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "metallb-462-remove-the-config-reloading-fail-static-behavior",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "metallb: Remove the config reloading fail-static behavior",
+    "description": "Remove the config reloading fail-static behavior. Requested by 10+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current metallb deployment",
+        "description": "Verify your metallb version and configuration:\n```bash\nkubectl get pods -n metallb-system -l app.kubernetes.io/name=metallb\nhelm list -n metallb-system 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working metallb installation."
+      },
+      {
+        "title": "Review metallb configuration",
+        "description": "Inspect the relevant metallb configuration:\n```bash\nkubectl get all -n metallb-system -l app.kubernetes.io/name=metallb\nkubectl get configmap -n metallb-system -l app.kubernetes.io/part-of=metallb\n```\nRight now, MetalLB tries hard to fail static if you delete its configuration, or provide an invalid/unsafe configuration."
+      },
+      {
+        "title": "Apply the fix for Remove the config reloading fail-static behavior",
+        "description": "regarding 1, on my testing deleting the MetalLB controller pod seems to work. The pod gets re-created and then MetalLB re-runs the reconciliation logic using the new config.\nUntil we remove the config reloading safety mechanism, MetalLB \"remembers\" the old IP and refuses to update it to a new IP to\n```yaml\ndata:\n  config: |\n    address-pools:\n    - name: default\n      protocol: layer2\n      addresses:\n      - 131.153.252.110-131.153.252.125\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n metallb-system -l app.kubernetes.io/name=metallb\nkubectl get events -n metallb-system --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Remove the config reloading fail-static behavior\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "regarding 1, on my testing deleting the MetalLB controller pod seems to work. The pod gets re-created and then MetalLB re-runs the reconciliation logic using the new config.\nUntil we remove the config reloading safety mechanism, MetalLB \"remembers\" the old IP and refuses to update it to a new IP to avoid breaking things.",
+      "codeSnippets": [
+        "data:\n  config: |\n    address-pools:\n    - name: default\n      protocol: layer2\n      addresses:\n      - 131.153.252.110-131.153.252.125",
+        "{\"caller\":\"main.go:114\",\"configmap\":\"metallb-system/config\",\"error\":\"new config not compatible with assigned IPs: service \\\"decco/k8sniff\\\" cannot own \\\"192.168.28.4\\\" under new config\",\"msg\":\"applying new configuration failed\",\"op\":\"setConfig\",\"ts\":\"2019-08-09T21:40:20.150041105Z\"}\n{\"caller\":\"k8s.go:338\",\"configmap\":\"metallb-system/config\",\"error\":null,\"event\":\"configStale\",\"msg\":\"config (re)load failed, config marked stale\",\"ts\":\"2019-08-09T21:40:20.150070566Z\"}",
+        "- name: default\n      protocol: layer2\n      avoid-buggy-ips: true\n      addresses:\n      - 172.105.85.189/32\n      - 139.162.162.133/32 \n      - 139.162.178.46/32\n      auto-assign: true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "metallb",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "metallb"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Configmap",
+      "Service"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/metallb/metallb/issues/462",
+      "repo": "https://github.com/metallb/metallb"
+    },
+    "reactions": 10,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with metallb installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:37:34.401Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
