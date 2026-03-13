@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-vip-879-svc-election-true-will-cause-load-balancers-with-the-same-ip-to-app",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-vip: svc_election=true will cause load balancers with the same IP to appear on different servers",
+    "description": "svc_election=true will cause load balancers with the same IP to appear on different servers. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kube-vip deployment",
+        "description": "Verify your kube-vip version and configuration:\n```bash\nkubectl get pods -n kube-vip -l app.kubernetes.io/name=kube-vip\nhelm list -n kube-vip 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kube-vip installation."
+      },
+      {
+        "title": "Review kube-vip configuration",
+        "description": "Inspect the relevant kube-vip configuration:\n```bash\nkubectl get all -n kube-vip -l app.kubernetes.io/name=kube-vip\nkubectl get configmap -n kube-vip -l app.kubernetes.io/part-of=kube-vip\n```\nI have a three-node Kubernetes cluster with two load balancers using the same IP but different port numbers. This VIP appears on two nodes simultaneously.\n\n**To Reproduce**\nSteps to reproduce the behavior:\n1."
+      },
+      {
+        "title": "Apply the fix for svc_election=true will cause load balancers with the same…",
+        "description": "This should fix #879\n\nThis PR introduces new annotation `kube-vip.io/leaseName: <name>` that will tie multiple services with single lease (so only one node will be a leader)..\n\nAdditionally fixed some issues I found with IP address deletion in ARP mode.\n\nEdit:\n\nAdded support for leader election in\n```yaml\napiVersion: v1\ndata:\n  cidr-qt-system: 10.106.109.9/32\nkind: ConfigMap\nmetadata:\n  annotations:\n    meta.helm.sh/release-name: kube-vip-cloud-provider\n  labels:\n    app.kubernetes.io/managed-by: Helm\n  name: kubevip\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kube-vip -l app.kubernetes.io/name=kube-vip\nkubectl get events -n kube-vip --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"svc_election=true will cause load balancers with the same…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This should fix #879\n\nThis PR introduces new annotation `kube-vip.io/leaseName: <name>` that will tie multiple services with single lease (so only one node will be a leader)..\n\nAdditionally fixed some issues I found with IP address deletion in ARP mode.\n\nEdit:\n\nAdded support for leader election in BGP mode and e2e tests for RT and BGP leader election with common lease.",
+      "codeSnippets": [
+        "apiVersion: v1\ndata:\n  cidr-qt-system: 10.106.109.9/32\nkind: ConfigMap\nmetadata:\n  annotations:\n    meta.helm.sh/release-name: kube-vip-cloud-provider\n  labels:\n    app.kubernetes.io/managed-by: Helm\n  name: kubevip",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  annotations:\n    kube-vip.io/loadbalancerIPs: 10.106.109.9\n  labels:\n    implementation: kube-vip\n  name: traefik-lb-1\nspec:\n  ports:\n  - name: agent\n    port: 8000\n    protocol: TCP\n    targetPort: agent\n  selector:\n    app.kubernetes.io/instance: traefik\n    app.kubernetes.io/name: traefik\n  type: LoadBalancer",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  annotations:\n    kube-vip.io/loadbalancerIPs: 10.106.109.9\n  labels:\n    implementation: kube-vip\n  name: traefik-lb-2\nspec:\n  ports:\n  - name: web\n    port: 80\n    protocol: TCP\n    targetPort: web\n  selector:\n    app.kubernetes.io/instance: traefik\n    app.kubernetes.io/name: traefik\n  type: LoadBalancer"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-vip",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kube-vip"
+    ],
+    "targetResourceKinds": [
+      "Configmap",
+      "Daemonset",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kube-vip/kube-vip/issues/879",
+      "repo": "https://github.com/kube-vip/kube-vip",
+      "pr": "https://github.com/kube-vip/kube-vip/pull/1235"
+    },
+    "reactions": 2,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kube-vip installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:39:02.123Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
