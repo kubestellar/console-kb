@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubevela-1851-feature-add-support-for-a-trait-to-patch-to-any-outputs-defined-be",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubevela: [Feature] Add support for a trait to patch to any outputs defined before it and not just the output defined by the corresponding component.",
+    "description": "[Feature] Add support for a trait to patch to any outputs defined before it and not just the output defined by the corresponding component.. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kubevela deployment",
+        "description": "Verify your kubevela version and configuration:\n```bash\nkubectl get pods -n kubevela -l app.kubernetes.io/name=kubevela\nhelm list -n kubevela 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kubevela installation."
+      },
+      {
+        "title": "Review kubevela configuration",
+        "description": "Inspect the relevant kubevela configuration:\n```bash\nkubectl get all -n kubevela -l app.kubernetes.io/name=kubevela\nkubectl get configmap -n kubevela -l app.kubernetes.io/part-of=kubevela\n```\nCurrently, traits can patch the workload of the corresponding components only. It is not possible for traits to patch workloads of other traits. This tends to make a trait overly complex when its targeting a fairly complex resource. For e.g."
+      },
+      {
+        "title": "Apply the fix for [Feature] Add support for a trait to patch to any outputs\u2026",
+        "description": "As  said, the first point, also is the main point of this issue, is already implemented in the form of `patch: context: outputs: resourcename`. However, the `context` here can override the global context in our cue files, so I'll submit a PR to fix that.\nAs for the second point, I think we can\n```yaml\napiVersion: core.oam.dev/v1beta1\nkind: Application\nmetadata:\n  name: sample-service\nspec:\n  components:\n    - name: myapp\n      type: webservice\n      properties:\n        image: myregistry.io/projectid/sample-service\n        port: 8000\n      traits:\n        - type: readiness-probes\n          properties:\n            http:\n              path: /health\n              port: 8090\n              interval: 20s\n        # These are the traits of concern\n        - type: service-mesh\n          properties:\n            enabled: true\n        - type: mesh-routes\n          properties:\n            routes:\n       \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kubevela -l app.kubernetes.io/name=kubevela\nkubectl get events -n kubevela --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Feature] Add support for a trait to patch to any outputs\u2026\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "As  said, the first point, also is the main point of this issue, is already implemented in the form of `patch: context: outputs: resourcename`. However, the `context` here can override the global context in our cue files, so I'll submit a PR to fix that.\nAs for the second point, I think we can discuss that in another issue, and this issue can be closed when my PR is merged.",
+      "codeSnippets": [
+        "apiVersion: core.oam.dev/v1beta1\nkind: Application\nmetadata:\n  name: sample-service\nspec:\n  components:\n    - name: myapp\n      type: webservice\n      properties:\n        image: myregistry.io/projectid/sample-service\n        port: 8000\n      traits:\n        - type: readiness-probes\n          properties:\n            http:\n              path: /health\n              port: 8090\n              interval: 20s\n        # These are the traits of concern\n        - type: service-mesh\n          properties:\n            enabled: true\n        - type: mesh-routes\n          properties:\n            routes:\n               - name: \"api-routes\"\n                 match:\n                   - uri:\n                       prefix: \"/v1/api\"\n        - type: loadbalancing-policy\n          properties:\n            policy: R",
+        "# This resource is created by the service mesh trait\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: myapp\nspec:\n  hosts:\n  - myapp\n  http:\n  - name: \"api-routes\"                 # This route is generated from the mesh-routes trait\n    match:\n    - uri:\n        prefix: \"/v1/api\"\n    route:\n    - destination:\n        host: myapp\n\n# The resource is defined via the service mesh trait\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: myapp\nspec:\n  host: myapp\n  trafficPolicy:\n    loadBalancer:                          #This part is generated from the loadbalancing trait\n      simple: ROUND_ROBIN\n    connectionPool:                        #This part is generated from the circuit breaking trait\n      tcp:\n        maxConnections: 100\n  ",
+        "apiVersion: core.oam.dev/v1beta1\nkind: TraitDefinition\nmetadata:\n  name: patch\nspec:\n  schematic:\n    cue:\n      template: |\n        patch: {spec: template: metadata: labels: app: context.name}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubevela",
+      "incubating",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kubevela"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubevela/kubevela/issues/1851",
+      "repo": "https://github.com/kubevela/kubevela"
+    },
+    "reactions": 4,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "vela",
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubevela installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:27:35.891Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
