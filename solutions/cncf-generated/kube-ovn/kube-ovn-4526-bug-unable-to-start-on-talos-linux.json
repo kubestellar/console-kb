@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-ovn-4526-bug-unable-to-start-on-talos-linux",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-ovn: [BUG] Unable to start on Talos Linux",
+    "description": "[BUG] Unable to start on Talos Linux. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kube-ovn troubleshoot symptoms",
+        "description": "Check for the issue in your kube-ovn deployment:\n```bash\nkubectl get pods -n kube-system -l app.kubernetes.io/name=kube-ovn\nkubectl logs -l app.kubernetes.io/name=kube-ovn -n kube-system --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kube-ovn configuration",
+        "description": "Inspect the relevant kube-ovn configuration:\n```bash\nkubectl get all -n kube-system -l app.kubernetes.io/name=kube-ovn\nkubectl get configmap -n kube-system -l app.kubernetes.io/part-of=kube-ovn\n```\nWhen the `ovs-ovn` daemonset tries to start the `openvswitch` container fails to start with this error:\n\n```\n\n```\n\nI have tried changing the securityContext to run this container privileged and as root but it still has this error."
+      },
+      {
+        "title": "Apply the fix for [BUG] Unable to start on Talos Linux",
+        "description": "I used Cozystack's image and setup Talos to use Kube-OVN, I still get cryptics errors concerning iptables:\n\n```\nfailed to create iptables rule \"-m set --match-set ovn40subnets src -j ACCEPT\": running [/usr/local/sbin/iptables -t filter -I INPUT 1 -m set --match-set ovn40subnets src -j ACCEPT\n```yaml\n/kube-ovn/start-ovs.sh: line 83: /usr/local/sbin/iptables: Operation not permitted\n```"
+      },
+      {
+        "title": "Upgrade kube-ovn to include the fix",
+        "description": "If the fix is included in a newer release, upgrade kube-ovn:\n```bash\nhelm repo update\nhelm upgrade kube-ovn kube-ovn/kube-ovn --namespace kube-system\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n kube-system\nhelm list -n kube-system\n```"
+      },
+      {
+        "title": "Confirm [BUG] Unable to start on Talos Linux is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kube-ovn -n kube-system --tail=50 --since=5m\nkubectl get events -n kube-system --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "I used Cozystack's image and setup Talos to use Kube-OVN, I still get cryptics errors concerning iptables:\n\n```\nfailed to create iptables rule \"-m set --match-set ovn40subnets src -j ACCEPT\": running [/usr/local/sbin/iptables -t filter -I INPUT 1 -m set --match-set ovn40subnets src -j ACCEPT --wait]: exit status 1: iptables v1.8.10 (nf_tables): Can't open socket to ipset.",
+      "codeSnippets": [
+        "/kube-ovn/start-ovs.sh: line 83: /usr/local/sbin/iptables: Operation not permitted",
+        "---\ncni_conf:\n  CNI_CONFIG_PRIORITY: \"10\"\n  MOUNT_LOCAL_BIN_DIR: false\nfunc:\n  ENABLE_NP: false\nipv4:\n  POD_CIDR: \"10.131.0.0/16\"\n  POD_GATEWAY: \"10.131.0.1\"\n  SVC_CIDR: \"10.128.0.0/20\"\n  JOIN_CIDR: \"10.130.0.0/24\"\n  # PINGER_EXTERNAL_ADDRESS: \"1.1.1.1\"\n  # PINGER_EXTERNAL_DOMAIN: \"kube-ovn.io.\"\nnamespace: \"kube-system\"\nDISABLE_MODULES_MANAGEMENT: true\nOPENVSWITCH_DIR: \"/var/kube-ovn/openvswitch\"\nOVN_DIR: \"/var/kube-ovn/ovn\"",
+        "securityContext:\n     runAsUser: 0\n     privileged: true\n     capabilities:\n       add:\n         - NET_ADMIN\n         - NET_BIND_SERVICE\n         - SYS_MODULE\n         - SYS_NICE\n         - SYS_ADMIN"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-ovn",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kube-ovn"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Daemonset",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeovn/kube-ovn/issues/4526",
+      "repo": "https://github.com/kubeovn/kube-ovn"
+    },
+    "reactions": 2,
+    "comments": 25,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with Kube-OVN installed as the CNI plugin."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:37:32.711Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
