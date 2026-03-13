@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-ovn-2707-support-for-using-talos-linux",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-ovn: Support for using Talos Linux",
+    "description": "Support for using Talos Linux. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kube-ovn troubleshoot symptoms",
+        "description": "Check for the issue in your Kube-OVN deployment on Talos Linux:\n```bash\nkubectl get pods -n kube-system -l app=kube-ovn\nkubectl logs -l app=ovs -n kube-system --tail=100 | grep -i error\n```\nLook for errors related to module loading or filesystem access on Talos Linux."
+      },
+      {
+        "title": "Review kube-ovn configuration",
+        "description": "Inspect the Kube-OVN configuration on Talos Linux:\n```bash\nkubectl get pods -n kube-system -l app=kube-ovn\nkubectl get nodes -o wide\n```\nTalos Linux has a read-only filesystem except for `/var`. Kube-OVN requires write access to directories like `/etc/origin/openvswitch`, `/opt/cni/bin`, and `/etc/cni/net.d`, which are read-only on Talos."
+      },
+      {
+        "title": "Apply the fix for Support for using Talos Linux",
+        "description": "The fix involves bind-mounting Kube-OVN's required directories to writable paths under `/var` on Talos Linux.\n\nKey error on Talos:\n```\nmodprobe: FATAL: Module openvswitch not found in directory /lib/modules/6.1.23-talos\nnsenter: cannot open /var/run/netns/*: No such file or directory\novs-vswitchd is not running\n```\n\nWorkaround: Talos machine config needs to include extensions or bind mounts for the required kernel modules and writable paths. The `kubectl-ko` tool should also be bundled in the container images rather than requiring installation at `/usr/local/bin`.\n\nSee the source issue for community discussion: https://github.com/kubeovn/kube-ovn/issues/2707"
+      },
+      {
+        "title": "Confirm Support for using Talos Linux is resolved",
+        "description": "Verify the fix by checking that Kube-OVN pods are running on Talos Linux:\n```bash\nkubectl get pods -n kube-system -l app=kube-ovn\nkubectl get pods -n kube-system -l app=ovs\nkubectl logs -l app=ovs -n kube-system --tail=50 --since=5m\n```\nConfirm that OVS and OVN components start correctly without filesystem errors."
+      }
+    ],
+    "resolution": {
+      "summary": ">  According to the [documentation](https://www.talos.dev/v1.4/learn-more/architecture/#the-file-system) only /var is fully writable\n\n Thanks for the information, there are also other directories that Kube-OVN need to write like `/etc/origin`, `/opt/cni`, `/etc/cni` and so on. I think it's more suitable to bindmount these directories to the `/var`",
+      "codeSnippets": [
+        "* ovsdb-server is not running\n * Starting ovsdb-server\n * Configuring Open vSwitch system IDs\n * Enabling remote OVSDB managers\nmodprobe: FATAL: Module openvswitch not found in directory /lib/modules/6.1.23-talos\n * Inserting openvswitch module\nrmmod: ERROR: Module bridge is builtin.\n * removing bridge module\nnsenter: cannot open /var/run/netns/*: No such file or directory\nnsenter: cannot open /var/run/netns/*: No such file or directory\n * ovn-controller is not running\n * ovs-vswitchd is not running\n * Exiting ovsdb-server (10936)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-ovn",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kube-ovn"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeovn/kube-ovn/issues/2707",
+      "repo": "https://github.com/kubeovn/kube-ovn"
+    },
+    "reactions": 2,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kube-ovn installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:38:59.797Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
