@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "harbor-11083-cannot-change-tag-retention-schedule-v1-10-1",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "harbor: Cannot change tag retention schedule - v1.10.1",
+    "description": "Cannot change tag retention schedule - v1.10.1. This issue affects 12+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify harbor troubleshoot symptoms",
+        "description": "Check for the issue in your harbor deployment:\n```bash\nkubectl get pods -n harbor -l app.kubernetes.io/name=harbor\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=100 | grep -i error\n```\nLook for error: `500 {\"code\":10006,\"message\":\"stop job failed with error\",\"details\":\"mismatch job status for stopping job: 680d1e1161c9bc`"
+      },
+      {
+        "title": "Review harbor configuration",
+        "description": "Inspect the relevant harbor configuration:\n```bash\nkubectl get all -n harbor -l app.kubernetes.io/name=harbor\nkubectl get configmap -n harbor -l app.kubernetes.io/part-of=harbor\n```\nWhenever I try to update the schedule for tag retention rules, I get an internal server error."
+      },
+      {
+        "title": "Upgrade Harbor to fix tag retention scheduling",
+        "description": "Upgrade Harbor to a version that includes the tag retention schedule fix:\n```bash\n# Update the Harbor Helm repo\nhelm repo update harbor\n\n# Upgrade Harbor\nhelm upgrade harbor harbor/harbor -n harbor -f values.yaml\n\n# Verify pods restart successfully\nkubectl rollout status deployment/harbor-core -n harbor\nkubectl rollout status deployment/harbor-jobservice -n harbor\n```\nAfter upgrading, you should be able to modify tag retention schedules without errors."
+      },
+      {
+        "title": "Confirm Cannot change tag retention schedule - v1.10.1 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=harbor -n harbor --tail=50 --since=5m\nkubectl get events -n harbor --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `500 {\"code\":10006,\"message\":\"stop job failed with error\",\"details\":\"mismatch job status for stopping job: 680d1e1161c9bc` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Tag retention schedule changes fail in Harbor v1.10.1 because the system attempts to stop a running job that has already completed (in Success, Error, or Stopped state), which returns an error. The fix returns nil instead of an error when trying to stop a job that is already in a final state, and improves the periodic job unschedule function to handle this case gracefully.",
+      "codeSnippets": [
+        "==> jobservice.log <==\n\nMar 15 07:39:13 172.23.0.1 jobservice[75447]: 2020-03-15T07:39:13Z [ERROR] [/jobservice/api/handler.go:288]: Serve http request 'POST /api/v1/jobs/680d1e1161c9bc0449a766eb' error: 500 {\"code\":10006,\"message\":\"stop job failed with error\",\"details\":\"mismatch job status for stopping job: 680d1e1161c9bc0449a766eb, job status Error is behind Running\"}\n\n==> core.log <==\n\nMar 15 07:39:13 172.23.0.1 core[75447]: 2020-03-15T07:39:13Z [ERROR] [/common/api/base.go:233]: status behind error\n\nMar 15 07:39:13 172.23.0.1 core[75447]: 2020-03-15T07:39:13Z [ERROR] [/common/api/base.go:73]: PUT /api/retentions/1 failed with error: {\"code\":500,\"message\":\"Internal Server Error\"}\n\nMar 15 07:39:13 172.23.0.1 core[75447]: 2020/03/15 07:39:13.460 #033[1;44m[D]#033[0m [server.go:2774]  |"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "harbor",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "harbor"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/goharbor/harbor/issues/11083",
+      "repo": "https://github.com/goharbor/harbor",
+      "pr": "https://github.com/goharbor/harbor/pull/12121"
+    },
+    "reactions": 12,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A running Kubernetes cluster with harbor installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:19:24.326Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
