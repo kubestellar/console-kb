@@ -1,0 +1,72 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-32623-oauth-login-error-with-custom-scheme",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: OAuth login error with custom scheme",
+    "description": "Keycloak rejects valid redirect URIs that use custom schemes with empty hostnames (e.g., `immich.app:///oauth-redirect`). While RFC 3986 allows empty authority sections, the KeycloakUriBuilder did not support them, causing OAuth login failures for mobile and desktop applications that use custom URI schemes. This issue affects 22+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the custom scheme redirect URI error",
+        "description": "Check your Keycloak logs for redirect URI validation errors:\n```bash\n# Check Keycloak logs for URI-related errors:\ndocker logs keycloak 2>&1 | grep -i 'redirect_uri\\|invalid.*uri'\n\n# Verify your Keycloak version:\ndocker exec keycloak /opt/keycloak/bin/kc.sh show-config\n```\nThe error occurs when a client uses a redirect URI with a custom scheme and no hostname, such as `immich.app:///oauth-redirect` or `myapp:///callback`."
+      },
+      {
+        "title": "Understand the root cause",
+        "description": "According to [RFC 3986](https://datatracker.ietf.org/doc/html/rfc3986#section-3), empty hostnames and authority sections are valid in URIs. However, Keycloak's `KeycloakUriBuilder` rejected these URIs, preventing OAuth login flows for applications (especially mobile and desktop apps) that use custom URI schemes without a hostname component."
+      },
+      {
+        "title": "Upgrade to the fixed version",
+        "description": "Upgrade your Keycloak installation to a version that includes the fix from [PR #32928](https://github.com/keycloak/keycloak/pull/32928):\n```bash\ndocker pull quay.io/keycloak/keycloak:latest\ndocker stop keycloak && docker rm keycloak\ndocker run -d --name keycloak \\\n  -e KEYCLOAK_ADMIN=admin \\\n  -e KEYCLOAK_ADMIN_PASSWORD=admin \\\n  -p 8080:8080 \\\n  quay.io/keycloak/keycloak:latest start-dev\n```\nThe fix updates the `KeycloakUriBuilder` to allow URIs without a hostname, as permitted by RFC 3986."
+      },
+      {
+        "title": "Confirm OAuth login with custom scheme works",
+        "description": "Verify the fix:\n1. Configure a client with a redirect URI using a custom scheme without a hostname (e.g., `immich.app:///oauth-redirect`)\n2. Initiate an OAuth login flow from the application\n3. Confirm that Keycloak accepts the redirect URI and completes the login flow without errors\n4. Verify the authorization code is delivered to the correct callback URI"
+      }
+    ],
+    "resolution": {
+      "summary": "The fix updates Keycloak's KeycloakUriBuilder to allow URIs without a hostname, as permitted by RFC 3986. This enables OAuth login flows for mobile and desktop applications that use custom URI schemes with empty authority sections (e.g., `immich.app:///oauth-redirect`).",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/32623",
+      "repo": "https://github.com/keycloak/keycloak",
+      "pr": "https://github.com/keycloak/keycloak/pull/32928"
+    },
+    "reactions": 22,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes) with client configuration access."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:49:13.347Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
