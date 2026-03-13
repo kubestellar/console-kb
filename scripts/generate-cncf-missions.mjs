@@ -957,13 +957,18 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     const missionJson = buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty })
     const content = Buffer.from(JSON.stringify(missionJson, null, 2) + '\n').toString('base64')
 
+    const BOT_NAME = 'github-actions[bot]'
+    const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
+    const commitMessage = `🌱 Add ${project.name}: ${truncateAtWordBoundary(issue.title, 60)} mission\n\nSigned-off-by: ${BOT_NAME} <${BOT_EMAIL}>`
     const fileResp = await fetch(`${apiBase}/contents/${filePath}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify({
-        message: `🌱 Add ${project.name}: ${truncateAtWordBoundary(issue.title, 60)} mission`,
+        message: commitMessage,
         content,
         branch: branchName,
+        committer: { name: BOT_NAME, email: BOT_EMAIL },
+        author: { name: BOT_NAME, email: BOT_EMAIL },
       }),
     })
     if (!fileResp.ok) {
