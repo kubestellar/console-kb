@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-9758-user-attributes-with-a-text-more-than-255-characters",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: User attributes with a text more than 255 characters",
+    "description": "User attributes with a text more than 255 characters. Requested by 30+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current Keycloak setup",
+        "description": "Verify your Keycloak version and database configuration:\n```bash\n# If running in a container:\ndocker exec keycloak /opt/keycloak/bin/kc.sh show-config\n\n# Check the container image version:\ndocker inspect keycloak | grep -i image\n```\nThis issue was resolved in Keycloak 22+ with the new user storage model."
+      },
+      {
+        "title": "Understand the 255-character limitation",
+        "description": "In older Keycloak versions, the `USER_ATTRIBUTE` table used `VARCHAR(255)` for the `value` column. This meant any user attribute longer than 255 characters would be silently truncated or cause errors.\n\nThis was a significant limitation for use cases such as storing certificates, long JSON payloads, or detailed user metadata in custom attributes."
+      },
+      {
+        "title": "Apply the fix",
+        "description": "**For Keycloak 22+ (Quarkus-based, new user storage):**\nThe new user storage model uses `TEXT` or `CLOB` column types, removing the 255-character limit. Upgrade to Keycloak 22+ and the limitation is resolved automatically.\n\n**For older Keycloak versions (legacy Wildfly-based):**\nYou can manually alter the database column:\n```sql\n-- For PostgreSQL:\nALTER TABLE user_attribute ALTER COLUMN value TYPE TEXT;\n\n-- For MySQL/MariaDB:\nALTER TABLE user_attribute MODIFY value TEXT;\n\n-- For H2 (dev only):\nALTER TABLE user_attribute ALTER COLUMN value SET DATA TYPE VARCHAR(4000);\n```\nSee the [source PR](https://github.com/keycloak/keycloak/pull/16829) for the upstream fix."
+      },
+      {
+        "title": "Verify long attributes are stored correctly",
+        "description": "Test that user attributes longer than 255 characters are stored and retrieved correctly:\n```bash\n# Set a long user attribute via the Admin REST API:\ncurl -X PUT -H \"Authorization: Bearer $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"attributes\": {\"longattr\": [\"'$(python3 -c \"print('A'*500)\")'\"]}}' \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID\n\n# Verify it was stored fully:\ncurl -s -H \"Authorization: Bearer $TOKEN\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID \\\n  | jq '.attributes.longattr[0] | length'\n```\nThe returned length should be 500, confirming the full attribute was stored."
+      }
+    ],
+    "resolution": {
+      "summary": "The 255-character limit on user attributes was caused by the VARCHAR(255) column type in the USER_ATTRIBUTE table. This was resolved in Keycloak 22+ with the new user storage model which uses TEXT/CLOB column types. For older versions, the database column can be manually altered to support longer values.",
+      "codeSnippets": [
+        "ALTER TABLE user_attribute ALTER COLUMN value TYPE TEXT;"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "feature"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/9758",
+      "repo": "https://github.com/keycloak/keycloak",
+      "pr": "https://github.com/keycloak/keycloak/pull/16829"
+    },
+    "reactions": 30,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes with the Keycloak Operator) with database access for schema changes on older versions."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:48:53.495Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
