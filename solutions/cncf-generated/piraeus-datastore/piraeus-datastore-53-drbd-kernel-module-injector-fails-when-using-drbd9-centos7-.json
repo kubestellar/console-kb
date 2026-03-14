@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "piraeus-datastore-53-drbd-kernel-module-injector-fails-when-using-drbd9-centos7-",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "piraeus-datastore: drbd-kernel-module-injector fails when using drbd9-centos7:v9.0.23 on CentOS 7.8",
+    "description": "drbd-kernel-module-injector fails when using drbd9-centos7:v9.0.23 on CentOS 7.8. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify piraeus-datastore troubleshoot symptoms",
+        "description": "Check for the issue in your piraeus-datastore deployment:\n```bash\nkubectl get pods -n piraeus-datastore -l app.kubernetes.io/name=piraeus-datastore\nkubectl logs -l app.kubernetes.io/name=piraeus-datastore -n piraeus-datastore --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review piraeus-datastore configuration",
+        "description": "Inspect the relevant piraeus-datastore configuration:\n```bash\nkubectl get all -n piraeus-datastore -l app.kubernetes.io/name=piraeus-datastore\nkubectl get configmap -n piraeus-datastore -l app.kubernetes.io/part-of=piraeus-datastore\n```\nCompile fails when using drbd9-centos7:v9.0.23 on CentOS 7.8\n\n```\n# kubectl logs -f piraeus-op-ns-node-mf7zf -c drbd-kernel-module-injector\nNeed a git checkout to regenerate drbd/.drbd_git_revision\nmake[1]: Entering directory"
+      },
+      {
+        "title": "Apply the fix for drbd-kernel-module-injector fails when using…",
+        "description": "While working on #53, it became clear that there is no way to set\nthe resources for the injector init container. This init container\nis special however, as the range of required resources varies between\ndifferent injection modes.\n\nThe best solution is: let the user decide. This commit adds a\n```yaml\n# kubectl logs -f piraeus-op-ns-node-mf7zf -c drbd-kernel-module-injector\nNeed a git checkout to regenerate drbd/.drbd_git_revision\nmake[1]: Entering directory `/tmp/pkg/drbd-9.0.23-1/drbd'\n\n    Calling toplevel makefile of kernel source tree, which I believe is in\n    KDIR=/lib/modules/3.10.0-1127.10.1.el7.x86_64/build\n\nmake -C /lib/modules/3.10.0-1127.10.1.el7.x86_64/build   M=/tmp/pkg/drbd-9.0.23-1/drbd  modules\n  COMPAT  before_4_13_kernel_read\n  COMPAT  alloc_workqueue_takes_fmt\n  COMPAT  blkdev_issue_zeroout_discard\n  COMPAT  drbd_release_returns_void\n  COMPAT  genl_policy_in_ops\n  COMPA\n```"
+      },
+      {
+        "title": "Confirm drbd-kernel-module-injector fails when using… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=piraeus-datastore -n piraeus-datastore --tail=50 --since=5m\nkubectl get events -n piraeus-datastore --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "While working on #53, it became clear that there is no way to set\nthe resources for the injector init container. This init container\nis special however, as the range of required resources varies between\ndifferent injection modes.\n\nThe best solution is: let the user decide. This commit adds a new\nvalue to the satelliteSet resource \"kernelModuleInjectionResources\".",
+      "codeSnippets": [
+        "# kubectl logs -f piraeus-op-ns-node-mf7zf -c drbd-kernel-module-injector\nNeed a git checkout to regenerate drbd/.drbd_git_revision\nmake[1]: Entering directory `/tmp/pkg/drbd-9.0.23-1/drbd'\n\n    Calling toplevel makefile of kernel source tree, which I believe is in\n    KDIR=/lib/modules/3.10.0-1127.10.1.el7.x86_64/build\n\nmake -C /lib/modules/3.10.0-1127.10.1.el7.x86_64/build   M=/tmp/pkg/drbd-9.0.23-1/drbd  modules\n  COMPAT  before_4_13_kernel_read\n  COMPAT  alloc_workqueue_takes_fmt\n  COMPAT  blkdev_issue_zeroout_discard\n  COMPAT  drbd_release_returns_void\n  COMPAT  genl_policy_in_ops\n  COMPAT  have_SHASH_DESC_ON_STACK\n  COMPAT  have_WB_congested_enum\n  COMPAT  have_allow_kernel_signal\n  COMPAT  have_atomic_dec_if_positive_linux\n  COMPAT  have_atomic_in_flight\n  COMPAT  have_bd_claim_by_d",
+        "mkdir -p /drbd/drbd/.compat_test.4.15.18/ ; var=`echo COMPAT_have_blk_queue_split_q_bio_bioset | tr -- -a-z _A-Z | tr -dc A-Z0-9_` ; if gcc -Wp,-MD,/drbd/drbd/.compat_test.4.15.18/.have_blk_queue_split_q_bio_bioset.result.d  -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/7/include -I/drbd/drbd -I/drbd/drbd/drbd-headers  -I./arch/x86/include -I./arch/x86/include/generated  -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/kconfig.h -Iubuntu/include  -D__KERNEL__ -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fshort-wchar -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -fno-PIE -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -m64 -falign-jum",
+        "$ kubectl version\nClient Version: version.Info{Major:\"1\", Minor:\"18\", GitVersion:\"v1.18.0\", GitCommit:\"9e991415386e4cf155a24b1da15becaa390438d8\", GitTreeState:\"clean\", BuildDate:\"2020-03-25T14:58:59Z\", GoVersion:\"go1.13.8\", Compiler:\"gc\", Platform:\"linux/amd64\"}\nServer Version: version.Info{Major:\"1\", Minor:\"18\", GitVersion:\"v1.18.0\", GitCommit:\"9e991415386e4cf155a24b1da15becaa390438d8\", GitTreeState:\"clean\", BuildDate:\"2020-03-25T14:50:46Z\", GoVersion:\"go1.13.8\", Compiler:\"gc\", Platform:\"linux/amd64\"}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "piraeus-datastore",
+      "sandbox",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "piraeus-datastore"
+    ],
+    "targetResourceKinds": [
+      "Job",
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/piraeusdatastore/piraeus-operator/issues/53",
+      "repo": "https://github.com/piraeusdatastore/piraeus-operator",
+      "pr": "https://github.com/piraeusdatastore/piraeus-operator/pull/66"
+    },
+    "reactions": 1,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with piraeus-datastore installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:41:24.473Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
