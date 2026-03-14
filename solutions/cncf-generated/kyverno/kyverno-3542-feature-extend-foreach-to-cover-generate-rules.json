@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-3542-feature-extend-foreach-to-cover-generate-rules",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: [Feature] Extend `foreach` to cover generate rules",
+    "description": "[Feature] Extend `foreach` to cover generate rules. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kyverno deployment",
+        "description": "Verify your kyverno version and configuration:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nhelm list -n kyverno 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kyverno installation."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\n### Problem Statement\n\nThe `foreach` ability covers validate and mutate rules, but not generate."
+      },
+      {
+        "title": "Apply the fix for [Feature] Extend `foreach` to cover generate rules",
+        "description": "Extends foreach to cover generate rules.\r\r\nDone 👍🏽 \n\n### Proof Manifests\n\nIf the pollicy given below is applied then multiple configMap will get created on the creation of a pod:\n\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: basic-policy2\nspec:\n  rules:\n  - name:\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: basic-policy2\nspec:\n  rules:\n  - name: test-foreach-generate\n    match:\n      any:\n      - resources:\n          kinds:\n          - Pod\n    generate:\n      foreach:\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n        apiVersion: v1\n        name: \"custom-created-configmap\"\n        namespace: \"{{request.object.metadata.namespace}}\"\n        synchronize: false\n        data:\n          data:\n            foo: \"bar is my container name\"\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n      \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Feature] Extend `foreach` to cover generate rules\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Extends foreach to cover generate rules.\r\r\nDone 👍🏽 \n\n### Proof Manifests\n\nIf the pollicy given below is applied then multiple configMap will get created on the creation of a pod:\n\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: basic-policy2\nspec:\n  rules:\n  - name: test-foreach-generate\n    match:\n      any:\n      - resources:\n          kinds:\n          - Pod\n   ",
+      "codeSnippets": [
+        "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: basic-policy2\nspec:\n  rules:\n  - name: test-foreach-generate\n    match:\n      any:\n      - resources:\n          kinds:\n          - Pod\n    generate:\n      foreach:\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n        apiVersion: v1\n        name: \"custom-created-configmap\"\n        namespace: \"{{request.object.metadata.namespace}}\"\n        synchronize: false\n        data:\n          data:\n            foo: \"bar is my container name\"\n      - list: \"request.object.spec.containers\"\n        kind: ConfigMap\n        apiVersion: v1\n        name: \"{{element.name}}-config\"\n        namespace: \"{{request.object.metadata.namespace}}\"\n        synchronize: false\n        data:\n          data:\n            foo: \"{{element",
+        "apiVersion: v1\nkind: Pod\nmetadata:\n  name: static-web\n  labels:\n    role: myrole\nspec:\n  containers:\n    - name: web\n      image: nginx\n      ports:\n        - name: web\n          containerPort: 80\n          protocol: TCP",
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: roles-dictionary\n  namespace: default\ndata:\n  allowed-roles: \"[\\\"cluster-admin\\\", \\\"cluster-operator\\\", \\\"tenant-admin\\\"]\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Configmap",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/3542",
+      "repo": "https://github.com/kyverno/kyverno",
+      "pr": "https://github.com/kyverno/kyverno/pull/4386"
+    },
+    "reactions": 12,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:25:10.827Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
