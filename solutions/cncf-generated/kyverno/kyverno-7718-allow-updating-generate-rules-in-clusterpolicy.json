@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-7718-allow-updating-generate-rules-in-clusterpolicy",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: allow updating \"generate\" rules in ClusterPolicy",
+    "description": "allow updating \"generate\" rules in ClusterPolicy. Requested by 9+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kyverno deployment",
+        "description": "Verify your kyverno version and configuration:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nhelm list -n kyverno 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kyverno installation."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\nAs of Kyverno 1.10 many fields in generate rules are now immutable (see PR https://github.com/kyverno/kyverno/pull/6451)."
+      },
+      {
+        "title": "Apply the fix for allow updating \"generate\" rules in ClusterPolicy",
+        "description": "> While disabling synchronization is a viable solution to the issue of immutable rules, it presents several challenges:\n> \n> * Temporarily turning off synchronization could lead to unforeseen issues in policies that depend on syncing attributes from the source to the generated objects.\n```yaml\nspec:\n          generateExisting: true\n          rules:\n            - name: sync-certificate-secret\n              match:\n                any:\n                  - resources:\n                      kinds:\n                        - Namespace\n                      namespaces:\n                        - one\n                        - two\n              generate:\n                kind: Secret\n                apiVersion: v1\n                name: certificate\n                namespace: \"{{request.object.metadata.name}}\"\n                synchronize: true\n                clone:\n                  namespace: ku\n```"
+      },
+      {
+        "title": "Upgrade kyverno to include the fix",
+        "description": "If the fix is included in a newer release, upgrade kyverno:\n```bash\nhelm repo update\nhelm upgrade kyverno kyverno/kyverno --namespace kyverno\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n kyverno\nhelm list -n kyverno\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"allow updating \"generate\" rules in ClusterPolicy\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "> While disabling synchronization is a viable solution to the issue of immutable rules, it presents several challenges:\n> \n> * Temporarily turning off synchronization could lead to unforeseen issues in policies that depend on syncing attributes from the source to the generated objects.",
+      "codeSnippets": [
+        "spec:\n          generateExisting: true\n          rules:\n            - name: sync-certificate-secret\n              match:\n                any:\n                  - resources:\n                      kinds:\n                        - Namespace\n                      namespaces:\n                        - one\n                        - two\n              generate:\n                kind: Secret\n                apiVersion: v1\n                name: certificate\n                namespace: \"{{request.object.metadata.name}}\"\n                synchronize: true\n                clone:\n                  namespace: kube-system\n                  name: certificate"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/7718",
+      "repo": "https://github.com/kyverno/kyverno"
+    },
+    "reactions": 9,
+    "comments": 29,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:25:49.179Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
