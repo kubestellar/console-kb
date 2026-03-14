@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "istio-16458-any-http-service-will-block-all-https-tcp-traffic-on-the-same-port",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "istio: Any HTTP service will block all HTTPS/TCP traffic on the same port",
+    "description": "Any HTTP service will block all HTTPS/TCP traffic on the same port. Requested by 18+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current istio deployment",
+        "description": "Verify your istio version and configuration:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nhelm list -n istio 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working istio installation."
+      },
+      {
+        "title": "Review istio configuration",
+        "description": "Inspect the relevant istio configuration:\n```bash\nkubectl get all -n istio -l app.kubernetes.io/name=istio\nkubectl get configmap -n istio -l app.kubernetes.io/part-of=istio\n```\n(Assumes ALLOW_ANY mode)\n\nNormally, traffic to external HTTPS services works due to the ALLOW_ANY mode changes we added. However, when an http service is added on port 443 (or any port, but generally this happens on 443), this breaks."
+      },
+      {
+        "title": "Apply the fix for Any HTTP service will block all HTTPS/TCP traffic on the…",
+        "description": "One alternative solution -- reject http Services on 443. Not sure if that is a worse evil than the bug though...\n\nOr treat `http` on 443 as https or tcp (either one works). Both of these are pretty hacky\n```yaml\ncurl https://www.google.com # works\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nkubectl get events -n istio --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Any HTTP service will block all HTTPS/TCP traffic on the…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "One alternative solution -- reject http Services on 443. Not sure if that is a worse evil than the bug though...\n\nOr treat `http` on 443 as https or tcp (either one works). Both of these are pretty hacky",
+      "codeSnippets": [
+        "curl https://www.google.com # works",
+        "cat <<EOF | kaf -\napiVersion: networking.istio.io/v1alpha3\nkind: ServiceEntry\nmetadata:\n  name: https-breaker\nspec:\n  hosts:\n  - wikipedia.org\n  location: MESH_EXTERNAL\n  ports:\n  - number: 443\n    name: http\n    protocol: HTTP\n  resolution: DNS\nEOF",
+        "$ curl https://www.google.com\ncurl: (35) error:140770FC:SSL routines:SSL23_GET_SERVER_HELLO:unknown protocol."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "istio",
+      "graduated",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "istio"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/istio/istio/issues/16458",
+      "repo": "https://github.com/istio/istio"
+    },
+    "reactions": 18,
+    "comments": 56,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with istio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:19:18.812Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
