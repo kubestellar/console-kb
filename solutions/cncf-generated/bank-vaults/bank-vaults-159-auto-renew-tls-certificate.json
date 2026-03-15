@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "bank-vaults-159-auto-renew-tls-certificate",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "bank-vaults: Auto renew TLS certificate",
+    "description": "Auto renew TLS certificate. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current bank-vaults deployment",
+        "description": "Verify your bank-vaults version and configuration:\n```bash\nkubectl get pods -n bank-vaults -l app.kubernetes.io/name=bank-vaults\nhelm list -n bank-vaults 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working bank-vaults installation."
+      },
+      {
+        "title": "Review bank-vaults configuration",
+        "description": "Inspect the relevant bank-vaults configuration:\n```bash\nkubectl get all -n bank-vaults -l app.kubernetes.io/name=bank-vaults\nkubectl get configmap -n bank-vaults -l app.kubernetes.io/part-of=bank-vaults\n```\nThe Vault TLS certificate is valid for 1 year currently, we have would like to support auto upgrading this certificate via the operator. An initial implementation has been added: https://github.com/banzaicloud/bank-vaults/tree/tls-auto-renewal"
+      },
+      {
+        "title": "Apply the fix for Auto renew TLS certificate",
+        "description": "**1st step** - I had the same plan, an annotation will be added to the secret which describes the expiry time and we just read this annotation, let's say 1 week before the expiry time the operator updates the Secret.\n\n**2nd step** - To be honest, I wanted to just restart the Vault Pods in the StatefulSet (yearly 1 restart) by adding an annotation to the podSpec part (the same as for the TLS secret), which makes the implementation more neutral and cleaner, because in this way we don't have to\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Upgrade bank-vaults to include the fix",
+        "description": "If the fix is included in a newer release, upgrade bank-vaults:\n```bash\nhelm repo update\nhelm upgrade bank-vaults bank-vaults/bank-vaults --namespace bank-vaults\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n bank-vaults\nhelm list -n bank-vaults\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n bank-vaults -l app.kubernetes.io/name=bank-vaults\nkubectl get events -n bank-vaults --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Auto renew TLS certificate\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "**1st step** - I had the same plan, an annotation will be added to the secret which describes the expiry time and we just read this annotation, let's say 1 week before the expiry time the operator updates the Secret.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "bank-vaults",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "bank-vaults"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Statefulset",
+      "Secret"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/bank-vaults/bank-vaults/issues/159",
+      "repo": "https://github.com/bank-vaults/bank-vaults",
+      "pr": "https://github.com/bank-vaults/bank-vaults/pull/508"
+    },
+    "reactions": 3,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with bank-vaults installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:33:00.280Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
