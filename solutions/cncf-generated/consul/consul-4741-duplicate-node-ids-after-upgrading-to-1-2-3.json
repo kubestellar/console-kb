@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "consul-4741-duplicate-node-ids-after-upgrading-to-1-2-3",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "consul: Duplicate Node IDs after upgrading to 1.2.3",
+    "description": "Duplicate Node IDs after upgrading to 1.2.3. Requested by 10+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current consul deployment",
+        "description": "Verify your consul version and configuration:\n```bash\nkubectl get pods -n consul -l app.kubernetes.io/name=consul\nhelm list -n consul 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working consul installation."
+      },
+      {
+        "title": "Review consul configuration",
+        "description": "Inspect the relevant consul configuration:\n```bash\nkubectl get all -n consul -l app.kubernetes.io/name=consul\nkubectl get configmap -n consul -l app.kubernetes.io/part-of=consul\n```\nAfter upgrading to 1.2.3 hosts begin reporting the following when registering with the catalog. The node name for the host making the new reservation and the node name for the conflicted always match."
+      },
+      {
+        "title": "Apply the fix for Duplicate Node IDs after upgrading to 1.2.3",
+        "description": "`consul leave ; service consul restart` does the trick when we have this issue.\n\nOther way, as we did (for bare-metal servers), compute the node-id with a fixed ID for nodes. We are doing this with the output of dmidecode on our side this way (which is the same way as Consul was supposed to work on\n```yaml\n[ERR] consul: \"Catalog.Register\" RPC failed to server 10.246.104.20:8300: rpc error making \ncall: failed inserting node: Error while renaming Node ID: \"f282db6c-f22d-d183-b078-fb5a821dd7ce\": Node name alp-aot-ccm10.mydomain is reserved by node 2450fa9\n3-3bae-f22e-3a82-08c4d71e5719 with name alp-aot-ccm10.mydomain\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n consul -l app.kubernetes.io/name=consul\nkubectl get events -n consul --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Duplicate Node IDs after upgrading to 1.2.3\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "`consul leave ; service consul restart` does the trick when we have this issue.\n\nOther way, as we did (for bare-metal servers), compute the node-id with a fixed ID for nodes.",
+      "codeSnippets": [
+        "[ERR] consul: \"Catalog.Register\" RPC failed to server 10.246.104.20:8300: rpc error making \ncall: failed inserting node: Error while renaming Node ID: \"f282db6c-f22d-d183-b078-fb5a821dd7ce\": Node name alp-aot-ccm10.mydomain is reserved by node 2450fa9\n3-3bae-f22e-3a82-08c4d71e5719 with name alp-aot-ccm10.mydomain",
+        "raft: Failed to restore snapshot 13931-7840952-1542219582505: Unrecognized msg type 15"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "consul",
+      "community",
+      "service-mesh",
+      "feature"
+    ],
+    "cncfProjects": [
+      "consul"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/hashicorp/consul/issues/4741",
+      "repo": "https://github.com/hashicorp/consul"
+    },
+    "reactions": 10,
+    "comments": 47,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with consul installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:51:13.592Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
