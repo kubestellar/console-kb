@@ -1,0 +1,73 @@
+{
+  "version": "kc-mission-v1",
+  "name": "qdrant-804-rocksdb-investigate-compression-scheme-for-rocksdb",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "qdrant: [rocksdb] Investigate compression scheme for RocksDB",
+    "description": "[rocksdb] Investigate compression scheme for RocksDB. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current qdrant deployment",
+        "description": "Verify your qdrant version and configuration:\n```bash\nkubectl get pods -n qdrant -l app.kubernetes.io/name=qdrant\nhelm list -n qdrant 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working qdrant installation."
+      },
+      {
+        "title": "Review qdrant configuration",
+        "description": "Inspect the relevant qdrant configuration:\n```bash\nkubectl get all -n qdrant -l app.kubernetes.io/name=qdrant\nkubectl get configmap -n qdrant -l app.kubernetes.io/part-of=qdrant\n```\nA quick profiling session on a heavy write workload shows that Snappy can take up to 2% of CPU time.\n\nThe official doc says:\n\n```\nUse options.compression to specify the compression to use. \nBy default it is Snappy."
+      },
+      {
+        "title": "Apply the fix for [rocksdb] Investigate compression scheme for RocksDB",
+        "description": "Introduction of text field index immutable state.\n\nImmutable state has with guarantee that we cannot insert new values, but still can remove them. It is applied for non-appendable segments.\n\nAs optimization of RAM usage was achieved this avoiding of this field:\nhttps://github.com/qdrant/qdrant/blob/master/lib/segment/src/index/field_index/full_text_index/inverted_index.rs#L63\nThis is a map from points into points documents. By side it's the same to the whole inverted index.\n\nFor immutable\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n qdrant -l app.kubernetes.io/name=qdrant\nkubectl get events -n qdrant --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[rocksdb] Investigate compression scheme for RocksDB\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Introduction of text field index immutable state.\n\nImmutable state has with guarantee that we cannot insert new values, but still can remove them. It is applied for non-appendable segments.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "qdrant",
+      "community",
+      "vector-db",
+      "feature"
+    ],
+    "cncfProjects": [
+      "qdrant"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/qdrant/qdrant/issues/804",
+      "repo": "https://github.com/qdrant/qdrant",
+      "pr": "https://github.com/qdrant/qdrant/pull/3497"
+    },
+    "reactions": 4,
+    "comments": 23,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with qdrant installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:50:20.342Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
