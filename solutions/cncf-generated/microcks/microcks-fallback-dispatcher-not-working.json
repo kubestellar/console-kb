@@ -1,0 +1,37 @@
+{
+  "version": "kc-mission-v1",
+  "name": "microcks-fallback-dispatcher-not-working",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Microcks: Fix Fallback Dispatcher Always Returning Default Response",
+    "description": "Resolves the issue where the FALLBACK dispatcher always returns the fallback response instead of matching the primary dispatcher rules. This is a common misconfiguration where the dispatcher rules syntax does not match the expected format.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Understand the FALLBACK dispatcher",
+        "description": "The FALLBACK dispatcher chains two dispatchers:\n1. A **primary dispatcher** (e.g., URI_PARTS or URI_ELEMENTS) that tries to match the request\n2. A **fallback response** returned when no primary match is found\n\nThe dispatcher rules must specify both the primary dispatcher and the fallback response name in a specific JSON format."
+      },
+      {
+        "title": "Check current dispatcher configuration",
+        "description": "In the Microcks UI, navigate to the operation and check the Dispatcher field. The rules for a FALLBACK dispatcher must be valid JSON:\n```json\n{\n  \"dispatcher\": \"URI_PARTS\",\n  \"dispatcherRules\": \"name\",\n  \"fallback\": \"Not_Found\"\n}\n```\nCommon mistakes:\n- Using the dispatcher rules text field for the fallback name instead of the JSON structure\n- Missing the `dispatcher` field that specifies the primary dispatcher type\n- Using `URI_PARTS` when `URI_ELEMENTS` is needed (URI_PARTS splits on `/`, URI_ELEMENTS uses named path parameters)"
+      },
+      {
+        "title": "Fix the dispatcher rules via API",
+        "description": "Update the dispatcher rules programmatically using the Microcks API:\n```bash\n# Port-forward to Microcks\nkubectl port-forward svc/microcks -n microcks 8080:8080 &\nsleep 2\n\n# List services to find the service ID\ncurl -s http://localhost:8080/api/services | jq '.[] | {id, name, version}'\n\n# Get the operation details (replace SERVICE_ID)\ncurl -s http://localhost:8080/api/services/SERVICE_ID | jq '.operations[] | {name, dispatcher, dispatcherRules}'\n```\nVerify the `dispatcherRules` is valid JSON with `dispatcher`, `dispatcherRules`, and `fallback` keys."
+      },
+      {
+        "title": "Test the fix",
+        "description": "Send a request that should match the primary dispatcher and one that should hit the fallback:\n```bash\n# Should match a specific mock response\ncurl -s http://localhost:8080/rest/<ServiceName>/<Version>/<valid-path>\n\n# Should return the fallback response\ncurl -s http://localhost:8080/rest/<ServiceName>/<Version>/<unknown-path>\n```\nThe first request should return the matched response, the second should return the fallback (e.g., Not_Found)."
+      }
+    ],
+    "resolution": {
+      "summary": "The FALLBACK dispatcher requires valid JSON in the dispatcherRules field with three keys: dispatcher (the primary type), dispatcherRules (the primary rules), and fallback (the response name when no match is found). Most failures are caused by incorrect rules format.",
+      "codeSnippets": [
+        "curl -s http://localhost:8080/api/services | jq '.[] | {id, name, version}'"
+      ]
+    }
+  }
+}
