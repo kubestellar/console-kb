@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-rollouts-574-rollback-windows-for-fast-tracked-rollbacks",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-rollouts: Rollback windows for fast-tracked rollbacks",
+    "description": "Rollback windows for fast-tracked rollbacks. Requested by 17+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-rollouts deployment",
+        "description": "Verify your argo-rollouts version and configuration:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nhelm list -n argo-rollouts 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-rollouts installation."
+      },
+      {
+        "title": "Review argo-rollouts configuration",
+        "description": "Inspect the relevant argo-rollouts configuration:\n```bash\nkubectl get all -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get configmap -n argo-rollouts -l app.kubernetes.io/part-of=argo-rollouts\n```\nSpawned from https://github.com/argoproj/argo-rollouts/issues/557.\n\nCurrently we perform a \"fast-tracked rollback\" (which skips pauses, steps, analysis) in two circumstances:\n1."
+      },
+      {
+        "title": "Apply the fix for Rollback windows for fast-tracked rollbacks",
+        "description": "One workaround we are using right now is to leave a timed pause step at the end of the Rollout.  We manually terminate the analysis run so that the only way we will roll back is if someone manually triggers it.\n\nThis works but it means that the \"new\" version is still marked as canary during that\n```yaml\nspec:\n  rollbackWindow:\n    duration: 24h\n  strategy:\n    blueGreen:\n...\n```"
+      },
+      {
+        "title": "Upgrade argo-rollouts to include the fix",
+        "description": "If the fix is included in a newer release, upgrade argo-rollouts:\n```bash\nhelm repo update\nhelm upgrade argo-rollouts argo-rollouts/argo-rollouts --namespace argo-rollouts\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n argo-rollouts\nhelm list -n argo-rollouts\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get events -n argo-rollouts --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Rollback windows for fast-tracked rollbacks\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "One workaround we are using right now is to leave a timed pause step at the end of the Rollout.  We manually terminate the analysis run so that the only way we will roll back is if someone manually triggers it.\n\nThis works but it means that the \"new\" version is still marked as canary during that period, even though it is receiving 100% of traffic.",
+      "codeSnippets": [
+        "spec:\n  rollbackWindow:\n    duration: 24h\n  strategy:\n    blueGreen:\n...",
+        "spec:\n  rollbackWindow:\n    revisions: 2\n  strategy:\n    canary:\n...",
+        "$ kubectl argo rollouts promote --help | grep full\nTo skip analysis, pauses and steps entirely, use '--full' to fully promote the rollout\n        kubectl argo rollouts promote guestbook --full\n      --full   Perform a full promotion, skipping analysis, pauses, and steps\n\n$ kubectl argo rollouts undo --help | grep full"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-rollouts",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo-rollouts"
+    ],
+    "targetResourceKinds": [
+      "Replicaset"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-rollouts/issues/574",
+      "repo": "https://github.com/argoproj/argo-rollouts",
+      "pr": "https://github.com/argoproj/argo-rollouts/pull/2394"
+    },
+    "reactions": 17,
+    "comments": 6,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-rollouts installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:35:27.710Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
