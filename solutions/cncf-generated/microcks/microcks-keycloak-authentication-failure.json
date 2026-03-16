@@ -1,0 +1,43 @@
+{
+  "version": "kc-mission-v1",
+  "name": "microcks-keycloak-authentication-failure",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Microcks: Fix \"Failed to Initialize authentication Subsystem\" Error",
+    "description": "Resolves the Keycloak authentication initialization failure that shows 'Failed to Initialize authentication Subsystem' in the Microcks UI. This is one of the most common Microcks deployment issues, typically caused by Keycloak URL misconfiguration, missing client secret, or SSL requirement mismatches.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check Keycloak pod status",
+        "description": "Verify the Keycloak pod is running and healthy:\n```bash\nkubectl get pods -n microcks -l app=keycloak\nkubectl logs -n microcks -l app=keycloak --tail=50\n```\nIf the pod is in `CrashLoopBackOff`, check logs for database connection errors. Keycloak requires a working database connection before Microcks can authenticate."
+      },
+      {
+        "title": "Verify Keycloak URL configuration",
+        "description": "The Microcks frontend must reach Keycloak at the URL configured in the Helm values. Check the current configuration:\n```bash\nhelm get values microcks -n microcks | grep -A5 keycloak\n```\nThe `keycloak.url` value must be reachable from the browser (not just from within the cluster). Common mistakes:\n- Using an internal service URL (e.g., `microcks-keycloak:8080`) instead of an externally accessible URL\n- Missing the port number\n- Using `http://` when Keycloak requires HTTPS"
+      },
+      {
+        "title": "Check Keycloak realm and client configuration",
+        "description": "Verify the `microcks` realm exists and the client is configured correctly:\n```bash\n# Port-forward to Keycloak admin console\nkubectl port-forward svc/microcks-keycloak -n microcks 9090:8080 &\n\n# Check realm exists (default: 'microcks')\ncurl -s http://localhost:9090/realms/microcks | head -5\n```\nIf the realm does not exist, Keycloak initialization failed during first boot. Delete the Keycloak pod to let it re-initialize:\n```bash\nkubectl delete pod -n microcks -l app=keycloak\n```"
+      },
+      {
+        "title": "Fix SSL requirement mismatch",
+        "description": "A common cause is Keycloak requiring SSL but Microcks connecting over plain HTTP. The Keycloak log shows `SSL is required to authenticate. Remote address X.X.X.X is secure: false`. Fix by setting the SSL requirement to NONE for development:\n```bash\n# Port-forward to Keycloak\nkubectl port-forward svc/microcks-keycloak -n microcks 9090:8080 &\n\n# Get admin token\nKC_TOKEN=$(curl -s -X POST http://localhost:9090/realms/master/protocol/openid-connect/token \\\n  -d 'username=admin&password=admin&grant_type=password&client_id=admin-cli' | jq -r '.access_token')\n\n# Set SSL to NONE on the microcks realm\ncurl -s -X PUT http://localhost:9090/admin/realms/microcks \\\n  -H \"Authorization: Bearer $KC_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"sslRequired\": \"NONE\"}'\n```\nFor production, configure TLS on both Keycloak and Microcks ingresses instead."
+      },
+      {
+        "title": "Verify fix",
+        "description": "Restart the Microcks pod to pick up the configuration change:\n```bash\nkubectl rollout restart deployment/microcks -n microcks\nkubectl wait --for=condition=ready pod -l app=microcks -n microcks --timeout=120s\n```\nThen access the Microcks UI and verify the authentication subsystem initializes successfully."
+      }
+    ],
+    "resolution": {
+      "summary": "The 'Failed to Initialize authentication Subsystem' error is resolved by ensuring Keycloak is running, the realm exists, the URL is browser-accessible, and SSL requirements match between Keycloak and Microcks.",
+      "codeSnippets": [
+        "kubectl get pods -n microcks -l app=keycloak",
+        "helm get values microcks -n microcks | grep -A5 keycloak",
+        "kubectl rollout restart deployment/microcks -n microcks"
+      ]
+    }
+  }
+}
