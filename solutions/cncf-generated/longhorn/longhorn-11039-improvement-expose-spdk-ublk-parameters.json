@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "longhorn-11039-improvement-expose-spdk-ublk-parameters",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "longhorn: [IMPROVEMENT] Expose SPDK UBLK Parameters",
+    "description": "[IMPROVEMENT] Expose SPDK UBLK Parameters. This issue affects 5+ users.",
+    "type": "analyze",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify longhorn analyze symptoms",
+        "description": "Check for the issue in your longhorn deployment:\n```bash\nkubectl get pods -n longhorn -l app.kubernetes.io/name=longhorn\nkubectl logs -l app.kubernetes.io/name=longhorn -n longhorn --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review longhorn configuration",
+        "description": "Inspect the relevant longhorn configuration:\n```bash\nkubectl get all -n longhorn -l app.kubernetes.io/name=longhorn\nkubectl get configmap -n longhorn -l app.kubernetes.io/part-of=longhorn\n```\n### Is your improvement request related to a feature? Please describe (👍 if you like this request)\n\nThe SPDK UBLK frontend includes `queue_depth`, `num_queues`, `disable-user-copy` parameters that impact I/O performance."
+      },
+      {
+        "title": "Apply the fix for [IMPROVEMENT] Expose SPDK UBLK Parameters",
+        "description": "## Pre Ready-For-Testing Checklist\n\nThe reproduce steps/test steps are at: https://github.com/longhorn/longhorn/issues/11039#issuecomment-3544740242\n\nThe workaround is at:~~\n\nThe PR for the YAML change is at: https://github.com/longhorn/longhorn/pull/12218\nThe PR for the chart change is at:\n\nThe PR\n```yaml\nkind: StorageClass\n    apiVersion: storage.k8s.io/v1\n    metadata:\n      name: longhorn-v2-data-engine\n    provisioner: driver.longhorn.io\n    allowVolumeExpansion: true\n    reclaimPolicy: Delete\n    volumeBindingMode: Immediate\n    parameters:\n      numberOfReplicas: \"1\"\n      staleReplicaTimeout: \"2880\"\n      fsType: \"ext4\"\n      dataEngine: \"v2\"\n      ublkQueueDepth: \"256\"\n      ublkNumberOfQueue: \"7\"\n      frontend: \"ublk\"\n```"
+      },
+      {
+        "title": "Confirm [IMPROVEMENT] Expose SPDK UBLK Parameters is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=longhorn -n longhorn --tail=50 --since=5m\nkubectl get events -n longhorn --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "## Pre Ready-For-Testing Checklist\n\nThe reproduce steps/test steps are at: https://github.com/longhorn/longhorn/issues/11039#issuecomment-3544740242\n\nThe workaround is at:~~\n\nThe PR for the YAML change is at: https://github.com/longhorn/longhorn/pull/12218\nThe PR for the chart change is at:\n\nThe PR is at\n[feat: expose SPDK UBLK Parameters",
+      "codeSnippets": [
+        "kind: StorageClass\n    apiVersion: storage.k8s.io/v1\n    metadata:\n      name: longhorn-v2-data-engine\n    provisioner: driver.longhorn.io\n    allowVolumeExpansion: true\n    reclaimPolicy: Delete\n    volumeBindingMode: Immediate\n    parameters:\n      numberOfReplicas: \"1\"\n      staleReplicaTimeout: \"2880\"\n      fsType: \"ext4\"\n      dataEngine: \"v2\"\n      ublkQueueDepth: \"256\"\n      ublkNumberOfQueue: \"7\"\n      frontend: \"ublk\"",
+        "> kubectl exec instance-manager-98780070e89ece2528333954ca0f8fc7 -n longhorn-system  -- sh -c \"go-spdk-helper ublk get-disks\"\n[\n        {\n                \"bdev_name\": \"pvc-949fdbc0-2ac3-41a7-b40c-63e684148bd2-e-0\",\n                \"id\": 1,\n                \"num_queues\": 7,\n                \"queue_depth\": 256,\n                \"ublk_device\": \"/dev/ublkb1\"\n        }\n]\n> kubectl exec instance-manager-1998b54d621b076e41879bd584964e8f -n longhorn-system  -- sh -c \"go-spdk-helper ublk get-disks\"\n[\n        {\n                \"bdev_name\": \"pvc-dc699771-7de8-4333-9b49-41eb61f62bb0-e-0\",\n                \"id\": 1,\n                \"num_queues\": 7,\n                \"queue_depth\": 256,\n                \"ublk_device\": \"/dev/ublkb1\"\n        }\n]",
+        "root@phan-m3-large-x86-01:~/kbench# fio ./fio/latency-random-write.fio --filename=/dev/mapper/testvol --size=200GiB  \nrand-write-lat: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=libaio, iodepth=1\nfio-3.36\nStarting 1 process\nJobs: 1 (f=1): [w(1)][100.0%][w=44.7MiB/s][w=11.4k IOPS][eta 00m:00s]\nrand-write-lat: (groupid=0, jobs=1): err= 0: pid=3335774: Thu Nov 27 02:54:34 2025\n  write: IOPS=11.4k, BW=44.4MiB/s (46.6MB/s)(2664MiB/60001msec); 0 zone resets\n    slat (usec): min=10, max=127, avg=14.58, stdev= 1.21\n    clat (usec): min=45, max=3529, avg=72.72, stdev=13.26\n     lat (usec): min=77, max=3544, avg=87.30, stdev=13.42\n    clat percentiles (usec):\n     |  1.00th=[   68],  5.00th=[   69], 10.00th=[   69], 20.00th=[   70],\n     | 30.00th=[   71], 40."
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "longhorn",
+      "incubating",
+      "storage",
+      "analyze"
+    ],
+    "cncfProjects": [
+      "longhorn"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "analyze"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/longhorn/longhorn/issues/11039",
+      "repo": "https://github.com/longhorn/longhorn"
+    },
+    "reactions": 5,
+    "comments": 24,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with longhorn installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:44:09.259Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
