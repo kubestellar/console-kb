@@ -1,0 +1,192 @@
+{
+  "version": "kc-mission-v1",
+  "name": "multi-tenancy-setup",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Configure Multi-Tenancy Framework (Three Shades of Isolation)",
+    "description": "Set up the complete multi-tenancy isolation framework combining OVN-Kubernetes, KubeFlex, K3s, and KubeVirt. Based on the KubeCon Europe 2026 talk 'Three Shades of Isolation: A Multi-Tenancy Fortress' by Braulio Dumba & Paolo Dettori (IBM Research). Provides three isolation layers: control-plane (KubeFlex + K3s), data-plane (KubeVirt), and network (OVN UDN L2/L3).",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 45,
+    "steps": [
+      {
+        "title": "Check existing components",
+        "description": "Before installing, check which components are already present on the cluster:\n```bash\n# Check OVN-Kubernetes\nkubectl get pods -A -l app=ovnkube-node --no-headers 2>/dev/null | wc -l\n\n# Check KubeFlex\nkubectl get pods -A -l app.kubernetes.io/name=kubeflex --no-headers 2>/dev/null | wc -l\n\n# Check KubeVirt\nkubectl get pods -A -l app=virt-operator --no-headers 2>/dev/null | wc -l\n\n# Check K3s pods\nkubectl get pods -A -l app=k3s --no-headers 2>/dev/null | wc -l\n```\n> Only install components that are missing (count = 0).",
+        "commands": [
+          "kubectl get pods -A -l app=ovnkube-node --no-headers 2>/dev/null | wc -l",
+          "kubectl get pods -A -l app.kubernetes.io/name=kubeflex --no-headers 2>/dev/null | wc -l",
+          "kubectl get pods -A -l app=virt-operator --no-headers 2>/dev/null | wc -l",
+          "kubectl get pods -A -l app=k3s --no-headers 2>/dev/null | wc -l"
+        ]
+      },
+      {
+        "title": "Install OVN-Kubernetes with UDN support (Network isolation)",
+        "description": "OVN-Kubernetes provides User Defined Networks (UDN) for Layer 2/3 network tenant isolation.\n\n```bash\n# Create OVN-Kubernetes namespace\nkubectl create namespace ovn-kubernetes\n\n# Deploy OVN-Kubernetes (adjust version as needed)\nkubectl apply -f https://raw.githubusercontent.com/ovn-kubernetes/ovn-kubernetes/v1.12.0/manifests/ovn-k8s-cni-overlay.yaml\nkubectl apply -f https://raw.githubusercontent.com/ovn-kubernetes/ovn-kubernetes/v1.12.0/manifests/ovn-k8s-controller.yaml\n\n# Wait for OVN pods to be ready\nkubectl wait --for=condition=Ready pods -l app=ovnkube-node -n ovn-kubernetes --timeout=300s\n```\n> Skip this step if OVN-Kubernetes is already installed.",
+        "commands": [
+          "kubectl create namespace ovn-kubernetes",
+          "kubectl apply -f https://raw.githubusercontent.com/ovn-kubernetes/ovn-kubernetes/v1.12.0/manifests/ovn-k8s-cni-overlay.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/ovn-kubernetes/ovn-kubernetes/v1.12.0/manifests/ovn-k8s-controller.yaml",
+          "kubectl wait --for=condition=Ready pods -l app=ovnkube-node -n ovn-kubernetes --timeout=300s"
+        ]
+      },
+      {
+        "title": "Install KubeFlex (Control-plane isolation)",
+        "description": "KubeFlex provides dedicated control planes per tenant.\n\n```bash\nhelm repo add kubestellar https://kubestellar.github.io/helm\nhelm repo update\nhelm install kubeflex kubestellar/kubeflex --namespace kubeflex-system --create-namespace\n\n# Wait for controller\nkubectl wait --for=condition=Ready pods -l app.kubernetes.io/name=kubeflex -n kubeflex-system --timeout=120s\n```\n> Skip if KubeFlex is already installed.",
+        "commands": [
+          "helm repo add kubestellar https://kubestellar.github.io/helm",
+          "helm repo update",
+          "helm install kubeflex kubestellar/kubeflex --namespace kubeflex-system --create-namespace",
+          "kubectl wait --for=condition=Ready pods -l app.kubernetes.io/name=kubeflex -n kubeflex-system --timeout=120s"
+        ]
+      },
+      {
+        "title": "Install KubeVirt (Data-plane isolation)",
+        "description": "KubeVirt runs VMs as Kubernetes pods so tenants don't share compute nodes.\n\n```bash\n# Install KubeVirt operator\nexport KUBEVIRT_VERSION=$(curl -s https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt)\nkubectl create -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml\nkubectl create -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml\n\n# Wait for operator\nkubectl wait --for=condition=Ready pods -l app=virt-operator -n kubevirt --timeout=300s\n```\n> Skip if KubeVirt is already installed.",
+        "commands": [
+          "export KUBEVIRT_VERSION=$(curl -s https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt)",
+          "kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml",
+          "kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml",
+          "kubectl wait --for=condition=Ready pods -l app=virt-operator -n kubevirt --timeout=300s"
+        ]
+      },
+      {
+        "title": "Create tenant namespaces and UDN networks",
+        "description": "Set up the network architecture for the first tenant with dual UDN (L3 primary + L2 secondary):\n\n```bash\n# Create tenant namespaces\nkubectl create namespace tenant-1-ns1\nkubectl create namespace tenant-1-ns2\n\n# Label for tenant association\nkubectl label namespace tenant-1-ns1 tenant=tenant-1\nkubectl label namespace tenant-1-ns2 tenant=tenant-1\n\n# Create Layer-3 UDN (primary — data-plane traffic)\nkubectl apply -f - <<EOF\napiVersion: k8s.ovn.org/v1\nkind: UserDefinedNetwork\nmetadata:\n  name: tenant-1-l3-primary\n  namespace: tenant-1-ns1\nspec:\n  topology: Layer3\n  layer3:\n    role: Primary\n    subnets:\n      - cidr: 10.100.0.0/16\nEOF\n\n# Create Layer-2 UDN (secondary — control-plane traffic)\nkubectl apply -f - <<EOF\napiVersion: k8s.ovn.org/v1\nkind: ClusterUserDefinedNetwork\nmetadata:\n  name: tenant-1-l2-secondary\nspec:\n  namespaceSelector:\n    matchLabels:\n      tenant: tenant-1\n  network:\n    topology: Layer2\n    layer2:\n      role: Secondary\n      subnets:\n        - cidr: 10.200.0.0/16\nEOF\n```\n> This creates the dual-network architecture: L3 for data-plane, L2 for control-plane.",
+        "commands": [
+          "kubectl create namespace tenant-1-ns1",
+          "kubectl create namespace tenant-1-ns2",
+          "kubectl label namespace tenant-1-ns1 tenant=tenant-1",
+          "kubectl label namespace tenant-1-ns2 tenant=tenant-1"
+        ]
+      },
+      {
+        "title": "Create KubeFlex control plane for the tenant",
+        "description": "Provision a dedicated control plane for the tenant:\n\n```bash\nkubectl apply -f - <<EOF\napiVersion: tenancy.kubeflex.io/v1alpha1\nkind: ControlPlane\nmetadata:\n  name: tenant-1\nspec:\n  type: k8s\n  backend: shared\nEOF\n\n# Wait for control plane to be ready\nkubectl wait --for=jsonpath='{.status.phase}'=Ready controlplane/tenant-1 --timeout=120s\n```",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: tenancy.kubeflex.io/v1alpha1\nkind: ControlPlane\nmetadata:\n  name: tenant-1\nspec:\n  type: k8s\n  backend: shared\nEOF"
+        ]
+      },
+      {
+        "title": "Deploy KubeVirt VM in tenant namespace-1",
+        "description": "Create a KubeVirt VM in namespace-1 with dual NICs (eth0 → L3 UDN primary, eth1 → L2 UDN secondary):\n\n```bash\nkubectl apply -f - <<EOF\napiVersion: kubevirt.io/v1\nkind: VirtualMachine\nmetadata:\n  name: tenant-1-vm\n  namespace: tenant-1-ns1\n  labels:\n    tenant: tenant-1\nspec:\n  running: true\n  template:\n    metadata:\n      labels:\n        tenant: tenant-1\n        kubevirt.io/vm: tenant-1-vm\n      annotations:\n        k8s.v1.cni.cncf.io/networks: tenant-1-l2-secondary\n    spec:\n      domain:\n        resources:\n          requests:\n            memory: 2Gi\n        devices:\n          interfaces:\n            - name: default\n              masquerade: {}\n            - name: l2-secondary\n              bridge: {}\n          disks:\n            - name: containerdisk\n              disk:\n                bus: virtio\n      networks:\n        - name: default\n          pod: {}\n        - name: l2-secondary\n          multus:\n            networkName: tenant-1-l2-secondary\n      volumes:\n        - name: containerdisk\n          containerDisk:\n            image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest\nEOF\n```\n> The VM gets eth0 on L3 UDN (data-plane) and eth1 on L2 UDN (control-plane).",
+        "commands": []
+      },
+      {
+        "title": "Deploy K3s server pod in tenant namespace-2",
+        "description": "Deploy a K3s server pod connected via KubeFlex controller through the default K8s network and L2 UDN secondary:\n\n```bash\nkubectl apply -f - <<EOF\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: k3s-server\n  namespace: tenant-1-ns2\n  labels:\n    app: k3s\n    tenant: tenant-1\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: k3s\n      tenant: tenant-1\n  template:\n    metadata:\n      labels:\n        app: k3s\n        tenant: tenant-1\n      annotations:\n        k8s.v1.cni.cncf.io/networks: tenant-1-l2-secondary\n    spec:\n      containers:\n        - name: k3s-server\n          image: rancher/k3s:v1.31.0-k3s1\n          command: [\"k3s\", \"server\", \"--disable=traefik\"]\n          securityContext:\n            privileged: true\n          ports:\n            - containerPort: 6443\n              name: api\nEOF\n```\n> K3s gets eth0 on default network (managed by KubeFlex) and eth1 on L2 UDN (control-plane traffic).",
+        "commands": []
+      },
+      {
+        "title": "Verify the multi-tenancy stack",
+        "description": "Confirm all three isolation layers are operational:\n\n```bash\necho '=== Control-plane isolation (KubeFlex + K3s) ==='\nkubectl get controlplanes\nkubectl get pods -n tenant-1-ns2 -l app=k3s\n\necho '=== Data-plane isolation (KubeVirt) ==='\nkubectl get vmi -n tenant-1-ns1\n\necho '=== Network isolation (OVN UDN) ==='\nkubectl get userdefinednetworks -A\nkubectl get clusteruserdefinednetworks\n```",
+        "commands": [
+          "kubectl get controlplanes",
+          "kubectl get pods -n tenant-1-ns2 -l app=k3s",
+          "kubectl get vmi -n tenant-1-ns1",
+          "kubectl get userdefinednetworks -A",
+          "kubectl get clusteruserdefinednetworks"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove tenant resources",
+        "description": "Delete tenant VMs, K3s pods, control planes, and namespaces:\n```bash\nkubectl delete vm --all -n tenant-1-ns1\nkubectl delete deployment k3s-server -n tenant-1-ns2\nkubectl delete controlplane tenant-1\nkubectl delete namespace tenant-1-ns1 tenant-1-ns2\n```",
+        "commands": [
+          "kubectl delete vm --all -n tenant-1-ns1",
+          "kubectl delete deployment k3s-server -n tenant-1-ns2",
+          "kubectl delete controlplane tenant-1",
+          "kubectl delete namespace tenant-1-ns1 tenant-1-ns2"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "VM not getting L2 secondary network",
+        "description": "**Cause:** The ClusterUserDefinedNetwork may not have matched the namespace labels.\n\n**Fix:** Verify namespace labels match the selector:\n```bash\nkubectl get namespace tenant-1-ns1 --show-labels\nkubectl describe clusteruserdefinednetwork tenant-1-l2-secondary\n```"
+      },
+      {
+        "title": "K3s pod not connecting to KubeFlex control plane",
+        "description": "**Cause:** The KubeFlex controller may not have provisioned the control plane service yet.\n\n**Fix:** Check control plane status and K3s logs:\n```bash\nkubectl get controlplanes\nkubectl logs -l app=k3s -n tenant-1-ns2\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful deployment shows: KubeFlex control plane in Ready state, KubeVirt VM running in tenant-1-ns1, K3s server pod running in tenant-1-ns2, and UDN networks assigned to both namespaces. All three isolation layers (control-plane, data-plane, network) are operational.",
+      "codeSnippets": [
+        "kubectl get controlplanes",
+        "kubectl get vmi -n tenant-1-ns1",
+        "kubectl get pods -n tenant-1-ns2 -l app=k3s",
+        "kubectl get userdefinednetworks -A"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "multi-tenancy",
+      "isolation",
+      "control-plane",
+      "data-plane",
+      "network",
+      "ovn-kubernetes",
+      "kubeflex",
+      "k3s",
+      "kubevirt",
+      "kubecon",
+      "kubestellar"
+    ],
+    "platform": "kubernetes",
+    "platformType": "multi-tenancy",
+    "platformProvider": "KubeStellar",
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubevirt"
+    ],
+    "targetResourceKinds": [
+      "ControlPlane",
+      "VirtualMachine",
+      "UserDefinedNetwork",
+      "ClusterUserDefinedNetwork",
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "installation",
+      "configuration",
+      "multi-tenancy"
+    ],
+    "installMethods": [
+      "helm",
+      "kubectl"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubestellar.io/docs/multi-tenancy/",
+      "repo": "https://github.com/kubestellar/kubeflex"
+    },
+    "qualityScore": 98
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.28",
+    "tools": [
+      "kubectl",
+      "helm",
+      "curl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 8 vCPU, 16GB RAM (hosting cluster with VMs and nested clusters)",
+    "description": "A running Kubernetes cluster (OpenShift, EKS, GKE, or similar) with sufficient resources for running VMs and nested control planes."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T22:00:00.000Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
