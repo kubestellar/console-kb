@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "minio-9726-server-startup-failed-with-unable-to-initialize-sub-systems-unable-to",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "minio: Server startup failed with 'Unable to initialize sub-systems: Unable to migrate all config at .minio.sys/config/",
+    "description": "Server startup failed with 'Unable to initialize sub-systems: Unable to migrate all config at .minio.sys/config/. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify minio troubleshoot symptoms",
+        "description": "Check for the issue in your minio deployment:\n```bash\nkubectl get pods -n minio -l app.kubernetes.io/name=minio\nkubectl logs -l app.kubernetes.io/name=minio -n minio --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review minio configuration",
+        "description": "Inspect the relevant minio configuration:\n```bash\nkubectl get all -n minio -l app.kubernetes.io/name=minio\nkubectl get configmap -n minio -l app.kubernetes.io/part-of=minio\n```\nCan't start minio container with volumes \n\n## Expected Behavior\nRun minio container with mounted directory\n\ndocker-compose.yml consist with:\n\n```\nversion: \"3\"\nservices:\n\n  minio:\n    image: minio/minio\n    container_name: minio\n    hostname: minio\n "
+      },
+      {
+        "title": "Apply the fix for Server startup failed with 'Unable to initialize…",
+        "description": "Add workaround for issue preventing servers from starting on Windows Docker Engine 19.03.8\n```yaml\nversion: \"3\"\nservices:\n\n  minio:\n    image: minio/minio\n    container_name: minio\n    hostname: minio\n    volumes:\n      - ./minio/s3:/data\n    ports:\n      - 9000:9000\n    command: 'server /data'\n    environment:\n      MINIO_ACCESS_KEY: minio\n      MINIO_SECRET_KEY: minio123\n```"
+      },
+      {
+        "title": "Confirm Server startup failed with 'Unable to initialize… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=minio -n minio --tail=50 --since=5m\nkubectl get events -n minio --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Add workaround for issue preventing servers from starting on Windows Docker Engine 19.03.8",
+      "codeSnippets": [
+        "version: \"3\"\nservices:\n\n  minio:\n    image: minio/minio\n    container_name: minio\n    hostname: minio\n    volumes:\n      - ./minio/s3:/data\n    ports:\n      - 9000:9000\n    command: 'server /data'\n    environment:\n      MINIO_ACCESS_KEY: minio\n      MINIO_SECRET_KEY: minio123",
+        "Creating minio ... done\nAttaching to minio\nminio    | Attempting encryption of all config, IAM users and policies on MinIO backend\nminio    | \nminio    | API: SYSTEM()\nminio    | Time: 16:41:52 UTC 05/28/2020\nminio    | DeploymentID: fe4965f4-6869-4143-93a3-8a6212da10b1\nminio    | Error: Unexpected error, please report this issue at https://github.com/minio/minio/issues\nminio    |        8: github.com/minio/minio@/cmd/fs-v1-helpers.go:337:cmd.fsCreateFile()\nminio    |        7: github.com/minio/minio@/cmd/fs-v1.go:996:cmd.(*FSObjects).putObject()\nminio    |        6: github.com/minio/minio@/cmd/fs-v1.go:910:cmd.(*FSObjects).PutObject()\nminio    |        5: github.com/minio/minio@/cmd/config-common.go:66:cmd.saveConfig()\nminio    |        4: github.com/minio/minio@/cmd/config-encrypted.go:2",
+        "SET GOOS=linux\nSET GOARCH=amd64\ngo build .\n\ndocker build -t minio -f Dockerfile.dev .\ndocker run -p 9000:9000 --name minio1 -e \"MINIO_ACCESS_KEY=minio\" -e \"MINIO_SECRET_KEY=minio123\" -v d:\\data\\docker:/data --rm -it minio server /data"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "minio",
+      "community",
+      "object-storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "minio"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/minio/minio/issues/9726",
+      "repo": "https://github.com/minio/minio",
+      "pr": "https://github.com/minio/minio/pull/9735"
+    },
+    "reactions": 11,
+    "comments": 7,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with minio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T07:03:31.372Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
