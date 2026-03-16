@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "litellm-16810-bug-sudden-switch-to-responses-from-completions-causing-failures",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "litellm: [Bug]: Sudden switch to responses from completions causing failures",
+    "description": "[Bug]: Sudden switch to responses from completions causing failures. This issue affects 19+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify litellm troubleshoot symptoms",
+        "description": "Check for the issue in your litellm deployment:\n```bash\nkubectl get pods -n litellm -l app.kubernetes.io/name=litellm\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review litellm configuration",
+        "description": "Inspect the relevant litellm configuration:\n```bash\nkubectl get all -n litellm -l app.kubernetes.io/name=litellm\nkubectl get configmap -n litellm -l app.kubernetes.io/part-of=litellm\n```\n### What happened?\n\nPR #16766 was merged in at night, and models started using `responses` instead of `completions`. The bridge does not work automatically for many cases, and structured outputs also failed for these requests."
+      },
+      {
+        "title": "Apply the fix for [Bug]: Sudden switch to responses from completions causing…",
+        "description": "Versioning might be a good idea - to catch regressions, before rolling out to everyone on model prices. We already support pinning to a local copy via \n\n```bash\nexport LITELLM_LOCAL_MODEL_COST_MAP=\"True\"\n```\n\n<img width=\"1065\" height=\"197\" alt=\"Image\"\n```yaml\nlitellm.ContextWindowExceededError: litellm.BadRequestError: ContextWindowExceededError: OpenAIException - {\n  \"error\": {\n    \"message\": \"Invalid 'metadata.schema_dict_json': string too long. Expected a string with maximum length 512, but got a string with length 1203 instead.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"metadata.schema_dict_json\",\n    \"code\": \"string_above_max_length\"\n  }\n}\n```"
+      },
+      {
+        "title": "Confirm [Bug]: Sudden switch to responses from… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=50 --since=5m\nkubectl get events -n litellm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Versioning might be a good idea - to catch regressions, before rolling out to everyone on model prices.",
+      "codeSnippets": [
+        "litellm.ContextWindowExceededError: litellm.BadRequestError: ContextWindowExceededError: OpenAIException - {\n  \"error\": {\n    \"message\": \"Invalid 'metadata.schema_dict_json': string too long. Expected a string with maximum length 512, but got a string with length 1203 instead.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"metadata.schema_dict_json\",\n    \"code\": \"string_above_max_length\"\n  }\n}",
+        "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.10/site-packages/litellm/llms/custom_httpx/llm_http_handler.py\", line 1668, in async_response_api_handler\n    response = await async_httpx_client.post(\n  File \"/usr/local/lib/python3.10/site-packages/litellm/litellm_core_utils/logging_utils.py\", line 135, in async_wrapper\n    result = await func(*args, **kwargs)\n  File \"/usr/local/lib/python3.10/site-packages/litellm/llms/custom_httpx/http_handler.py\", line 324, in post\n    raise e\n  File \"/usr/local/lib/python3.10/site-packages/litellm/llms/custom_httpx/http_handler.py\", line 280, in post\n    response.raise_for_status()\n  File \"/usr/local/lib/python3.10/site-packages/httpx/_models.py\", line 829, in raise_for_status\n    raise HTTPStatusError(message, request=request, respons",
+        "export LITELLM_LOCAL_MODEL_COST_MAP=\"True\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "litellm",
+      "community",
+      "llm-gateway",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "litellm"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/BerriAI/litellm/issues/16810",
+      "repo": "https://github.com/BerriAI/litellm"
+    },
+    "reactions": 19,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with litellm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T07:00:07.401Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
