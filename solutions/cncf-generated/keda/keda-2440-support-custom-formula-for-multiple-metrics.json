@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keda-2440-support-custom-formula-for-multiple-metrics",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keda: Support custom formula for multiple metrics",
+    "description": "Support custom formula for multiple metrics. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current keda deployment",
+        "description": "Verify your keda version and configuration:\n```bash\nkubectl get pods -n keda -l app.kubernetes.io/name=keda\nhelm list -n keda 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working keda installation."
+      },
+      {
+        "title": "Review keda configuration",
+        "description": "Inspect the relevant keda configuration:\n```bash\nkubectl get all -n keda -l app.kubernetes.io/name=keda\nkubectl get configmap -n keda -l app.kubernetes.io/part-of=keda\n```\n### Proposal\n\n- KEDA metrics server knows how to get multiple metrics from various sources.\n- Currently, the desired size computation works for each scaler individually and the final value is decided according to MAX."
+      },
+      {
+        "title": "Apply the fix for Support custom formula for multiple metrics",
+        "description": "# UPDATE\nIve separated 2 functions in this PR into 2 and am keeping this as draft only for references as references\n- new feat: formula [here](https://github.com/kedacore/keda/pull/4821)\n- new feat: grpc servers as external calculations [here](https://github.com/kedacore/keda/pull/4859)\n###\n```yaml\nq := queue-length\ncpu := DB-writer CPU utilization\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n keda -l app.kubernetes.io/name=keda\nkubectl get events -n keda --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support custom formula for multiple metrics\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "# UPDATE\nIve separated 2 functions in this PR into 2 and am keeping this as draft only for references as references\n- new feat: formula [here](https://github.com/kedacore/keda/pull/4821)\n- new feat: grpc servers as external calculations [here](https://github.com/kedacore/keda/pull/4859)\n### Summary\nadds new structure in SO that describes how to modify/alter fetched metrics.",
+      "codeSnippets": [
+        "q := queue-length\ncpu := DB-writer CPU utilization",
+        "triggers:\n  - type: composed\n    metadata:\n      metrics:\n        q_length: \n          type: aws-cloudwatch\n          metadata:\n            namespace: AWS/SQS\n            ... # SQS length\n        cpu_util:\n          type: aws-cloudwatch\n          metadata:\n            namespace: AWS/Neptune\n            ... # neptune writer CPU\n      formula: \"ceil((1 - $cpu_util) * $q_length)\"\n      targetMetricValue: \"5\"\n      minMetricValue: \"0\"",
+        "scaledObject.spec:\n  ...\n  mutlipleTriggersCalculation:    ### we should find a better name for this probably\n      formula: \"ceil((1 - $cpu_util) * $q_length)\"\n      targetMetricValue: \"5\"\n      minMetricValue: \"0\"\n  triggers:\n    - type: aws-cloudwatch\n       name: q_length     ### name added here\n       metadata:\n            namespace: AWS/SQS\n            ... # SQS length\n    - type: aws-cloudwatch\n       name: cpu_util       ### name added here\n       metadata:\n            namespace: AWS/Neptune\n            ... # neptune writer CPU"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keda",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "keda"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/kedacore/keda/issues/2440",
+      "repo": "https://github.com/kedacore/keda",
+      "pr": "https://github.com/kedacore/keda/pull/4583"
+    },
+    "reactions": 12,
+    "comments": 3,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with keda installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:26:44.727Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
