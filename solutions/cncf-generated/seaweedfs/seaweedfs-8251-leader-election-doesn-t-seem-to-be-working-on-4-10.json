@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "seaweedfs-8251-leader-election-doesn-t-seem-to-be-working-on-4-10",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "seaweedfs: Leader election doesn't seem to be working on 4.10",
+    "description": "Leader election doesn't seem to be working on 4.10. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current seaweedfs deployment",
+        "description": "Verify your seaweedfs version and configuration:\n```bash\nkubectl get pods -n seaweedfs -l app.kubernetes.io/name=seaweedfs\nhelm list -n seaweedfs 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working seaweedfs installation."
+      },
+      {
+        "title": "Review seaweedfs configuration",
+        "description": "Inspect the relevant seaweedfs configuration:\n```bash\nkubectl get all -n seaweedfs -l app.kubernetes.io/name=seaweedfs\nkubectl get configmap -n seaweedfs -l app.kubernetes.io/part-of=seaweedfs\n```\nTried upgraded from 4.09 to 4.10 today and I can't seem to get a leader elected. Reverting to 4.09 works with the same setup. Then upgrading again fails."
+      },
+      {
+        "title": "Apply the fix for Leader election doesn't seem to be working on 4.10",
+        "description": "## Summary\n- normalize the hashicorp Raft voter IDs to the HTTP address so bootstrap sees the local node as a voter\n- keep gRPC transport running on the grpc port while using the normalized IDs for the configuration and peer updates\n- add unit tests to cover canonicalization logic\n\n## Testing\n- go\n```yaml\n$ kubectl exec -it -n seaweedfs weed-master-0 -- weed shell\nmaster: localhost:9333 filer: \nI0209 09:08:28.749594 masterclient.go:385 .adminShell masterClient bootstraps with masters {[localhost:9333] <nil>}\nI0209 09:08:28.757902 masterclient.go:179 .adminShell masterClient gRPC stream established to localhost:9333 in 4.669206ms\nI0209 09:08:38.823395 masterclient.go:370 .adminShell WaitUntilConnected still waiting for master connection (attempt 100)...\nI0209 09:08:48.336459 masterclient.go:370 .adminShell WaitUntilConnected still waiting for master connection (attempt 200)...\nI0209 09:08:58.445\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n seaweedfs -l app.kubernetes.io/name=seaweedfs\nkubectl get events -n seaweedfs --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Leader election doesn't seem to be working on 4.10\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "## Summary\n- normalize the hashicorp Raft voter IDs to the HTTP address so bootstrap sees the local node as a voter\n- keep gRPC transport running on the grpc port while using the normalized IDs for the configuration and peer updates\n- add unit tests to cover canonicalization logic\n\n## Testing\n- go test ./weed/server ./weed/command -count=1\n\n## Summary by CodeRabbit\n\n*\n\n* Updated server peer",
+      "codeSnippets": [
+        "$ kubectl exec -it -n seaweedfs weed-master-0 -- weed shell\nmaster: localhost:9333 filer: \nI0209 09:08:28.749594 masterclient.go:385 .adminShell masterClient bootstraps with masters {[localhost:9333] <nil>}\nI0209 09:08:28.757902 masterclient.go:179 .adminShell masterClient gRPC stream established to localhost:9333 in 4.669206ms\nI0209 09:08:38.823395 masterclient.go:370 .adminShell WaitUntilConnected still waiting for master connection (attempt 100)...\nI0209 09:08:48.336459 masterclient.go:370 .adminShell WaitUntilConnected still waiting for master connection (attempt 200)...\nI0209 09:08:58.445719 masterclient.go:370 .adminShell WaitUntilConnected still waiting for master connection (attempt 300)...\nI0209 09:09:00.502359 masterclient.go:197 .adminShell masterClient failed to receive from lo",
+        "weed-master-1 weed-master I0209 09:09:25.605894 volume_grpc_client_to_master.go:187 Volume Server found a new master newLeader: weed-master-2.weed-master.seaweedfs.svc.cluster.local:9333.19333 instead of weed-master-1.weed-master.seaweedfs.svc.cluster.local:9333\nweed-master-1 weed-master W0209 09:09:25.606234 master_grpc_server.go:105 SendHeartbeat.Recv: rpc error: code = Canceled desc = context canceled\nweed-master-1 weed-master W0209 09:09:27.894771 master_grpc_server.go:105 SendHeartbeat.Recv: rpc error: code = Canceled desc = context canceled\nweed-master-1 weed-master W0209 09:09:28.300641 master_grpc_server.go:105 SendHeartbeat.Recv: rpc error: code = Canceled desc = context canceled\nweed-master-1 weed-master W0209 09:09:28.394287 master_grpc_server.go:105 SendHeartbeat.Recv: rpc erro",
+        "$ k get pods\nNAME                          READY   STATUS    RESTARTS     AGE\nweed-admin-55b5776c85-m6dw4   1/1     Running   0            5m29s\nweed-master-0                 1/1     Running   0            4m11s\nweed-master-1                 1/1     Running   0            4m25s\nweed-master-2                 1/1     Running   1 (4m ago)   4m58s\nweed-server-0                 1/1     Running   0            3m55s\nweed-server-1                 1/1     Running   0            4m9s\nweed-server-2                 1/1     Running   0            4m22s\nweed-server-3                 1/1     Running   0            4m36s\nweed-server-4                 1/1     Running   0            5m"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "seaweedfs",
+      "community",
+      "distributed-storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "seaweedfs"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/seaweedfs/seaweedfs/issues/8251",
+      "repo": "https://github.com/seaweedfs/seaweedfs",
+      "pr": "https://github.com/seaweedfs/seaweedfs/pull/8252"
+    },
+    "reactions": 2,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with seaweedfs installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:53:28.382Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
