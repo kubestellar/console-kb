@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cilium-20915-scale-down-event-of-eks-kube-apiserver-causes-network-outage",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cilium: Scale-down event of EKS kube-apiserver causes network outage",
+    "description": "Scale-down event of EKS kube-apiserver causes network outage. This issue affects 22+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cilium troubleshoot symptoms",
+        "description": "Check for the issue in your cilium deployment:\n```bash\nkubectl get pods -n cilium -l app.kubernetes.io/name=cilium\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review cilium configuration",
+        "description": "Inspect the relevant cilium configuration:\n```bash\nkubectl get all -n cilium -l app.kubernetes.io/name=cilium\nkubectl get configmap -n cilium -l app.kubernetes.io/part-of=cilium\n```\n### Is there an existing issue for this?\n\n- [X] I have searched the existing issues\n\n### What happened?\n\nAWS EKS scales its kube-apiserver(s) out and in."
+      },
+      {
+        "title": "Apply the fix for Scale-down event of EKS kube-apiserver causes network outage",
+        "description": "While a 404 Not Found or a 409 Conflict can be considered successful interactions with the k8s API, a blanket accept for all 4xx codes is problematic. Since LastSuccessInteraction is exclusively used as an optimisation, we should err on the cautious side: accept the potential increase in heartbeats\n```yaml\ncilium-operator-78d4dc7dbb-lv8q2 cilium-operator error retrieving resource lock kube-system/cilium-operator-resource-lock: Unauthorized\ncilium-operator-78d4dc7dbb-lv8q2 cilium-operator level=error msg=\"error retrieving resource lock kube-system/cilium-operator-resource-lock: Unauthorized\" subsys=klo\n```"
+      },
+      {
+        "title": "Confirm Scale-down event of EKS kube-apiserver causes… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=50 --since=5m\nkubectl get events -n cilium --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "While a 404 Not Found or a 409 Conflict can be considered successful interactions with the k8s API, a blanket accept for all 4xx codes is problematic. Since LastSuccessInteraction is exclusively used as an optimisation, we should err on the cautious side: accept the potential increase in heartbeats to avoid missing being unable to effecticely communicate with the k8s API.",
+      "codeSnippets": [
+        "cilium-operator-78d4dc7dbb-lv8q2 cilium-operator error retrieving resource lock kube-system/cilium-operator-resource-lock: Unauthorized\ncilium-operator-78d4dc7dbb-lv8q2 cilium-operator level=error msg=\"error retrieving resource lock kube-system/cilium-operator-resource-lock: Unauthorized\" subsys=klo",
+        "affinity:\n  nodeAffinity:\n    requiredDuringSchedulingIgnoredDuringExecution:\n      nodeSelectorTerms:\n      - matchExpressions:\n        - key: kubernetes.io/os\n          operator: In\n          values:\n          - linux\n        - key: kubernetes.io/arch\n          operator: In\n          values:\n          - amd64\n        - key: eks.amazonaws.com/compute-type\n          operator: NotIn\n          values:\n          - fargate\nbpf:\n  hostRouting: false\n  masquerade: true\n  tproxy: true\ncni:\n  chainingMode: none\n  configMap: cni-configuration\n  customConf: true\ndevices: eth0\nenableCiliumEndpointSlice: true\nendpointHealthChecking:\n  enabled: false\neni:\n  awsEnablePrefixDelegation: true\n  ec2APIEndpoint: ec2.eu-west-1.amazonaws.com\n  enabled: true\n  instanceTagsFilter: aws:eks:cluster-name=ci-eks-4qr",
+        "❯ cilium version\ncilium-cli: 0.12.1 compiled with go1.18.5 on linux/amd64\ncilium image (default): v1.12.0\ncilium image (stable): v1.12.0\ncilium image (running): v1.12.0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Configmap"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cilium/cilium/issues/20915",
+      "repo": "https://github.com/cilium/cilium",
+      "pr": "https://github.com/cilium/cilium/pull/22393"
+    },
+    "reactions": 22,
+    "comments": 38,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cilium installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:26:19.646Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
