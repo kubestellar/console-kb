@@ -6,70 +6,94 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure MongoDB Community Operator",
-    "description": "The MongoDB Community Operator simplifies the deployment and management of MongoDB databases on Kubernetes. It is ideal for users looking to run MongoDB in a Kubernetes environment without the need for enterprise features.",
+    "description": "The MongoDB Community Operator allows you to deploy and manage MongoDB Community instances on Kubernetes. It simplifies the management of MongoDB clusters, but it is deprecated and users are encouraged to migrate to the new MongoDB Kubernetes Operator. Key trade-offs include limited support and the need to transition to a new repository in the near future.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Install MongoDB Community Operator",
-        "description": "To install the MongoDB Community Operator, use Helm to add the repository and install the operator. Ensure you have Helm v3.x installed.\n\n```bash\n# Add the MongoDB Helm repository\nhelm repo add mongodb https://mongodb.github.io/mongodb-kubernetes-operator\nhelm repo update\n\n# Install the MongoDB Community Operator\nhelm install mongodb-community-operator mongodb/mongodb-kubernetes-operator --version 0.11.0\n```\n\nVerify the installation:\n```bash\nkubectl get pods -n default\n```\nYou should see the operator pod running."
+        "title": "Add the MongoDB Helm repository",
+        "description": "This step adds the MongoDB Community Operator Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add mongodb https://mongodb.github.io/mongodb-kubernetes-operator\n\n```\n\n> This adds the correct repository for the MongoDB Community Operator.",
+        "commands": [
+          "helm repo add mongodb https://mongodb.github.io/mongodb-kubernetes-operator"
+        ]
       },
       {
-        "title": "Create MongoDB Custom Resource",
-        "description": "Create a MongoDB resource to deploy a MongoDB instance. Save the following YAML as `mongodb.yaml`:\n\n```yaml\napiVersion: mongodb.com/v1\nkind: MongoDB\nmetadata:\n  name: my-mongo\nspec:\n  members: 3\n  type: ReplicaSet\n  version: 4.4.0\n  podSpec:\n    resources:\n      requests:\n        cpu: 100m\n        memory: 512Mi\n      limits:\n        cpu: 1000m\n        memory: 2Gi\n```\n\nDeploy it using:\n```bash\nkubectl apply -f mongodb.yaml\n```\n\nVerify the MongoDB instance:\n```bash\nkubectl get mongodb\n```\n"
+        "title": "Install the MongoDB Community Operator",
+        "description": "This command installs the MongoDB Community Operator in the specified namespace.\n\n```bash\n\nhelm install mongodb-community-operator mongodb/mongodb-kubernetes-operator --namespace mongodb --create-namespace --version 0.13.0\n\n```\n\n> Ensure the namespace is created if it doesn't exist.",
+        "commands": [
+          "helm install mongodb-community-operator mongodb/mongodb-kubernetes-operator --namespace mongodb --create-namespace --version 0.13.0"
+        ]
       },
       {
-        "title": "Post-install Configuration",
-        "description": "After deploying MongoDB, configure RBAC to manage access. Create a role and bind it to a user:\n\n```bash\n# Create a role\nkubectl create role mongo-admin --verb=* --resource=pods --namespace=default\n\n# Bind the role to a user\nkubectl create rolebinding mongo-admin-binding --role=mongo-admin --user=<username> --namespace=default\n```\n"
+        "title": "Create a MongoDB custom resource",
+        "description": "This step creates a custom resource definition (CRD) for MongoDB, which defines the desired state of your MongoDB deployment.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: mongodb.com/v1\nkind: MongoDB\nmetadata:\n  name: my-mongo\n  namespace: mongodb\nspec:\n  members: 3\n  type: ReplicaSet\n  version: 5.0.5\n  persistent: true\nEOF\n\n```\n\n> This creates a MongoDB replica set with 3 members.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: mongodb.com/v1\nkind: MongoDB\nmetadata:\n  name: my-mongo\n  namespace: mongodb\nspec:\n  members: 3\n  type: ReplicaSet\n  version: 5.0.5\n  persistent: true\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the MongoDB deployment",
+        "description": "This command checks the status of the MongoDB custom resource to ensure it is running correctly.\n\n```bash\n\nkubectl get mongodb -n mongodb\n\n```\n\n> You should see the status of your MongoDB instance.",
+        "commands": [
+          "kubectl get mongodb -n mongodb"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall MongoDB Community Operator",
-        "description": "To uninstall the MongoDB Community Operator and clean up resources:\n```bash\n# Uninstall the operator\nhelm uninstall mongodb-community-operator\n\n# Delete MongoDB resources\nkubectl delete mongodb my-mongo\n```\nEnsure all resources are cleaned up:\n```bash\nkubectl get all\n```"
+        "title": "Uninstall the MongoDB Community Operator",
+        "description": "This step removes the MongoDB Community Operator and all associated resources. Be aware that this will delete all MongoDB data and resources created by the operator.\n\n```bash\n\nhelm uninstall mongodb-community-operator --namespace mongodb\n\nkubectl delete namespace mongodb\n\n```\n\n> This command removes the operator.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall mongodb-community-operator --namespace mongodb",
+          "kubectl delete namespace mongodb"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade MongoDB Community Operator",
-        "description": "To upgrade the MongoDB Community Operator from v0.10 to v0.11:\n1. Backup your MongoDB data using the built-in backup features or by exporting data.\n2. Upgrade the Helm release:\n```bash\nhelm upgrade mongodb-community-operator mongodb/mongodb-kubernetes-operator --version 0.11.0\n```\n3. Verify the upgrade:\n```bash\nkubectl get pods -n default\n```\n4. If issues arise, rollback to the previous version:\n```bash\nhelm rollback mongodb-community-operator 0\n```"
+        "title": "Upgrade the MongoDB Community Operator",
+        "description": "Before upgrading, ensure you have a backup of your MongoDB data. This process will upgrade the operator and verify the upgrade.\n\n```bash\n\nkubectl get mongodb -n mongodb -o yaml > mongodb-backup.yaml\n\nhelm upgrade mongodb-community-operator mongodb/mongodb-kubernetes-operator --namespace mongodb --version 0.13.0\n\nkubectl get mongodb -n mongodb\n\n```\n\n> Backup the current MongoDB custom resource.\n> This command upgrades the operator to the specified version.\n> Verify that the MongoDB instance is running after the upgrade.",
+        "commands": [
+          "kubectl get mongodb -n mongodb -o yaml > mongodb-backup.yaml",
+          "helm upgrade mongodb-community-operator mongodb/mongodb-kubernetes-operator --namespace mongodb --version 0.13.0",
+          "kubectl get mongodb -n mongodb"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Operator Pod CrashLoopBackOff",
-        "description": "If the MongoDB Operator pod is in a CrashLoopBackOff state, check the logs:\n```bash\nkubectl logs <operator-pod-name>\n```\nCommon issues include misconfigured permissions or missing CRDs. Ensure all CRDs are installed:\n```bash\nkubectl get crd | grep mongodb\n```"
+        "title": "Error: 'MongoDB CRD not found'",
+        "description": "**Cause:** The MongoDB custom resource definition has not been installed.\n\n**Fix:**\nRun 'kubectl apply -f https://raw.githubusercontent.com/mongodb/mongodb-kubernetes-operator/main/deploy/crds/mongodb.com_mongodb_crd.yaml' to install the CRD."
       },
       {
-        "title": "MongoDB Instance Not Starting",
-        "description": "If the MongoDB instance is not starting, check the status:\n```bash\nkubectl get mongodb my-mongo -o yaml\n```\nLook for events indicating resource issues or misconfigurations. Adjust resources in the `mongodb.yaml` file if necessary."
+        "title": "Error: 'MongoDB instance is not ready'",
+        "description": "**Cause:** The MongoDB pods may not be running due to insufficient resources.\n\n**Fix:**\nCheck the pod status with 'kubectl get pods -n mongodb' and ensure your cluster has enough resources."
       },
       {
-        "title": "Insufficient Resources Error",
-        "description": "If you encounter an 'Insufficient CPU' or 'Insufficient Memory' error, check the resource requests and limits in your MongoDB spec. You may need to adjust them based on your cluster's available resources."
+        "title": "Error: 'Failed to connect to MongoDB'",
+        "description": "**Cause:** The MongoDB service may not be exposed correctly.\n\n**Fix:**\nEnsure the service is created with 'kubectl get svc -n mongodb' and check the service configuration."
+      },
+      {
+        "title": "Error: 'Helm release not found'",
+        "description": "**Cause:** The MongoDB Community Operator may not be installed.\n\n**Fix:**\nRun 'helm list --namespace mongodb' to check if the operator is installed."
       }
     ],
     "versionNotes": [
       {
-        "version": "0.11",
-        "changes": "Improved stability and performance enhancements.",
-        "deprecations": "No deprecated features in this version."
-      },
-      {
-        "version": "0.10",
-        "changes": "Initial release with basic MongoDB deployment capabilities.",
-        "deprecations": "N/A"
+        "version": "v0.13.0",
+        "changes": "Added support for Kubernetes 1.30 and improved logging capabilities.",
+        "deprecations": "Deprecated the use of legacy MongoDB configurations.",
+        "migrationSteps": "If upgrading from v0.11, ensure to migrate your custom resources to the new format as per the migration guide."
       }
     ],
     "resolution": {
-      "summary": "A successful setup includes a running MongoDB Community Operator and a deployed MongoDB instance, with proper RBAC configured for user access. You can verify the deployment by checking the status of the pods and MongoDB resources.",
+      "summary": "You should see the MongoDB instance listed with 'kubectl get mongodb -n mongodb' showing the status as 'Ready'.",
       "codeSnippets": [
-        "# Add the MongoDB Helm repository\nhelm repo add mongodb https://mongodb.github.io/mongodb-kubernetes-operator\nhelm repo update\n\n# Install the MongoDB Community Operator\nhelm install mongodb-community-operator mongodb/mongodb-kubernetes-operator --version 0.11.0",
-        "kubectl get pods -n default",
-        "apiVersion: mongodb.com/v1\nkind: MongoDB\nmetadata:\n  name: my-mongo\nspec:\n  members: 3\n  type: ReplicaSet\n  version: 4.4.0\n  podSpec:\n    resources:\n      requests:\n        cpu: 100m\n        memory: 512Mi\n      limits:\n        cpu: 1000m\n        memory: 2Gi",
-        "kubectl apply -f mongodb.yaml",
-        "kubectl get mongodb",
-        "# Create a role\nkubectl create role mongo-admin --verb=* --resource=pods --namespace=default\n\n# Bind the role to a user\nkubectl create rolebinding mongo-admin-binding --role=mongo-admin --user=<username> --namespace=default"
+        "helm repo add mongodb https://mongodb.github.io/mongodb-kubernetes-operator",
+        "helm install mongodb-community-operator mongodb/mongodb-kubernetes-operator --namespace mongodb --create-namespace --version 0.13.0",
+        "kubectl apply -f - <<EOF\napiVersion: mongodb.com/v1\nkind: MongoDB\nmetadata:\n  name: my-mongo\n  namespace: mongodb\nspec:\n  members: 3\n  type: ReplicaSet\n  version: 5.0.5\n  persistent: true\nEOF",
+        "kubectl get mongodb -n mongodb"
       ]
     }
   },
@@ -89,7 +113,13 @@
       "0.11"
     ],
     "supportedK8sVersions": [
-      "1.25+"
+      "1.25",
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -103,30 +133,29 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
-      "kubectl"
+      "helm"
     ],
     "containerImages": [
-      "mongodb/mongodb-kubernetes-operator:v0.11.0"
+      "docker.io/mongo:5.0.5"
     ],
     "sourceUrls": {
       "docs": "https://www.mongodb.com/docs/kubernetes-operator/",
       "repo": "https://github.com/mongodb/mongodb-kubernetes-operator"
     },
-    "qualityScore": 100
+    "qualityScore": 96
   },
   "prerequisites": {
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure you have a Kubernetes cluster running and kubectl configured."
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:06:52.786Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-17T12:10:50.182Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

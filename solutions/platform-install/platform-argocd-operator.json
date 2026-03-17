@@ -6,68 +6,114 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Argo CD Operator",
-    "description": "The Argo CD Operator simplifies the management of Argo CD instances on Kubernetes, enabling GitOps workflows. It is ideal for teams looking to automate their continuous delivery processes using Git as the source of truth.",
+    "description": "The Argo CD Operator is a Kubernetes operator designed to manage Argo CD clusters, enabling GitOps workflows for Kubernetes applications. It simplifies the deployment and management of Argo CD instances, making it easier to integrate continuous delivery practices into your Kubernetes environment. Key trade-offs include the need for familiarity with Kubernetes operators and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Install Argo CD Operator",
-        "description": "Create the necessary resources for the Argo CD Operator. First, apply the CatalogSource, OperatorGroup, and Subscription YAML files to your cluster:\n\n```bash\nkubectl apply -f catalog_source.yaml\nkubectl apply -f operator_group.yaml\nkubectl apply -f subscription.yaml\n```\n\nEnsure you are using the correct version of the operator by checking the image in the CatalogSource. For v0.12, use the image `quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92`."
+        "title": "Add the Argo CD Operator Helm repository",
+        "description": "This step adds the official Argo CD Operator Helm repository to your Helm configuration.\n\n```bash\n\nhelm repo add argocd-operator https://argoproj.github.io/argo-helm\n\nhelm repo update\n\n```\n\n> This command adds the Helm repository for the Argo CD Operator.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add argocd-operator https://argoproj.github.io/argo-helm",
+          "helm repo update"
+        ]
       },
       {
-        "title": "Verify Installation",
-        "description": "Check if the Argo CD Operator is running correctly:\n\n```bash\nkubectl get pods -n olm\nkubectl get subscriptions -n olm\nkubectl get catalogsources -n olm\n```\n\nYou should see the operator pod in a Running state."
+        "title": "Install the Argo CD Operator",
+        "description": "This step installs the Argo CD Operator using Helm in the specified namespace.\n\n```bash\n\nkubectl create namespace argocd-operator\n\nhelm install argocd-operator argocd-operator/argocd-operator --namespace argocd-operator --version 0.17.0\n\n```\n\n> Creates a namespace for the Argo CD Operator.\n> Installs the Argo CD Operator with the specified version.",
+        "commands": [
+          "kubectl create namespace argocd-operator",
+          "helm install argocd-operator argocd-operator/argocd-operator --namespace argocd-operator --version 0.17.0"
+        ]
       },
       {
-        "title": "Post-Install Configuration",
-        "description": "After installation, configure RBAC for Argo CD. Create a role and role binding:\n\n```yaml\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: argocd\n  name: argocd-role\nrules:\n- apiGroups: ['*']\n  resources: ['*']\n  verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: argocd-role-binding\n  namespace: argocd\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: argocd-role\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: argocd\n```\n\nApply the configuration:\n```bash\nkubectl apply -f rbac.yaml\n```"
+        "title": "Create the CatalogSource",
+        "description": "This step creates a CatalogSource resource for the Argo CD Operator.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: CatalogSource\nmetadata:\n  name: argocd-catalog\nspec:\n  sourceType: grpc\n  image: quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92\n  displayName: Argo CD Operators\n  publisher: Argo CD Community\nEOF\n\n```\n\n> Creates a CatalogSource for the Argo CD Operator.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: CatalogSource\nmetadata:\n  name: argocd-catalog\nspec:\n  sourceType: grpc\n  image: quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92\n  displayName: Argo CD Operators\n  publisher: Argo CD Community\nEOF"
+        ]
+      },
+      {
+        "title": "Create the OperatorGroup",
+        "description": "This step creates an OperatorGroup resource to manage the operator's scope.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1\nkind: OperatorGroup\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nEOF\n\n```\n\n> Creates an OperatorGroup for the Argo CD Operator.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1\nkind: OperatorGroup\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nEOF"
+        ]
+      },
+      {
+        "title": "Create the Subscription",
+        "description": "This step creates a Subscription resource to manage the Argo CD Operator lifecycle.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: Subscription\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nspec:\n  channel: alpha\n  name: argocd-operator\n  source: argocd-catalog\n  sourceNamespace: olm\nEOF\n\n```\n\n> Creates a Subscription for the Argo CD Operator.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: Subscription\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nspec:\n  channel: alpha\n  name: argocd-operator\n  source: argocd-catalog\n  sourceNamespace: olm\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the installation",
+        "description": "This step checks if the Argo CD Operator is running correctly.\n\n```bash\n\nkubectl get pods -n argocd-operator\n\n```\n\n> Lists the pods in the argocd-operator namespace to verify they are running.",
+        "commands": [
+          "kubectl get pods -n argocd-operator"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall Argo CD Operator",
-        "description": "To uninstall the Argo CD Operator, delete the Subscription, OperatorGroup, and CatalogSource:\n\n```bash\nkubectl delete subscription argocd-operator -n olm\nkubectl delete operatorgroup argocd-operator -n olm\nkubectl delete catalogsource argocd-catalog -n olm\n```\n\nAdditionally, clean up any Argo CD instances created by the operator:\n```bash\nkubectl delete argocd <argocd-instance-name> -n <namespace>\n```"
+        "title": "Uninstall the Argo CD Operator",
+        "description": "This step removes the Argo CD Operator and all associated resources. Be aware that this may lead to data loss if Argo CD applications are not backed up.\n\n```bash\n\nhelm uninstall argocd-operator --namespace argocd-operator\n\nkubectl delete namespace argocd-operator\n\n```\n\n> Uninstalls the Argo CD Operator.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall argocd-operator --namespace argocd-operator",
+          "kubectl delete namespace argocd-operator"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Argo CD Operator",
-        "description": "To upgrade the Argo CD Operator to a newer version, first ensure you have a backup of your existing Argo CD configurations. Then, update the Subscription YAML to point to the new version:\n\n1. Edit the `subscription.yaml` to change the `name` field to the new version, e.g., `argocd-operator.v0.12.0`.\n2. Apply the updated Subscription:\n```bash\nkubectl apply -f subscription.yaml\n```\n3. Verify the upgrade:\n```bash\nkubectl get pods -n olm\n```\n\nIf you encounter issues, you can roll back by reverting the Subscription YAML to the previous version and reapplying it."
+        "title": "Upgrade the Argo CD Operator",
+        "description": "Before upgrading, ensure you back up any critical data. This step upgrades the Argo CD Operator to the latest version.\n\n```bash\n\nkubectl get pods -n argocd-operator -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data\n\nhelm upgrade argocd-operator argocd-operator/argocd-operator --namespace argocd-operator --version 0.17.0\n\nkubectl get pods -n argocd-operator\n\n```\n\n> Drains the pods in the argocd-operator namespace.\n> Upgrades the Argo CD Operator to the specified version.\n> Verifies that the pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n argocd-operator -o jsonpath='{.items[*].metadata.name}' | xargs kubectl drain --ignore-daemonsets --delete-local-data",
+          "helm upgrade argocd-operator argocd-operator/argocd-operator --namespace argocd-operator --version 0.17.0",
+          "kubectl get pods -n argocd-operator"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Operator Pod Not Starting",
-        "description": "If the Argo CD Operator pod is not starting, check the logs for errors:\n```bash\nkubectl logs <operator-pod-name> -n olm\n```\nCommon issues may include insufficient permissions or missing CRDs. Ensure that all required CRDs are installed."
+        "title": "Error: 'no matches for kind \"CatalogSource\" in version \"operators.coreos.com/v1alpha1\"'",
+        "description": "**Cause:** The OLM (Operator Lifecycle Manager) is not installed or not running.\n\n**Fix:**\nInstall OLM by following the official OLM installation guide."
       },
       {
-        "title": "Argo CD Instance Not Responding",
-        "description": "If your Argo CD instance is not responding, check the status of the Argo CD services:\n```bash\nkubectl get svc -n argocd\n```\nEnsure that the services are up and running. If not, check the logs of the Argo CD pods for any errors."
+        "title": "Error: 'failed to create subscription: catalog source not found'",
+        "description": "**Cause:** The CatalogSource resource was not created successfully.\n\n**Fix:**\nCheck the CatalogSource YAML for errors and reapply it using kubectl."
       },
       {
-        "title": "RBAC Issues",
-        "description": "If you encounter permission errors, verify your RBAC configuration. Check the role and role binding:\n```bash\nkubectl get role -n argocd\nkubectl get rolebinding -n argocd\n```\nEnsure that the service account used by the Argo CD Operator has the necessary permissions."
+        "title": "Pods in argocd-operator namespace are in 'CrashLoopBackOff' state.",
+        "description": "**Cause:** The operator may have configuration issues or missing dependencies.\n\n**Fix:**\nCheck the operator logs using 'kubectl logs <pod-name> -n argocd-operator' for more details."
+      },
+      {
+        "title": "Error: 'no matches for kind \"OperatorGroup\" in version \"operators.coreos.com/v1\"'",
+        "description": "**Cause:** The OLM is not properly configured or the API version is incorrect.\n\n**Fix:**\nEnsure that OLM is installed and running correctly, and verify the API version."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.12",
-        "changes": "Improved support for multi-cluster deployments and enhanced logging capabilities.",
-        "deprecations": "Deprecated the old RBAC model in favor of a more flexible policy model."
-      },
-      {
-        "version": "v0.11",
-        "changes": "Introduced support for custom resource definitions (CRDs) for better management of Argo CD resources.",
-        "deprecations": "Removed legacy API endpoints."
+        "version": "v0.17.0",
+        "changes": "Added support for multi-cluster management and improved RBAC configurations.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of the Argo CD Operator will have the operator running in the `olm` namespace, with all required resources deployed. You should be able to create and manage Argo CD instances seamlessly.",
+      "summary": "You should see the Argo CD Operator pods running in the 'argocd-operator' namespace with a status of 'Running'. Use 'kubectl get pods -n argocd-operator' to confirm.",
       "codeSnippets": [
-        "kubectl apply -f catalog_source.yaml\nkubectl apply -f operator_group.yaml\nkubectl apply -f subscription.yaml",
-        "kubectl get pods -n olm\nkubectl get subscriptions -n olm\nkubectl get catalogsources -n olm",
-        "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  namespace: argocd\n  name: argocd-role\nrules:\n- apiGroups: ['*']\n  resources: ['*']\n  verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: argocd-role-binding\n  namespace: argocd\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: argocd-role\nsubjects:\n- kind: ServiceAccount\n  name: default\n  namespace: argocd",
-        "kubectl apply -f rbac.yaml"
+        "helm repo add argocd-operator https://argoproj.github.io/argo-helm",
+        "helm repo update",
+        "kubectl create namespace argocd-operator",
+        "helm install argocd-operator argocd-operator/argocd-operator --namespace argocd-operator --version 0.17.0",
+        "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: CatalogSource\nmetadata:\n  name: argocd-catalog\nspec:\n  sourceType: grpc\n  image: quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92\n  displayName: Argo CD Operators\n  publisher: Argo CD Community\nEOF",
+        "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1\nkind: OperatorGroup\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nEOF",
+        "kubectl apply -f - <<EOF\napiVersion: operators.coreos.com/v1alpha1\nkind: Subscription\nmetadata:\n  name: argocd-operator\n  namespace: argocd-operator\nspec:\n  channel: alpha\n  name: argocd-operator\n  source: argocd-catalog\n  sourceNamespace: olm\nEOF",
+        "kubectl get pods -n argocd-operator"
       ]
     }
   },
@@ -88,7 +134,9 @@
       "v0.12"
     ],
     "supportedK8sVersions": [
-      "1.25+"
+      "1.25",
+      "1.26",
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -102,10 +150,11 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "cli",
+      "helm"
     ],
     "containerImages": [
-      "quay.io/argoprojlabs/argocd-operator-registry:v0.12"
+      "quay.io/argoprojlabs/argocd-operator-registry@sha256:f0d2bb73e8b9d0561c931b2f2afc81cf28ca5711c476b02ac1887770e799ab92"
     ],
     "sourceUrls": {
       "docs": "https://argocd-operator.readthedocs.io/",
@@ -117,14 +166,14 @@
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary permissions to deploy operators."
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources and tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T02:10:05.784Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-17T12:13:18.728Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

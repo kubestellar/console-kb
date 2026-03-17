@@ -6,74 +6,106 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Rook Ceph Operator",
-    "description": "Rook is a cloud-native storage orchestrator for Kubernetes that automates the deployment and management of Ceph storage. It provides a framework for integrating storage services into Kubernetes, making it ideal for applications requiring scalable and resilient storage solutions.",
+    "description": "Rook Ceph Operator is a cloud-native storage orchestrator for Kubernetes that automates the deployment and management of Ceph storage. It provides self-managing, self-scaling, and self-healing storage services, making it ideal for applications requiring reliable and scalable storage solutions. Key trade-offs include the complexity of Ceph and the need for sufficient resources to run effectively.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Install Rook Ceph Operator",
-        "description": "1. Clone the Rook repository:\n```bash\ngit clone --single-branch --branch v1.16.0 https://github.com/rook/rook.git\ncd rook/deploy/examples\n```\n2. Create the Rook operator namespace:\n```bash\nkubectl create namespace rook-ceph\n```\n3. Apply the Rook CRDs:\n```bash\nkubectl apply -f crds.yaml\n```\n4. Deploy the Rook operator:\n```bash\nkubectl apply -f operator.yaml -n rook-ceph\n```\n5. Verify the operator is running:\n```bash\nkubectl -n rook-ceph get pods\n```"
+        "title": "Add Rook Helm repository",
+        "description": "This step adds the Rook Helm repository to your local Helm client, allowing you to install Rook using Helm.\n\n```bash\n\nhelm repo add rook-release https://charts.rook.io/release\n\nhelm repo update\n\n```\n\n> This command adds the official Rook Helm chart repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add rook-release https://charts.rook.io/release",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Rook CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Rook to manage Ceph resources.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/cluster/examples/kubernetes/ceph/crds.yaml\n\n```\n\n> This command applies the CRDs for Rook.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/cluster/examples/kubernetes/ceph/crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Rook Operator",
+        "description": "This step installs the Rook operator in the 'rook-system' namespace using Helm.\n\n```bash\n\nhelm install rook-ceph rook-release/rook-ceph --namespace rook-system --create-namespace --version v1.19.2\n\n```\n\n> This command installs the Rook Ceph operator.",
+        "commands": [
+          "helm install rook-ceph rook-release/rook-ceph --namespace rook-system --create-namespace --version v1.19.2"
+        ]
       },
       {
         "title": "Create a Ceph Cluster",
-        "description": "1. Apply the Ceph cluster configuration:\n```bash\nkubectl apply -f cluster.yaml -n rook-ceph\n```\n2. Verify the Ceph cluster status:\n```bash\nkubectl -n rook-ceph get cephclusters.ceph.rook.io\n```"
+        "description": "This step creates a Ceph cluster using a sample configuration.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/examples/cluster.yaml\n\n```\n\n> This command deploys a sample Ceph cluster.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/examples/cluster.yaml"
+        ]
       },
       {
-        "title": "Post-Install Configuration",
-        "description": "1. Enable monitoring for the Ceph cluster:\n```bash\nkubectl apply -f toolbox.yaml -n rook-ceph\n```\n2. Set up RBAC for accessing Ceph:\n```bash\nkubectl apply -f rbac.yaml -n rook-ceph\n```"
-      },
-      {
-        "title": "Verify Installation",
-        "description": "Check the overall status of the Rook and Ceph components:\n```bash\nkubectl -n rook-ceph get pods\nkubectl -n rook-ceph get cephclusters.ceph.rook.io\nkubectl -n rook-ceph get cephblockpools.ceph.rook.io\n```"
+        "title": "Verify the Ceph Cluster",
+        "description": "This step checks the status of the Ceph cluster to ensure it is running correctly.\n\n```bash\n\nkubectl -n rook-system get pods\n\nkubectl -n rook-system exec -it deploy/rook-ceph-tools -- ceph status\n\n```\n\n> This command lists all pods in the rook-system namespace.\n> This command checks the status of the Ceph cluster.",
+        "commands": [
+          "kubectl -n rook-system get pods",
+          "kubectl -n rook-system exec -it deploy/rook-ceph-tools -- ceph status"
+        ]
       }
     ],
     "uninstall": [
       {
-        "title": "Remove Rook Ceph Operator",
-        "description": "1. Delete the Ceph cluster:\n```bash\nkubectl delete cephcluster <cluster-name> -n rook-ceph\n```\n2. Remove the Rook operator:\n```bash\nkubectl delete -f operator.yaml -n rook-ceph\n```\n3. Delete the CRDs:\n```bash\nkubectl delete -f crds.yaml\n```\n4. Delete the Rook namespace:\n```bash\nkubectl delete namespace rook-ceph\n```"
+        "title": "Uninstall Rook Ceph Operator",
+        "description": "This step removes the Rook Ceph operator and its associated resources. Be aware that this will delete all Ceph data and resources managed by Rook.\n\n```bash\n\nhelm uninstall rook-ceph --namespace rook-system\n\nkubectl delete namespace rook-system\n\n```\n\n> This command uninstalls the Rook Ceph operator.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall rook-ceph --namespace rook-system",
+          "kubectl delete namespace rook-system"
+        ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Rook Ceph Operator",
-        "description": "1. Backup your Ceph cluster data:\n```bash\nkubectl -n rook-ceph exec -it <toolbox-pod> -- ceph osd pool export <pool-name> > backup.pool\n```\n2. Update the Rook operator version in the operator.yaml file to the desired version (e.g., v1.16.0).\n3. Apply the updated operator:\n```bash\nkubectl apply -f operator.yaml -n rook-ceph\n```\n4. Verify the upgrade:\n```bash\nkubectl -n rook-ceph get pods\nkubectl -n rook-ceph get cephclusters.ceph.rook.io\n```"
+        "description": "Before upgrading, ensure you have a backup of your data. This process includes draining nodes if necessary, upgrading the operator, and verifying the upgrade.\n\n```bash\n\nkubectl -n rook-system get pods\n\nhelm upgrade rook-ceph rook-release/rook-ceph --namespace rook-system --version v1.19.2\n\nkubectl -n rook-system get pods\n\n```\n\n> Check the status of the pods before upgrading.\n> This command upgrades the Rook Ceph operator.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl -n rook-system get pods",
+          "helm upgrade rook-ceph rook-release/rook-ceph --namespace rook-system --version v1.19.2",
+          "kubectl -n rook-system get pods"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Operator Pod Not Starting",
-        "description": "If the Rook operator pod is not starting, check the logs:\n```bash\nkubectl -n rook-ceph logs <operator-pod>\n```\nCommon issues include missing CRDs or incorrect RBAC permissions. Ensure all necessary resources are applied correctly."
+        "title": "Error: 'failed to create pool'",
+        "description": "**Cause:** This may occur if the Ceph cluster is not healthy or if there are insufficient resources.\n\n**Fix:**\nCheck the status of the Ceph cluster using 'kubectl -n rook-system exec -it deploy/rook-ceph-tools -- ceph status' and ensure all nodes are healthy."
       },
       {
-        "title": "Ceph Cluster Not Healthy",
-        "description": "To check the health of the Ceph cluster, run:\n```bash\nkubectl -n rook-ceph exec -it <toolbox-pod> -- ceph health\n```\nIf the cluster is unhealthy, check for OSDs that are down or misconfigured pools."
+        "title": "Pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can happen if there are misconfigurations in the Ceph cluster or insufficient resources.\n\n**Fix:**\nInspect the pod logs using 'kubectl logs <pod-name> -n rook-system' to identify the issue."
       },
       {
-        "title": "Insufficient Resources for Ceph OSDs",
-        "description": "If you encounter issues with OSDs not starting due to insufficient resources, check the resource requests in your cluster.yaml file. Adjust the requests and limits as necessary."
+        "title": "Ceph cluster status shows 'incomplete'",
+        "description": "**Cause:** This indicates that not all Ceph components are running or healthy.\n\n**Fix:**\nRun 'kubectl -n rook-system get pods' to check the pod status and troubleshoot any failing pods."
+      },
+      {
+        "title": "Error: 'no available monitors'",
+        "description": "**Cause:** This indicates that the Ceph monitor pods are not running or reachable.\n\n**Fix:**\nCheck the monitor pod status with 'kubectl -n rook-system get pods' and ensure they are running."
       }
     ],
     "versionNotes": [
       {
-        "version": "v1.16.0",
-        "changes": "Improved stability and performance enhancements for Ceph integration.",
-        "deprecations": "Deprecated the use of certain legacy configuration options in cluster.yaml."
-      },
-      {
-        "version": "v1.15.0",
-        "changes": "Added support for new storage classes and enhanced monitoring capabilities.",
-        "deprecations": "Removed support for Kubernetes versions below 1.25."
+        "version": "v1.19.2",
+        "changes": "Improved stability and performance of Ceph cluster management, added support for new storage classes.",
+        "deprecations": "No specific deprecations in this version.",
+        "migrationSteps": "No specific migration steps are required when upgrading from previous versions."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of Rook Ceph Operator includes a running operator, a healthy Ceph cluster, and properly configured storage classes. Verify that all components are operational and accessible.",
+      "summary": "You should see the output of 'kubectl -n rook-system get pods' showing all pods in the 'Running' state, and 'ceph status' should report a healthy cluster.",
       "codeSnippets": [
-        "git clone --single-branch --branch v1.16.0 https://github.com/rook/rook.git\ncd rook/deploy/examples",
-        "kubectl create namespace rook-ceph",
-        "kubectl apply -f crds.yaml",
-        "kubectl apply -f operator.yaml -n rook-ceph",
-        "kubectl -n rook-ceph get pods",
-        "kubectl apply -f cluster.yaml -n rook-ceph"
+        "helm repo add rook-release https://charts.rook.io/release",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/cluster/examples/kubernetes/ceph/crds.yaml",
+        "helm install rook-ceph rook-release/rook-ceph --namespace rook-system --create-namespace --version v1.19.2",
+        "kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.19.2/deploy/examples/cluster.yaml",
+        "kubectl -n rook-system get pods",
+        "kubectl -n rook-system exec -it deploy/rook-ceph-tools -- ceph status"
       ]
     }
   },
@@ -89,12 +121,12 @@
     "platformType": "operator",
     "platformProvider": "Rook",
     "platformVersions": [
-      "v1.14",
-      "v1.15",
-      "v1.16"
+      "v1.19.2"
     ],
     "supportedK8sVersions": [
-      "1.25+"
+      "1.25",
+      "1.26",
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -108,11 +140,10 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl",
       "helm"
     ],
     "containerImages": [
-      "rook/ceph:v1.16.0"
+      "rook/ceph:v1.19.2"
     ],
     "sourceUrls": {
       "docs": "https://rook.io/docs/rook/latest/",
@@ -124,14 +155,14 @@
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure you have a Kubernetes cluster running version 1.25 or higher and have kubectl and helm installed."
+    "resources": "Minimum 4 vCPU, 8GB RAM per node",
+    "description": "Ensure your Kubernetes cluster meets the resource requirements and that kubectl and helm are installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:07:18.448Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-17T12:11:12.226Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }

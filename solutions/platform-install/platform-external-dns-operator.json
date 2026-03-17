@@ -6,68 +6,98 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure ExternalDNS",
-    "description": "ExternalDNS is an operator that synchronizes Kubernetes Services and Ingresses with DNS providers, allowing dynamic DNS management through Kubernetes resources. It is useful when you want to automate DNS record updates based on your Kubernetes resources.",
+    "description": "ExternalDNS is an operator that synchronizes Kubernetes Services and Ingresses with DNS providers, allowing for dynamic DNS record management. It is particularly useful in environments where services are frequently created and destroyed, ensuring that DNS records are always up-to-date. Key trade-offs include dependency on external DNS providers and potential delays in DNS propagation.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Install ExternalDNS using Helm",
-        "description": "Add the ExternalDNS Helm repository and install the operator. Ensure you are using Helm version 3.0 or higher.\n\n```bash\nhelm repo add external-dns https://charts.bitnami.com/bitnami\nhelm repo update\nhelm install external-dns external-dns/external-dns --namespace kube-system --set provider=aws --set aws.zoneType=public --set aws.accessKey=YOUR_AWS_ACCESS_KEY --set aws.secretKey=YOUR_AWS_SECRET_KEY\n```\n\n**Note:** Replace `YOUR_AWS_ACCESS_KEY` and `YOUR_AWS_SECRET_KEY` with your actual AWS credentials. Ensure the IAM role has permissions to manage Route 53 records."
+        "title": "Add the ExternalDNS Helm repository",
+        "description": "This step adds the official ExternalDNS Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add external-dns https://charts.bitnami.com/bitnami\n\nhelm repo update\n\n```\n\n> This repository contains the ExternalDNS Helm chart.\n> Updates your local Helm chart repository cache.",
+        "commands": [
+          "helm repo add external-dns https://charts.bitnami.com/bitnami",
+          "helm repo update"
+        ]
       },
       {
-        "title": "Configure ExternalDNS for your domain",
-        "description": "Create a ConfigMap to specify the domain filter and other settings. This example assumes you want to manage DNS records for the domain `example.com`.\n\n```bash\nkubectl create configmap external-dns-config --from-literal=domain-filter=example.com --namespace kube-system\n```\n\nThen, update the ExternalDNS deployment to use this ConfigMap:\n\n```bash\nkubectl patch deployment external-dns -n kube-system --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/env/-\", \"value\": {\"name\": \"EXTERNAL_DNS_DOMAIN_FILTER\", \"valueFrom\": {\"configMapKeyRef\": {\"name\": \"external-dns-config\", \"key\": \"domain-filter\"}}}}]'\n```"
+        "title": "Install ExternalDNS with Helm",
+        "description": "This step installs ExternalDNS in the specified namespace with the necessary configurations.\n\n```bash\n\nhelm install external-dns external-dns/external-dns --namespace kube-system --create-namespace --version 0.20.0 --set provider=aws --set aws.zoneType=public\n\n```\n\n> Replace 'aws' with your DNS provider as needed.",
+        "commands": [
+          "helm install external-dns external-dns/external-dns --namespace kube-system --create-namespace --version 0.20.0 --set provider=aws --set aws.zoneType=public"
+        ]
       },
       {
-        "title": "Verify ExternalDNS installation",
-        "description": "Check if ExternalDNS is running correctly and managing DNS records.\n\n```bash\nkubectl get pods -n kube-system\nkubectl logs -f deployment/external-dns -n kube-system\nkubectl get services --all-namespaces\n```"
+        "title": "Create an ExternalDNS Custom Resource",
+        "description": "This step creates a Custom Resource (CR) that defines the desired DNS records to manage.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: externaldns.kubernetes.io/v1alpha1\nkind: DNSRecord\nmetadata:\n  name: my-dns-record\n  namespace: kube-system\nspec:\n  domain: example.com\n  targets:\n    - my-service.example.com\nEOF\n\n```\n\n> Replace 'example.com' and 'my-service' with your actual domain and service.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: externaldns.kubernetes.io/v1alpha1\nkind: DNSRecord\nmetadata:\n  name: my-dns-record\n  namespace: kube-system\nspec:\n  domain: example.com\n  targets:\n    - my-service.example.com\nEOF"
+        ]
+      },
+      {
+        "title": "Verify ExternalDNS is running",
+        "description": "This step checks the status of the ExternalDNS deployment to ensure it is running correctly.\n\n```bash\n\nkubectl get pods -n kube-system -l app.kubernetes.io/name=external-dns\n\nkubectl logs -n kube-system -l app.kubernetes.io/name=external-dns\n\n```\n\n> You should see the ExternalDNS pod running.\n> Check the logs for any errors or confirmation of DNS updates.",
+        "commands": [
+          "kubectl get pods -n kube-system -l app.kubernetes.io/name=external-dns",
+          "kubectl logs -n kube-system -l app.kubernetes.io/name=external-dns"
+        ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall ExternalDNS",
-        "description": "Remove the ExternalDNS Helm release and clean up any associated resources.\n\n```bash\nhelm uninstall external-dns --namespace kube-system\nkubectl delete configmap external-dns-config --namespace kube-system\n```"
+        "description": "This step removes the ExternalDNS deployment and associated resources. Be aware that this may lead to orphaned DNS records in your DNS provider.\n\n```bash\n\nhelm uninstall external-dns -n kube-system\n\nkubectl delete customresourcedefinition dnsrecords.externaldns.kubernetes.io\n\n```\n\n> This command removes the ExternalDNS release.\n> This command deletes the Custom Resource Definition.",
+        "commands": [
+          "helm uninstall external-dns -n kube-system",
+          "kubectl delete customresourcedefinition dnsrecords.externaldns.kubernetes.io"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade ExternalDNS to v0.15",
-        "description": "Before upgrading, back up your existing configuration and resources. Check the release notes for breaking changes. To upgrade:\n\n```bash\nhelm repo update\nhelm upgrade external-dns external-dns/external-dns --namespace kube-system --set provider=aws --set aws.zoneType=public --set aws.accessKey=YOUR_AWS_ACCESS_KEY --set aws.secretKey=YOUR_AWS_SECRET_KEY\n```\n\n**Backup:**\n```bash\nkubectl get all -n kube-system > external-dns-backup.yaml\n```\n\n**Rollback:** If the upgrade fails, you can rollback to the previous version using:\n```bash\nhelm rollback external-dns --namespace kube-system\n```"
+        "title": "Upgrade ExternalDNS",
+        "description": "Before upgrading, ensure you have a backup of your current configuration. This step upgrades ExternalDNS to the latest version.\n\n```bash\n\nhelm get values external-dns -n kube-system > external-dns-backup.yaml\n\nhelm upgrade external-dns external-dns/external-dns --namespace kube-system --version 0.20.0\n\nkubectl get pods -n kube-system -l app.kubernetes.io/name=external-dns\n\n```\n\n> Backup current values for ExternalDNS.\n> Upgrade to the specified version.\n> Verify that the new version is running.",
+        "commands": [
+          "helm get values external-dns -n kube-system > external-dns-backup.yaml",
+          "helm upgrade external-dns external-dns/external-dns --namespace kube-system --version 0.20.0",
+          "kubectl get pods -n kube-system -l app.kubernetes.io/name=external-dns"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "ExternalDNS not updating DNS records",
-        "description": "If DNS records are not being updated, check the logs for errors:\n```bash\nkubectl logs deployment/external-dns -n kube-system\n```\nEnsure that the IAM role has the correct permissions for Route 53. Also, verify that the domain filter is set correctly."
+        "title": "Error: 'No valid zones found'",
+        "description": "**Cause:** This indicates that ExternalDNS cannot find any zones configured for the specified provider.\n\n**Fix:**\nEnsure that the correct credentials and zone configurations are set in the ExternalDNS deployment."
       },
       {
-        "title": "Pods in CrashLoopBackOff",
-        "description": "If the ExternalDNS pods are in a CrashLoopBackOff state, check the logs for the root cause:\n```bash\nkubectl logs deployment/external-dns -n kube-system\n```\nCommon issues include misconfigured AWS credentials or incorrect domain filters."
+        "title": "Error: 'Failed to update DNS records'",
+        "description": "**Cause:** This may occur due to insufficient permissions for the DNS provider.\n\n**Fix:**\nVerify that the IAM roles or API keys used by ExternalDNS have the necessary permissions to modify DNS records."
       },
       {
-        "title": "Service not found in DNS",
-        "description": "If a service is not found in DNS, ensure that the service is of type LoadBalancer and that the ExternalDNS is configured to watch the correct namespace. Check the service annotations for ExternalDNS:\n```bash\nkubectl describe service <service-name> -n <namespace>\n```"
+        "title": "DNS records not updating",
+        "description": "**Cause:** This could be due to caching issues or propagation delays with the DNS provider.\n\n**Fix:**\nCheck the DNS provider's dashboard for the current state of records and ensure ExternalDNS is running without errors."
+      },
+      {
+        "title": "Pod is in CrashLoopBackOff",
+        "description": "**Cause:** This indicates that the ExternalDNS pod is failing to start, possibly due to misconfiguration.\n\n**Fix:**\nCheck the pod logs for detailed error messages and ensure all required environment variables are set correctly."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.14",
-        "changes": "Introduced support for additional DNS providers and improved logging.",
-        "deprecations": "Deprecated the old configuration flags for AWS provider."
-      },
-      {
-        "version": "v0.15",
-        "changes": "Added support for new Kubernetes API versions and enhanced error handling.",
-        "deprecations": "Removed deprecated flags from v0.14."
+        "version": "v0.20.0",
+        "changes": "Added support for Azure DNS and improved logging for DNS updates.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "A successful setup of ExternalDNS will have the operator running in the kube-system namespace, dynamically managing DNS records for your specified domain based on Kubernetes resources. You should see the DNS records in your DNS provider reflecting the services and ingresses defined in your cluster.",
+      "summary": "You should see the ExternalDNS pod running with a status of 'Running' and the expected DNS records created in your DNS provider's dashboard.",
       "codeSnippets": [
-        "helm repo add external-dns https://charts.bitnami.com/bitnami\nhelm repo update\nhelm install external-dns external-dns/external-dns --namespace kube-system --set provider=aws --set aws.zoneType=public --set aws.accessKey=YOUR_AWS_ACCESS_KEY --set aws.secretKey=YOUR_AWS_SECRET_KEY",
-        "kubectl create configmap external-dns-config --from-literal=domain-filter=example.com --namespace kube-system",
-        "kubectl patch deployment external-dns -n kube-system --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/env/-\", \"value\": {\"name\": \"EXTERNAL_DNS_DOMAIN_FILTER\", \"valueFrom\": {\"configMapKeyRef\": {\"name\": \"external-dns-config\", \"key\": \"domain-filter\"}}}}]'",
-        "kubectl get pods -n kube-system\nkubectl logs -f deployment/external-dns -n kube-system\nkubectl get services --all-namespaces"
+        "helm repo add external-dns https://charts.bitnami.com/bitnami",
+        "helm repo update",
+        "helm install external-dns external-dns/external-dns --namespace kube-system --create-namespace --version 0.20.0 --set provider=aws --set aws.zoneType=public",
+        "kubectl apply -f - <<EOF\napiVersion: externaldns.kubernetes.io/v1alpha1\nkind: DNSRecord\nmetadata:\n  name: my-dns-record\n  namespace: kube-system\nspec:\n  domain: example.com\n  targets:\n    - my-service.example.com\nEOF",
+        "kubectl get pods -n kube-system -l app.kubernetes.io/name=external-dns",
+        "kubectl logs -n kube-system -l app.kubernetes.io/name=external-dns"
       ]
     }
   },
@@ -83,11 +113,16 @@
     "platformType": "operator",
     "platformProvider": "Kubernetes SIG",
     "platformVersions": [
-      "v0.14",
-      "v0.15"
+      "v0.20.0"
     ],
     "supportedK8sVersions": [
-      "1.25+"
+      "1.25",
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -101,11 +136,10 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
-      "kubectl"
+      "helm"
     ],
     "containerImages": [
-      "k8s.gcr.io/external-dns/external-dns:v0.15.0"
+      "k8s.gcr.io/external-dns/external-dns:v0.20.0"
     ],
     "sourceUrls": {
       "docs": "https://kubernetes-sigs.github.io/external-dns/",
@@ -117,14 +151,14 @@
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "aws",
-    "description": "Ensure you have kubectl and Helm installed, and AWS CLI configured with appropriate permissions."
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:07:43.562Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-17T12:11:52.681Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }
