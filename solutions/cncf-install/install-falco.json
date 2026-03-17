@@ -12,79 +12,74 @@
     "steps": [
       {
         "title": "Add the Falco Helm repository",
-        "description": "Add the official Falco Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add falco https://falcosecurity.github.io/charts\nhelm repo update\n```"
+        "description": "Add the official Falco Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update\n```"
       },
       {
         "title": "Install Falco using Helm",
-        "description": "Install Falco in the 'falco-system' namespace with the following command:\n```bash\nhelm install falco falco/falco --namespace falco-system --create-namespace --version 0.43.0\n```"
+        "description": "Install Falco in the 'falco' namespace with the following command:\n```bash\nhelm install falco falcosecurity/falco --namespace falco --create-namespace --version 0.43.0\n```"
       },
       {
         "title": "Verify the Falco installation",
-        "description": "Check that the Falco pod is running successfully:\n```bash\nkubectl get pods -n falco-system\n```"
+        "description": "Check that the Falco pods are running successfully. Note that Falco runs as a DaemonSet, so you should see one pod per node.\n```bash\nkubectl get pods -n falco\n```"
       },
       {
-        "title": "Configure resource limits for Falco",
-        "description": "Update the Falco deployment to set resource limits. Use the following command to edit the deployment:\n```bash\nkubectl edit deployment falco -n falco-system\n```\nIn the editor, add the following under the 'spec.template.spec.containers.resources' section:\n```yaml\nresources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\"\n```"
-      },
-      {
-        "title": "Set up port forwarding for Falco",
-        "description": "To access Falco's output, set up port forwarding with the following command:\n```bash\nkubectl port-forward -n falco-system svc/falco 6677:6677\n```"
+        "title": "Verify Falco is detecting events",
+        "description": "Check the Falco logs to verify it is running and detecting events:\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falco --tail=50\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Falco will show the Falco pod running in the 'falco-system' namespace. You will also be able to access Falco's output through the port forwarding setup.",
+      "summary": "A successful installation of Falco will show a Falco pod running on each node in the 'falco' namespace (it runs as a DaemonSet). Falco does not expose a web UI — it logs security events to stdout and can forward them to external systems via Falcosidekick.",
       "codeSnippets": [
-        "helm repo add falco https://falcosecurity.github.io/charts\nhelm repo update",
-        "helm install falco falco/falco --namespace falco-system --create-namespace --version 0.43.0",
-        "kubectl get pods -n falco-system",
-        "kubectl edit deployment falco -n falco-system",
-        "resources:\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\""
+        "helm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update",
+        "helm install falco falcosecurity/falco --namespace falco --create-namespace --version 0.43.0",
+        "kubectl get pods -n falco",
+        "kubectl logs -n falco -l app.kubernetes.io/name=falco --tail=50"
       ]
     },
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the Falco release from the 'falco-system' namespace using the following command:\n```bash\nhelm uninstall falco --namespace falco-system\n```"
+        "description": "Uninstall the Falco release from the 'falco' namespace using the following command:\n```bash\nhelm uninstall falco --namespace falco\n```"
       },
       {
         "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with Falco. Use the following commands:\n```bash\nkubectl delete crd falcosecurity.org\nkubectl delete pvc --all -n falco-system\n```"
+        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with Falco. Use the following commands:\n```bash\nkubectl delete crd falcosecurity.org\nkubectl delete pvc --all -n falco\n```"
       },
       {
         "title": "Remove namespace and verify",
-        "description": "Delete the 'falco-system' namespace and verify its removal with the following commands:\n```bash\nkubectl delete namespace falco-system\nkubectl get namespaces\n```"
+        "description": "Delete the 'falco' namespace and verify its removal with the following commands:\n```bash\nkubectl delete namespace falco\nkubectl get namespaces\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of Falco. You can do this by exporting the current deployment:\n```bash\nkubectl get deployment falco -n falco-system -o yaml > falco-backup.yaml\n```"
+        "description": "Before upgrading, back up the current configuration and state of Falco. You can do this by exporting the current DaemonSet:\n```bash\nkubectl get daemonset falco -n falco -o yaml > falco-backup.yaml\n```"
       },
       {
         "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade Falco to the latest version using the following commands:\n```bash\nhelm repo update\nhelm upgrade falco falco/falco --namespace falco-system --version 0.44.0\n```"
+        "description": "Update the Helm repository and upgrade Falco to the latest version using the following commands:\n```bash\nhelm repo update\nhelm upgrade falco falcosecurity/falco --namespace falco --version 0.44.0\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the Falco pod is running the new version successfully:\n```bash\nkubectl get pods -n falco-system\n```"
+        "description": "Check that the Falco pods are running the new version successfully:\n```bash\nkubectl get pods -n falco\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Falco pod is not starting",
-        "description": "If the Falco pod is in a 'CrashLoopBackOff' state, check the logs for errors:\n```bash\nkubectl logs -n falco-system deployment/falco\n``` \nLook for any configuration issues or missing permissions."
+        "description": "If the Falco pod is in a 'CrashLoopBackOff' state, check the logs for errors:\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falco\n``` \nLook for any configuration issues or missing permissions."
       },
       {
         "title": "Falco alerts not triggering",
-        "description": "If Falco is not generating alerts, ensure that the rules are correctly configured. Check the rules file:\n```bash\nkubectl exec -n falco-system -it $(kubectl get pods -n falco-system -l app=falco -o jsonpath='{.items[0].metadata.name}') -- cat /etc/falco/falco_rules.yaml\n``` \nMake sure the rules are enabled and correctly defined."
+        "description": "If Falco is not generating alerts, ensure that the rules are correctly configured. Check the rules file:\n```bash\nkubectl exec -n falco -it $(kubectl get pods -n falco -l app.kubernetes.io/name=falco -o jsonpath='{.items[0].metadata.name}') -- cat /etc/falco/falco_rules.yaml\n``` \nMake sure the rules are enabled and correctly defined."
       },
       {
-        "title": "Port forwarding not working",
-        "description": "If you cannot access Falco's output via port forwarding, ensure that the service is running:\n```bash\nkubectl get svc -n falco-system\n``` \nIf the service is not available, check the deployment status and logs."
+        "title": "Falco events not appearing",
+        "description": "If Falco events are not appearing, ensure the DaemonSet is running on all nodes:\n```bash\nkubectl get ds -n falco\nkubectl get svc -n falco\n``` \nIf pods are not running, check the DaemonSet status and logs."
       },
       {
         "title": "Resource limits causing OOMKilled",
-        "description": "If the Falco pod is being killed due to out-of-memory (OOM) issues, consider increasing the memory limits in the deployment:\n```bash\nkubectl edit deployment falco -n falco-system\n``` \nAdjust the 'resources.limits.memory' value accordingly."
+        "description": "If the Falco pod is being killed due to out-of-memory (OOM) issues, consider increasing the memory limits via Helm values:\n```bash\nhelm upgrade falco falcosecurity/falco --namespace falco --set resources.limits.memory=1Gi\n``` \nAdjust the memory limit value accordingly."
       }
     ]
   },
@@ -100,7 +95,7 @@
       "falco"
     ],
     "targetResourceKinds": [
-      "Deployment",
+      "DaemonSet",
       "Namespace"
     ],
     "difficulty": "intermediate",
