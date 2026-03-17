@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cilium-38210-deadlock-in-compilation-lock-on-cilium-v1-17-0-v1-17-2",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cilium: Deadlock in compilation lock on Cilium v1.17.0 - v1.17.2",
+    "description": "Deadlock in compilation lock on Cilium v1.17.0 - v1.17.2. Users encounter: \"code = Unknown desc = failed to setup network for sandbox \"6fe91c8e8ebcee2b7f1541bff08471150a7c95f02\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cilium troubleshoot symptoms",
+        "description": "Check for the issue in your cilium deployment:\n```bash\nkubectl get pods -n cilium -l app.kubernetes.io/name=cilium\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=100 | grep -i error\n```\nLook for error: `code = Unknown desc = failed to setup network for sandbox \"6fe91c8e8ebcee2b7f1541bff08471150a7c95f0258be1e01645f26f7cd9d`"
+      },
+      {
+        "title": "Review cilium configuration",
+        "description": "Inspect the relevant cilium configuration:\n```bash\nkubectl get all -n cilium -l app.kubernetes.io/name=cilium\nkubectl get configmap -n cilium -l app.kubernetes.io/part-of=cilium\n```\n### Is there an existing issue for this?\n\n### Version\n\nequal or higher than v1.17.1 and lower than v1.18.0\n\n### What happened?\n\nDuring a node rollover event where the nodes are replaced with newer versions, we witnessed pods on one node fail to"
+      },
+      {
+        "title": "Apply the fix for Deadlock in compilation lock on Cilium v1.17.0 - v1.17.2",
+        "description": "The orchestrator watches a hand full of internal state and uses this to initialize and reinitalize the datapath. Endpoints can only start compiling their programs after we have done an initial reinitialization.\n\nTo ensure this, we proxy all calls to the loader via the orchestrator which blocks on a\n```yaml\nFailed to create pod sandbox: rpc error: code = Unknown desc = failed to setup network for sandbox \"6fe91c8e8ebcee2b7f1541bff08471150a7c95f0258be1e01645f26f7cd9d09f\": plugin type=\"cilium-cni\" failed (add): unable to create endpoint: [PUT /endpoint/{id}][429] putEndpointIdTooManyRequests\n```"
+      },
+      {
+        "title": "Confirm Deadlock in compilation lock on Cilium v1.17.0 -… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=50 --since=5m\nkubectl get events -n cilium --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = Unknown desc = failed to setup network for sandbox \"6fe91c8e8ebcee2b7f1541bff08471150a7c95f0258be1e01645f26f7cd9d` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The orchestrator watches a hand full of internal state and uses this to initialize and reinitalize the datapath. Endpoints can only start compiling their programs after we have done an initial reinitialization.\n\nTo ensure this, we proxy all calls to the loader via the orchestrator which blocks on a channel which gets closed after the first call to `Reinitialize` is done.",
+      "codeSnippets": [
+        "Failed to create pod sandbox: rpc error: code = Unknown desc = failed to setup network for sandbox \"6fe91c8e8ebcee2b7f1541bff08471150a7c95f0258be1e01645f26f7cd9d09f\": plugin type=\"cilium-cni\" failed (add): unable to create endpoint: [PUT /endpoint/{id}][429] putEndpointIdTooManyRequests",
+        "goroutine 1261 [chan receive, 22 minutes]:\ngithub.com/cilium/cilium/pkg/datapath/orchestrator.(*orchestrator).EndpointHash(0xc000a60000, {0x55d0e20, 0xc000c3f008})\n        /go/src/github.com/cilium/cilium/pkg/datapath/orchestrator/orchestrator.go:323 +0x2e\ngithub.com/cilium/cilium/pkg/endpoint.(*Endpoint).runPreCompilationSteps(0xc000c3f008, 0xc000c3f808)\n        /go/src/github.com/cilium/cilium/pkg/endpoint/bpf.go:758 +0xc98\ngithub.com/cilium/cilium/pkg/endpoint.(*Endpoint).regenerateBPF(0xc000c3f008, 0xc000c3f808)\n        /go/src/github.com/cilium/cilium/pkg/endpoint/bpf.go:400 +0x1fd\ngithub.com/cilium/cilium/pkg/endpoint.(*Endpoint).regenerate(0xc000c3f008, 0xc000c3f808)\n        /go/src/github.com/cilium/cilium/pkg/endpoint/policy.go:478 +0x991\ngithub.com/cilium/cilium/pkg/endpoint.(*En",
+        "goroutine 408 [sync.RWMutex.Lock, 22 minutes]:\nsync.runtime_SemacquireRWMutex(0x0?, 0xa0?, 0xc002d47cb0?)\n        /usr/local/go/src/runtime/sema.go:105 +0x25\nsync.(*RWMutex).Lock(0x1?)\n        /usr/local/go/src/sync/rwmutex.go:153 +0x6a\ngithub.com/cilium/cilium/pkg/datapath/loader.(*loader).Reinitialize(0xc00067bd00, {0x5584238, 0xc000dc0c00}, 0xc003b22780, {{0xc000cf8d90, 0x5}, 0x2118, {0x4e5524a, 0xc}, 0x1}, ...)\n        /go/src/github.com/cilium/cilium/pkg/datapath/loader/base.go:381 +0x362"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cilium/cilium/issues/38210",
+      "repo": "https://github.com/cilium/cilium",
+      "pr": "https://github.com/cilium/cilium/pull/38784"
+    },
+    "reactions": 21,
+    "comments": 29,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cilium installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:26:26.004Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
