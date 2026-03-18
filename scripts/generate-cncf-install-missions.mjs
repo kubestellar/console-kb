@@ -700,8 +700,21 @@ async function main() {
 
   const config = loadInstallSourcesConfig()
 
-  // Filter projects — exclude kubestellar itself
-  let projects = CNCF_PROJECTS.filter(p => p.name !== 'kubestellar')
+  // Non-installable projects — specs, community orgs, and circular installs
+  const NON_INSTALLABLE_PROJECTS = new Set([
+    'cloudevents', 'openmetrics', 'opentelemetry-specification',
+    'in-toto-spec', 'notary-project', 'kubernetes',  // K8s-on-K8s is circular
+  ])
+
+  // Filter projects — exclude kubestellar itself and non-installable specs
+  let projects = CNCF_PROJECTS.filter(p => {
+    if (p.name === 'kubestellar') return false
+    if (NON_INSTALLABLE_PROJECTS.has(p.name)) {
+      console.log(`Skipping non-installable project: ${p.name}`)
+      return false
+    }
+    return true
+  })
 
   if (TARGET_PROJECTS) {
     projects = projects.filter(p => TARGET_PROJECTS.includes(p.name))
