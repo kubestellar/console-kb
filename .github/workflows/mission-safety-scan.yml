@@ -112,6 +112,22 @@ jobs:
                 echo "::warning file=$f::Uses :latest tag — pin to specific version"
               fi
             fi
+
+            # Detect hardcoded credentials (password/token/secret/apiKey with non-placeholder values)
+            if grep -qP '"(password|token|secret|apiKey|api_key|admin_password)":\s*"(?!<[A-Z_]+>|changeme|CHANGE_ME|your-|YOUR_|xxx|placeholder)[^"]{3,}"' "$f"; then
+              echo "::warning file=$f::Possible hardcoded credential detected — verify it's a safe example value"
+            fi
+
+            # Detect leaked cloud provider hostnames
+            if grep -qP '\b(ip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal|ec2-\d+-\d+-\d+-\d+\.\w+\.compute\.amazonaws\.com|compute\.googleapis\.com|\.cloudapp\.azure\.com)\b' "$f"; then
+              echo "::error file=$f::Leaked cloud provider hostname detected — must be anonymized"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Detect deprecated container registries
+            if grep -qP 'k8s\.gcr\.io/' "$f"; then
+              echo "::warning file=$f::Uses deprecated k8s.gcr.io registry — should use registry.k8s.io"
+            fi
           done
 
           if [ $ERRORS -gt 0 ]; then

@@ -1,0 +1,131 @@
+name: Mission Content Validation
+on:
+  pull_request:
+    paths:
+      - 'solutions/**/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-content:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install validation tools
+        run: |
+          # Install crane for container image validation
+          CRANE_VERSION="v0.20.2"
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" | tar xz -C /usr/local/bin crane
+          crane version
+
+      - name: Validate mission content
+        run: |
+          ERRORS=0
+          WARNINGS=0
+
+          # Get changed JSON files in solutions/
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'solutions/**/*.json' 2>/dev/null || echo "")
+          [ -z "$FILES" ] && echo "No solution files changed" && exit 0
+
+          for f in $FILES; do
+            [ -f "$f" ] || continue
+
+            echo "Validating: $f"
+
+            # Extract URLs, Helm repos, container images from the JSON
+            HELM_REPOS=$(python3 -c "
+          import json, re, sys
+          try:
+            d = json.load(open('$f'))
+            text = json.dumps(d)
+            # Find helm repo add commands
+            for m in re.finditer(r'helm repo add \S+ (\S+)', text):
+              url = m.group(1).rstrip('\\\\n').rstrip('\"')
+              if not url.startswith('oci://'):
+                print(url)
+            # Check helmRepoUrl field
+            repo = d.get('metadata', {}).get('helmRepoUrl', '')
+            if repo and not repo.startswith('oci://'):
+              print(repo)
+          except: pass
+          " 2>/dev/null || true)
+
+            CONTAINER_IMAGES=$(python3 -c "
+          import json, re, sys
+          try:
+            d = json.load(open('$f'))
+            for img in d.get('metadata', {}).get('containerImages', []):
+              if img and 'registry/org' not in img and 'your-docker' not in img:
+                print(img)
+          except: pass
+          " 2>/dev/null || true)
+
+            URLS=$(python3 -c "
+          import json, re, sys
+          try:
+            d = json.load(open('$f'))
+            text = json.dumps(d)
+            for m in re.finditer(r'https?://[^\s\"\\\\]+', text):
+              url = m.group(0).rstrip('.,;)')
+              # Skip known-good domains and API endpoints
+              if any(skip in url for skip in ['github.com/kubestellar', 'kubernetes.io/docs', 'helm.sh/docs']):
+                continue
+              # Only check raw.githubusercontent URLs and custom domains
+              if 'raw.githubusercontent.com' in url or not any(known in url for known in ['github.com', 'kubernetes.io', 'google.com', 'microsoft.com', 'cloudflare.com', 'docker.com', 'docker.io', 'quay.io', 'ghcr.io', 'gcr.io', 'registry.k8s.io', 'elastic.co', 'grafana.com', 'bitnami.com']):
+                print(url)
+          except: pass
+          " 2>/dev/null | head -10 || true)
+
+            # Validate Helm repo URLs (check index.yaml exists)
+            if [ -n "$HELM_REPOS" ]; then
+              while IFS= read -r repo; do
+                [ -z "$repo" ] && continue
+                HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "${repo}/index.yaml" 2>/dev/null || echo "000")
+                if [ "$HTTP_CODE" != "200" ]; then
+                  echo "::error file=$f::Helm repo URL unreachable or invalid: $repo (HTTP $HTTP_CODE)"
+                  ERRORS=$((ERRORS + 1))
+                fi
+              done <<< "$HELM_REPOS"
+            fi
+
+            # Validate container images exist (using crane)
+            if [ -n "$CONTAINER_IMAGES" ]; then
+              while IFS= read -r img; do
+                [ -z "$img" ] && continue
+                # Strip any quotes or whitespace
+                img=$(echo "$img" | tr -d '"' | xargs)
+                if ! crane digest "$img" > /dev/null 2>&1; then
+                  echo "::warning file=$f::Container image not found in registry: $img"
+                  WARNINGS=$((WARNINGS + 1))
+                fi
+              done <<< "$CONTAINER_IMAGES"
+            fi
+
+            # Spot-check URLs (only non-standard ones, max 10 per file)
+            if [ -n "$URLS" ]; then
+              while IFS= read -r url; do
+                [ -z "$url" ] && continue
+                HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$url" 2>/dev/null || echo "000")
+                if [ "$HTTP_CODE" = "000" ] || [ "$HTTP_CODE" = "404" ]; then
+                  echo "::warning file=$f::URL unreachable or 404: $url"
+                  WARNINGS=$((WARNINGS + 1))
+                fi
+              done <<< "$URLS"
+            fi
+
+          done
+
+          echo ""
+          echo "=== Validation Summary ==="
+          echo "Errors: $ERRORS"
+          echo "Warnings: $WARNINGS"
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::Found $ERRORS validation errors. Fix before merging."
+            exit 1
+          fi
+          echo "Content validation passed"
