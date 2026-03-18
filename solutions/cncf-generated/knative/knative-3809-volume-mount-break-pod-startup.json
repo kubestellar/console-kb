@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "knative-3809-volume-mount-break-pod-startup",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "knative: volume mount break Pod startup",
+    "description": "volume mount break Pod startup. This issue affects 5+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify knative troubleshoot symptoms",
+        "description": "Check for the issue in your knative deployment:\n```bash\nkubectl get pods -n knative -l app.kubernetes.io/name=knative\nkubectl logs -l app.kubernetes.io/name=knative -n knative --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review knative configuration",
+        "description": "Inspect the relevant knative configuration:\n```bash\nkubectl get all -n knative -l app.kubernetes.io/name=knative\nkubectl get configmap -n knative -l app.kubernetes.io/part-of=knative\n```\n## In what area(s)?\r\n\n## What version of Knative?\n\nHEAD\n\n## Expected Behavior\n\nRun the `nginx` container as a service by specifying a non default port (.e port 80)."
+      },
+      {
+        "title": "Apply the fix for volume mount break Pod startup",
+        "description": "Now (#4156) that there is no fluentd sidecar we could also get rid of the emptyDir.\n &  mentionned that we should be able to read directly from the container content.\n\nIf there is no volume mounted to `/var/log`, its content is located at `/var/lib/docker/overlay2/<ID>/merged/var/log`. We could\n```yaml\n2019-04-18T16:41:52.643263735Z nginx: [alert] could not open error log file: open() \"/var/log/nginx/error.log\" failed (2: No such file or directory)\n2019-04-18T16:41:52.649571891Z 2019/04/18 16:41:52 [emerg] 1#1: open() \"/var/log/nginx/error.log\" failed (2: No such file or directory)\n```"
+      },
+      {
+        "title": "Confirm volume mount break Pod startup is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=knative -n knative --tail=50 --since=5m\nkubectl get events -n knative --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Now (#4156) that there is no fluentd sidecar we could also get rid of the emptyDir.\n &  mentionned that we should be able to read directly from the container content.\n\nIf there is no volume mounted to `/var/log`, its content is located at `/var/lib/docker/overlay2/<ID>/merged/var/log`.",
+      "codeSnippets": [
+        "2019-04-18T16:41:52.643263735Z nginx: [alert] could not open error log file: open() \"/var/log/nginx/error.log\" failed (2: No such file or directory)\n2019-04-18T16:41:52.649571891Z 2019/04/18 16:41:52 [emerg] 1#1: open() \"/var/log/nginx/error.log\" failed (2: No such file or directory)",
+        "apiVersion: serving.knative.dev/v1alpha1\nkind: Service\nmetadata:\n    annotations:\n        serving.knative.dev/creator: 'system:serviceaccount:sebgoa:default'\n        serving.knative.dev/lastModifier: 'system:serviceaccount:sebgoa:default'\n    name: fooport\nspec:\n    runLatest:\n        configuration:\n            revisionTemplate: {metadata: {creationTimestamp: null}, spec: {container: {image: nginx, name: \"\", ports: [{containerPort: 80}], resources: {requests: {cpu: 400m}}}, timeoutSeconds: 300}}",
+        "user  nginx;\nworker_processes  1;\n\nerror_log  /var/log/nginx/error.log warn;\npid        /var/log/nginx/run.pid;"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "knative",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "knative"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/knative/serving/issues/3809",
+      "repo": "https://github.com/knative/serving"
+    },
+    "reactions": 5,
+    "comments": 25,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with knative installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-18T06:28:35.015Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
