@@ -2,85 +2,67 @@
   "version": "kc-mission-v1",
   "name": "install-xregistry",
   "missionClass": "install",
-  "author": "KubeStellar Bot",
+  "author": "KubeStellar Community",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Xregistry on Kubernetes",
-    "description": "xRegistry is a metadata registry for discovering, validating, and versioning resources in distributed systems. Installing xRegistry allows you to manage your resources effectively through its server and CLI implementations.",
+    "title": "Install and Run xRegistry",
+    "description": "xRegistry is a CNCF Sandbox metadata registry for discovering, validating, and versioning resources in distributed systems. It provides both a server (API) and a CLI tool (`xr`). The server runs as a Docker container with an embedded MySQL database — no Kubernetes manifests are provided by the project.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the xRegistry repository",
-        "description": "First, clone the xRegistry repository to your local machine using the following command:\n```bash\ngit clone https://github.com/xregistry/server.git\ncd server\n```"
+        "title": "Run xRegistry server with Docker",
+        "description": "Start the xRegistry server with an embedded MySQL database and sample data:\n```bash\ndocker run -ti -p 8080:8080 ghcr.io/xregistry/xrserver-all --samples\n```\nThe `--samples` flag preloads sample Registries for exploration. Omit it to start with an empty Registry.\n\nWhen ready, the API server will be available at `http://localhost:8080`."
       },
       {
-        "title": "Deploy xRegistry using kubectl",
-        "description": "Apply the Kubernetes manifests to deploy xRegistry. Ensure you are in the `server` directory:\n```bash\nkubectl apply -f k8s/deployment.yaml --create-namespace --namespace xregistry\n```"
+        "title": "Verify the server is running",
+        "description": "Test the API with curl:\n```bash\ncurl http://localhost:8080\n```\nExpected output includes `specversion`, `registryid`, and `self` fields.\n\nYou can also access the browser-based explorer at:\n```\nhttp://localhost:8080?ui\n```"
       },
       {
-        "title": "Verify the deployment",
-        "description": "Check if the xRegistry pods are running successfully:\n```bash\nkubectl get pods --namespace xregistry\n```"
+        "title": "Install the xRegistry CLI",
+        "description": "Download the standalone `xr` CLI from the GitHub releases:\n```bash\n# macOS (Apple Silicon)\ncurl -Lo xr https://github.com/xregistry/server/releases/download/dev/xr-darwin-arm64\nchmod +x xr\nsudo mv xr /usr/local/bin/\n\n# Linux (amd64)\ncurl -Lo xr https://github.com/xregistry/server/releases/download/dev/xr-linux-amd64\nchmod +x xr\nsudo mv xr /usr/local/bin/\n```\nSee all available binaries at https://github.com/xregistry/server/releases/tag/dev"
       },
       {
-        "title": "Expose the xRegistry service",
-        "description": "To access the xRegistry service, you can use port forwarding:\n```bash\nkubectl port-forward svc/xregistry-service 8080:80 --namespace xregistry\n```"
-      },
-      {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the xRegistry deployment by editing the deployment manifest:\n```bash\nkubectl edit deployment xregistry --namespace xregistry\n``` \nAdd resource limits under the `spec.containers.resources` section."
+        "title": "Explore sample data",
+        "description": "If you started the server with `--samples`, explore the preloaded registries:\n```bash\n# List the DocStore registry\ncurl http://localhost:8080/reg-DocStore\n\n# Browse in the UI\nopen http://localhost:8080/reg-DocStore?ui\n```\nSee the [`samples/doc-store`](https://github.com/xregistry/server/tree/main/samples/doc-store) script for additional setup with sample data."
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the xRegistry service",
-        "description": "First, delete the xRegistry deployment and service:\n```bash\nkubectl delete -f k8s/deployment.yaml --namespace xregistry\n```"
+        "title": "Stop the xRegistry container",
+        "description": "Stop the running Docker container:\n```bash\ndocker ps | grep xrserver\ndocker stop <container-id>\n```"
       },
       {
-        "title": "Clean up the xRegistry namespace",
-        "description": "Remove the xRegistry namespace to clean up all associated resources:\n```bash\nkubectl delete namespace xregistry\n```"
+        "title": "Remove the CLI",
+        "description": "Remove the xr CLI binary:\n```bash\nsudo rm /usr/local/bin/xr\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and data if necessary. You can export the current deployment:\n```bash\nkubectl get deployment xregistry -n xregistry -o yaml > xregistry-backup.yaml\n```"
+        "title": "Pull the latest image",
+        "description": "Pull the latest xRegistry server image:\n```bash\ndocker pull ghcr.io/xregistry/xrserver-all\n```"
       },
       {
-        "title": "Update the repository",
-        "description": "Pull the latest changes from the xRegistry repository:\n```bash\ngit pull origin main\n```"
-      },
-      {
-        "title": "Upgrade the deployment",
-        "description": "Reapply the updated Kubernetes manifests:\n```bash\nkubectl apply -f k8s/deployment.yaml --namespace xregistry\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the pods to ensure they are running the new version:\n```bash\nkubectl get pods --namespace xregistry\n```"
+        "title": "Restart with the new image",
+        "description": "Stop the current container and start a new one:\n```bash\ndocker stop <container-id>\ndocker run -ti -p 8080:8080 ghcr.io/xregistry/xrserver-all --samples\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not starting",
-        "description": "If the pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace xregistry\n``` \nEnsure that all required environment variables and configurations are set correctly."
+        "title": "Port 8080 already in use",
+        "description": "If port 8080 is in use, map to a different port:\n```bash\ndocker run -ti -p 9090:8080 ghcr.io/xregistry/xrserver-all --samples\n```\nThen access the server at `http://localhost:9090`."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the service, verify that the service is running:\n```bash\nkubectl get svc --namespace xregistry\n``` \nEnsure that the correct ports are exposed and that port forwarding is set up correctly."
-      },
-      {
-        "title": "Insufficient resources",
-        "description": "If you encounter resource allocation issues, check the resource limits set in the deployment:\n```bash\nkubectl describe deployment xregistry --namespace xregistry\n``` \nAdjust the resource limits in the deployment manifest if necessary."
+        "title": "Container exits immediately",
+        "description": "Check the container logs for errors:\n```bash\ndocker logs <container-id>\n```\nEnsure Docker has enough memory allocated (the embedded MySQL requires at least 512MB)."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of xRegistry will have all pods running without errors, and you will be able to access the service through the specified port. You can manage your resources using the CLI provided.",
+      "summary": "A successful installation will have the xRegistry server running as a Docker container, accessible at http://localhost:8080 (API) and http://localhost:8080?ui (browser explorer). The xr CLI can be used to manage data in Registries.",
       "codeSnippets": [
-        "git clone https://github.com/xregistry/server.git\ncd server",
-        "kubectl apply -f k8s/deployment.yaml --create-namespace --namespace xregistry",
-        "kubectl get pods --namespace xregistry",
-        "kubectl port-forward svc/xregistry-service 8080:80 --namespace xregistry",
-        "kubectl edit deployment xregistry --namespace xregistry"
+        "docker run -ti -p 8080:8080 ghcr.io/xregistry/xrserver-all --samples",
+        "curl http://localhost:8080",
+        "curl -Lo xr https://github.com/xregistry/server/releases/download/dev/xr-darwin-arm64"
       ]
     }
   },
@@ -95,38 +77,35 @@
     "cncfProjects": [
       "xregistry"
     ],
-    "targetResourceKinds": [
-      "Deployment",
-      "Service",
-      "Namespace"
-    ],
-    "difficulty": "intermediate",
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
     "issueTypes": [
-      "installation",
-      "configuration"
+      "installation"
     ],
     "installMethods": [
-      "kubectl"
+      "docker"
     ],
     "maturity": "sandbox",
-    "projectVersion": "latest",
-    "containerImages": [],
+    "projectVersion": "dev",
+    "containerImages": [
+      "ghcr.io/xregistry/xrserver-all"
+    ],
     "sourceUrls": {
-      "docs": "https://xRegistry.io",
-      "repo": "https://github.com/xregistry/server"
+      "docs": "https://xregistry.io",
+      "repo": "https://github.com/xregistry/server",
+      "installation": "https://github.com/xregistry/server/blob/main/docs/installation.md"
     },
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "docker"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and kubectl configured to interact with it."
+    "description": "Docker must be installed and running. No Kubernetes cluster is required — xRegistry runs as a standalone Docker container."
   },
   "security": {
-    "scannedAt": "2026-03-18T06:27:14.180Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-03-18T14:00:00.000Z",
+    "scannerVersion": "manual-review",
     "sanitized": true,
     "findings": []
   }
