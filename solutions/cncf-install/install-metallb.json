@@ -28,7 +28,7 @@
       },
       {
         "title": "Configure MetalLB for Layer 2 mode",
-        "description": "Create a ConfigMap to configure MetalLB. Replace `<YOUR_IP_RANGE>` with your desired IP range:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    layer2:\n      addresses:\n      - <YOUR_IP_RANGE>\nEOF\n```"
+        "description": "Create an IPAddressPool and L2Advertisement to configure MetalLB. Replace `192.168.1.240-192.168.1.250` with your desired IP range:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: metallb.io/v1beta1\nkind: IPAddressPool\nmetadata:\n  name: default-pool\n  namespace: metallb-system\nspec:\n  addresses:\n  - 192.168.1.240-192.168.1.250\n---\napiVersion: metallb.io/v1beta1\nkind: L2Advertisement\nmetadata:\n  name: default-l2\n  namespace: metallb-system\nspec:\n  ipAddressPools:\n  - default-pool\nEOF\n```"
       }
     ],
     "uninstall": [
@@ -48,7 +48,7 @@
     "upgrade": [
       {
         "title": "Backup current configuration",
-        "description": "Before upgrading, back up your current MetalLB configuration:\n```bash\nkubectl get configmap config -n metallb-system -o yaml > metallb-config-backup.yaml\n```"
+        "description": "Before upgrading, back up your current MetalLB configuration:\n```bash\nkubectl get ipaddresspool,l2advertisement -n metallb-system -o yaml > metallb-config-backup.yaml\n```"
       },
       {
         "title": "Update the Helm repository",
@@ -70,7 +70,7 @@
       },
       {
         "title": "MetalLB not assigning IPs",
-        "description": "If MetalLB is not assigning IPs, ensure that the IP range specified in the ConfigMap is valid and not overlapping with existing services:\n```bash\nkubectl describe configmap config -n metallb-system\n```"
+        "description": "If MetalLB is not assigning IPs, ensure that the IPAddressPool is correctly configured and the IP range is valid and not overlapping with existing services:\n```bash\nkubectl get ipaddresspool -n metallb-system -o yaml\nkubectl get l2advertisement -n metallb-system -o yaml\n```"
       },
       {
         "title": "Service not reachable",
@@ -84,7 +84,7 @@
         "helm repo update",
         "helm install metallb metallb/metallb --version 0.15.3 --namespace metallb-system --create-namespace",
         "kubectl get pods -n metallb-system",
-        "cat <<EOF | kubectl apply -f -\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    layer2:\n      addresses:\n      - <YOUR_IP_RANGE>\nEOF"
+        "cat <<EOF | kubectl apply -f -\napiVersion: metallb.io/v1beta1\nkind: IPAddressPool\nmetadata:\n  name: default-pool\n  namespace: metallb-system\nspec:\n  addresses:\n  - 192.168.1.240-192.168.1.250\n---\napiVersion: metallb.io/v1beta1\nkind: L2Advertisement\nmetadata:\n  name: default-l2\n  namespace: metallb-system\nspec:\n  ipAddressPools:\n  - default-pool\nEOF"
       ]
     }
   },
@@ -100,7 +100,8 @@
       "metallb"
     ],
     "targetResourceKinds": [
-      "Configmap",
+      "IPAddressPool",
+      "L2Advertisement",
       "Namespace"
     ],
     "difficulty": "intermediate",
