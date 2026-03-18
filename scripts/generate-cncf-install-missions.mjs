@@ -650,6 +650,39 @@ function titleCase(str) {
   return str.replace(/(?:^|[-_])(\w)/g, (_, c) => ' ' + c.toUpperCase()).trim()
 }
 
+/** Sanitize real infrastructure details from scraped content */
+function sanitizeInfraDetails(text) {
+  // Replace real public IPs with RFC 5737 documentation IPs (preserve private ranges)
+  let sanitized = text.replace(
+    /\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
+    '192.0.2.1'
+  )
+  // Replace AWS EC2 internal hostnames
+  sanitized = sanitized.replace(
+    /\bip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal\b/g,
+    'ip-10-0-1-100.us-east-1.compute.internal'
+  )
+  // Replace AWS EC2 public hostnames
+  sanitized = sanitized.replace(
+    /\bec2-\d+-\d+-\d+-\d+\.\w+\.compute\.amazonaws\.com\b/g,
+    'ec2-192-0-2-1.us-east-1.compute.amazonaws.com'
+  )
+  // Replace GCP instance hostnames
+  sanitized = sanitized.replace(
+    /\b[\w-]+\.[\w-]+\.c\.[\w-]+\.internal\b/g,
+    'instance-1.us-central1-a.c.project-id.internal'
+  )
+  return sanitized
+}
+
+/** Detect and redact potential credentials in scraped content */
+function redactCredentials(text) {
+  // Redact password values in YAML/JSON-like content
+  return text
+    .replace(/(password|passwd|secret|token|apiKey|api_key|admin_password)["']?\s*[:=]\s*["']?(?!<[A-Z_]+>|changeme|CHANGE_ME|your-|YOUR_|xxx|placeholder|\$\{)([^\s"'}{,]{4,})/gi,
+      '$1: <REDACTED>')
+}
+
 function truncate(text, max) {
   if (!text) return ''
   return text.length <= max ? text : text.slice(0, max) + '\n... [truncated]'
@@ -813,8 +846,35 @@ async function main() {
       // Build mission JSON
       const mission = buildMissionJson(project, llmResult, context, config)
 
+      // Sanitize infrastructure details and redact credentials from mission content
+      const sanitizeMissionText = (obj) => {
+        if (typeof obj === 'string') return redactCredentials(sanitizeInfraDetails(obj))
+        if (Array.isArray(obj)) return obj.map(sanitizeMissionText)
+        if (obj && typeof obj === 'object') {
+          const result = {}
+          for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v)
+          return result
+        }
+        return obj
+      }
+      mission.mission = sanitizeMissionText(mission.mission)
+
+      // Validate chart name matches project name (basic sanity check)
+      let qualityScore = 100
+      if (llmResult.helmChart && !llmResult.helmChart.toLowerCase().includes(project.name.toLowerCase().split('-')[0])) {
+        console.log(`  ⚠ Helm chart "${llmResult.helmChart}" doesn't match project "${project.name}" — possible wrong project`)
+        // Don't reject, but flag for review by penalizing score
+        const CHART_NAME_MISMATCH_PENALTY = 20
+        qualityScore = Math.max(0, qualityScore - CHART_NAME_MISMATCH_PENALTY)
+      }
+
       // Apply quality gate
       const gateResult = applyQualityGate(mission, config)
+      // Apply any pre-gate penalty from chart name mismatch
+      const FULL_SCORE = 100
+      if (qualityScore < FULL_SCORE) {
+        gateResult.score = Math.max(0, gateResult.score - (FULL_SCORE - qualityScore))
+      }
       mission.metadata.qualityScore = gateResult.score
       console.log(`  Quality: ${gateResult.score}/100 — ${gateResult.tier}`)
 

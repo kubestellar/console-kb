@@ -1259,7 +1259,7 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
           issue: issue.html_url,
           ...(linkedPR ? { pr: linkedPR.html_url } : {}),
         }),
-        codeSnippets: (resolution.yamlSnippets || []).slice(0, 3).map(s => s.slice(0, 800)),
+        codeSnippets: (resolution.yamlSnippets || []).slice(0, 3).map(s => redactCredentials(sanitizeInfraDetails(s.slice(0, 800)))),
       },
     },
     metadata: {
@@ -1530,12 +1530,37 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
   return steps
 }
 
-/**
- * Replace real public IP addresses with RFC 5737 documentation IPs.
- * Preserves private/loopback IPs (10.x, 172.16-31.x, 192.168.x, 127.x, 0.0.0.0).
- */
-function sanitizeIPs(text) {
-  return text.replace(/\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)(\d{1,3}\.){3}\d{1,3}\b/g, '192.0.2.1')
+/** Sanitize real infrastructure details from scraped content */
+function sanitizeInfraDetails(text) {
+  // Replace real public IPs with RFC 5737 documentation IPs (preserve private ranges)
+  let sanitized = text.replace(
+    /\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
+    '192.0.2.1'
+  )
+  // Replace AWS EC2 internal hostnames
+  sanitized = sanitized.replace(
+    /\bip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal\b/g,
+    'ip-10-0-1-100.us-east-1.compute.internal'
+  )
+  // Replace AWS EC2 public hostnames
+  sanitized = sanitized.replace(
+    /\bec2-\d+-\d+-\d+-\d+\.\w+\.compute\.amazonaws\.com\b/g,
+    'ec2-192-0-2-1.us-east-1.compute.amazonaws.com'
+  )
+  // Replace GCP instance hostnames
+  sanitized = sanitized.replace(
+    /\b[\w-]+\.[\w-]+\.c\.[\w-]+\.internal\b/g,
+    'instance-1.us-central1-a.c.project-id.internal'
+  )
+  return sanitized
+}
+
+/** Detect and redact potential credentials in scraped content */
+function redactCredentials(text) {
+  // Redact password values in YAML/JSON-like content
+  return text
+    .replace(/(password|passwd|secret|token|apiKey|api_key|admin_password)["']?\s*[:=]\s*["']?(?!<[A-Z_]+>|changeme|CHANGE_ME|your-|YOUR_|xxx|placeholder|\$\{)([^\s"'}{,]{4,})/gi,
+      '$1: <REDACTED>')
 }
 
 /**
@@ -1548,11 +1573,11 @@ function buildResolutionSummary(resolution, cleanSolution, missionType, sourceUr
     const summary = truncateAtSentenceBoundary(cleanSolution, 400)
     // Skip if after cleaning it's just empty or too short to be useful
     if (summary.length < 30) {
-      return sanitizeIPs(buildResolutionFallback(sourceUrls))
+      return sanitizeInfraDetails(redactCredentials(buildResolutionFallback(sourceUrls)))
     }
-    return sanitizeIPs(summary)
+    return sanitizeInfraDetails(redactCredentials(summary))
   }
-  return sanitizeIPs(buildResolutionFallback(sourceUrls))
+  return sanitizeInfraDetails(redactCredentials(buildResolutionFallback(sourceUrls)))
 }
 
 /** Build a useful fallback when no clean solution text is available. */
