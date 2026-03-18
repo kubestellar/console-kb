@@ -700,10 +700,18 @@ async function main() {
 
   const config = loadInstallSourcesConfig()
 
-  // Non-installable projects — specs, community orgs, and circular installs
+  // Non-installable projects — specs, community orgs, libs, and circular installs
   const NON_INSTALLABLE_PROJECTS = new Set([
     'cloudevents', 'openmetrics', 'opentelemetry-specification',
     'in-toto-spec', 'notary-project', 'kubernetes',  // K8s-on-K8s is circular
+    'grpc',             // library/spec — not an installable K8s component
+    'cedar',            // policy language/library — no runtime binary
+    'connect-rpc',      // library — used via language package managers
+    'container-network-interface', // spec — CNI plugins are separate projects
+    'composefs',        // filesystem library — not a K8s component
+    'bootc',            // bootable container tooling — not a K8s component
+    'oscal-compass',    // compliance spec tooling — not installable on K8s
+    'helm',             // helm-on-helm is circular
   ])
 
   // Filter projects — exclude kubestellar itself and non-installable specs
@@ -787,6 +795,18 @@ async function main() {
         console.log('  LLM returned skip/null — project may not be installable')
         report.skipped++
         report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'skipped', installMethods: 'N/A' })
+        continue
+      }
+
+      // Reject missions with empty install steps (no commands at all)
+      const hasInstallCmd = (llmResult.steps || []).some(s =>
+        /kubectl|helm|curl|apt|pip|docker|kustomize|operator-sdk/i.test(s.description || '')
+      )
+      if (!hasInstallCmd) {
+        console.log('  Rejected: install steps contain no actual install commands')
+        report.rejected++
+        report.rejectedProjects.push({ name: project.name, reason: 'Empty install steps — no commands found' })
+        report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'rejected', installMethods: 'N/A' })
         continue
       }
 

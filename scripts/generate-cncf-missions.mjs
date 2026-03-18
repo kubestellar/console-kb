@@ -362,11 +362,28 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
     }
   }
 
+  // Filter out low-quality resolution patterns
+  const LOW_QUALITY_PATTERNS = [
+    /hereby agree to the terms of the CLA/i,
+    /Pre-Submission checklist/i,
+    /What is the problem you're trying to solve/i,
+    /Does this PR introduce a user-facing change/i,
+    /I (had|have) the same (issue|problem|error)/i,
+    /me too/i,
+    /same here/i,
+    /\+1$/,
+    /WIP|work in progress/i,
+  ]
+
+  function isLowQualityComment(text) {
+    return LOW_QUALITY_PATTERNS.some(pattern => pattern.test(text))
+  }
+
   // If no PR-based solution, score comments and pick the best resolution
   if (!resolution.solution && comments.length > 0) {
     const MIN_COMMENT_LENGTH = 50
     const scoredComments = comments
-      .filter(c => c.body && c.body.length > MIN_COMMENT_LENGTH)
+      .filter(c => c.body && c.body.length > MIN_COMMENT_LENGTH && !isLowQualityComment(c.body))
       .map(c => {
         let score = 0
         const bodyLower = (c.body || '').toLowerCase()
@@ -1514,6 +1531,14 @@ function buildDetailedSteps(issue, resolution, project, cleanDesc, cleanSolution
 }
 
 /**
+ * Replace real public IP addresses with RFC 5737 documentation IPs.
+ * Preserves private/loopback IPs (10.x, 172.16-31.x, 192.168.x, 127.x, 0.0.0.0).
+ */
+function sanitizeIPs(text) {
+  return text.replace(/\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)(\d{1,3}\.){3}\d{1,3}\b/g, '192.0.2.1')
+}
+
+/**
  * Build resolution summary from available context.
  * Strips PR template boilerplate and avoids tautological filler text.
  * Ensures the summary ends at a sentence boundary (period, not mid-word).
@@ -1523,11 +1548,11 @@ function buildResolutionSummary(resolution, cleanSolution, missionType, sourceUr
     const summary = truncateAtSentenceBoundary(cleanSolution, 400)
     // Skip if after cleaning it's just empty or too short to be useful
     if (summary.length < 30) {
-      return buildResolutionFallback(sourceUrls)
+      return sanitizeIPs(buildResolutionFallback(sourceUrls))
     }
-    return summary
+    return sanitizeIPs(summary)
   }
-  return buildResolutionFallback(sourceUrls)
+  return sanitizeIPs(buildResolutionFallback(sourceUrls))
 }
 
 /** Build a useful fallback when no clean solution text is available. */

@@ -76,6 +76,42 @@ jobs:
             if grep -q '\-\-force.*grace-period=0' "$f"; then
               echo "::warning file=$f::Force delete with grace-period=0 — ensure this is intentional"
             fi
+
+            # Detect CLA boilerplate in resolutions
+            if grep -qi 'hereby agree to the terms of the CLA\|I hereby agree.*cla' "$f"; then
+              echo "::error file=$f::Resolution contains CLA boilerplate instead of actual content"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Detect unfilled PR templates in resolutions
+            if grep -qP 'What is the problem you.re trying to solve\?|Pre-Submission checklist|Does this PR introduce a user-facing change' "$f"; then
+              echo "::error file=$f::Resolution contains unfilled PR template"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Detect force delete without grace period (extended pattern)
+            if grep -qP '\-\-force.*grace-period[= ]*0' "$f"; then
+              echo "::warning file=$f::Contains --force --grace-period=0 pattern"
+            fi
+
+            # Detect pip install kubectl/helm (wrong install method)
+            if grep -qP 'pip install (kubectl|helm)\b' "$f"; then
+              echo "::error file=$f::Uses pip install kubectl/helm — these are not the real tools"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Detect nonexistent Kubernetes versions (>v1.33)
+            if grep -qP 'v1\.(3[4-9]|[4-9][0-9])' "$f"; then
+              echo "::error file=$f::References nonexistent Kubernetes version"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Detect :latest container image tags in install missions
+            if echo "$f" | grep -q 'install'; then
+              if grep -qP 'image:.*:latest' "$f"; then
+                echo "::warning file=$f::Uses :latest tag — pin to specific version"
+              fi
+            fi
           done
 
           if [ $ERRORS -gt 0 ]; then

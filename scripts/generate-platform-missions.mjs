@@ -746,6 +746,33 @@ async function main() {
     // 3. Build mission JSON
     const mission = buildMissionJson(platform, llmResult, context)
 
+    // 3.1. Post-generation validation — reject fabricated content
+    const allMissionText = JSON.stringify(mission.mission)
+
+    // Reject nonexistent Kubernetes versions (>v1.33)
+    const NONEXISTENT_K8S_VERSION_RE = /v1\.(3[4-9]|[4-9][0-9])/
+    if (NONEXISTENT_K8S_VERSION_RE.test(allMissionText)) {
+      console.log('  Rejected: references nonexistent Kubernetes version (>v1.33)')
+      results.push({ platform: platform.name, verdict: 'rejected', score: 0, issues: ['References nonexistent K8s version'] })
+      continue
+    }
+
+    // Reject pip install kubectl/helm (wrong install method)
+    const PIP_INSTALL_WRONG_TOOL_RE = /pip install (kubectl|helm)\b/
+    if (PIP_INSTALL_WRONG_TOOL_RE.test(allMissionText)) {
+      console.log('  Rejected: uses pip install kubectl/helm — these are not the real tools')
+      results.push({ platform: platform.name, verdict: 'rejected', score: 0, issues: ['Uses pip install kubectl/helm'] })
+      continue
+    }
+
+    // Reject placeholder container image patterns
+    const PLACEHOLDER_IMAGE_RE = /registry\/[a-z]+\/[a-z]+:tag|registry\/org\/image/
+    if (PLACEHOLDER_IMAGE_RE.test(allMissionText)) {
+      console.log('  Rejected: contains placeholder container image pattern')
+      results.push({ platform: platform.name, verdict: 'rejected', score: 0, issues: ['Placeholder container image not replaced'] })
+      continue
+    }
+
     // 3.5. Validate Helm repo URL if install method is helm
     if (llmResult.installMethods?.includes('helm') && llmResult.helmRepoUrl) {
       try {
