@@ -746,6 +746,23 @@ async function main() {
     // 3. Build mission JSON
     const mission = buildMissionJson(platform, llmResult, context)
 
+    // 3.5. Validate Helm repo URL if install method is helm
+    if (llmResult.installMethods?.includes('helm') && llmResult.helmRepoUrl) {
+      try {
+        const HELM_VALIDATE_TIMEOUT_MS = 10000
+        const indexRes = await fetch(`${llmResult.helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS) })
+        if (!indexRes.ok) {
+          console.log(`  Helm repo URL ${llmResult.helmRepoUrl} returned ${indexRes.status} — flagging for review`)
+          const HELM_URL_PENALTY = 30
+          mission.metadata.qualityScore = Math.max(0, (mission.metadata.qualityScore || 100) - HELM_URL_PENALTY)
+        }
+      } catch {
+        console.log(`  Helm repo URL ${llmResult.helmRepoUrl} unreachable — flagging for review`)
+        const HELM_URL_PENALTY = 30
+        mission.metadata.qualityScore = Math.max(0, (mission.metadata.qualityScore || 100) - HELM_URL_PENALTY)
+      }
+    }
+
     // 4. Apply quality gate
     const gateResult = applyQualityGate(mission)
     mission.metadata.qualityScore = gateResult.score

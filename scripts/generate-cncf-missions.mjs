@@ -290,6 +290,13 @@ async function getIssueDetails(owner, repo, issueNumber) {
     // Timeline API may not be available; proceed without linked PR
   }
 
+  // Verify linked PR was actually merged — closed-without-merging PRs
+  // should not be used as resolution sources
+  if (linkedPR && !linkedPR.merged) {
+    console.log(`    [SKIP PR] Linked PR #${linkedPR.number} was closed without merging — skipping as resolution source`)
+    linkedPR = null
+  }
+
   return { issue, comments: comments || [], linkedPR }
 }
 
@@ -394,7 +401,7 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
       })
       .sort((a, b) => b.score - a.score)
 
-    const MIN_COMMENT_SCORE = 3
+    const MIN_COMMENT_SCORE = 8
     if (scoredComments.length > 0 && scoredComments[0].score >= MIN_COMMENT_SCORE) {
       resolution.solution = truncateAtWordBoundary(cleanText(scoredComments[0].comment.body), 1500)
     }
@@ -572,6 +579,8 @@ const NON_K8S_PROJECTS = new Set([
   'visual-studio-code-kubernetes-tools',
   // Policy language — library/CLI, not a K8s workload
   'cedar',
+  // Specifications and community projects — no installable component
+  'opentelemetry-community', 'openssf', 'openmetrics', 'cloudevents-spec',
 ])
 
 function isKubernetesNative(project) {
@@ -941,7 +950,7 @@ function detectMissionType(issue) {
 
   // RFCs and proposals are features, not troubleshoot — check before bug keywords
   // since RFCs may contain words like "fix" or "error" in their descriptions
-  if (text.includes('[rfc]') || text.includes('rfc:') || text.includes('proposal') || text.includes('design doc')) return 'feature'
+  if (text.includes('[rfc]') || text.includes('[RFC]') || text.includes('rfc:') || text.includes('RFC:') || text.includes('proposal') || text.includes('design doc')) return 'feature'
 
   // Bug/error patterns — check first since these override feature keywords
   if (text.includes('bug') || text.includes('crash') || text.includes('error') || text.includes('fix')) return 'troubleshoot'

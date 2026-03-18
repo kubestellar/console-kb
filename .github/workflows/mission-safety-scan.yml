@@ -1,0 +1,69 @@
+name: Mission Safety Scan
+on:
+  pull_request:
+    paths:
+      - 'solutions/**/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  safety-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for dangerous commands
+        run: |
+          ERRORS=0
+
+          # Get changed JSON files
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'solutions/**/*.json' 2>/dev/null || find solutions -name '*.json' -newer .git/index)
+
+          for f in $FILES; do
+            [ -f "$f" ] || continue
+
+            # Check for kubectl delete namespace/all patterns (excluding documented uninstall sections)
+            if grep -qP 'kubectl delete (namespace|ns|all)\b.*--all' "$f"; then
+              echo "::error file=$f::Dangerous: kubectl delete all/namespace --all"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for rm -rf with dangerous paths
+            if grep -qP 'rm\s+-rf?\s+(/|/\*|~|\$HOME)' "$f"; then
+              echo "::error file=$f::Dangerous: rm -rf with root/home path"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for kubectl delete kube-system
+            if grep -qi 'kubectl delete.*kube-system' "$f"; then
+              echo "::error file=$f::Dangerous: kubectl delete in kube-system namespace"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for placeholder container images
+            if grep -q 'registry/org/image:tag' "$f"; then
+              echo "::error file=$f::Placeholder container image not replaced: registry/org/image:tag"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for unverified curl|bash from non-official sources
+            # (Allow known official domains)
+            if grep -qP 'curl.*\|\s*(ba)?sh' "$f"; then
+              if ! grep -qP 'curl.*(get\.k3s\.io|aka\.ms/|sdk\.cloud\.google|clis\.cloud\.ibm|ollama\.com|get\.rke2\.io|raw\.githubusercontent\.com).*\|\s*(ba)?sh' "$f"; then
+                echo "::warning file=$f::curl piped to shell from non-standard source — verify URL is official"
+              fi
+            fi
+
+            # Check for force delete without grace period
+            if grep -q '\-\-force.*grace-period=0' "$f"; then
+              echo "::warning file=$f::Force delete with grace-period=0 — ensure this is intentional"
+            fi
+          done
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::Found $ERRORS safety issues. Fix before merging."
+            exit 1
+          fi
+          echo "Safety scan passed"
