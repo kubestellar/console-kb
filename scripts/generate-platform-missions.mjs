@@ -316,6 +316,64 @@ async function synthesizePlatformMission(platform, context) {
   }
 }
 
+// ─── Sanitization helpers ────────────────────────────────────────────
+
+/** Sanitize real infrastructure details from scraped content */
+function sanitizeInfraDetails(text) {
+  // Replace real public IPs with RFC 5737 documentation IPs (preserve private ranges)
+  let sanitized = text.replace(
+    /\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
+    '192.0.2.1'
+  )
+  // Replace AWS EC2 internal hostnames
+  sanitized = sanitized.replace(
+    /\bip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal\b/g,
+    'ip-10-0-1-100.us-east-1.compute.internal'
+  )
+  // Replace AWS EC2 public hostnames
+  sanitized = sanitized.replace(
+    /\bec2-\d+-\d+-\d+-\d+\.\w+\.compute\.amazonaws\.com\b/g,
+    'ec2-192-0-2-1.us-east-1.compute.amazonaws.com'
+  )
+  // Replace GCP instance hostnames
+  sanitized = sanitized.replace(
+    /\b[\w-]+\.[\w-]+\.c\.[\w-]+\.internal\b/g,
+    'instance-1.us-central1-a.c.project-id.internal'
+  )
+  return sanitized
+}
+
+/** Detect and redact potential credentials in scraped content */
+function redactCredentials(text) {
+  // Redact password values in YAML/JSON-like content
+  return text
+    .replace(/(password|passwd|secret|token|apiKey|api_key|admin_password)["']?\s*[:=]\s*["']?(?!<[A-Z_]+>|changeme|CHANGE_ME|your-|YOUR_|xxx|placeholder|\$\{)([^\s"'}{,]{4,})/gi,
+      '$1: <REDACTED>')
+}
+
+/** Check if a Helm chart version is reasonably fresh by querying the repo */
+async function checkVersionFreshness(helmRepoUrl, chartName, currentVersion) {
+  if (!helmRepoUrl || !chartName || !currentVersion) return true
+  try {
+    const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(10000) })
+    if (!res.ok) return true // Can't check, assume OK
+    const text = await res.text()
+    // Extract versions for this chart from index.yaml
+    const chartSection = text.split(new RegExp(`^\\s*${chartName}:`, 'm'))[1]
+    if (!chartSection) return true
+    const versions = [...chartSection.matchAll(/version:\s*(\S+)/g)].map(m => m[1]).slice(0, 5)
+    if (versions.length === 0) return true
+    // If currentVersion is not in the top 5 most recent, flag as stale
+    if (!versions.includes(currentVersion)) {
+      console.log(`  ⚠ Version ${currentVersion} not in latest 5 releases: ${versions.join(', ')}`)
+      return false
+    }
+    return true
+  } catch {
+    return true // Network error, can't check
+  }
+}
+
 // ─── Slug / Title helpers ────────────────────────────────────────────
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') }
 function titleCase(s) { return s.replace(/(^|[\s-])(\w)/g, (_, p, c) => p + c.toUpperCase()) }
@@ -773,6 +831,19 @@ async function main() {
       continue
     }
 
+    // 3.2. Sanitize infrastructure details and redact credentials from mission content
+    const sanitizeMissionText = (obj) => {
+      if (typeof obj === 'string') return redactCredentials(sanitizeInfraDetails(obj))
+      if (Array.isArray(obj)) return obj.map(sanitizeMissionText)
+      if (obj && typeof obj === 'object') {
+        const result = {}
+        for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v)
+        return result
+      }
+      return obj
+    }
+    mission.mission = sanitizeMissionText(mission.mission)
+
     // 3.5. Validate Helm repo URL if install method is helm
     if (llmResult.installMethods?.includes('helm') && llmResult.helmRepoUrl) {
       try {
@@ -787,6 +858,20 @@ async function main() {
         console.log(`  Helm repo URL ${llmResult.helmRepoUrl} unreachable — flagging for review`)
         const HELM_URL_PENALTY = 30
         mission.metadata.qualityScore = Math.max(0, (mission.metadata.qualityScore || 100) - HELM_URL_PENALTY)
+      }
+    }
+
+    // 3.6. Check version freshness against Helm repo index
+    if (llmResult.installMethods?.includes('helm') && llmResult.helmRepoUrl && llmResult.helmChart) {
+      // Extract chart version from the generated steps
+      const stepsText = JSON.stringify(mission.mission.steps || [])
+      const chartVersionMatch = stepsText.match(/--version\s+([\w.]+)/)
+      if (chartVersionMatch) {
+        const VERSION_STALENESS_PENALTY = 15
+        const isFresh = await checkVersionFreshness(llmResult.helmRepoUrl, llmResult.helmChart, chartVersionMatch[1])
+        if (!isFresh) {
+          mission.metadata.qualityScore = Math.max(0, (mission.metadata.qualityScore || 100) - VERSION_STALENESS_PENALTY)
+        }
       }
     }
 
