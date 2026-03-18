@@ -28,7 +28,7 @@
       }
     ],
     "resolution": {
-      "summary": "Without https://github.com/helm/helm/issues/2378 there isn't a way to\ndeterministically know when all resources are finished being removed. A\nsimple thing we can do is warn the user on a ES_FORCE_INSTALL=true.",
+      "summary": "\u26a0\ufe0f Warning: The workaround script uses `--force --grace-period 0` which bypasses graceful termination and can cause data loss or resource leaks. Use with caution in production. Without https://github.com/helm/helm/issues/2378 there isn't a way to\ndeterministically know when all resources are finished being removed. A\nsimple thing we can do is warn the user on a ES_FORCE_INSTALL=true.",
       "codeSnippets": [
         "#!/usr/bin/env bash\r\n\r\nset -euo pipefail\r\n\r\nmain() {\r\n\tlocal kinds=( Service Deployment Pod Secret ConfigMap )\r\n\tlocal counter=0 attempts=30\r\n\r\n\tfor release in \"$@\"; do\r\n\t\techo \"--> Deleting release ${release}\"\r\n\r\n\t\tif helm ls --kube-context \"${KUBE_CONTEXT}\" | grep -qF \"${release}\"; then\r\n\t\t\techo \"==> Found helm release; deleting with --purge\"\r\n\t\t\thelm delete \"${release}\" --purge  --kube-context \"${KUBE_CONTEXT}\"\r\n\t\telse\r\n\t\t\techo \"==> No release found; deleting manually\"\r\n\r\n\t\t\tfor kind in \"${kinds[@]}\"; do\r\n\t\t\t\techo \"==> Deleting any dangling ${kind}\"\r\n\r\n\t\t\t\tkubectl delete \"${kind}\" \\\r\n\t\t\t\t\t-l \"release=${release}\" \\\r\n\t\t\t\t\t-n \"${KUBE_NAMESPACE}\" \\\r\n\t\t\t\t\t--force \\\r\n\t\t\t\t\t--grace-period 0 \\\r\n\t\t\t\t\t--context \"${KUBE_CONTEXT}\" 2>/dev/null\r\n\t\t\tdone\r\n\t\tfi\r\n\r\n\t\techo \"--> Awaiting resource deleting "
       ]
