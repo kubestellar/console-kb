@@ -6,74 +6,114 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Elastic Cloud on Kubernetes (ECK)",
-    "description": "Elastic Cloud on Kubernetes (ECK) automates the deployment and management of the Elastic Stack on Kubernetes. It is ideal for users who want to run Elasticsearch, Kibana, and other Elastic products in a Kubernetes environment using an operator pattern.",
+    "description": "Elastic Cloud on Kubernetes (ECK) automates the deployment and management of Elastic Stack components on Kubernetes. It is ideal for users looking to run Elasticsearch, Kibana, and other Elastic services in a Kubernetes environment, leveraging the operator pattern for simplified management. Key trade-offs include the need for Kubernetes expertise and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 20,
     "steps": [
       {
+        "title": "Add the ECK Helm repository",
+        "description": "This step adds the official Elastic Helm repository to your Helm client, allowing you to install ECK.\n\n```bash\n\nhelm repo add elastic https://helm.elastic.co\n\nhelm repo update\n\n```\n\n> This command adds the Elastic Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add elastic https://helm.elastic.co",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install Custom Resource Definitions (CRDs)",
+        "description": "CRDs are necessary for ECK to manage Elastic resources. This step installs them from the ECK Helm chart.\n\n```bash\n\nkubectl apply -f https://download.elastic.co/downloads/eck/2.14.0/crds.yaml\n\n```\n\n> This command installs the required CRDs for ECK.",
+        "commands": [
+          "kubectl apply -f https://download.elastic.co/downloads/eck/2.14.0/crds.yaml"
+        ]
+      },
+      {
         "title": "Install ECK Operator",
-        "description": "Deploy the ECK operator using Helm. Ensure Helm is installed and configured. Run the following commands:\n\n```bash\n# Add the Elastic Helm repository\nhelm repo add elastic https://helm.elastic.co\n\n# Update your local Helm chart repository cache\nhelm repo update\n\n# Install the ECK operator (version 2.14.0)\nhelm install eck-operator elastic/eck-operator --version 2.14.0 --namespace elastic-system --create-namespace\n```\n\nVerify the installation:\n```bash\nkubectl get pods -n elastic-system\n```"
+        "description": "This step installs the ECK operator in the 'elastic-system' namespace using Helm.\n\n```bash\n\nhelm install eck-operator elastic/eck-operator --namespace elastic-system --create-namespace --version 2.14.0\n\n```\n\n> Installs the ECK operator with the specified version.",
+        "commands": [
+          "helm install eck-operator elastic/eck-operator --namespace elastic-system --create-namespace --version 2.14.0"
+        ]
       },
       {
-        "title": "Create Custom Resource Definitions (CRDs)",
-        "description": "After installing the operator, apply the CRDs required for ECK:\n\n```bash\nkubectl apply -f https://download.elastic.co/downloads/eck/2.14.0/crds.yaml\n```\n\nVerify CRDs:\n```bash\nkubectl get crd | grep elasticsearch\n```"
+        "title": "Verify the ECK Operator installation",
+        "description": "After installation, it's important to verify that the ECK operator is running correctly.\n\n```bash\n\nkubectl get pods --namespace elastic-system\n\nkubectl get crd\n\n```\n\n> Check that the ECK operator pod is running.\n> Verify that the CRDs have been installed.",
+        "commands": [
+          "kubectl get pods --namespace elastic-system",
+          "kubectl get crd"
+        ]
       },
       {
-        "title": "Deploy Elasticsearch Cluster",
-        "description": "Create an Elasticsearch cluster by applying a custom resource:\n\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: elasticsearch.k8s.elastic.co/v1\nkind: Elasticsearch\nmetadata:\n  name: my-elasticsearch\n  namespace: default\nspec:\n  version: 8.5.0\n  nodeSets:\n  - name: default\n    count: 3\n    config:\n      node.store.allow_mmap: false\nEOF\n```\n\nVerify the Elasticsearch cluster:\n```bash\nkubectl get elasticsearch -n default\n```"
+        "title": "Create an ElasticSearch cluster",
+        "description": "This step creates an Elasticsearch cluster using a Custom Resource (CR) definition.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: elasticsearch.k8s.elastic.co/v1\nkind: Elasticsearch\nmetadata:\n  name: my-elasticsearch\n  namespace: default\nspec:\n  version: 8.15.0\n  nodeSets:\n  - name: default\n    count: 3\n    config:\n      node.store.allow_mmap: false\nEOF\n\n```\n\n> Creates a simple Elasticsearch cluster with 3 nodes.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: elasticsearch.k8s.elastic.co/v1\nkind: Elasticsearch\nmetadata:\n  name: my-elasticsearch\n  namespace: default\nspec:\n  version: 8.15.0\n  nodeSets:\n  - name: default\n    count: 3\n    config:\n      node.store.allow_mmap: false\nEOF"
+        ]
       },
       {
-        "title": "Post-Install Configuration",
-        "description": "Configure autoscaling for the Elasticsearch cluster:\n\n```bash\nkubectl patch elasticsearch my-elasticsearch -n default --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/nodeSets/0/podTemplate/spec/containers/0/resources/requests/cpu\", \"value\": \"500m\"}]'\n```\n\nVerify the autoscaling configuration:\n```bash\nkubectl get elasticsearch my-elasticsearch -n default -o yaml\n```"
+        "title": "Verify the Elasticsearch cluster",
+        "description": "Ensure that the Elasticsearch cluster is up and running.\n\n```bash\n\nkubectl get elasticsearch\n\n```\n\n> Check the status of the Elasticsearch cluster.",
+        "commands": [
+          "kubectl get elasticsearch"
+        ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall ECK Operator",
-        "description": "Remove the ECK operator and associated resources:\n\n```bash\n# Delete the Elasticsearch cluster\nkubectl delete elasticsearch my-elasticsearch -n default\n\n# Uninstall the ECK operator\nhelm uninstall eck-operator -n elastic-system\n\n# Remove CRDs\nkubectl delete -f https://download.elastic.co/downloads/eck/2.14.0/crds.yaml\n```"
+        "description": "This step removes the ECK operator and its associated resources. Be aware that this will also delete any managed Elasticsearch clusters, leading to data loss.\n\n```bash\n\nhelm uninstall eck-operator --namespace elastic-system\n\nkubectl delete namespace elastic-system\n\n```\n\n> Uninstalls the ECK operator.\n> Deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall eck-operator --namespace elastic-system",
+          "kubectl delete namespace elastic-system"
+        ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade ECK Operator",
-        "description": "To upgrade from version 2.12 to 2.14, follow these steps:\n1. Backup your Elasticsearch data and configurations.\n2. Upgrade the operator using Helm:\n   ```bash\n   helm upgrade eck-operator elastic/eck-operator --version 2.14.0 -n elastic-system\n   ```\n3. Verify the upgrade:\n   ```bash\n   kubectl get pods -n elastic-system\n   ```\n4. Check the Elasticsearch cluster status:\n   ```bash\n   kubectl get elasticsearch -n default\n   ```\n5. Rollback if necessary:\n   ```bash\n   helm rollback eck-operator -n elastic-system\n   ```"
+        "description": "Before upgrading, ensure you backup your Elasticsearch data. This step will upgrade the ECK operator to a newer version.\n\n```bash\n\nkubectl get elasticsearch -o json > elasticsearch-backup.json\n\nhelm upgrade eck-operator elastic/eck-operator --namespace elastic-system --version 2.14.1\n\nkubectl get pods --namespace elastic-system\n\n```\n\n> Backup existing Elasticsearch configurations.\n> Upgrades the ECK operator to the specified version.\n> Verify that the ECK operator pod is running after the upgrade.",
+        "commands": [
+          "kubectl get elasticsearch -o json > elasticsearch-backup.json",
+          "helm upgrade eck-operator elastic/eck-operator --namespace elastic-system --version 2.14.1",
+          "kubectl get pods --namespace elastic-system"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Elasticsearch Cluster Not Starting",
-        "description": "If the Elasticsearch cluster fails to start, check the logs:\n```bash\nkubectl logs -l common.k8s.elastic.co/type=elasticsearch -n default\n```\nCommon issues include insufficient resources or misconfigurations in the custom resource."
+        "title": "Error: 'Failed to install CRD'",
+        "description": "**Cause:** The CRDs may not be compatible with the current Kubernetes version.\n\n**Fix:**\nEnsure you are using a compatible version of Kubernetes (>=1.26).\n\n**Affected versions:** 1.26+"
       },
       {
-        "title": "ECK Operator Not Running",
-        "description": "If the ECK operator pod is not running, check the pod status:\n```bash\nkubectl get pods -n elastic-system\n```\nIf the pod is in a CrashLoopBackOff state, inspect the logs for errors:\n```bash\nkubectl logs <pod-name> -n elastic-system\n```"
+        "title": "Error: 'Elasticsearch cluster is not ready'",
+        "description": "**Cause:** The Elasticsearch pods may be in a crash loop or not starting correctly.\n\n**Fix:**\nCheck the logs of the Elasticsearch pods using 'kubectl logs <pod-name>'."
       },
       {
-        "title": "CRD Not Found",
-        "description": "If you encounter a 'CRD not found' error, ensure that the CRDs were applied correctly:\n```bash\nkubectl get crd | grep elasticsearch\n```\nIf missing, reapply the CRDs using the command provided in the installation steps."
+        "title": "Error: 'Failed to connect to Elasticsearch'",
+        "description": "**Cause:** Network policies or service configurations may be blocking access.\n\n**Fix:**\nVerify network policies and ensure the service is correctly configured."
+      },
+      {
+        "title": "Error: 'Insufficient resources to schedule pod'",
+        "description": "**Cause:** The cluster may not have enough resources available.\n\n**Fix:**\nCheck node resource availability and adjust resource requests/limits in the Elasticsearch CR."
       }
     ],
     "versionNotes": [
       {
         "version": "2.14",
-        "changes": "Improved TLS certificate management and enhanced monitoring capabilities.",
-        "deprecations": "Deprecated support for Elasticsearch versions below 8.0."
-      },
-      {
-        "version": "2.13",
-        "changes": "Added support for new Elasticsearch features and improved resource management.",
-        "deprecations": "No deprecations."
+        "changes": "Added support for Elasticsearch 9.x, improved TLS certificate management.",
+        "deprecations": "Deprecated support for Elasticsearch 7.x.",
+        "migrationSteps": "If upgrading from 2.12 or 2.13, ensure to update your Elasticsearch CRs to comply with the new version."
       }
     ],
     "resolution": {
-      "summary": "A successful setup includes a running ECK operator and Elasticsearch cluster, with all resources properly configured. You should be able to access your Elasticsearch instance and manage it through the Kubernetes API.",
+      "summary": "You should see the Elasticsearch cluster status as 'Green' when running 'kubectl get elasticsearch'.",
       "codeSnippets": [
-        "# Add the Elastic Helm repository\nhelm repo add elastic https://helm.elastic.co\n\n# Update your local Helm chart repository cache\nhelm repo update\n\n# Install the ECK operator (version 2.14.0)\nhelm install eck-operator elastic/eck-operator --version 2.14.0 --namespace elastic-system --create-namespace",
-        "kubectl get pods -n elastic-system",
+        "helm repo add elastic https://helm.elastic.co",
+        "helm repo update",
         "kubectl apply -f https://download.elastic.co/downloads/eck/2.14.0/crds.yaml",
-        "kubectl get crd | grep elasticsearch",
-        "cat <<EOF | kubectl apply -f -\napiVersion: elasticsearch.k8s.elastic.co/v1\nkind: Elasticsearch\nmetadata:\n  name: my-elasticsearch\n  namespace: default\nspec:\n  version: 8.5.0\n  nodeSets:\n  - name: default\n    count: 3\n    config:\n      node.store.allow_mmap: false\nEOF",
-        "kubectl get elasticsearch -n default"
+        "helm install eck-operator elastic/eck-operator --namespace elastic-system --create-namespace --version 2.14.0",
+        "kubectl get pods --namespace elastic-system",
+        "kubectl get crd",
+        "kubectl apply -f - <<EOF\napiVersion: elasticsearch.k8s.elastic.co/v1\nkind: Elasticsearch\nmetadata:\n  name: my-elasticsearch\n  namespace: default\nspec:\n  version: 8.15.0\n  nodeSets:\n  - name: default\n    count: 3\n    config:\n      node.store.allow_mmap: false\nEOF",
+        "kubectl get elasticsearch"
       ]
     }
   },
@@ -94,7 +134,12 @@
       "2.14"
     ],
     "supportedK8sVersions": [
-      "1.26+"
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -108,11 +153,12 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
-      "kubectl"
+      "helm"
     ],
     "containerImages": [
-      "docker.elastic.co/eck/eck-operator:2.14.0"
+      "docker.elastic.co/eck/eck-operator:2.14.0",
+      "docker.elastic.co/elasticsearch/elasticsearch:8.15.0",
+      "docker.elastic.co/kibana/kibana:8.15.0"
     ],
     "sourceUrls": {
       "docs": "https://www.elastic.co/guide/en/cloud-on-k8s/",
@@ -124,14 +170,14 @@
     "kubernetes": ">=1.26",
     "tools": [
       "kubectl",
-      "helm"
+      "helm 3.x"
     ],
-    "cloudCLI": "optional cloud CLI tool (gcloud, aws, az, oci)",
-    "description": "Ensure you have a Kubernetes cluster running version 1.26 or higher and have kubectl and helm installed."
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure your Kubernetes cluster meets the minimum resource requirements."
   },
   "security": {
-    "scannedAt": "2026-03-03T12:10:03.394Z",
-    "scannerVersion": "platform-install-gen-1.0.0",
+    "scannedAt": "2026-03-18T12:11:03.584Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
   }
