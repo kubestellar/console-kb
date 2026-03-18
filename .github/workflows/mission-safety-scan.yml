@@ -24,7 +24,7 @@ jobs:
           for f in $FILES; do
             [ -f "$f" ] || continue
 
-            # Check for kubectl delete namespace/all patterns (excluding documented uninstall sections)
+            # Check for kubectl delete namespace/all patterns
             if grep -qP 'kubectl delete (namespace|ns|all)\b.*--all' "$f"; then
               echo "::error file=$f::Dangerous: kubectl delete all/namespace --all"
               ERRORS=$((ERRORS + 1))
@@ -36,22 +36,38 @@ jobs:
               ERRORS=$((ERRORS + 1))
             fi
 
-            # Check for kubectl delete kube-system
-            if grep -qi 'kubectl delete.*kube-system' "$f"; then
-              echo "::error file=$f::Dangerous: kubectl delete in kube-system namespace"
+            # Check for kubectl delete in protected namespaces
+            if grep -qiP 'kubectl delete.*(kube-system|kube-public|kube-node-lease|default)\b' "$f"; then
+              echo "::error file=$f::Dangerous: kubectl delete targeting protected namespace"
               ERRORS=$((ERRORS + 1))
             fi
 
-            # Check for placeholder container images
-            if grep -q 'registry/org/image:tag' "$f"; then
-              echo "::error file=$f::Placeholder container image not replaced: registry/org/image:tag"
+            # Check for placeholder container images (multiple patterns)
+            if grep -qP 'registry/org/image:tag|registry/[a-z]|your-docker-registry/' "$f"; then
+              echo "::error file=$f::Placeholder container image not replaced"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for empty install steps (no actual commands)
+            if python3 -c "
+          import json, sys
+          try:
+            d = json.load(open('$f'))
+            steps = d.get('mission', {}).get('steps', [])
+            has_cmd = any('kubectl' in str(s) or 'helm' in str(s) or 'curl' in str(s) or 'apt' in str(s) or 'pip' in str(s) for s in steps)
+            if d.get('missionClass') == 'install' and not has_cmd:
+              print('empty')
+              sys.exit(0)
+          except: pass
+          sys.exit(1)
+          " 2>/dev/null; then
+              echo "::error file=$f::Install mission has no actual install commands"
               ERRORS=$((ERRORS + 1))
             fi
 
             # Check for unverified curl|bash from non-official sources
-            # (Allow known official domains)
             if grep -qP 'curl.*\|\s*(ba)?sh' "$f"; then
-              if ! grep -qP 'curl.*(get\.k3s\.io|aka\.ms/|sdk\.cloud\.google|clis\.cloud\.ibm|ollama\.com|get\.rke2\.io|raw\.githubusercontent\.com).*\|\s*(ba)?sh' "$f"; then
+              if ! grep -qP 'curl.*(get\.k3s\.io|aka\.ms/|sdk\.cloud\.google|clis\.cloud\.ibm|ollama\.com|get\.rke2\.io|raw\.githubusercontent\.com|cdn\.porter\.sh|istio\.io|oss\.kubeclipper\.io).*\|\s*(ba)?sh' "$f"; then
                 echo "::warning file=$f::curl piped to shell from non-standard source — verify URL is official"
               fi
             fi
