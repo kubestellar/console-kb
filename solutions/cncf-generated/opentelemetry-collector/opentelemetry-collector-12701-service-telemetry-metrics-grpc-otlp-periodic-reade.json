@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentelemetry-collector-12701-service-telemetry-metrics-grpc-otlp-periodic-reade",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentelemetry-collector: [service/telemetry/metrics] GRPC OTLP periodic reader ignores insecure configuration",
+    "description": "[service/telemetry/metrics] GRPC OTLP periodic reader ignores insecure configuration. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify opentelemetry-collector troubleshoot symptoms",
+        "description": "Check for the issue in your opentelemetry-collector deployment:\n```bash\nkubectl get pods -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-collector --tail=100 | grep -i error\n```\nLook for error: `code = DeadlineExceeded desc = context deadline exceeded`"
+      },
+      {
+        "title": "Review opentelemetry-collector configuration",
+        "description": "Inspect the relevant opentelemetry-collector configuration:\n```bash\nkubectl get all -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl get configmap -n opentelemetry-collector -l app.kubernetes.io/part-of=opentelemetry-collector\n```\n### Component(s)\n\n_No response_\n\n### What happened?\n\nOpenTelemetry Collector ignores both `insecure: true` and `http` schema in endpoint in internal telemetry periodic reader GRPC configuration."
+      },
+      {
+        "title": "Apply the fix for [service/telemetry/metrics] GRPC OTLP periodic reader…",
+        "description": "Issue is valid for both vanilla and contrib distributions.\nHere is the log from `otelcol` distribution:\n```\n$ ./otelcol --config otel-grpc-test.yaml\n2025-03-24T11:56:56.731+0200    info    service.122.1/service.go:193 Setting up own telemetry...\n2025-03-24T11:56:56.731+0200    info   \n```yaml\nreceivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint: localhost:4317\n\nexporters:\n  debug: {}\n\nservice:\n  pipelines:\n    metrics:\n      receivers:\n        - otlp\n      exporters:\n        - debug\n  telemetry:\n    logs:\n        level: INFO\n    metrics:\n      level: normal\n      readers:\n        - periodic:\n            interval: 10000\n            # Timeout for reader itself, in milliseconds\n            timeout: 3000\n            exporter:\n              otlp:\n                protocol: grpc\n                endpoint: http://localhost:4317\n                compression: gzip\n                ins\n```"
+      },
+      {
+        "title": "Confirm [service/telemetry/metrics] GRPC OTLP periodic… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-collector --tail=50 --since=5m\nkubectl get events -n opentelemetry-collector --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = DeadlineExceeded desc = context deadline exceeded` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Issue is valid for both vanilla and contrib distributions.\nHere is the log from `otelcol` distribution:\n```\n$ ./otelcol --config otel-grpc-test.yaml\n2025-03-24T11:56:56.731+0200    info    service.122.1/service.go:193 Setting up own telemetry...\n2025-03-24T11:56:56.731+0200    info    builders/builders.go:26 Development component. May change in the future.",
+      "codeSnippets": [
+        "receivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint: localhost:4317\n\nexporters:\n  debug: {}\n\nservice:\n  pipelines:\n    metrics:\n      receivers:\n        - otlp\n      exporters:\n        - debug\n  telemetry:\n    logs:\n        level: INFO\n    metrics:\n      level: normal\n      readers:\n        - periodic:\n            interval: 10000\n            # Timeout for reader itself, in milliseconds\n            timeout: 3000\n            exporter:\n              otlp:\n                protocol: grpc\n                endpoint: http://localhost:4317\n                compression: gzip\n                insecure: true\n                # Timeout for sending telemetry, in milliseconds\n                timeout: 5000"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentelemetry-collector",
+      "incubating",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "opentelemetry-collector"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/open-telemetry/opentelemetry-collector/issues/12701",
+      "repo": "https://github.com/open-telemetry/opentelemetry-collector"
+    },
+    "reactions": 11,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentelemetry-collector installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:35:19.957Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
