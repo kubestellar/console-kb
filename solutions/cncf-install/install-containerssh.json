@@ -11,47 +11,54 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "Create a dedicated namespace for ContainerSSH to isolate its resources."
+        "title": "Install ContainerSSH via Helm",
+        "description": "Add the ContainerSSH Helm chart and install:\n```bash\nhelm repo add containerssh https://containerssh.github.io/containerssh\nhelm repo update\nkubectl create namespace containerssh\nhelm install containerssh containerssh/containerssh --namespace containerssh\n```\nAlternatively, use the Docker image:\n```bash\ndocker run -d -p 2222:2222 containerssh/containerssh:0.5.0\n```"
       },
       {
-        "title": "Deploy ContainerSSH",
-        "description": "Apply the ContainerSSH manifests to deploy the application."
+        "title": "Configure the authentication webhook",
+        "description": "ContainerSSH requires an authentication webhook. Create a simple auth server or use the test server:\n```bash\ndocker run -d -p 8080:8080 containerssh/containerssh-test-authconfig-server:0.5.0\n```"
       },
       {
-        "title": "Verify the Deployment",
-        "description": "Check that the ContainerSSH pods are running successfully."
+        "title": "Test SSH access",
+        "description": "Connect via SSH to the ContainerSSH server:\n```bash\nssh -p 2222 user@localhost\n```\nEach SSH session launches a new container."
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n containerssh\nkubectl logs -l app.kubernetes.io/name=containerssh -n containerssh\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove ContainerSSH",
-        "description": "Delete the ContainerSSH resources and the namespace."
+        "title": "Uninstall Helm release",
+        "description": "```bash\nhelm uninstall containerssh -n containerssh\nkubectl delete namespace containerssh\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade ContainerSSH",
-        "description": "To upgrade ContainerSSH, apply the updated manifest from the repository."
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade containerssh containerssh/containerssh --namespace containerssh\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "Check the pod logs for errors using: `kubectl logs <pod-name> -n containerssh`."
+        "title": "SSH connection refused",
+        "description": "Check that the ContainerSSH pod is running and the service is exposed:\n```bash\nkubectl get svc -n containerssh\nkubectl get pods -n containerssh\n```"
       },
       {
-        "title": "Service Not Accessible",
-        "description": "Ensure that the service is correctly configured and check the service endpoints with: `kubectl get endpoints -n containerssh`."
+        "title": "Authentication webhook unreachable",
+        "description": "Verify the auth server URL in the ContainerSSH config and check connectivity from the pod."
       },
       {
-        "title": "Insufficient Resources",
-        "description": "If pods are pending, verify that your cluster has enough resources by running: `kubectl describe nodes`."
+        "title": "Container launch failures",
+        "description": "Check ContainerSSH logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=containerssh -n containerssh\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of ContainerSSH will have all pods running in the 'containerssh' namespace, and you will be able to SSH into the service using the forwarded port. You can also verify that resource limits are correctly configured.",
-      "codeSnippets": []
+      "summary": "ContainerSSH is installed and provides SSH access that launches isolated containers for each session.",
+      "codeSnippets": [
+        "helm install containerssh containerssh/containerssh --namespace containerssh",
+        "ssh -p 2222 user@localhost"
+      ]
     }
   },
   "metadata": {
@@ -76,7 +83,8 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm",
+      "docker"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.5.2",
@@ -92,6 +100,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a working Kubernetes cluster and kubectl installed and configured to interact with it."

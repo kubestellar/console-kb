@@ -11,54 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create the InterLink Namespace",
-        "description": "First, create a namespace for InterLink to isolate its resources."
+        "title": "Install interLink CLI",
+        "description": "Download the interLink installer:\n```bash\ncurl -Lo interlink https://github.com/interlink-hq/interLink/releases/latest/download/interlink-linux-amd64\nchmod +x interlink\nsudo mv interlink /usr/local/bin/\n```\nSee https://interlink-hq.github.io/interLink/ for detailed docs."
       },
       {
-        "title": "Apply InterLink Custom Resource Definitions (CRDs)",
-        "description": "Apply the necessary CRDs for InterLink."
+        "title": "Deploy the Virtual Kubelet node",
+        "description": "interLink creates virtual nodes in your cluster that offload pods to remote providers:\n```bash\ninterlink install --provider slurm --namespace interlink-system\n```\nThis deploys the Virtual Kubelet and interLink API server."
       },
       {
-        "title": "Deploy InterLink Components",
-        "description": "Deploy the InterLink components using the provided manifests."
+        "title": "Configure the provider sidecar",
+        "description": "Each provider (SLURM, HTCondor, Docker, etc.) requires a sidecar configuration. See the provider-specific docs at https://interlink-hq.github.io/interLink/"
       },
       {
-        "title": "Verify the Installation",
-        "description": "Check if the InterLink pods are running correctly."
+        "title": "Verify the installation",
+        "description": "Check the virtual node is ready:\n```bash\nkubectl get nodes\nkubectl get pods -n interlink-system\n```\nThe virtual node should appear as Ready in the node list."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of InterLink will show the pods running in the 'interlink' namespace when you execute `kubectl get pods --namespace interlink`. Additionally, you will have configured resource limits and set up TLS for secure communication.",
-      "codeSnippets": []
+      "summary": "interLink is installed with a Virtual Kubelet node for offloading workloads to remote compute providers.",
+      "codeSnippets": [
+        "interlink install --provider slurm --namespace interlink-system",
+        "kubectl get nodes"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove InterLink Components",
-        "description": "Delete the deployed resources and CRDs for InterLink."
-      },
-      {
-        "title": "Delete the InterLink Namespace",
-        "description": "Remove the namespace created for InterLink."
+        "title": "Remove interLink components",
+        "description": "```bash\nkubectl delete namespace interlink-system\nsudo rm /usr/local/bin/interlink\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade InterLink",
-        "description": "To upgrade InterLink, apply the new version manifests."
+        "title": "Download latest release",
+        "description": "```bash\ncurl -Lo interlink https://github.com/interlink-hq/interLink/releases/latest/download/interlink-linux-amd64\nchmod +x interlink\nsudo mv interlink /usr/local/bin/\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods Not Starting",
-        "description": "Check the logs of the pods to identify issues."
+        "title": "Virtual node not appearing",
+        "description": "Check the Virtual Kubelet logs:\n```bash\nkubectl logs -l app=virtual-kubelet -n interlink-system\n```"
       },
       {
-        "title": "Insufficient Resources",
-        "description": "Ensure that your Kubernetes cluster has enough resources (CPU, memory) to run InterLink."
+        "title": "Pods stuck in Pending on virtual node",
+        "description": "Check the interLink API server logs for provider connectivity issues:\n```bash\nkubectl logs -l app=interlink -n interlink-system\n```"
       },
       {
-        "title": "CRDs Not Found",
-        "description": "If CRDs are not found, ensure they are applied correctly and check for any errors during the apply step."
+        "title": "Provider authentication errors",
+        "description": "Verify OAuth2 or bearer token configuration in the interLink config."
       }
     ]
   },
@@ -84,6 +83,7 @@
       "configuration"
     ],
     "installMethods": [
+      "binary",
       "kubectl"
     ],
     "maturity": "sandbox",
@@ -100,7 +100,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
     "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
   },

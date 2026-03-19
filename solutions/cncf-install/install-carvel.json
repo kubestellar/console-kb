@@ -11,46 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "Create a dedicated namespace for ytt to isolate its resources."
+        "title": "Install Carvel CLI tools",
+        "description": "Install the Carvel tool suite using the install script:\n```bash\ncurl -L https://carvel.dev/install.sh | bash\n```\nOr install individual tools via Homebrew:\n```bash\nbrew tap carvel-dev/carvel\nbrew install ytt kbld kapp imgpkg vendir\n```\nSee https://carvel.dev/ytt/docs/latest/install/"
       },
       {
-        "title": "Apply ytt Manifests",
-        "description": "Download and apply the ytt manifests from the GitHub repository."
+        "title": "Verify installation",
+        "description": "Check that all Carvel tools are installed:\n```bash\nytt --version\nkapp --version\nkbld --version\nimgpkg --version\nvendir --version\n```"
       },
       {
-        "title": "Verify Installation",
-        "description": "Check that the ytt pods are running successfully."
+        "title": "Try ytt templating",
+        "description": "Create a simple ytt template:\n```bash\ncat > config.yml << 'EOF'\n#@ load(\"@ytt:data\", \"data\")\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: #@ data.values.name\ndata:\n  greeting: #@ data.values.greeting\nEOF\n\ncat > values.yml << 'EOF'\n#@data/values\n---\nname: my-config\ngreeting: hello world\nEOF\n\nytt -f config.yml -f values.yml\n```"
+      },
+      {
+        "title": "Deploy to Kubernetes with kapp",
+        "description": "Deploy the rendered output to a cluster:\n```bash\nytt -f config.yml -f values.yml | kapp deploy -a my-app -f - -y\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the ytt pod running in the 'carvel' namespace, and you will be able to access it locally through port 8080. You can also verify that resource limits are set correctly for the deployment.",
-      "codeSnippets": []
+      "summary": "Carvel tools (ytt, kapp, kbld, imgpkg, vendir) are installed for Kubernetes-native application configuration and deployment.",
+      "codeSnippets": [
+        "ytt -f config.yml -f values.yml",
+        "ytt -f config.yml | kapp deploy -a my-app -f - -y"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove ytt Resources",
-        "description": "Delete the ytt resources and the namespace if no longer needed."
+        "title": "Remove Carvel tools",
+        "description": "```bash\n# If installed via script\nsudo rm /usr/local/bin/{ytt,kapp,kbld,imgpkg,vendir}\n\n# If installed via Homebrew\nbrew uninstall ytt kapp kbld imgpkg vendir\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade ytt",
-        "description": "To upgrade ytt, apply the new version's manifests."
+        "title": "Upgrade Carvel tools",
+        "description": "```bash\n# Via Homebrew\nbrew upgrade ytt kapp kbld imgpkg vendir\n\n# Or re-run the install script\ncurl -L https://carvel.dev/install.sh | bash\n```"
+      },
+      {
+        "title": "Verify upgrade",
+        "description": "```bash\nytt --version\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "Check the pod logs for errors using: `kubectl logs <pod-name> -n ytt`."
+        "title": "ytt template syntax errors",
+        "description": "Use the online playground to test templates: https://carvel.dev/ytt/#playground"
       },
       {
-        "title": "Resource Quotas Exceeded",
-        "description": "Ensure that your namespace has enough resources available. Check with: `kubectl describe quota -n ytt`."
+        "title": "kapp deploy fails with RBAC errors",
+        "description": "Ensure you have the correct kubeconfig context and RBAC permissions:\n```bash\nkubectl config current-context\nkubectl auth can-i create configmaps\n```"
       },
       {
-        "title": "Configuration Errors",
-        "description": "Validate your YAML files using ytt's built-in validation before applying them."
+        "title": "imgpkg push authentication error",
+        "description": "Log in to your container registry:\n```bash\ndocker login myregistry.io\n```"
       }
     ]
   },
@@ -75,7 +86,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.53.2",
@@ -89,9 +100,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "curl"
     ],
-    "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
+    "description": "No Kubernetes cluster required for ytt templating. kubectl and a cluster are needed for kapp deployments."
   },
   "security": {
     "scannedAt": "2026-03-01T14:14:36.588Z",

@@ -11,46 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create the Kairos Namespace",
-        "description": "First, create a dedicated namespace for Kairos to isolate its resources."
+        "title": "Download Kairos ISO",
+        "description": "Download the Kairos ISO for your preferred base OS:\n```bash\n# Ubuntu-based\ncurl -Lo kairos.iso https://github.com/kairos-io/kairos/releases/download/v3.3.3/kairos-ubuntu-24.04-standard-amd64-generic-v3.3.3.iso\n\n# Or Alpine-based (smaller)\ncurl -Lo kairos.iso https://github.com/kairos-io/kairos/releases/download/v3.3.3/kairos-alpine-3.21-standard-amd64-generic-v3.3.3.iso\n```\nSee all flavors at https://github.com/kairos-io/kairos/releases"
       },
       {
-        "title": "Apply Kairos Manifests",
-        "description": "Next, apply the Kairos manifests from the GitHub repository to set up the necessary resources."
+        "title": "Boot and install",
+        "description": "Boot the ISO on your edge device (USB, PXE, or VM). The interactive installer will guide you through:\n- Network configuration\n- K3s/K8s installation\n- User setup\n\nOr use a cloud-config file for automated installation:\n```yaml\n#cloud-config\ninstall:\n  auto: true\n  device: /dev/sda\nk3s:\n  enabled: true\nusers:\n  - name: kairos\n    passwd: kairos\n```"
       },
       {
-        "title": "Verify Installation",
-        "description": "After applying the manifests, verify that the Kairos pods are running correctly."
+        "title": "Verify the Kubernetes cluster",
+        "description": "After installation, SSH into the node:\n```bash\nssh kairos@<node-ip>\nsudo k3s kubectl get nodes\nsudo k3s kubectl get pods -A\n```"
+      },
+      {
+        "title": "Install the Kairos CLI (optional)",
+        "description": "The Kairos CLI helps manage nodes:\n```bash\ncurl -Lo kairos-cli https://github.com/kairos-io/kairos/releases/download/v3.3.3/kairos-cli-linux-amd64\nchmod +x kairos-cli\nsudo mv kairos-cli /usr/local/bin/kairos\nkairos version\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Kairos will show the Kairos pods running in the 'kairos' namespace. You should also be able to access the service via port 8080 on your local machine.",
-      "codeSnippets": []
+      "summary": "Kairos is installed as an immutable Linux OS with Kubernetes (K3s) for edge computing with atomic upgrades.",
+      "codeSnippets": [
+        "sudo k3s kubectl get nodes",
+        "sudo kairos upgrade --image quay.io/kairos/ubuntu:v3.3.3"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Kairos Resources",
-        "description": "To uninstall Kairos, delete the resources applied in the Kairos namespace."
+        "title": "Reinstall the OS",
+        "description": "Kairos is an immutable OS \u2014 to remove it, reinstall a different OS on the device."
+      },
+      {
+        "title": "Remove Kairos CLI",
+        "description": "```bash\nsudo rm /usr/local/bin/kairos\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Kairos",
-        "description": "To upgrade Kairos, apply the new version of the manifests. Ensure to specify the new version in the URLs."
+        "title": "Upgrade via container image",
+        "description": "Kairos upgrades atomically via OCI images:\n```bash\nsudo kairos upgrade --image quay.io/kairos/ubuntu:v3.3.3\n```\nThe system will reboot into the new version with A/B rollback support."
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If the Kairos pods are not starting, check the pod logs for errors using the command: `kubectl logs <pod-name> -n kairos`."
+        "title": "Node fails to boot after install",
+        "description": "Check the install logs in `/var/log/kairos/` and ensure the target disk is correct."
       },
       {
-        "title": "Resource Quotas",
-        "description": "Ensure that your cluster has enough resources (CPU, Memory) available. Check resource quotas with: `kubectl describe quota -n kairos`."
+        "title": "K3s not starting",
+        "description": "Check the K3s service:\n```bash\nsudo systemctl status k3s\nsudo journalctl -u k3s\n```"
       },
       {
-        "title": "Network Issues",
-        "description": "If the pods are in a CrashLoopBackOff state, investigate potential network issues or misconfigurations in your cluster networking."
+        "title": "P2P mesh not forming",
+        "description": "Kairos P2P mesh requires UDP port 51820 (WireGuard) to be open between nodes."
       }
     ]
   },
@@ -76,7 +87,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "iso"
     ],
     "maturity": "sandbox",
     "projectVersion": "v4.0.0",
@@ -92,9 +103,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "curl"
     ],
-    "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
+    "description": "Physical or virtual machine for the immutable OS. Kairos includes K3s for Kubernetes."
   },
   "security": {
     "scannedAt": "2026-03-01T15:43:40.003Z",

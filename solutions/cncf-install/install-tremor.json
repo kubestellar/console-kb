@@ -11,51 +11,58 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "Create a dedicated namespace for Tremor to run in. This helps to isolate the resources used by Tremor from other applications in your cluster."
+        "title": "Install Tremor via Docker",
+        "description": "Run Tremor using the official Docker image:\n```bash\ndocker pull tremorproject/tremor:0.13.0-rc.32\ndocker run -ti --rm tremorproject/tremor:0.13.0-rc.32 tremor --version\n```"
       },
       {
-        "title": "Apply the Tremor Deployment",
-        "description": "Deploy Tremor using the provided Kubernetes manifests. Ensure you are using a specific version instead of the latest."
+        "title": "Install Tremor binary (alternative)",
+        "description": "Download the Tremor binary:\n```bash\n# See https://tremor.rs/docs/0.12/getting-started/install\ncurl -Lo tremor https://github.com/tremor-rs/tremor-runtime/releases/latest/download/tremor-linux-amd64\nchmod +x tremor\nsudo mv tremor /usr/local/bin/\n```"
       },
       {
-        "title": "Apply the Tremor Service",
-        "description": "Expose the Tremor deployment via a service to allow communication with other components."
+        "title": "Create a simple pipeline",
+        "description": "Create a `config.troy` file:\n```troy\ndefine flow main\nflow\n  use tremor::connectors;\n  define connector input from connectors::stdio\n  with\n    codec = \"json\"\n  end;\n  define connector output from connectors::stdio\n  with\n    codec = \"json\"\n  end;\n  define pipeline passthrough\n  pipeline\n    select event from in into out;\n  end;\n  create connector input;\n  create connector output;\n  create pipeline passthrough;\n  connect /connector/input to /pipeline/passthrough;\n  connect /pipeline/passthrough to /connector/output;\nend;\ndeploy flow main;\n```\nRun the pipeline:\n```bash\ntremor run config.troy\n```"
       },
       {
-        "title": "Verify the Installation",
-        "description": "Check that the Tremor pods are running correctly in the tremor namespace."
+        "title": "Verify the installation",
+        "description": "```bash\ntremor --version\ntremor --help\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove Tremor Resources",
-        "description": "To uninstall Tremor, delete the deployment and service using kubectl."
+        "title": "Remove Tremor",
+        "description": "```bash\nsudo rm /usr/local/bin/tremor\n# Or stop Docker container\ndocker stop tremor\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Tremor",
-        "description": "To upgrade Tremor, apply the new version of the deployment and service manifests."
+        "title": "Pull latest Docker image",
+        "description": "```bash\ndocker pull tremorproject/tremor:latest\n```"
+      },
+      {
+        "title": "Or download latest binary",
+        "description": "```bash\ncurl -Lo tremor https://github.com/tremor-rs/tremor-runtime/releases/latest/download/tremor-linux-amd64\nchmod +x tremor\nsudo mv tremor /usr/local/bin/\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If the Tremor pod is not starting, check the pod logs for errors using:\n```bash\nkubectl logs <pod-name> -n tremor\n```"
+        "title": "Pipeline syntax errors",
+        "description": "Tremor has its own language (Troy/Trickle). Use the LSP for IDE support:\n```bash\ntremor server run\n```"
       },
       {
-        "title": "Service Not Accessible",
-        "description": "If you cannot access the Tremor service, ensure that the service type is set correctly (e.g., ClusterIP or NodePort) and check the service configuration with:\n```bash\nkubectl describe service tremor -n tremor\n```"
+        "title": "Kafka connector not connecting",
+        "description": "Check the connector configuration and ensure Kafka is reachable from the Tremor process."
       },
       {
-        "title": "Insufficient Resources",
-        "description": "If the Tremor pods are in a pending state, it may be due to insufficient resources. Check the resource requests and limits in the deployment manifest and adjust them accordingly."
+        "title": "High memory usage under load",
+        "description": "Tune circuit breaker and backpressure settings in your pipeline definition."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Tremor will have all pods running in the 'tremor' namespace, and you will be able to access the service via the forwarded port. Resource limits will be configured, ensuring optimal performance.",
-      "codeSnippets": []
+      "summary": "Tremor is installed as an event processing system for high-volume data streaming and ETL workloads.",
+      "codeSnippets": [
+        "tremor run config.troy",
+        "docker run -ti tremorproject/tremor:0.13.0-rc.32"
+      ]
     }
   },
   "metadata": {
@@ -80,7 +87,8 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "docker",
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.13.0-rc.33",
@@ -96,7 +104,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "docker"
     ],
     "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
   },

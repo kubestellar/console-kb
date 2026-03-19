@@ -11,46 +11,65 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "First, create a dedicated namespace for Bank-Vaults to run in. This helps to isolate the resources used by Bank-Vaults from other applications in your cluster."
+        "title": "Install the Bank-Vaults operator via Helm",
+        "description": "Add the Bank-Vaults Helm repository and install the operator:\n```bash\nhelm repo add bank-vaults https://bank-vaults.dev/charts\nhelm repo update\nkubectl create namespace bank-vaults\nhelm install vault-operator bank-vaults/vault-operator --namespace bank-vaults --version 1.22.6\n```"
       },
       {
-        "title": "Deploy Bank-Vaults",
-        "description": "Apply the necessary manifests to deploy Bank-Vaults. You can find the manifests in the Bank-Vaults GitHub repository."
+        "title": "Deploy a Vault instance",
+        "description": "Create a Vault custom resource:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/bank-vaults/vault-operator/main/deploy/examples/cr-raft.yaml -n bank-vaults\n```\nThis deploys a Vault instance with Raft storage backend."
       },
       {
-        "title": "Verify the Installation",
-        "description": "Check if the Bank-Vaults pods are running successfully."
+        "title": "Install the Secrets Webhook (optional)",
+        "description": "The Secrets Webhook injects secrets directly into pods:\n```bash\nhelm install vault-secrets-webhook bank-vaults/vault-secrets-webhook --namespace bank-vaults --version 1.22.6\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the operator and Vault pods are running:\n```bash\nkubectl get pods -n bank-vaults\nkubectl get vault -n bank-vaults\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Bank-Vaults will show the Bank-Vaults pods in a running state when you execute the 'kubectl get pods' command. Additionally, resource limits and RBAC settings should be applied correctly to ensure optimal operation.",
-      "codeSnippets": []
+      "summary": "Bank-Vaults operator is installed and managing a Vault instance on Kubernetes with optional secrets injection.",
+      "codeSnippets": [
+        "helm install vault-operator bank-vaults/vault-operator --namespace bank-vaults",
+        "kubectl get vault -n bank-vaults"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Bank-Vaults",
-        "description": "To uninstall Bank-Vaults, delete the resources created in the bank-vaults namespace."
+        "title": "Remove the Vault instance",
+        "description": "```bash\nkubectl delete vault --all -n bank-vaults\n```"
+      },
+      {
+        "title": "Uninstall Helm releases",
+        "description": "```bash\nhelm uninstall vault-secrets-webhook -n bank-vaults\nhelm uninstall vault-operator -n bank-vaults\n```"
+      },
+      {
+        "title": "Remove the namespace",
+        "description": "```bash\nkubectl delete namespace bank-vaults\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Bank-Vaults",
-        "description": "To upgrade Bank-Vaults, apply the new version of the manifests. Make sure to check for the latest version on the GitHub releases page."
+        "title": "Update Helm repo and upgrade",
+        "description": "```bash\nhelm repo update\nhelm upgrade vault-operator bank-vaults/vault-operator --namespace bank-vaults\n```"
+      },
+      {
+        "title": "Verify upgrade",
+        "description": "```bash\nkubectl get pods -n bank-vaults\nhelm list -n bank-vaults\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If the Bank-Vaults pod is not starting, check the pod logs for errors using the command: `kubectl logs <pod-name> -n bank-vaults`."
+        "title": "Vault pod stuck in CrashLoopBackOff",
+        "description": "Check the operator logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=vault-operator -n bank-vaults\n```"
       },
       {
-        "title": "Insufficient Resources",
-        "description": "If you encounter issues related to resource limits, ensure that your cluster has enough CPU and memory allocated for the Bank-Vaults deployment."
+        "title": "Vault unsealing fails",
+        "description": "Check the unseal configuration in the Vault CR. The operator auto-unseals via the configured KMS.\n```bash\nkubectl describe vault -n bank-vaults\n```"
       },
       {
-        "title": "Network Issues",
-        "description": "If you cannot access the Bank-Vaults service, verify the service configuration and ensure that the correct ports are exposed."
+        "title": "Secrets Webhook not injecting",
+        "description": "Ensure the webhook is enabled and the pod has the correct annotation:\n```yaml\nannotations:\n  vault.security.banzaicloud.io/vault-addr: \"https://vault:8200\"\n```"
       }
     ]
   },
@@ -77,7 +96,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.32.1",
@@ -93,6 +112,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure that you have kubectl installed and configured to interact with your Kubernetes cluster."

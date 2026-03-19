@@ -11,46 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace for Kuberhealthy",
-        "description": "First, create a dedicated namespace for Kuberhealthy to run in. This helps in organizing resources and managing permissions."
+        "title": "Install Kuberhealthy via Helm",
+        "description": "Add the Kuberhealthy Helm chart and install:\n```bash\nhelm repo add kuberhealthy https://kuberhealthy.github.io/kuberhealthy/helm-repos\nhelm repo update\nkubectl create namespace kuberhealthy\nhelm install kuberhealthy kuberhealthy/kuberhealthy --namespace kuberhealthy --version 104\n```\nOr install with plain YAML:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/kuberhealthy/kuberhealthy/master/deploy/helm/kuberhealthy/crds/comcast.github.io_kuberhealthychecks.yaml\nkubectl apply -f https://raw.githubusercontent.com/kuberhealthy/kuberhealthy/master/deploy/helm/kuberhealthy/crds/comcast.github.io_kuberhealthystates.yaml\n```"
       },
       {
-        "title": "Deploy Kuberhealthy",
-        "description": "Next, apply the Kuberhealthy manifests from the GitHub repository. This will deploy the necessary resources in the created namespace."
+        "title": "Enable built-in health checks",
+        "description": "Kuberhealthy comes with several built-in checks. Enable the deployment check:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/kuberhealthy/kuberhealthy/master/cmd/deployment-check/deployment-check.yaml -n kuberhealthy\n```"
       },
       {
-        "title": "Verify the Installation",
-        "description": "After deploying, check that the Kuberhealthy pods are running correctly."
+        "title": "Access the status page",
+        "description": "Port-forward to access the Kuberhealthy status page:\n```bash\nkubectl port-forward svc/kuberhealthy -n kuberhealthy 8080:80\n```\nOpen http://localhost:8080 to view the JSON status page."
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n kuberhealthy\nkubectl get khcheck -n kuberhealthy\nkubectl get khstate -n kuberhealthy\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Kuberhealthy will show the Kuberhealthy pods running in the `kuberhealthy` namespace, and you will be able to access the Kuberhealthy status page at `http://localhost:8080`. Additionally, the resource limits will be set as specified.",
-      "codeSnippets": []
+      "summary": "Kuberhealthy is installed and running synthetic health checks on the cluster with a JSON status page and Prometheus metrics.",
+      "codeSnippets": [
+        "helm install kuberhealthy kuberhealthy/kuberhealthy --namespace kuberhealthy",
+        "kubectl get khcheck -n kuberhealthy"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Kuberhealthy",
-        "description": "To uninstall Kuberhealthy, delete the resources created in the kuberhealthy namespace."
+        "title": "Uninstall Kuberhealthy",
+        "description": "```bash\nhelm uninstall kuberhealthy -n kuberhealthy\nkubectl delete namespace kuberhealthy\n```"
+      },
+      {
+        "title": "Remove CRDs",
+        "description": "```bash\nkubectl delete crd kuberhealthychecks.comcast.github.io kuberhealthystates.comcast.github.io\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Kuberhealthy",
-        "description": "To upgrade Kuberhealthy, apply the new version of the manifests. Make sure to check the latest version on the GitHub releases page."
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade kuberhealthy kuberhealthy/kuberhealthy --namespace kuberhealthy\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Check Pod Status",
-        "description": "If pods are not running, check the status of the pods for any errors."
+        "title": "Check pods stuck in CrashLoopBackOff",
+        "description": "```bash\nkubectl logs -l app=kuberhealthy -n kuberhealthy\n```\nCommon cause: insufficient RBAC permissions."
       },
       {
-        "title": "View Logs",
-        "description": "To get more information about what might be going wrong, view the logs of the Kuberhealthy pods."
+        "title": "Checks not running",
+        "description": "Verify the KuberhealthyCheck resource exists:\n```bash\nkubectl get khcheck -n kuberhealthy\nkubectl describe khcheck <check-name> -n kuberhealthy\n```"
       },
       {
-        "title": "Check Resource Quotas",
-        "description": "Ensure that the namespace has sufficient resources allocated and that there are no resource quota issues preventing pod creation."
+        "title": "Prometheus metrics not available",
+        "description": "Kuberhealthy exposes metrics at `/metrics`. Ensure your Prometheus ServiceMonitor is configured:\n```bash\nkubectl get svc -n kuberhealthy\ncurl http://kuberhealthy.kuberhealthy.svc:80/metrics\n```"
       }
     ]
   },
@@ -75,6 +86,7 @@
       "configuration"
     ],
     "installMethods": [
+      "helm",
       "kubectl"
     ],
     "maturity": "sandbox",
@@ -91,6 +103,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have access to a Kubernetes cluster and the kubectl command-line tool installed and configured."

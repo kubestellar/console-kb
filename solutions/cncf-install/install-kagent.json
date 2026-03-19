@@ -11,50 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace for kagent",
-        "description": "First, create a dedicated namespace for kagent to keep your resources organized. Run the following command:"
+        "title": "Install kagent via Helm",
+        "description": "Add the kagent Helm repository and install:\n```bash\nhelm repo add kagent https://kagent-dev.github.io/kagent\nhelm repo update\nkubectl create namespace kagent\nhelm install kagent kagent/kagent --namespace kagent --version 0.2.1\n```\nSee https://kagent.dev/docs/kagent/introduction/installation for details."
       },
       {
-        "title": "Apply kagent Custom Resource Definitions (CRDs)",
-        "description": "Next, apply the necessary Custom Resource Definitions (CRDs) for kagent. Use the following command to fetch and apply the CRDs:"
+        "title": "Configure an LLM provider",
+        "description": "Create a ModelConfig resource to connect to an LLM provider:\n```bash\nkubectl apply -n kagent -f - << 'EOF'\napiVersion: kagent.dev/v1alpha1\nkind: ModelConfig\nmetadata:\n  name: openai-gpt4\nspec:\n  provider: openai\n  model: gpt-4\n  apiKeySecretRef:\n    name: openai-key\n    key: api-key\nEOF\n```\nCreate the secret first:\n```bash\nkubectl create secret generic openai-key --from-literal=api-key=<your-key> -n kagent\n```"
       },
       {
-        "title": "Deploy kagent Components",
-        "description": "Now, deploy the kagent components by applying the necessary manifests. Execute the following commands:"
+        "title": "Create an Agent",
+        "description": "Deploy an AI agent:\n```bash\nkubectl apply -n kagent -f - << 'EOF'\napiVersion: kagent.dev/v1alpha1\nkind: Agent\nmetadata:\n  name: k8s-helper\nspec:\n  systemPrompt: \"You are a Kubernetes expert assistant.\"\n  modelConfigRef:\n    name: openai-gpt4\nEOF\n```"
       },
       {
-        "title": "Verify the Installation",
-        "description": "After deploying the components, verify that the kagent pods are running correctly. Use the following command to check the status of the pods:"
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n kagent\nkubectl get agents -n kagent\nkubectl get modelconfigs -n kagent\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the kagent pods running in the 'kagent' namespace, and you will be able to access the service through port 8080. You should also see the resource limits applied to the kagent deployment.",
-      "codeSnippets": []
+      "summary": "kagent is installed and can deploy AI agents on Kubernetes with configurable LLM providers and MCP tools.",
+      "codeSnippets": [
+        "helm install kagent kagent/kagent --namespace kagent",
+        "kubectl get agents -n kagent"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove kagent Resources",
-        "description": "To uninstall kagent, delete the deployed resources and the namespace. Run the following commands:"
+        "title": "Remove agents and configs",
+        "description": "```bash\nkubectl delete agents --all -n kagent\nkubectl delete modelconfigs --all -n kagent\n```"
+      },
+      {
+        "title": "Uninstall Helm release",
+        "description": "```bash\nhelm uninstall kagent -n kagent\nkubectl delete namespace kagent\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade kagent",
-        "description": "To upgrade kagent, apply the latest manifests. Ensure to specify the new version in the URLs. For example:"
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade kagent kagent/kagent --namespace kagent\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If the kagent pods are not starting, check the pod logs for errors using the command: `kubectl logs <pod-name> -n kagent`."
+        "title": "Agent not responding",
+        "description": "Check kagent controller logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kagent -n kagent\n```"
       },
       {
-        "title": "CRDs Not Found",
-        "description": "If you encounter issues related to CRDs, ensure that they were applied successfully by running: `kubectl get crd -n kagent`."
+        "title": "LLM API key errors",
+        "description": "Verify the secret exists and has the correct key:\n```bash\nkubectl get secret openai-key -n kagent -o jsonpath='{.data.api-key}' | base64 -d\n```"
       },
       {
-        "title": "Service Not Accessible",
-        "description": "If the service is not accessible, verify that the service is running and check the endpoints with: `kubectl get endpoints -n kagent`."
+        "title": "CRDs not installed",
+        "description": "```bash\nkubectl get crd | grep kagent\n```\nIf missing, reinstall the Helm chart with `--set installCRDs=true`."
       }
     ]
   },
@@ -80,7 +87,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.7.19",
@@ -94,6 +101,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to interact with your cluster."

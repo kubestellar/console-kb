@@ -11,46 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create Namespace",
-        "description": "Create a dedicated namespace for Inclavare Containers to isolate its resources."
+        "title": "Install Intel SGX SDK and Driver",
+        "description": "Inclavare requires Intel SGX hardware and SDK:\n```bash\n# Ubuntu 20.04+\necho 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | sudo tee /etc/apt/sources.list.d/intel-sgx.list\nwget -qO - https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | sudo apt-key add -\nsudo apt-get update\nsudo apt-get install -y sgx-aesm-service libsgx-launch libsgx-urts\n```"
       },
       {
-        "title": "Deploy Inclavare Containers",
-        "description": "Apply the necessary manifests to deploy Inclavare Containers."
+        "title": "Install the rune OCI runtime",
+        "description": "Install rune, the enclave-aware OCI runtime:\n```bash\ncurl -Lo rune https://github.com/inclavare-containers/inclavare-containers/releases/download/v0.6.2/rune-v0.6.2-linux-amd64\nchmod +x rune\nsudo mv rune /usr/local/bin/\n```"
       },
       {
-        "title": "Verify Installation",
-        "description": "Check if the Inclavare Containers pods are running successfully."
+        "title": "Configure containerd to use rune",
+        "description": "Add rune as a runtime in containerd config:\n```bash\nsudo mkdir -p /etc/containerd\ncat << 'EOF' | sudo tee -a /etc/containerd/config.toml\n[plugins.cri.containerd.runtimes.rune]\n  runtime_type = \"io.containerd.rune.v2\"\nEOF\nsudo systemctl restart containerd\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nrune --version\nsudo systemctl status sgx_aesm\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Inclavare Containers will show the pods running in the 'inclavare' namespace. You should also see the resource limits applied and the RBAC permissions set correctly.",
-      "codeSnippets": []
+      "summary": "Inclavare Containers is installed with the rune OCI runtime for running containers in hardware-enforced TEE enclaves.",
+      "codeSnippets": [
+        "rune --version",
+        "sudo systemctl status sgx_aesm"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Inclavare Containers",
-        "description": "Delete the deployed resources and the namespace."
+        "title": "Remove rune runtime",
+        "description": "```bash\nsudo rm /usr/local/bin/rune\n```\nRemove the rune section from `/etc/containerd/config.toml` and restart containerd."
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Inclavare Containers",
-        "description": "Reapply the manifests to upgrade to the latest stable version."
+        "title": "Download latest rune release",
+        "description": "```bash\ncurl -Lo rune https://github.com/inclavare-containers/inclavare-containers/releases/latest/download/rune-linux-amd64\nchmod +x rune\nsudo mv rune /usr/local/bin/\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Running",
-        "description": "If the pods are not in a Running state, check the pod logs for errors using: `kubectl logs <pod-name> -n inclavare-containers`."
+        "title": "SGX not available",
+        "description": "Verify your CPU supports SGX:\n```bash\ncpuid | grep SGX\n```\nSGX must be enabled in BIOS."
       },
       {
-        "title": "Insufficient Resources",
-        "description": "Ensure your cluster has enough resources available. Check node status with: `kubectl get nodes`."
+        "title": "AESM service not running",
+        "description": "```bash\nsudo systemctl status sgx_aesm\nsudo systemctl start sgx_aesm\n```"
       },
       {
-        "title": "Network Issues",
-        "description": "If you cannot access the service, verify the service configuration and check network policies that might be blocking access."
+        "title": "Enclave creation fails",
+        "description": "Check enclave memory limits in `/etc/sgx_default_qcnl.conf` and ensure sufficient EPC memory is available."
       }
     ]
   },
@@ -77,7 +84,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.6.2",
@@ -93,9 +100,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "curl"
     ],
-    "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to interact with it."
+    "description": "Intel SGX hardware, SGX SDK, and containerd are required. Works with Kubernetes when configured as a container runtime."
   },
   "security": {
     "scannedAt": "2026-03-01T14:35:48.747Z",

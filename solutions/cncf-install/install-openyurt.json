@@ -11,50 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create OpenYurt Namespace",
-        "description": "Create a dedicated namespace for OpenYurt to isolate its resources."
+        "title": "Install OpenYurt control plane via Helm",
+        "description": "Add the OpenYurt Helm repository and install:\n```bash\nhelm repo add openyurt https://openyurtio.github.io/openyurt-helm\nhelm repo update\nkubectl create namespace openyurt-system\nhelm install yurt-manager openyurt/yurt-manager --namespace openyurt-system --version 1.6.0\n```"
       },
       {
-        "title": "Install OpenYurt Core Components",
-        "description": "Apply the core components of OpenYurt using the manifests from the GitHub repository."
+        "title": "Install YurtHub on edge nodes",
+        "description": "Label nodes as edge nodes and install YurtHub:\n```bash\nkubectl label node <edge-node-name> openyurt.io/is-edge-worker=true\n```\nYurtHub is automatically deployed to labeled edge nodes by the operator."
       },
       {
-        "title": "Install Yurt Hub",
-        "description": "Apply the Yurt Hub manifest to enable communication between the cloud and edge nodes."
+        "title": "Create a NodePool",
+        "description": "Organize edge nodes into pools:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: apps.openyurt.io/v1beta1\nkind: NodePool\nmetadata:\n  name: edge-pool\nspec:\n  type: Edge\nEOF\n```"
       },
       {
-        "title": "Verify Installation",
-        "description": "Check that the OpenYurt pods are running correctly."
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n openyurt-system\nkubectl get nodepools\nkubectl get nodes -l openyurt.io/is-edge-worker=true\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will show the yurt-iot-dock pods running in the 'openyurt' namespace, and you will be able to access the service via port 8080 on your local machine. Additionally, resource limits will be configured for optimal performance.",
-      "codeSnippets": []
+      "summary": "OpenYurt is installed with the yurt-manager control plane and can manage edge nodes with autonomous operation.",
+      "codeSnippets": [
+        "helm install yurt-manager openyurt/yurt-manager --namespace openyurt-system",
+        "kubectl get nodepools"
+      ]
     },
     "uninstall": [
       {
-        "title": "Uninstall OpenYurt",
-        "description": "Remove the OpenYurt components from your cluster."
+        "title": "Remove node pools",
+        "description": "```bash\nkubectl delete nodepools --all\n```"
+      },
+      {
+        "title": "Uninstall Helm release",
+        "description": "```bash\nhelm uninstall yurt-manager -n openyurt-system\nkubectl delete namespace openyurt-system\n```"
+      },
+      {
+        "title": "Remove node labels",
+        "description": "```bash\nkubectl label node <edge-node-name> openyurt.io/is-edge-worker-\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade OpenYurt",
-        "description": "To upgrade OpenYurt, apply the new manifests for the desired version."
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade yurt-manager openyurt/yurt-manager --namespace openyurt-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Check Pod Status",
-        "description": "If pods are not running, check their status and logs for errors."
+        "title": "YurtHub not connecting to API server",
+        "description": "Check YurtHub logs on the edge node:\n```bash\nkubectl logs -l k8s-app=yurt-hub -n kube-system --context <edge-node>\n```"
       },
       {
-        "title": "Verify Node Registration",
-        "description": "Ensure that edge nodes are properly registered with the control plane."
+        "title": "Edge node shows NotReady",
+        "description": "YurtHub enables edge autonomy \u2014 the node may show NotReady if disconnected from the cloud but workloads continue running."
       },
       {
-        "title": "Inspect Events",
-        "description": "Check for any events that might indicate issues with the OpenYurt components."
+        "title": "NodePool not scheduling workloads",
+        "description": "Ensure nodes are labeled and joined to the pool:\n```bash\nkubectl describe nodepool edge-pool\n```"
       }
     ]
   },
@@ -80,7 +91,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "incubating",
     "projectVersion": "v1.6.1",
@@ -97,6 +108,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed on your local machine."

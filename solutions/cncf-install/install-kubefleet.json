@@ -11,46 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create the KubeFleet Namespace",
-        "description": "First, create a namespace for KubeFleet to operate within. This helps in organizing resources and managing permissions effectively."
+        "title": "Set up a Kind cluster for testing",
+        "description": "KubeFleet uses a hub-spoke model. Create clusters for testing:\n```bash\n# Create hub cluster\nkind create cluster --name hub\n\n# Create member clusters\nkind create cluster --name member1\nkind create cluster --name member2\n```"
       },
       {
-        "title": "Apply KubeFleet Manifests",
-        "description": "Next, apply the necessary manifests from the KubeFleet repository. You can use the following commands to deploy the components."
+        "title": "Install KubeFleet on the hub cluster",
+        "description": "Install the KubeFleet CRDs and controllers on the hub:\n```bash\nkubectl config use-context kind-hub\nhelm repo add kubefleet https://kubefleet-dev.github.io/charts\nhelm repo update\nhelm install kubefleet kubefleet/kubefleet --namespace kubefleet-system --create-namespace\n```\nSee https://kubefleet-dev.github.io/website/docs/getting-started/kind/ for the full quickstart."
       },
       {
-        "title": "Verify KubeFleet Installation",
-        "description": "To ensure that KubeFleet has been installed correctly, check the status of the pods in the kubefleet-system namespace."
+        "title": "Join member clusters",
+        "description": "Register member clusters with the hub:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: cluster.kubefleet.io/v1\nkind: MemberCluster\nmetadata:\n  name: member1\nspec:\n  identity:\n    name: member1\nEOF\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n kubefleet-system\nkubectl get memberclusters\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of KubeFleet will show the hub agent pod running in the 'fleet-system' namespace. You will also have configured resource limits and RBAC for the hub agent.",
-      "codeSnippets": []
+      "summary": "KubeFleet is installed on the hub cluster with member clusters joined for multi-cluster workload management.",
+      "codeSnippets": [
+        "helm install kubefleet kubefleet/kubefleet --namespace kubefleet-system",
+        "kubectl get memberclusters"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove KubeFleet Resources",
-        "description": "To uninstall KubeFleet, delete the resources you applied earlier. Ensure you are in the correct namespace."
+        "title": "Remove member clusters",
+        "description": "```bash\nkubectl delete memberclusters --all\n```"
+      },
+      {
+        "title": "Uninstall KubeFleet",
+        "description": "```bash\nhelm uninstall kubefleet -n kubefleet-system\nkubectl delete namespace kubefleet-system\n```"
+      },
+      {
+        "title": "Delete Kind clusters",
+        "description": "```bash\nkind delete cluster --name hub\nkind delete cluster --name member1\nkind delete cluster --name member2\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade KubeFleet",
-        "description": "To upgrade KubeFleet, apply the new version of the manifests. Replace 'v0.1.0' with the desired version."
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade kubefleet kubefleet/kubefleet --namespace kubefleet-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Check Pod Status",
-        "description": "If KubeFleet components are not running as expected, check the pod status using the following command:"
+        "title": "Member cluster not joining",
+        "description": "Check the join agent logs on the member cluster:\n```bash\nkubectl logs -l app=kubefleet-agent -n kubefleet-system\n```"
       },
       {
-        "title": "View Pod Logs",
-        "description": "If a pod is in a crash loop or not starting, view the logs for more information:"
+        "title": "Placement policy not scheduling",
+        "description": "Check the ClusterResourcePlacement status:\n```bash\nkubectl describe clusterresourceplacement <name>\n```"
       },
       {
-        "title": "Describe Resources",
-        "description": "To get more details about a specific resource, use the describe command. This can provide insights into any issues:"
+        "title": "Hub controller not starting",
+        "description": "```bash\nkubectl get pods -n kubefleet-system\nkubectl logs -l app=kubefleet-hub -n kubefleet-system\n```"
       }
     ]
   },
@@ -79,7 +94,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.2.2",
@@ -96,7 +111,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "helm",
+      "kubectl",
+      "kind"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to communicate with your cluster."
   },

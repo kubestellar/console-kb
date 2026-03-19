@@ -11,50 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create the Logging Namespace",
-        "description": "First, create a namespace for the logging operator to run in. Run the following command:"
+        "title": "Install the Logging Operator via Helm",
+        "description": "Add the kube-logging Helm repository and install:\n```bash\nhelm repo add kube-logging https://kube-logging.github.io/helm-charts\nhelm repo update\nkubectl create namespace logging\nhelm install logging-operator kube-logging/logging-operator --namespace logging --version 4.11.0\n```"
       },
       {
-        "title": "Deploy the Logging Operator",
-        "description": "Apply the Logging Operator manifests from the GitHub repository. Use the following command to deploy the operator:"
+        "title": "Create a Logging resource",
+        "description": "Deploy a Logging pipeline with Fluent Bit and Fluentd:\n```bash\nkubectl apply -n logging -f - << 'EOF'\napiVersion: logging.banzaicloud.io/v1beta1\nkind: Logging\nmetadata:\n  name: default-logging\nspec:\n  fluentd: {}\n  fluentbit: {}\n  controlNamespace: logging\nEOF\n```"
       },
       {
-        "title": "Verify the Installation",
-        "description": "Check if the Logging Operator pods are running correctly by executing:"
+        "title": "Create an Output and Flow",
+        "description": "Route logs to stdout (for testing):\n```bash\nkubectl apply -n logging -f - << 'EOF'\napiVersion: logging.banzaicloud.io/v1beta1\nkind: ClusterOutput\nmetadata:\n  name: stdout\nspec:\n  stdout: {}\n---\napiVersion: logging.banzaicloud.io/v1beta1\nkind: ClusterFlow\nmetadata:\n  name: all-logs\nspec:\n  globalOutputRefs:\n    - stdout\nEOF\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n logging\nkubectl get logging -n logging\nkubectl get clusterflow -n logging\nkubectl get clusteroutput -n logging\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of the Logging Operator will show the operator pod running in the 'logging' namespace, and you will be able to access logs from your applications through the configured logging pipeline. Additionally, RBAC and resource limits will be applied as specified.",
-      "codeSnippets": []
+      "summary": "Logging Operator is installed with Fluent Bit and Fluentd, collecting and routing logs from all pods.",
+      "codeSnippets": [
+        "helm install logging-operator kube-logging/logging-operator --namespace logging",
+        "kubectl get logging -n logging"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove the Logging Operator",
-        "description": "To uninstall the Logging Operator, delete the resources using the following command:"
+        "title": "Remove flows and outputs",
+        "description": "```bash\nkubectl delete clusterflow --all -n logging\nkubectl delete clusteroutput --all -n logging\nkubectl delete logging --all -n logging\n```"
       },
       {
-        "title": "Delete the Logging Namespace",
-        "description": "Finally, remove the namespace created for the logging operator:"
+        "title": "Uninstall Helm release",
+        "description": "```bash\nhelm uninstall logging-operator -n logging\nkubectl delete namespace logging\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade the Logging Operator",
-        "description": "To upgrade the Logging Operator, apply the new version of the manifests. Replace 'v0.7.0' with the desired version:"
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade logging-operator kube-logging/logging-operator --namespace logging\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Running",
-        "description": "If the Logging Operator pod is not running, check the pod logs for errors using:"
+        "title": "Fluent Bit pods not starting",
+        "description": "```bash\nkubectl get ds -n logging\nkubectl logs -l app.kubernetes.io/name=fluentbit -n logging\n```"
       },
       {
-        "title": "Namespace Issues",
-        "description": "Ensure that the namespace 'kube-logging' exists. If not, recreate it using the command:"
+        "title": "Logs not reaching the output",
+        "description": "Check the Fluentd logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluentd -n logging\n```"
       },
       {
-        "title": "Check Resource Quotas",
-        "description": "Verify that resource quotas are not preventing the pods from starting. Check the quotas with:"
+        "title": "CRD version mismatch",
+        "description": "Ensure CRDs are up to date:\n```bash\nkubectl get crd | grep logging\n```"
       }
     ]
   },
@@ -80,7 +87,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "6.4.0",
@@ -97,6 +104,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl configured to interact with it."

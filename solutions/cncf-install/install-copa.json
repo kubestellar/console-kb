@@ -11,50 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create Namespace",
-        "description": "Create a dedicated namespace for Copa to run in. This helps in organizing your Kubernetes resources."
+        "title": "Install Copa CLI",
+        "description": "Download Copa from GitHub releases:\n```bash\n# Linux (amd64)\ncurl -Lo copa https://github.com/project-copacetic/copacetic/releases/download/v0.9.0/copa_0.9.0_linux_amd64\nchmod +x copa\nsudo mv copa /usr/local/bin/\n\n# macOS (Apple Silicon)\ncurl -Lo copa https://github.com/project-copacetic/copacetic/releases/download/v0.9.0/copa_0.9.0_darwin_arm64\nchmod +x copa\nsudo mv copa /usr/local/bin/\n```\nSee all binaries at https://github.com/project-copacetic/copacetic/releases"
       },
       {
-        "title": "Apply Copa Deployment",
-        "description": "Deploy Copa using the provided Kubernetes manifests from the GitHub repository. Replace `<version>` with the desired version of Copa."
+        "title": "Start buildkitd (required backend)",
+        "description": "Copa requires a running buildkitd instance:\n```bash\ndocker run -d --name buildkitd --privileged moby/buildkit:latest\nexport BUILDKIT_HOST=docker-container://buildkitd\n```"
       },
       {
-        "title": "Apply Copa Service",
-        "description": "Expose Copa using a service to allow access to the CLI tool."
+        "title": "Scan and patch a container image",
+        "description": "Use Trivy to scan for vulnerabilities, then patch with Copa:\n```bash\n# Scan the image\ntrivy image --vuln-type os --ignore-unfixed -f json -o scan.json nginx:1.25\n\n# Patch the image\ncopa patch -i nginx:1.25 -r scan.json -t 1.25-patched\n```\nThis creates a patched image `nginx:1.25-patched` with vulnerabilities fixed."
       },
       {
-        "title": "Verify Installation",
-        "description": "Check if the Copa pods are running correctly in the namespace."
+        "title": "Verify the patched image",
+        "description": "Scan the patched image to confirm vulnerabilities are resolved:\n```bash\ntrivy image --vuln-type os nginx:1.25-patched\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Copa will show the Copa pod running in the specified namespace. You can also verify its functionality by executing a patch command on a container image.",
-      "codeSnippets": []
+      "summary": "Copa is installed as a CLI tool for directly patching container image vulnerabilities without full rebuilds.",
+      "codeSnippets": [
+        "copa patch -i nginx:1.25 -r scan.json -t 1.25-patched",
+        "trivy image --vuln-type os --ignore-unfixed -f json -o scan.json nginx:1.25"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Copa Resources",
-        "description": "To uninstall Copa, delete the deployment and service, and then remove the namespace."
+        "title": "Remove Copa binary",
+        "description": "```bash\nsudo rm /usr/local/bin/copa\n```"
+      },
+      {
+        "title": "Remove buildkitd container",
+        "description": "```bash\ndocker stop buildkitd && docker rm buildkitd\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Copa",
-        "description": "To upgrade Copa, apply the new version of the deployment and service manifests. Ensure to replace `<new-version>` with the latest version."
+        "title": "Download latest Copa release",
+        "description": "Check https://github.com/project-copacetic/copacetic/releases for the latest version:\n```bash\ncurl -Lo copa https://github.com/project-copacetic/copacetic/releases/latest/download/copa_linux_amd64\nchmod +x copa\nsudo mv copa /usr/local/bin/\n```"
+      },
+      {
+        "title": "Verify upgrade",
+        "description": "```bash\ncopa --version\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Running",
-        "description": "If the Copa pod is not in a Running state, check the pod logs for errors."
+        "title": "buildkitd connection error",
+        "description": "Ensure buildkitd is running and BUILDKIT_HOST is set:\n```bash\ndocker ps | grep buildkitd\nexport BUILDKIT_HOST=docker-container://buildkitd\n```"
       },
       {
-        "title": "Service Not Accessible",
-        "description": "If you cannot access the Copa service, ensure that the service is correctly configured and check the endpoints."
+        "title": "No patchable vulnerabilities found",
+        "description": "Copa can only patch OS-level vulnerabilities with available fixes. Use `--ignore-unfixed` in your Trivy scan to filter."
       },
       {
-        "title": "Namespace Issues",
-        "description": "If you encounter issues related to the namespace, verify that it was created successfully and that all resources are deployed within it."
+        "title": "Unsupported base image",
+        "description": "Copa supports Debian, Ubuntu, Alpine, RHEL, and other major distros. Check project docs for the full list."
       }
     ]
   },
@@ -79,7 +90,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.13.0",
@@ -95,9 +106,10 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "docker",
+      "trivy"
     ],
-    "description": "Ensure you have kubectl installed and configured to communicate with your Kubernetes cluster."
+    "description": "Docker and buildkitd are required. Trivy is recommended for vulnerability scanning. No Kubernetes cluster needed."
   },
   "security": {
     "scannedAt": "2026-03-01T11:34:32.631Z",

@@ -11,50 +11,65 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create a Namespace",
-        "description": "First, create a namespace for wasmCloud to isolate its resources."
+        "title": "Install the wash CLI",
+        "description": "Install the wasmCloud shell (wash) CLI:\n```bash\n# macOS / Linux\ncurl -fsSL https://raw.githubusercontent.com/wasmcloud/wasmCloud/refs/heads/main/install.sh | bash\nsudo mv wash /usr/local/bin/\n\n# Or via Homebrew\nbrew install wasmcloud/tap/wash\n```"
       },
       {
-        "title": "Deploy the Control Plane",
-        "description": "Apply the wasmCloud control plane manifests to your Kubernetes cluster."
+        "title": "Start wasmCloud locally",
+        "description": "Start a local wasmCloud host:\n```bash\nwash up\n```\nThis starts NATS, wasmCloud host, and the wadm application manager."
       },
       {
-        "title": "Deploy the Host",
-        "description": "Next, deploy the wasmCloud host to manage your Wasm applications."
+        "title": "Deploy to Kubernetes with the operator",
+        "description": "For Kubernetes deployment, install the wasmCloud operator:\n```bash\nhelm repo add wasmcloud https://wasmcloud.github.io/wasmcloud-operator\nhelm repo update\nkubectl create namespace wasmcloud\nhelm install wasmcloud-operator wasmcloud/wasmcloud-operator --namespace wasmcloud\n```"
       },
       {
-        "title": "Verify the Installation",
-        "description": "Check that the wasmCloud pods are running correctly."
+        "title": "Verify the installation",
+        "description": "```bash\nwash --version\nwash get hosts\n\n# For Kubernetes\nkubectl get pods -n wasmcloud\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of wasmCloud will show the pods running in the 'wasmcloud' namespace when you execute `kubectl get pods --namespace wasmcloud`. You will also be able to access the service via port 8080 on your local machine.",
-      "codeSnippets": []
+      "summary": "wasmCloud is installed with the wash CLI for local development and optionally the Kubernetes operator for cluster deployment.",
+      "codeSnippets": [
+        "wash up",
+        "helm install wasmcloud-operator wasmcloud/wasmcloud-operator --namespace wasmcloud"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove wasmCloud Resources",
-        "description": "To uninstall wasmCloud, delete the resources you created in the wasmcloud namespace."
+        "title": "Stop local wasmCloud",
+        "description": "```bash\nwash down\n```"
+      },
+      {
+        "title": "Uninstall from Kubernetes",
+        "description": "```bash\nhelm uninstall wasmcloud-operator -n wasmcloud\nkubectl delete namespace wasmcloud\n```"
+      },
+      {
+        "title": "Remove wash CLI",
+        "description": "```bash\nsudo rm /usr/local/bin/wash\n# Or: brew uninstall wash\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade wasmCloud",
-        "description": "To upgrade wasmCloud, apply the latest manifests from the repository. Ensure you check for version compatibility."
+        "title": "Upgrade wash CLI",
+        "description": "```bash\nwash self-update\n# Or: brew upgrade wash\n```"
+      },
+      {
+        "title": "Upgrade Kubernetes operator",
+        "description": "```bash\nhelm repo update\nhelm upgrade wasmcloud-operator wasmcloud/wasmcloud-operator --namespace wasmcloud\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "If a pod is not starting, check the logs for the pod using: `kubectl logs <pod-name> -n wasmcloud`."
+        "title": "wash up fails to start NATS",
+        "description": "Ensure port 4222 is not in use:\n```bash\nlsof -i :4222\n```"
       },
       {
-        "title": "Insufficient Resources",
-        "description": "If you encounter resource issues, ensure your cluster has enough CPU and memory allocated. You can check resource usage with: `kubectl top nodes`."
+        "title": "Component fails to start",
+        "description": "Check host logs:\n```bash\nwash get hosts\nwash get inventory <host-id>\n```"
       },
       {
-        "title": "Networking Issues",
-        "description": "If you have networking issues, verify that your cluster's network policies allow communication between pods. Use: `kubectl get networkpolicies -n wasmcloud`."
+        "title": "Kubernetes operator pods not ready",
+        "description": "```bash\nkubectl logs -l app.kubernetes.io/name=wasmcloud-operator -n wasmcloud\n```"
       }
     ]
   },
@@ -80,7 +95,8 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "binary",
+      "helm"
     ],
     "maturity": "incubating",
     "projectVersion": "v1.9.2",
@@ -98,6 +114,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "curl",
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed to manage it."

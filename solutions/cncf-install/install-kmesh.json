@@ -11,46 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Create Kmesh Namespace",
-        "description": "First, create a dedicated namespace for Kmesh to operate in."
+        "title": "Install Kmesh via Helm",
+        "description": "Deploy Kmesh using the official Helm chart:\n```bash\nhelm repo add kmesh https://kmesh-net.github.io/kmesh\nhelm repo update\nkubectl create namespace kmesh-system\nhelm install kmesh kmesh/kmesh --namespace kmesh-system\n```\nSee https://kmesh.net/en/docs/setup/quick-start/ for details."
       },
       {
-        "title": "Apply Kmesh Manifests",
-        "description": "Next, apply the Kmesh manifests from the GitHub repository. This will deploy the necessary components."
+        "title": "Enable Kmesh for a namespace",
+        "description": "Label the namespace to enable Kmesh sidecarless mesh:\n```bash\nkubectl label namespace default istio.io/dataplane-mode=Kmesh\n```"
       },
       {
-        "title": "Verify Installation",
-        "description": "After applying the manifests, verify that the Kmesh pods are running successfully."
+        "title": "Deploy a test application",
+        "description": "Deploy a sample app to test traffic management:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.21/samples/bookinfo/platform/kube/bookinfo.yaml\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n kmesh-system\nkubectl get ds -n kmesh-system\n```\nKmesh runs as a DaemonSet with eBPF programs on each node."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Kmesh will show the Kmesh pods in a running state when you execute `kubectl get pods`. Additionally, the resource limits and monitoring configurations should be applied correctly to ensure optimal performance.",
-      "codeSnippets": []
+      "summary": "Kmesh is installed as a high-performance eBPF-based service mesh without sidecars.",
+      "codeSnippets": [
+        "helm install kmesh kmesh/kmesh --namespace kmesh-system",
+        "kubectl label namespace default istio.io/dataplane-mode=Kmesh"
+      ]
     },
     "uninstall": [
       {
-        "title": "Remove Kmesh Resources",
-        "description": "To uninstall Kmesh, delete the resources you applied earlier."
+        "title": "Remove namespace labels",
+        "description": "```bash\nkubectl label namespace default istio.io/dataplane-mode-\n```"
+      },
+      {
+        "title": "Uninstall Kmesh",
+        "description": "```bash\nhelm uninstall kmesh -n kmesh-system\nkubectl delete namespace kmesh-system\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Kmesh",
-        "description": "To upgrade Kmesh, apply the new version of the manifests. Ensure you specify the correct version."
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade kmesh kmesh/kmesh --namespace kmesh-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods Not Starting",
-        "description": "Check the logs of the Kmesh pods to identify any issues with the startup process."
+        "title": "Kmesh DaemonSet pods failing",
+        "description": "Kmesh requires Linux kernel 5.10+ with BTF support:\n```bash\nuname -r\nls /sys/kernel/btf/vmlinux\n```"
       },
       {
-        "title": "Resource Quotas",
-        "description": "Ensure that your cluster has enough resources (CPU, Memory) allocated for Kmesh to run."
+        "title": "eBPF programs not loading",
+        "description": "Check Kmesh daemon logs:\n```bash\nkubectl logs -l app=kmesh -n kmesh-system\n```"
       },
       {
-        "title": "Network Policies",
-        "description": "Verify that there are no network policies blocking traffic to or from Kmesh components."
+        "title": "Traffic not being intercepted",
+        "description": "Verify the namespace label:\n```bash\nkubectl get namespace default --show-labels\n```"
       }
     ]
   },
@@ -76,7 +87,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.2.0",
@@ -93,6 +104,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
+      "helm",
       "kubectl"
     ],
     "description": "Ensure you have Kubernetes cluster version 1.24 or higher and kubectl installed on your machine."
