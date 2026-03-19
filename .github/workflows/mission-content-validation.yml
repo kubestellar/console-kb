@@ -22,6 +22,70 @@ jobs:
           curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" | tar xz -C /usr/local/bin crane
           crane version
 
+      - name: Validate mission quality
+        run: |
+          ERRORS=0
+          WARNINGS=0
+
+          # Get changed install mission JSON files
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'solutions/cncf-install/install-*.json' 2>/dev/null || echo "")
+          [ -z "$FILES" ] && echo "No install missions changed" && exit 0
+
+          for f in $FILES; do
+            [ -f "$f" ] || continue
+
+            python3 -c "
+          import json, re, sys
+          with open('$f') as fh:
+              d = json.load(fh)
+          steps = d.get('mission', {}).get('steps', [])
+          errors = []
+          warnings = []
+
+          # Check 1: Every step must have at least one code block
+          for i, s in enumerate(steps):
+              desc = s.get('description', '')
+              if '\`\`\`' not in desc:
+                  errors.append(f'Step {i} (\"{s.get(\"title\",\"?\")}\") has no code blocks — skeleton step')
+
+          # Check 2: No kubectl edit deployment placeholders
+          for i, s in enumerate(steps):
+              desc = s.get('description', '')
+              if 'kubectl edit deployment' in desc:
+                  other_cmds = re.search(r'kubectl\s+(apply|create|set|patch|rollout|scale)|helm\s+(install|upgrade)|docker\s+run|kustomize', desc)
+                  if not other_cmds:
+                      errors.append(f'Step {i} (\"{s.get(\"title\",\"?\")}\") contains only kubectl edit deployment placeholder')
+
+          # Check 3: No kubectl apply -f <local-file> without inline content
+          for i, s in enumerate(steps):
+              desc = s.get('description', '')
+              local_applies = re.findall(r'kubectl apply -f\s+(\S+)', desc)
+              for target in local_applies:
+                  if target.startswith('http') or target == '-':
+                      continue
+                  if '<<' in desc and 'EOF' in desc:
+                      continue
+                  if target.startswith('\$'):
+                      continue
+                  warnings.append(f'Step {i}: kubectl apply -f {target} — local file not provided inline')
+
+          for e in errors:
+              print(f'::error file=$f::{e}')
+          for w in warnings:
+              print(f'::warning file=$f::{w}')
+          sys.exit(1 if errors else 0)
+          "
+            if [ $? -ne 0 ]; then
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::$ERRORS mission(s) failed quality checks"
+            exit 1
+          fi
+          echo "Mission quality checks passed"
+
       - name: Validate mission content
         run: |
           ERRORS=0
