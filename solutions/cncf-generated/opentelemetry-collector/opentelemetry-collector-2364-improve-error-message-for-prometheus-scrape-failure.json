@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentelemetry-collector-2364-improve-error-message-for-prometheus-scrape-failure",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentelemetry-collector: Improve error message for prometheus scrape failure",
+    "description": "Improve error message for prometheus scrape failure. This issue affects 23+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify opentelemetry-collector troubleshoot symptoms",
+        "description": "Check for the issue in your opentelemetry-collector deployment:\n```bash\nkubectl get pods -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-collector --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review opentelemetry-collector configuration",
+        "description": "Inspect the relevant opentelemetry-collector configuration:\n```bash\nkubectl get all -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl get configmap -n opentelemetry-collector -l app.kubernetes.io/part-of=opentelemetry-collector\n```\nIf a prometheus receiver, fails to scrape an endpoint, the output shows something like:\n\n```\n2021-01-12T21:11:10.496Z\twarn\tinternal/metricsbuilder.go:104\tFailed to scrape Prometheus endpoint\t{\"component_kind\": \"receiver\", \"component_type\":"
+      },
+      {
+        "title": "Apply the fix for Improve error message for prometheus scrape failure",
+        "description": "> any idea how to wait for the subsequent debug log\n\n in https://github.com/open-telemetry/opentelemetry-collector/blob/68871bdd7db82d0d495f886c558f8ea6005ef2d0/receiver/prometheusreceiver/internal/logger.go#L46, we get key-value pairs from go-kit (used by Prometheus) for each log message, which\n```yaml\n2021-01-12T21:11:10.496Z\twarn\tinternal/metricsbuilder.go:104\tFailed to scrape Prometheus endpoint\t{\"component_kind\": \"receiver\", \"component_type\": \"prometheus\", \"component_name\": \"prometheus\", \"scrape_timestamp\": 1610485870495, \"target_labels\": \"map[instance:aks-agentpool-30099824-vmss000002 job:cadvisor]\"}\n```"
+      },
+      {
+        "title": "Confirm Improve error message for prometheus scrape… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-collector --tail=50 --since=5m\nkubectl get events -n opentelemetry-collector --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "> any idea how to wait for the subsequent debug log\n\n in https://github.com/open-telemetry/opentelemetry-collector/blob/68871bdd7db82d0d495f886c558f8ea6005ef2d0/receiver/prometheusreceiver/internal/logger.go#L46, we get key-value pairs from go-kit (used by Prometheus) for each log message, which gets parsed and forwarded to zap logger.\n\nYou may change the code to catch specific errors there (e.g.",
+      "codeSnippets": [
+        "2021-01-12T21:11:10.496Z\twarn\tinternal/metricsbuilder.go:104\tFailed to scrape Prometheus endpoint\t{\"component_kind\": \"receiver\", \"component_type\": \"prometheus\", \"component_name\": \"prometheus\", \"scrape_timestamp\": 1610485870495, \"target_labels\": \"map[instance:aks-agentpool-30099824-vmss000002 job:cadvisor]\"}",
+        "kubernetes_sd_configs:\n            - role: node\n            tls_config:\n              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\n              insecure_skip_verify: false\n            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token\n            relabel_configs:\n              - action: labelmap\n                regex: __meta_kubernetes_node_label_(.+)\n                # Only for Kubernetes ^1.7.3.\n                # See: https://github.com/prometheus/prometheus/issues/2916\n              - target_label: __address__\n                replacement: kubernetes.default.svc:443\n              - source_labels: [__meta_kubernetes_node_name]\n                regex: (.+)\n                target_label: __metrics_path__\n                replacement: /api/v1/nodes/${1}/prox",
+        "receivers:\n  prometheus:\n    config:\n      scrape_configs:\n        - job_name: 'my-job'\n          static_configs:\n            - targets: ['localhost:9090']  # Replace with your actual target\n          params:\n            match[]:\n              - '{__name__!~\"up\"}'  # Exclude metrics with the name \"up\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentelemetry-collector",
+      "incubating",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "opentelemetry-collector"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/open-telemetry/opentelemetry-collector/issues/2364",
+      "repo": "https://github.com/open-telemetry/opentelemetry-collector"
+    },
+    "reactions": 23,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentelemetry-collector installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:35:13.460Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
