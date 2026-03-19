@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "n8n-22007-incorrect-mime-type-when-reading-file-using-read-write-files-from-disk",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "n8n: Incorrect MIME Type when reading file using “Read/Write Files from Disk” node",
+    "description": "Incorrect MIME Type when reading file using “Read/Write Files from Disk” node. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current n8n deployment",
+        "description": "Verify your n8n version and configuration:\n```bash\nkubectl get pods -n n8n -l app.kubernetes.io/name=n8n\nhelm list -n n8n 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working n8n installation."
+      },
+      {
+        "title": "Review n8n configuration",
+        "description": "Inspect the relevant n8n configuration:\n```bash\nkubectl get all -n n8n -l app.kubernetes.io/name=n8n\nkubectl get configmap -n n8n -l app.kubernetes.io/part-of=n8n\n```\n### Bug Description\n\nHello,,\n\nAfter updating n8n to the beta version, the `Read/Write Files from Disk` node returns a different MIME type than in the previous version (1.120.3)."
+      },
+      {
+        "title": "Apply the fix for Incorrect MIME Type when reading file using “Read/Write…",
+        "description": "I’ve been running into this issue recently as well.\n\nI’m currently on **n8n 2.1.1**, and what’s confusing is that **some videos upload successfully while others fail with the same workflow**. At first I thought it might be a pure n8n version issue, but around the same time I also changed some\n```yaml\n{\n  \"nodes\": [\n    {\n      \"parameters\": {\n        \"operation\": \"write\",\n        \"fileName\": \"/n8n_data/output.mp4\",\n        \"dataPropertyName\": \"data0\",\n        \"options\": {}\n      },\n      \"type\": \"n8n-nodes-base.readWriteFile\",\n      \"typeVersion\": 1,\n      \"position\": [\n        656,\n        208\n      ],\n      \"id\": \"1786827e-1a17-4273-8c14-c0f6480e06a2\",\n      \"name\": \"Read/Write Files from Disk1\"\n    },\n    {\n      \"parameters\": {\n        \"options\": {\n          \"allowFileUploads\": true\n        }\n      },\n      \"type\": \"@n8n/n8n-nodes-langchain.chatTrigger\",\n      \"typeVersion\": 1.4,\n     \n```"
+      },
+      {
+        "title": "Upgrade n8n to include the fix",
+        "description": "If the fix is included in a newer release, upgrade n8n:\n```bash\nhelm repo update\nhelm upgrade n8n n8n/n8n --namespace n8n\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n n8n\nhelm list -n n8n\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n n8n -l app.kubernetes.io/name=n8n\nkubectl get events -n n8n --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Incorrect MIME Type when reading file using “Read/Write…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I’ve been running into this issue recently as well.\n\nI’m currently on **n8n 2.1.1**, and what’s confusing is that **some videos upload successfully while others fail with the same workflow**. At first I thought it might be a pure n8n version issue, but around the same time I also changed some **ffmpeg options used to generate the videos**, so that might be part of the trigger too.",
+      "codeSnippets": [
+        "{\n  \"nodes\": [\n    {\n      \"parameters\": {\n        \"operation\": \"write\",\n        \"fileName\": \"/n8n_data/output.mp4\",\n        \"dataPropertyName\": \"data0\",\n        \"options\": {}\n      },\n      \"type\": \"n8n-nodes-base.readWriteFile\",\n      \"typeVersion\": 1,\n      \"position\": [\n        656,\n        208\n      ],\n      \"id\": \"1786827e-1a17-4273-8c14-c0f6480e06a2\",\n      \"name\": \"Read/Write Files from Disk1\"\n    },\n    {\n      \"parameters\": {\n        \"options\": {\n          \"allowFileUploads\": true\n        }\n      },\n      \"type\": \"@n8n/n8n-nodes-langchain.chatTrigger\",\n      \"typeVersion\": 1.4,\n      \"position\": [\n        432,\n        208\n      ],\n      \"id\": \"c6548e10-5d69-4019-9ae4-542003e532f3\",\n      \"name\": \"When chat message received\",\n      \"webhookId\": \"b473a745-8d04-4d83-bb7d-79a07edf99b",
+        "{\n  \"nodes\": [\n    {\n      \"parameters\": {\n        \"jsCode\": \"// Récupère le premier item avec binary data\\nconst item = $input.first();\\n\\nif (!item.binary || !item.binary.data) {\\n  throw new Error('Pas de données binaires trouvées');\\n}\\n\\n// Récupère les données binaires ORIGINALES (Buffer)\\nconst originalBinary = $input.first().binary.data;\\n\\n// Crée une NOUVELLE entrée binaire avec MIME type corrigé\\nconst newBinaryData = {\\n  data: originalBinary.data,  // Buffer original (CRUCIAL)\\n  mimeType: 'video/mp4',      // ✅ CORRECTION ICI\\n  fileName: originalBinary.fileName || 'Saint_Andre.mp4',\\n  fileExtension: 'mp4',\\n  fileSize: originalBinary.fileSize\\n};\\n\\nreturn [{\\n  json: {\\n    originalMime: originalBinary.mimeType,\\n    newMime: 'video/mp4',\\n    fileSize: originalBinary.file"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "n8n",
+      "community",
+      "workflow",
+      "feature"
+    ],
+    "cncfProjects": [
+      "n8n"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/n8n-io/n8n/issues/22007",
+      "repo": "https://github.com/n8n-io/n8n"
+    },
+    "reactions": 4,
+    "comments": 24,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with n8n installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:51:45.976Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
