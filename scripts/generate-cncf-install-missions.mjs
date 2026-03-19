@@ -307,13 +307,14 @@ Your output MUST be a JSON object with these fields:
 
 Rules:
 - If the project has NO installable component (it's a spec, SDK, or library only), return {"skip": true}
+- CRITICAL: If the project is a CLI tool, SDK, language compiler, or desktop application (not a Kubernetes service), generate steps for LOCAL INSTALLATION (curl binary, brew install, pip install, cargo install, etc.) — NOT kubectl/helm deployment. Examples: opentofu, kcl, copa, kitops, stacker, notation, devspace, container2wasm are CLI tools.
 - CRITICAL: ONLY use Helm install commands if a "## Helm Chart" section or "## Artifact Hub Helm Chart" section is provided in the context. If NEITHER section is present, DO NOT generate helm commands — use kubectl apply, kustomize, or another appropriate method instead.
 - CRITICAL: Do NOT invent Helm repository URLs, chart names, or image names. ONLY use URLs and names explicitly provided in the context above. If you don't know the real Helm repo URL, DO NOT guess.
+- CRITICAL: Every step description MUST contain at least one code block (triple backticks) with a real, copy-pasteable command. Steps with only prose and no commands are rejected.
 - Steps MUST have real commands — never "see the documentation"
-- Include a verification step (kubectl get pods, health check, port-forward)
-- Include at least 1 post-install configuration step (resource limits, RBAC, TLS, or monitoring)
+- Include a verification step (kubectl get pods, health check, port-forward, --version)
 - Pin versions — never use :latest
-- Use --namespace and --create-namespace
+- Use --namespace and --create-namespace for Kubernetes deployments
 - 4-6 install steps is ideal
 - "uninstall" must have 2-4 steps covering: remove release, clean up CRDs/resources, remove namespace
 - "upgrade" must have 2-4 steps covering: backup current state, update repo/manifests, upgrade, verify
@@ -488,6 +489,15 @@ function applyQualityGate(mission, config) {
     return { pass: false, gates, score: 0, tier: 'rejected' }
   }
   gates.push({ gate: 'verification-step', pass: true })
+
+  // Gate 8: All steps must have code blocks — reject skeleton missions
+  const steps = mission.mission?.steps || []
+  const stepsWithoutCode = steps.filter(s => !(/```/.test(s.description || '')))
+  if (stepsWithoutCode.length > 0) {
+    gates.push({ gate: 'steps-have-code', pass: false, reason: `${stepsWithoutCode.length} step(s) have no code blocks` })
+    return { pass: false, gates, score: 0, tier: 'rejected' }
+  }
+  gates.push({ gate: 'steps-have-code', pass: true })
 
   // Gate 7: Helm repo URL validation — reject missions with invalid Helm repo URLs
   const helmRepoMatch = allText.match(/helm repo add \S+ (\S+)/i)
