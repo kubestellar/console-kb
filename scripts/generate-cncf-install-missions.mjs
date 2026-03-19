@@ -318,7 +318,9 @@ Rules:
 - "uninstall" must have 2-4 steps covering: remove release, clean up CRDs/resources, remove namespace
 - "upgrade" must have 2-4 steps covering: backup current state, update repo/manifests, upgrade, verify
 - "troubleshooting" must have 3-5 common issues with diagnostic commands and fixes
-- "installMethods" MUST accurately list ONLY the methods used in the steps (e.g. ["helm"], ["kubectl"], ["kustomize"], or a combination)`
+- "installMethods" MUST accurately list ONLY the methods used in the steps (e.g. ["helm"], ["kubectl"], ["kustomize"], or a combination)
+- CRITICAL: Do NOT include generic placeholder steps like "kubectl edit deployment" for post-install configuration. If you need a configuration step, use specific, actionable commands (e.g. kubectl set resources, helm upgrade --set, or kubectl patch) — never interactive edit commands.
+- Do NOT include "Configure resource limits" or "Post-install configuration" steps that only contain "kubectl edit deployment" — these are not actionable and reduce quality.`
 
 function buildInstallPrompt(project, context) {
   const sections = [`# Install mission for: ${project.name} (${project.maturity})`]
@@ -557,10 +559,12 @@ function buildMissionJson(project, llmResult, context, config) {
       description: llmResult.description || `Production-ready installation guide for ${displayName} (${repoShort}).`,
       type: 'deploy',
       status: 'completed',
-      steps: (llmResult.steps || []).map(s => ({
-        title: s.title.slice(0, 120),
-        description: s.description.slice(0, 3000),
-      })),
+      steps: (llmResult.steps || [])
+        .filter(s => !isPlaceholderStep(s))
+        .map(s => ({
+          title: s.title.slice(0, 120),
+          description: s.description.slice(0, 3000),
+        })),
       uninstall: (llmResult.uninstall || []).map(s => ({
         title: s.title.slice(0, 120),
         description: s.description.slice(0, 3000),
@@ -575,7 +579,7 @@ function buildMissionJson(project, llmResult, context, config) {
       })),
       resolution: {
         summary: llmResult.resolution || `${displayName} is installed and verified.`,
-        codeSnippets: extractCodeSnippets(llmResult.steps || []),
+        codeSnippets: extractCodeSnippets((llmResult.steps || []).filter(s => !isPlaceholderStep(s))),
       },
     },
     metadata: {
@@ -609,6 +613,18 @@ function buildMissionJson(project, llmResult, context, config) {
   }
 
   return mission
+}
+
+/** Detect generic placeholder steps (e.g. "kubectl edit deployment" config stubs) */
+function isPlaceholderStep(step) {
+  const text = `${step.title || ''} ${step.description || ''}`
+  // Reject steps whose only actionable command is "kubectl edit deployment"
+  if (/kubectl\s+edit\s+deployment/i.test(text)) {
+    // Check if the step has any OTHER real command besides kubectl edit
+    const otherCmds = /(?:kubectl\s+(?:apply|create|set|patch|rollout|scale)|helm\s+(?:install|upgrade)|docker\s+run|kustomize)/i
+    if (!otherCmds.test(text)) return true
+  }
+  return false
 }
 
 function extractCodeSnippets(steps) {
