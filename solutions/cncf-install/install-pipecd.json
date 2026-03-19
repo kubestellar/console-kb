@@ -11,76 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the PipeCD Helm repository",
-        "description": "First, add the PipeCD Helm repository to your local Helm installation with the following command:\n```bash\ngit clone https://github.com/pipe-cd/pipecd.git\ncd pipecd\n```"
+        "title": "Clone the PipeCD repository",
+        "description": "Clone the repository which contains the installation manifests:\n```bash\ngit clone https://github.com/pipe-cd/pipecd.git\ncd pipecd\n```"
       },
       {
-        "title": "Install PipeCD using Helm",
-        "description": "Now, install PipeCD in a new namespace called 'pipecd' with the following command:\n```bash\nhelm install pipecd manifests/pipecd --namespace pipecd --create-namespace --version v0.55.0\n```"
+        "title": "Install PipeCD Control Plane",
+        "description": "Install PipeCD using the manifests:\n```bash\nkubectl create namespace pipecd\nhelm install pipecd manifests/pipecd --namespace pipecd \\\n  --set quickstart.enabled=true\n```"
+      },
+      {
+        "title": "Access the PipeCD console",
+        "description": "Port-forward to access the PipeCD web console:\n```bash\nkubectl port-forward svc/pipecd 8080:8080 -n pipecd\n```\nOpen http://localhost:8080"
+      },
+      {
+        "title": "Install Piped (deployment agent)",
+        "description": "Download and install the Piped agent on each target environment:\n```bash\ncurl -Lo piped https://github.com/pipe-cd/pipecd/releases/latest/download/piped_linux_amd64\nchmod +x piped\nsudo mv piped /usr/local/bin/\npiped --version\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the PipeCD pods are running successfully with:\n```bash\nkubectl get pods --namespace pipecd\n```"
-      },
-      {
-        "title": "Port-forward the PipeCD API server",
-        "description": "To access the PipeCD API server, run the following command:\n```bash\nkubectl port-forward svc/pipecd-api --namespace pipecd 8080:80\n```"
+        "description": "```bash\nkubectl get pods -n pipecd\npiped --version\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of PipeCD will show all pods running in the 'pipecd' namespace. You can access the PipeCD API server at http://localhost:8080 after port-forwarding. Additionally, the resource limits should be configured as specified.",
+      "summary": "PipeCD control plane is installed with the Piped agent for GitOps-style continuous delivery.",
       "codeSnippets": [
-        "helm repo add pipecd https://charts.pipecd.dev/\nhelm repo update",
-        "helm install pipecd pipecd/pipecd --namespace pipecd --create-namespace --version v0.55.0",
-        "kubectl get pods --namespace pipecd",
-        "kubectl port-forward svc/pipecd-api --namespace pipecd 8080:80",
-        "kubectl edit deployment pipecd --namespace pipecd"
+        "helm install pipecd manifests/pipecd --namespace pipecd",
+        "kubectl get pods -n pipecd"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "To cleanly remove the PipeCD installation, first uninstall the Helm release with the following command:\n```bash\nhelm uninstall pipecd --namespace pipecd\n```"
-      },
-      {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Next, remove any Custom Resource Definitions (CRDs) and persistent volumes that were created during the installation:\n```bash\nkubectl delete crd pipelineruns.pipecd.dev\nkubectl delete crd applications.pipecd.dev\nkubectl delete crd environments.pipecd.dev\nkubectl delete crd deployments.pipecd.dev\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Finally, delete the 'pipecd' namespace and verify that it has been removed:\n```bash\nkubectl delete namespace pipecd\nkubectl get namespaces\n```"
+        "title": "Remove PipeCD",
+        "description": "```bash\nhelm uninstall pipecd -n pipecd\nkubectl delete namespace pipecd\nsudo rm /usr/local/bin/piped\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's a good practice to back up the current state of your PipeCD installation. You can do this by exporting the current configuration:\n```bash\nkubectl get all --namespace pipecd -o yaml > pipecd-backup.yaml\n```"
+        "title": "Pull latest and upgrade",
+        "description": "```bash\ncd pipecd && git pull\nhelm upgrade pipecd manifests/pipecd --namespace pipecd\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and run the upgrade command to apply the latest version of PipeCD:\n```bash\nhelm repo update\nhelm upgrade pipecd pipecd/pipecd --namespace pipecd --version v0.56.0\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "After the upgrade, verify that the PipeCD pods are running the new version:\n```bash\nkubectl get pods --namespace pipecd\n```"
+        "title": "Upgrade Piped agent",
+        "description": "```bash\ncurl -Lo piped https://github.com/pipe-cd/pipecd/releases/latest/download/piped_linux_amd64\nchmod +x piped\nsudo mv piped /usr/local/bin/\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If you notice that the PipeCD pods are stuck in a CrashLoopBackOff state, check the logs for more information:\n```bash\nkubectl logs <pod-name> --namespace pipecd\n```\nLook for any error messages that might indicate what is causing the crash."
+        "title": "Control plane pods not starting",
+        "description": "```bash\nkubectl logs -l app.kubernetes.io/name=pipecd -n pipecd\n```"
       },
       {
-        "title": "API server not accessible",
-        "description": "If you are unable to access the PipeCD API server, ensure that the port-forwarding command is running. You can check the service status with:\n```bash\nkubectl get svc --namespace pipecd\n```\nIf the service is not running, try restarting the port-forward command."
+        "title": "Piped agent not connecting",
+        "description": "Verify the Piped config points to the correct control plane address and has a valid API key."
       },
       {
-        "title": "Resource limits causing pod eviction",
-        "description": "If your pods are being evicted due to resource limits, check the events for the namespace:\n```bash\nkubectl get events --namespace pipecd\n```\nYou may need to adjust the resource limits in your deployment."
-      },
-      {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If you encounter a version conflict during the Helm upgrade, ensure that you are using a compatible version of the chart. Check the available versions with:\n```bash\nhelm search repo pipecd/pipecd --versions\n```\nThen, specify a valid version in your upgrade command."
+        "title": "Deployment stuck",
+        "description": "Check deployment logs in the PipeCD web console or:\n```bash\nkubectl get pods -n pipecd\n```"
       }
     ]
   },
@@ -105,7 +90,8 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "helm",
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.55.0",

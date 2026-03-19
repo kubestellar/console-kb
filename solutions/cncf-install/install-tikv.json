@@ -11,80 +11,65 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the TiKV Helm repository",
-        "description": "First, add the TiKV Helm chart repository to your Helm configuration.\n```bash\nhelm repo add tikv https://raw.githubusercontent.com/pingcap/tidb-operator/master/charts\n```"
+        "title": "Clone the TiDB Operator repository",
+        "description": "TiKV is deployed on Kubernetes via the TiDB Operator. Clone the operator repo:\n```bash\ngit clone https://github.com/pingcap/tidb-operator.git\ncd tidb-operator\n```"
       },
       {
-        "title": "Install TiKV using Helm",
-        "description": "Now, install TiKV using the Helm chart, specifying the desired namespace.\n```bash\nhelm install tikv tikv/tikv --namespace tikv --create-namespace --version v8.5.5\n```"
+        "title": "Install TiDB Operator CRDs",
+        "description": "Install the Custom Resource Definitions:\n```bash\nkubectl create -f manifests/crd.yaml\n```"
+      },
+      {
+        "title": "Install TiDB Operator via local Helm chart",
+        "description": "Install the operator from the local chart:\n```bash\nkubectl create namespace tidb-admin\nhelm install tidb-operator charts/tidb-operator --namespace tidb-admin --version v1.6.1\n```"
+      },
+      {
+        "title": "Deploy a TiKV cluster",
+        "description": "Create a TiKV cluster using the TidbCluster CR:\n```bash\nkubectl create namespace tikv\nkubectl apply -n tikv -f - << 'EOF'\napiVersion: pingcap.com/v1alpha1\nkind: TidbCluster\nmetadata:\n  name: basic\nspec:\n  version: v8.5.0\n  timezone: UTC\n  pvReclaimPolicy: Retain\n  pd:\n    replicas: 1\n    requests:\n      storage: \"1Gi\"\n  tikv:\n    replicas: 3\n    requests:\n      storage: \"10Gi\"\nEOF\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the TiKV pods are running successfully in the specified namespace.\n```bash\nkubectl get pods --namespace tikv\n```"
-      },
-      {
-        "title": "Configure resource limits",
-        "description": "To ensure optimal performance, configure resource limits for the TiKV deployment. Edit the values file or use the following command:\n```bash\nhelm upgrade tikv tikv/tikv --namespace tikv --set resources.limits.cpu=2000m --set resources.limits.memory=4Gi\n```"
-      },
-      {
-        "title": "Set up monitoring (optional)",
-        "description": "For better observability, you can enable monitoring by integrating TiKV with Prometheus. Update your Helm installation:\n```bash\nhelm upgrade tikv tikv/tikv --namespace tikv --set monitoring.enabled=true\n```"
+        "description": "```bash\nkubectl get pods -n tikv\nkubectl get tidbcluster -n tikv\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of TiKV will show the TiKV pods running in the 'tikv' namespace. You can also verify the resource limits and monitoring settings applied to the deployment.",
+      "summary": "TiKV is deployed on Kubernetes via the TiDB Operator with PD and TiKV components running.",
       "codeSnippets": [
-        "helm repo add tikv https://raw.githubusercontent.com/pingcap/tidb-operator/master/charts\nhelm repo update",
-        "helm install tikv tikv/tikv --namespace tikv --create-namespace --version v8.5.5",
-        "kubectl get pods --namespace tikv",
-        "helm upgrade tikv tikv/tikv --namespace tikv --set resources.limits.cpu=2000m --set resources.limits.memory=4Gi",
-        "helm upgrade tikv tikv/tikv --namespace tikv --set monitoring.enabled=true"
+        "helm install tidb-operator charts/tidb-operator --namespace tidb-admin",
+        "kubectl get tidbcluster -n tikv"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "To cleanly remove the TiKV deployment, use the following command to uninstall the Helm release from the specified namespace:\n```bash\nhelm uninstall tikv --namespace tikv\n```"
+        "title": "Remove the TiKV cluster",
+        "description": "```bash\nkubectl delete tidbcluster basic -n tikv\nkubectl delete namespace tikv\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "After uninstalling the Helm release, you should clean up any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created. Run the following commands:\n```bash\nkubectl delete crd tikvclusters.pingcap.com\nkubectl delete pvc --all --namespace tikv\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Finally, remove the namespace used for TiKV and verify that it has been deleted:\n```bash\nkubectl delete namespace tikv\nkubectl get namespaces\n```"
+        "title": "Uninstall TiDB Operator",
+        "description": "```bash\nhelm uninstall tidb-operator -n tidb-admin\nkubectl delete -f manifests/crd.yaml\nkubectl delete namespace tidb-admin\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up your current state. You can create a backup of your existing TiKV data by exporting it or taking snapshots, depending on your setup."
+        "title": "Pull latest and upgrade operator",
+        "description": "```bash\ncd tidb-operator && git pull\nhelm upgrade tidb-operator charts/tidb-operator --namespace tidb-admin\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the TiKV release to the latest version. Run the following commands:\n```bash\nhelm repo update\nhelm upgrade tikv tikv/tikv --namespace tikv --version v8.5.6\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "After upgrading, verify that the TiKV pods are running the new version successfully:\n```bash\nkubectl get pods --namespace tikv\n```"
+        "title": "Upgrade TiKV cluster version",
+        "description": "```bash\nkubectl patch tidbcluster basic -n tikv --type merge -p '{\"spec\":{\"version\":\"v8.5.0\"}}'\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If your TiKV pods are stuck in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace tikv\n```\nLook for any configuration issues or resource constraints that may be causing the crash."
+        "title": "TiKV pods stuck in Pending",
+        "description": "TiKV requires persistent storage. Ensure a StorageClass is available:\n```bash\nkubectl get storageclass\nkubectl describe pod -n tikv | grep -A5 Events\n```"
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter issues related to insufficient resources, check the resource requests and limits set for the TiKV deployment:\n```bash\nkubectl describe deployment tikv --namespace tikv\n```\nAdjust the resource limits in your Helm upgrade command if necessary."
+        "title": "PD not starting",
+        "description": "PD (Placement Driver) must start before TiKV. Check PD logs:\n```bash\nkubectl logs -l app.kubernetes.io/component=pd -n tikv\n```"
       },
       {
-        "title": "Failed to connect to TiKV",
-        "description": "If your application fails to connect to TiKV, ensure that the service is running and accessible:\n```bash\nkubectl get svc --namespace tikv\n```\nCheck for any network policies or firewall rules that might be blocking access."
-      },
-      {
-        "title": "Persistent volume issues",
-        "description": "If there are issues with persistent volumes, check the status of the PVCs:\n```bash\nkubectl get pvc --namespace tikv\n```\nEnsure that the PVCs are bound and that the underlying storage is available."
+        "title": "Operator not reconciling",
+        "description": "```bash\nkubectl logs -l app.kubernetes.io/name=tidb-operator -n tidb-admin\n```"
       }
     ]
   },
@@ -109,7 +94,8 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "helm",
+      "kubectl"
     ],
     "maturity": "graduated",
     "projectVersion": "v8.5.5",
