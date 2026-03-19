@@ -11,80 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the Knative Eventing Helm chart repository to your local Helm configuration.\n```bash\nhelm repo add knative-eventing https://ahhhh-man.github.io/charts\nhelm repo update\n```"
+        "title": "Install Knative Eventing CRDs",
+        "description": "Install the Knative Eventing CRDs from the official release:\n```bash\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-crds.yaml\n```"
       },
       {
-        "title": "Install Knative Eventing",
-        "description": "Install the Knative Eventing Helm chart into a new namespace called 'knative-eventing'.\n```bash\nhelm install knative-eventing knative-eventing/knative-eventing --namespace knative-eventing --create-namespace --version 0.18.2\n```"
+        "title": "Install Knative Eventing core",
+        "description": "Install the core eventing components:\n```bash\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-core.yaml\n```"
+      },
+      {
+        "title": "Install the in-memory channel (for development)",
+        "description": "Install the in-memory channel for development/testing:\n```bash\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/in-memory-channel.yaml\n```\nFor production, use Apache Kafka or NATS channels instead."
+      },
+      {
+        "title": "Install the MT-Channel-Based broker",
+        "description": "Install the default broker implementation:\n```bash\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/mt-channel-broker.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Knative Eventing pods are running successfully.\n```bash\nkubectl get pods --namespace knative-eventing\n```"
-      },
-      {
-        "title": "Configure default channel",
-        "description": "Apply the default channel configuration for Knative Eventing.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/knative/eventing/main/config/400-config-br-default-channel.yaml --namespace knative-eventing\n```"
-      },
-      {
-        "title": "Configure broker defaults",
-        "description": "Apply the broker defaults configuration for Knative Eventing.\n```bash\nkubectl apply -f https://raw.githubusercontent.com/knative/eventing/main/config/400-config-br-defaults.yaml --namespace knative-eventing\n```"
+        "description": "Check all eventing pods are running:\n```bash\nkubectl get pods -n knative-eventing\nkubectl get apiservices | grep knative\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Knative Eventing release from the cluster.\n```bash\nhelm uninstall knative-eventing --namespace knative-eventing\n```"
-      },
-      {
-        "title": "Clean up CRDs",
-        "description": "Remove any Custom Resource Definitions (CRDs) created by Knative Eventing.\n```bash\nkubectl delete crd $(kubectl get crd | grep 'eventing.knative.dev' | awk '{print $1}')\n```"
-      },
-      {
-        "title": "Delete the namespace",
-        "description": "Delete the 'knative-eventing' namespace to clean up all resources.\n```bash\nkubectl delete namespace knative-eventing\n```"
+        "title": "Remove Knative Eventing components",
+        "description": "```bash\nkubectl delete -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/mt-channel-broker.yaml\nkubectl delete -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/in-memory-channel.yaml\nkubectl delete -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-core.yaml\nkubectl delete -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-crds.yaml\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Export the current configuration and state of Knative Eventing.\n```bash\nkubectl get all --namespace knative-eventing -o yaml > knative-eventing-backup.yaml\n```"
+        "title": "Apply the new version manifests",
+        "description": "Check https://github.com/knative/eventing/releases for the latest version:\n```bash\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-crds.yaml\nkubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-core.yaml\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Update the Helm repository to ensure you have the latest charts.\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade Knative Eventing",
-        "description": "Upgrade the Knative Eventing installation to the latest version.\n```bash\nhelm upgrade knative-eventing knative-eventing/knative-eventing --namespace knative-eventing --version 0.18.2\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the Knative Eventing pods are running successfully after the upgrade.\n```bash\nkubectl get pods --namespace knative-eventing\n```"
+        "title": "Verify upgrade",
+        "description": "```bash\nkubectl get pods -n knative-eventing\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Pods stuck in Pending",
-        "description": "If the Knative Eventing pods are stuck in 'Pending', check for resource availability in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace knative-eventing\nkubectl get nodes\n```"
+        "description": "Check resource availability:\n```bash\nkubectl describe pods -n knative-eventing\nkubectl get events -n knative-eventing\n```"
       },
       {
-        "title": "Pods in CrashLoopBackOff",
-        "description": "If you see pods in 'CrashLoopBackOff', check the logs for errors.\n```bash\nkubectl logs <pod-name> --namespace knative-eventing\n```"
+        "title": "Webhook errors",
+        "description": "Ensure the webhook service is running:\n```bash\nkubectl get svc -n knative-eventing\nkubectl logs -l app=eventing-webhook -n knative-eventing\n```"
       },
       {
-        "title": "Configuration issues",
-        "description": "If the eventing functionality is not working as expected, verify the applied configurations.\n```bash\nkubectl get configmap --namespace knative-eventing\nkubectl describe configmap <configmap-name> --namespace knative-eventing\n```"
+        "title": "Broker not creating channels",
+        "description": "Verify the default channel configuration:\n```bash\nkubectl get configmap config-br-defaults -n knative-eventing -o yaml\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Knative Eventing will have all pods running in the 'knative-eventing' namespace without errors. You can verify this by running 'kubectl get pods --namespace knative-eventing'.",
+      "summary": "Knative Eventing is installed with the in-memory channel and MT-Channel-Based broker for event-driven architectures.",
       "codeSnippets": [
-        "helm repo add knative-eventing https://ahhhh-man.github.io/charts\nhelm repo update",
-        "helm install knative-eventing knative-eventing/knative-eventing --namespace knative-eventing --create-namespace --version 0.18.2",
-        "kubectl get pods --namespace knative-eventing",
-        "kubectl apply -f https://raw.githubusercontent.com/knative/eventing/main/config/400-config-br-default-channel.yaml --namespace knative-eventing",
-        "kubectl apply -f https://raw.githubusercontent.com/knative/eventing/main/config/400-config-br-defaults.yaml --namespace knative-eventing"
+        "kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.17.5/eventing-core.yaml",
+        "kubectl get pods -n knative-eventing"
       ]
     }
   },
@@ -110,7 +91,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "graduated",
     "projectVersion": "knative-v1.21.0",
@@ -125,9 +106,8 @@
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.24",
+    "kubernetes": ">=1.28",
     "tools": [
-      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and have Helm and kubectl installed."

@@ -11,71 +11,52 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the Aeraki repository",
-        "description": "Start by cloning the Aeraki repository to your local machine to access the necessary configuration files.\n```bash\ngit clone https://github.com/aeraki-mesh/aeraki.git\ncd aeraki\n```"
+        "title": "Install Istio (prerequisite)",
+        "description": "Aeraki Mesh extends Istio. Install Istio first:\n```bash\ncurl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.21.0 sh -\nexport PATH=$PWD/istio-1.21.0/bin:$PATH\nistioctl install --set profile=demo -y\n```"
       },
       {
-        "title": "Deploy Aeraki using kubectl",
-        "description": "Apply the Aeraki manifests to your Kubernetes cluster. Ensure you are in the `aeraki` directory where the manifests are located.\n```bash\nkubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system\n```"
+        "title": "Install Aeraki Mesh via Helm",
+        "description": "Add the Aeraki Helm repository and install:\n```bash\nhelm repo add aeraki https://aeraki-framework.github.io/aeraki/\nhelm repo update\nkubectl create namespace aeraki-system\nhelm install aeraki aeraki/aeraki --namespace aeraki-system\n```"
+      },
+      {
+        "title": "Deploy a sample application",
+        "description": "Test with the Dubbo or Thrift sample:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/aeraki-framework/aeraki/master/demo/metaprotocol-dubbo/dubbo-sample.yaml\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Aeraki pods are running successfully in the `aeraki-system` namespace.\n```bash\nkubectl get pods -n aeraki-system\n```"
-      },
-      {
-        "title": "Set up monitoring",
-        "description": "Integrate monitoring by deploying Prometheus and Grafana to visualize Aeraki metrics. Follow the specific instructions in the Aeraki documentation for setting this up."
+        "description": "```bash\nkubectl get pods -n aeraki-system\nkubectl get metarouter -A\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Aeraki deployment",
-        "description": "Delete the Aeraki deployment and any associated resources in the `aeraki-system` namespace.\n```bash\nkubectl delete -f deploy/aeraki.yaml --namespace aeraki-system\nkubectl delete namespace aeraki-system\n```"
-      },
-      {
-        "title": "Clean up remaining resources",
-        "description": "Ensure that all resources related to Aeraki are removed from the cluster.\n```bash\nkubectl delete crd $(kubectl get crd | grep aeraki | awk '{print $1}')\n```"
+        "title": "Remove Aeraki",
+        "description": "```bash\nhelm uninstall aeraki -n aeraki-system\nkubectl delete namespace aeraki-system\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current Aeraki configuration and any custom resources.\n```bash\nkubectl get all -n aeraki-system -o yaml > aeraki-backup.yaml\n```"
-      },
-      {
-        "title": "Update the Aeraki manifests",
-        "description": "Pull the latest changes from the Aeraki repository to get the updated manifests.\n```bash\ngit pull origin master\n```"
-      },
-      {
-        "title": "Upgrade the Aeraki deployment",
-        "description": "Apply the updated manifests to upgrade Aeraki in your cluster.\n```bash\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the Aeraki pods are running the new version successfully.\n```bash\nkubectl get pods -n aeraki-system\n```"
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade aeraki aeraki/aeraki --namespace aeraki-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not starting",
-        "description": "If the Aeraki pods are not starting, check the pod status and logs for errors.\n```bash\nkubectl get pods -n aeraki-system\nkubectl logs <pod-name> -n aeraki-system\n```"
+        "title": "Aeraki controller not starting",
+        "description": "```bash\nkubectl logs -l app=aeraki -n aeraki-system\n```\nEnsure Istio is installed and running first."
       },
       {
-        "title": "Service not reachable",
-        "description": "If services managed by Aeraki are not reachable, verify the service configuration and network policies.\n```bash\nkubectl get svc -n aeraki-system\nkubectl describe svc <service-name> -n aeraki-system\n```"
+        "title": "MetaRouter not taking effect",
+        "description": "Verify the MetaRouter CRD exists:\n```bash\nkubectl get crd | grep aeraki\n```"
       },
       {
-        "title": "High resource usage",
-        "description": "If Aeraki pods are consuming too many resources, check the resource limits and adjust them accordingly.\n```bash\nkubectl top pods -n aeraki-system\n```"
+        "title": "Istio version incompatibility",
+        "description": "Check the Aeraki compatibility matrix at https://github.com/aeraki-framework/aeraki#compatibility"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Aeraki will result in all pods running in the `aeraki-system` namespace without errors. You will be able to manage various layer-7 protocols effectively within your service mesh.",
+      "summary": "Aeraki Mesh is installed alongside Istio for managing non-HTTP protocols like Dubbo, Thrift, and Redis.",
       "codeSnippets": [
-        "git clone https://github.com/aeraki-mesh/aeraki.git\ncd aeraki",
-        "kubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/aeraki.yaml --namespace aeraki-system",
-        "kubectl get pods -n aeraki-system",
-        "kubectl edit deployment aeraki -n aeraki-system\n# Add the following under spec.containers:\n# resources:\n#   requests:\n#     cpu: \"100m\"\n#     memory: \"128Mi\"\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\""
+        "helm install aeraki aeraki/aeraki --namespace aeraki-system"
       ]
     }
   },
@@ -100,7 +81,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "helm"
     ],
     "maturity": "sandbox",
     "projectVersion": "1.4.1",
@@ -116,7 +97,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "helm",
+      "kubectl",
+      "istioctl"
     ],
     "description": "Ensure you have a Kubernetes cluster running and kubectl installed on your local machine."
   },

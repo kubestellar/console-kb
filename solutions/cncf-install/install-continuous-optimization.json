@@ -11,76 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the repository",
-        "description": "Start by cloning the Krkn repository to your local machine using the following command:\n```bash\ngit clone https://github.com/krkn-chaos/krkn.git\ncd krkn\n```"
+        "title": "Install Krkn (Kraken) via pip",
+        "description": "Install the Krkn chaos testing tool:\n```bash\npip install krkn\n```\nOr run via container:\n```bash\ndocker pull quay.io/redhat-chaos/krkn:latest\n```"
       },
       {
-        "title": "Deploy Krkn using kubectl",
-        "description": "Apply the Kubernetes manifests provided in the repository to deploy Krkn. Ensure you are in the cloned repository directory:\n```bash\nkubectl apply -f deploy/krkn-deployment.yaml --create-namespace --namespace krkn\n```"
+        "title": "Configure a chaos scenario",
+        "description": "Create a configuration file:\n```bash\ncat > config.yaml << 'EOF'\nkraken:\n  kubeconfig_path: ~/.kube/config\n  scenarios:\n    - pod_scenarios/pod-delete.yaml\n  litmus_scenarios: []\n  exit_on_failure: false\nEOF\n```"
       },
       {
-        "title": "Verify the deployment",
-        "description": "Check if the Krkn pods are running successfully:\n```bash\nkubectl get pods --namespace krkn\n```"
+        "title": "Run a chaos test",
+        "description": "Execute a chaos scenario:\n```bash\nkrkn --config config.yaml\n```\nOr via Docker:\n```bash\ndocker run --rm -v ~/.kube:/root/.kube quay.io/redhat-chaos/krkn:latest --config config.yaml\n```"
       },
       {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the Krkn deployment to ensure it runs efficiently:\n```bash\nkubectl set resources deployment krkn --namespace krkn --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
-      },
-      {
-        "title": "Access the Krkn service",
-        "description": "If you need to access the Krkn service, you can port-forward it to your local machine:\n```bash\nkubectl port-forward service/krkn --namespace krkn 8080:80\n```"
+        "title": "Verify the installation",
+        "description": "```bash\nkrkn --help\nkrkn --version\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Krkn deployment",
-        "description": "To uninstall Krkn, first delete the deployment:\n```bash\nkubectl delete -f deploy/krkn-deployment.yaml --namespace krkn\n```"
-      },
-      {
-        "title": "Clean up the namespace",
-        "description": "Remove the Krkn namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace krkn\n```"
+        "title": "Remove Krkn",
+        "description": "```bash\npip uninstall krkn\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of your Krkn deployment:\n```bash\nkubectl get all --namespace krkn -o yaml > krkn-backup.yaml\n```"
-      },
-      {
-        "title": "Update the repository",
-        "description": "Pull the latest changes from the repository to get the latest version:\n```bash\ngit pull origin main\n```"
-      },
-      {
-        "title": "Upgrade the deployment",
-        "description": "Apply the updated manifests to upgrade your Krkn deployment:\n```bash\nkubectl apply -f deploy/krkn-deployment.yaml --namespace krkn\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the Krkn pods after the upgrade:\n```bash\nkubectl get pods --namespace krkn\n```"
+        "title": "Upgrade Krkn",
+        "description": "```bash\npip install --upgrade krkn\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not starting",
-        "description": "If the Krkn pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace krkn\n``` \nLook for any error messages that indicate what might be wrong."
+        "title": "Kubeconfig not found",
+        "description": "```bash\nexport KUBECONFIG=~/.kube/config\nkubectl cluster-info\n```"
       },
       {
-        "title": "Service not accessible",
-        "description": "If you cannot access the Krkn service, ensure the service is running:\n```bash\nkubectl get service --namespace krkn\n``` \nIf the service is not running, check the deployment and pod status."
+        "title": "Scenario fails with RBAC errors",
+        "description": "Krkn needs cluster-admin permissions to inject chaos. Verify your kubeconfig has admin access."
       },
       {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If your pods are being OOMKilled, consider adjusting the resource limits:\n```bash\nkubectl describe pod <pod-name> --namespace krkn\n``` \nCheck the memory usage and adjust the limits accordingly."
+        "title": "Pod not being killed",
+        "description": "Check the pod scenario config matches existing pod labels and namespaces."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Krkn will result in the Krkn pods running without errors and the service being accessible. You can verify this by checking the pod status and accessing the service through port-forwarding.",
+      "summary": "Krkn is installed for running chaos engineering tests against Kubernetes clusters.",
       "codeSnippets": [
-        "git clone https://github.com/krkn-chaos/krkn.git\ncd krkn",
-        "kubectl apply -f deploy/krkn-deployment.yaml --create-namespace --namespace krkn",
-        "kubectl get pods --namespace krkn",
-        "kubectl set resources deployment krkn --namespace krkn --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi",
-        "kubectl port-forward service/krkn --namespace krkn 8080:80"
+        "krkn --config config.yaml",
+        "pip install krkn"
       ]
     }
   },
@@ -106,7 +83,8 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "pip",
+      "docker"
     ],
     "maturity": "sandbox",
     "projectVersion": "v5.0.0",
@@ -122,9 +100,10 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "python",
+      "pip"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and kubectl installed to interact with it."
+    "description": "Python 3.8+ required. kubectl and a running cluster needed for chaos testing."
   },
   "security": {
     "scannedAt": "2026-03-05T22:32:34.435Z",

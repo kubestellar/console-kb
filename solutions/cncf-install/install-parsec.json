@@ -11,76 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Parsec Helm repository",
-        "description": "First, add the Parsec Helm repository to your Helm configuration. This allows you to install Parsec using Helm charts.\n```bash\nhelm repo add parallaxsecond https://parsec.github.io/charts\nhelm repo update\n```"
+        "title": "Install Parsec from package",
+        "description": "Install Parsec on Linux:\n```bash\n# Debian/Ubuntu\ncurl -Lo parsec.deb https://github.com/parallaxsecond/parsec/releases/download/1.4.1/parsec_1.4.1-1_amd64.deb\nsudo dpkg -i parsec.deb\n\n# Or build from source\ncargo install parsec --version 1.4.1\n```\nSee https://parallaxsecond.github.io/parsec-book/parsec_service/install_parsec_linux.html"
       },
       {
-        "title": "Install Parsec using Helm",
-        "description": "Now, install the Parsec service using Helm. Make sure to create a namespace for it.\n```bash\nhelm install parsec parallaxsecond/parsec --namespace parsec --create-namespace --version 1.4.0\n```"
+        "title": "Configure Parsec",
+        "description": "Create a configuration file:\n```bash\nsudo mkdir -p /etc/parsec\nsudo cat > /etc/parsec/config.toml << 'EOF'\n[core_settings]\nlog_level = \"info\"\n\n[listener]\nlistener_type = \"DomainSocket\"\ntimeout = 200\nsocket_path = \"/run/parsec/parsec.sock\"\n\n[[key_manager]]\nname = \"mbed-crypto-provider\"\nprovider_type = \"MbedCrypto\"\nkey_info_manager = \"sqlite-manager\"\nEOF\n```"
+      },
+      {
+        "title": "Start the Parsec service",
+        "description": "```bash\nsudo systemctl enable parsec\nsudo systemctl start parsec\n```\nOr run directly:\n```bash\nparsec -c /etc/parsec/config.toml &\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Parsec pods are running successfully in the parsec namespace.\n```bash\nkubectl get pods --namespace parsec\n```"
-      },
-      {
-        "title": "Set up port forwarding for local access",
-        "description": "If you want to access the Parsec service locally, set up port forwarding:\n```bash\nkubectl port-forward service/parsec --namespace parsec 8080:80\n```"
+        "description": "Install the Parsec CLI tool and test:\n```bash\ncargo install parsec-tool\nparsec-tool ping\nparsec-tool list-providers\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Parsec will show the Parsec pods in the 'Running' state when you execute `kubectl get pods --namespace parsec`. You should also be able to access the service locally via port 8080.",
+      "summary": "Parsec is installed as a platform-agnostic security API daemon for cryptographic key management.",
       "codeSnippets": [
-        "helm repo add parallaxsecond https://parsec.github.io/charts\nhelm repo update",
-        "helm install parsec parallaxsecond/parsec --namespace parsec --create-namespace --version 1.4.0",
-        "kubectl get pods --namespace parsec",
-        "kubectl edit deployment parsec --namespace parsec",
-        "resources:\n  limits:\n    cpu: \"500m\"\n    memory: \"512Mi\"\n  requests:\n    cpu: \"250m\"\n    memory: \"256Mi\""
+        "parsec-tool ping",
+        "parsec-tool list-providers"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "To cleanly remove the Parsec installation, first uninstall the Helm release using the following command. This will remove the deployment and associated resources managed by Helm.\n```bash\nhelm uninstall parsec --namespace parsec\n```"
-      },
-      {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Next, remove any Custom Resource Definitions (CRDs) and persistent volumes that may have been created during the installation. Use the following commands to delete the CRDs and any persistent volume claims (PVCs).\n```bash\nkubectl delete crd parsec.*\nkubectl delete pvc --all --namespace parsec\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Finally, delete the namespace used for Parsec to ensure all resources are cleaned up. Verify that the namespace has been removed successfully.\n```bash\nkubectl delete namespace parsec\nkubectl get namespaces\n```"
+        "title": "Stop and remove Parsec",
+        "description": "```bash\nsudo systemctl stop parsec\nsudo systemctl disable parsec\nsudo dpkg -r parsec\n# Or: cargo uninstall parsec\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, it's important to back up the current state of your Parsec installation. You can do this by exporting the current configuration and resources.\n```bash\nkubectl get all --namespace parsec -o yaml > parsec-backup.yaml\n```"
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository to ensure you have the latest charts, then run the upgrade command to update your Parsec installation to the latest version.\n```bash\nhelm repo update\nhelm upgrade parsec parallaxsecond/parsec --namespace parsec --version 1.5.0\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "After the upgrade, verify that the Parsec pods are running the new version successfully. Check the status of the pods in the parsec namespace.\n```bash\nkubectl get pods --namespace parsec\n```"
+        "title": "Download latest release",
+        "description": "```bash\ncurl -Lo parsec.deb https://github.com/parallaxsecond/parsec/releases/latest/download/parsec_amd64.deb\nsudo dpkg -i parsec.deb\nsudo systemctl restart parsec\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If your Parsec pods are in a CrashLoopBackOff state, check the logs for the pod to diagnose the issue. This may indicate a misconfiguration or resource limits being too low.\n```bash\nkubectl logs <pod-name> --namespace parsec\n```"
+        "title": "Socket permission denied",
+        "description": "Ensure the socket directory exists with correct permissions:\n```bash\nsudo mkdir -p /run/parsec\nsudo chmod 755 /run/parsec\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Parsec service, ensure that the port forwarding is set up correctly and that the service is running. Check the service status with:\n```bash\nkubectl get svc --namespace parsec\n```"
+        "title": "Provider not available",
+        "description": "Check supported hardware security modules:\n```bash\nparsec-tool list-providers\n```\nFallback to the Mbed Crypto software provider."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter errors related to insufficient resources, check the resource usage and limits set for the Parsec deployment. You can view the current resource usage with:\n```bash\nkubectl top pods --namespace parsec\n```"
-      },
-      {
-        "title": "Helm release not found",
-        "description": "If you receive an error stating that the Helm release is not found, ensure that you are using the correct namespace and release name. List all Helm releases in the namespace with:\n```bash\nhelm list --namespace parsec\n```"
+        "title": "Service fails to start",
+        "description": "Check the logs:\n```bash\njournalctl -u parsec\n```"
       }
     ]
   },
@@ -106,7 +83,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "1.4.0",
@@ -121,10 +98,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "curl"
     ],
-    "description": "You need a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
+    "description": "Linux system required. Optionally requires hardware security modules (TPM, HSM). No Kubernetes cluster needed."
   },
   "security": {
     "scannedAt": "2026-03-01T23:10:28.351Z",

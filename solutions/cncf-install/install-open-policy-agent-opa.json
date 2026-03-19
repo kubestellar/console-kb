@@ -11,67 +11,84 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Install Gatekeeper via Helm",
-        "description": "Add the Gatekeeper Helm chart repository and install Gatekeeper into the gatekeeper-system namespace:\n```bash\nhelm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts\nhelm install gatekeeper/gatekeeper --name-template=gatekeeper --namespace gatekeeper-system --create-namespace\n```\nAlternatively, install via kubectl apply:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.21.1/deploy/gatekeeper.yaml\n```"
-      },
-      {
-        "title": "Verify the installation",
-        "description": "Check that the Gatekeeper controller and audit pods are running:\n```bash\nkubectl get pods -n gatekeeper-system\n```\nYou should see gatekeeper-controller-manager and gatekeeper-audit pods in Running state."
+        "title": "Install OPA Gatekeeper via Helm",
+        "description": "Add the Gatekeeper Helm repository and install:\n```bash\nhelm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts\nhelm repo update\nkubectl create namespace gatekeeper-system\nhelm install gatekeeper gatekeeper/gatekeeper --namespace gatekeeper-system --version 3.18.2\n```"
       },
       {
         "title": "Create a constraint template",
-        "description": "Define a constraint template that specifies the policy logic in Rego. For example, to require all namespaces to have a specific label:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper-library/master/library/general/requiredlabels/template.yaml\n```\nVerify the template was created:\n```bash\nkubectl get constrainttemplates\n```"
+        "description": "Define a policy that requires labels on namespaces:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: templates.gatekeeper.sh/v1\nkind: ConstraintTemplate\nmetadata:\n  name: k8srequiredlabels\nspec:\n  crd:\n    spec:\n      names:\n        kind: K8sRequiredLabels\n      validation:\n        openAPIV3Schema:\n          type: object\n          properties:\n            labels:\n              type: array\n              items:\n                type: string\n  targets:\n    - target: admission.k8s.gatekeeper.sh\n      rego: |\n        package k8srequiredlabels\n        violation[{\"msg\": msg}] {\n          provided := {l | input.review.object.metadata.labels[l]}\n          required := {l | l := input.parameters.labels[_]}\n          missing := required - provided\n          count(missing) > 0\n          msg := sprintf(\"Missing required labels: %v\", [missing])\n        }\nEOF\n```"
       },
       {
         "title": "Create a constraint",
-        "description": "Apply a constraint that uses the template to enforce the policy. For example, require all namespaces to have an 'owner' label:\n```yaml\napiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: ns-must-have-owner\nspec:\n  match:\n    kinds:\n      - apiGroups: [\"\"]\n        kinds: [\"Namespace\"]\n  parameters:\n    labels:\n      - key: owner\n```\nApply with `kubectl apply -f constraint.yaml` and verify:\n```bash\nkubectl get constraints\n```"
+        "description": "Apply the constraint to enforce the policy:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: ns-must-have-owner\nspec:\n  match:\n    kinds:\n      - apiGroups: [\"\"]\n        kinds: [\"Namespace\"]\n  parameters:\n    labels: [\"owner\"]\nEOF\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n gatekeeper-system\nkubectl get constrainttemplates\nkubectl get constraints\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have Gatekeeper pods running in the gatekeeper-system namespace. Constraint templates and constraints define your policies, which are enforced at admission time. Test by creating a resource that violates a constraint — it should be rejected.",
+      "summary": "OPA Gatekeeper is installed for policy enforcement on Kubernetes with constraint templates and constraints.",
       "codeSnippets": [
-        "helm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts\nhelm install gatekeeper/gatekeeper --name-template=gatekeeper --namespace gatekeeper-system --create-namespace",
-        "kubectl get pods -n gatekeeper-system",
-        "kubectl get constrainttemplates\nkubectl get constraints"
+        "helm install gatekeeper gatekeeper/gatekeeper --namespace gatekeeper-system",
+        "kubectl get constraints"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove Gatekeeper via Helm",
-        "description": "Uninstall the Gatekeeper Helm release. Note: Helm v3 does not clean up CRDs automatically.\n```bash\nhelm uninstall gatekeeper -n gatekeeper-system\nkubectl delete crd -l gatekeeper.sh/system=yes\nkubectl delete ns gatekeeper-system\n```"
+        "title": "Remove Gatekeeper",
+        "description": "```bash\nhelm uninstall gatekeeper -n gatekeeper-system\nkubectl delete namespace gatekeeper-system\nkubectl delete crd -l gatekeeper.sh/system=yes\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Gatekeeper",
-        "description": "Update the Helm repo and upgrade:\n```bash\nhelm repo update\nhelm upgrade gatekeeper gatekeeper/gatekeeper -n gatekeeper-system\n```"
+        "title": "Upgrade via Helm",
+        "description": "```bash\nhelm repo update\nhelm upgrade gatekeeper gatekeeper/gatekeeper --namespace gatekeeper-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Webhook not enforcing policies",
-        "description": "Check that the validating webhook is registered:\n```bash\nkubectl get validatingwebhookconfigurations | grep gatekeeper\n```\nIf missing, the Gatekeeper controller may not be running."
+        "title": "Webhook errors blocking deployments",
+        "description": "If Gatekeeper blocks legitimate resources, check:\n```bash\nkubectl get constraint -o wide\n```\nDisable temporarily:\n```bash\nkubectl delete validatingwebhookconfiguration gatekeeper-validating-webhook-configuration\n```"
       },
       {
-        "title": "Constraint violations not blocking",
-        "description": "Verify the constraint is in enforcement mode (not dry-run):\n```bash\nkubectl get constraints -o yaml | grep enforcementAction\n```\nDefault is 'deny'. If set to 'dryrun' or 'warn', violations are logged but not blocked."
+        "title": "Constraint template not syncing",
+        "description": "```bash\nkubectl describe constrainttemplate k8srequiredlabels\n```"
       },
       {
-        "title": "Pods in CrashLoopBackOff",
-        "description": "Check Gatekeeper controller logs:\n```bash\nkubectl logs -n gatekeeper-system -l control-plane=controller-manager\n```"
+        "title": "Audit results not showing",
+        "description": "Check the audit controller:\n```bash\nkubectl logs -l control-plane=audit-controller -n gatekeeper-system\n```"
       }
     ]
   },
   "metadata": {
-    "tags": ["installation", "configuration", "cncf", "security", "graduated"],
-    "cncfProjects": ["open-policy-agent-opa"],
-    "targetResourceKinds": ["Namespace", "ConstraintTemplate"],
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "security",
+      "graduated"
+    ],
+    "cncfProjects": [
+      "open-policy-agent-opa"
+    ],
+    "targetResourceKinds": [
+      "Namespace",
+      "ConstraintTemplate"
+    ],
     "difficulty": "intermediate",
-    "issueTypes": ["installation", "configuration"],
-    "installMethods": ["helm", "kubectl"],
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
     "maturity": "graduated",
     "projectVersion": "v3.21.1",
-    "containerImages": ["openpolicyagent/gatekeeper:v3.21.1"],
+    "containerImages": [
+      "openpolicyagent/gatekeeper:v3.21.1"
+    ],
     "sourceUrls": {
       "docs": "https://open-policy-agent.github.io/gatekeeper/website/docs/install/",
       "repo": "https://github.com/open-policy-agent/gatekeeper",
@@ -81,7 +98,10 @@
   },
   "prerequisites": {
     "kubernetes": ">=1.16",
-    "tools": ["helm", "kubectl"],
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
     "description": "Kubernetes 1.16+ with cluster-admin permissions. Helm 3 and kubectl configured to access your cluster."
   },
   "security": {

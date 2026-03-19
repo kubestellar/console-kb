@@ -11,76 +11,58 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the OpenTofu Helm repository",
-        "description": "Add the OpenTofu Helm chart repository to your Helm configuration.\n```bash\nhelm repo add opentofu https://charts.krateo.io\nhelm repo update\n```"
+        "title": "Install OpenTofu CLI",
+        "description": "Install OpenTofu using the official install script:\n```bash\n# Linux / macOS\ncurl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh\nchmod +x install-opentofu.sh\n./install-opentofu.sh --install-method standalone\nrm install-opentofu.sh\n```\nOr via package manager:\n```bash\n# macOS\nbrew install opentofu\n\n# Debian/Ubuntu\ncurl -fsSL https://packagecloud.io/install/repositories/opentofu/tofu/script.deb.sh | sudo bash\nsudo apt-get install tofu\n```"
       },
       {
-        "title": "Install OpenTofu using Helm",
-        "description": "Install OpenTofu in a new namespace called 'opentofu'.\n```bash\nhelm install opentofu opentofu/opentofu --namespace opentofu --create-namespace --version v1.11.5\n```"
+        "title": "Initialize a project",
+        "description": "Create a simple OpenTofu configuration:\n```bash\nmkdir my-infra && cd my-infra\ncat > main.tf << 'EOF'\nterraform {\n  required_providers {\n    local = {\n      source  = \"hashicorp/local\"\n      version = \"~> 2.4\"\n    }\n  }\n}\n\nresource \"local_file\" \"hello\" {\n  content  = \"Hello from OpenTofu!\"\n  filename = \"${path.module}/hello.txt\"\n}\nEOF\ntofu init\n```"
+      },
+      {
+        "title": "Apply the configuration",
+        "description": "```bash\ntofu plan\ntofu apply -auto-approve\ncat hello.txt\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the OpenTofu pods are running successfully.\n```bash\nkubectl get pods --namespace opentofu\n```"
-      },
-      {
-        "title": "Set up port forwarding for access",
-        "description": "Forward the OpenTofu service port to your local machine for access.\n```bash\nkubectl port-forward svc/opentofu --namespace opentofu 8080:80\n```"
+        "description": "```bash\ntofu version\ntofu --help\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the OpenTofu pods running in the 'opentofu' namespace, and you will be able to access the service through port 8080 on your local machine. Additionally, resource limits will be configured for the OpenTofu deployment.",
+      "summary": "OpenTofu is installed as a CLI tool for infrastructure-as-code provisioning, compatible with Terraform configurations.",
       "codeSnippets": [
-        "helm repo add opentofu https://charts.krateo.io\nhelm repo update",
-        "helm install opentofu opentofu/opentofu --namespace opentofu --create-namespace --version v1.11.5",
-        "kubectl get pods --namespace opentofu",
-        "kubectl edit deployment opentofu --namespace opentofu\n# Add the following under spec.containers:\n# resources:\n#   limits:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"",
-        "kubectl port-forward svc/opentofu --namespace opentofu 8080:80"
+        "tofu init",
+        "tofu apply -auto-approve",
+        "tofu version"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the OpenTofu Helm release to remove the deployment from your cluster."
-      },
-      {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with OpenTofu."
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'opentofu' namespace and verify that all resources have been cleaned up."
+        "title": "Remove OpenTofu",
+        "description": "```bash\n# If installed via script\nsudo rm /usr/local/bin/tofu\n\n# If installed via Homebrew\nbrew uninstall opentofu\n\n# If installed via apt\nsudo apt-get remove tofu\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Take a backup of the current OpenTofu configuration and resources before proceeding with the upgrade."
+        "title": "Upgrade OpenTofu",
+        "description": "```bash\n# Homebrew\nbrew upgrade opentofu\n\n# Or re-run the install script\ncurl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh | sh -s -- --install-method standalone\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the OpenTofu Helm repository and run the upgrade command to install the latest version."
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the OpenTofu pods to ensure they are running the new version successfully."
+        "title": "Verify upgrade",
+        "description": "```bash\ntofu version\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "This issue occurs when a pod fails to start repeatedly. Check the pod logs for errors using the command: \n```bash\nkubectl logs <pod-name> --namespace opentofu\n``` \nFix the underlying issue causing the failure."
+        "title": "Provider initialization fails",
+        "description": "Clear the provider cache and re-initialize:\n```bash\nrm -rf .terraform\ntofu init\n```"
       },
       {
-        "title": "Service not accessible",
-        "description": "If the OpenTofu service is not accessible, verify that the port forwarding is set up correctly. Run: \n```bash\nkubectl get svc --namespace opentofu\n``` \nEnsure the service is running and the correct ports are exposed."
+        "title": "State file conflicts",
+        "description": "Use remote state backends for team collaboration:\n```hcl\nbackend \"s3\" {\n  bucket = \"my-state-bucket\"\n  key    = \"state.tfstate\"\n}\n```"
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If the Helm upgrade fails due to a version conflict, check the installed version with: \n```bash\nhelm list --namespace opentofu\n``` \nYou may need to specify a compatible version or rollback to a previous version."
-      },
-      {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If pods are being terminated due to Out of Memory (OOM) errors, check the resource limits set on the deployment. Use: \n```bash\nkubectl describe pod <pod-name> --namespace opentofu\n``` \nAdjust the resource limits accordingly in the deployment."
+        "title": "Migrating from Terraform",
+        "description": "OpenTofu is a drop-in replacement. Rename `terraform` blocks to work with `tofu`:\n```bash\ntofu init -upgrade\n```"
       }
     ]
   },
@@ -106,7 +88,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "binary"
     ],
     "maturity": "sandbox",
     "projectVersion": "v1.11.5",
@@ -123,10 +105,9 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "curl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running and Helm installed on your local machine."
+    "description": "No Kubernetes cluster required. OpenTofu is a standalone CLI tool for infrastructure provisioning."
   },
   "security": {
     "scannedAt": "2026-03-01T22:38:56.629Z",

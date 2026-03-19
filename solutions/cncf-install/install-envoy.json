@@ -11,76 +11,49 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the official Helm repository for Envoy to your Helm client.\n```bash\nhelm repo add envoy https://cloudnativeapp.github.io/charts/curated\nhelm repo update\n```"
+        "title": "Install Envoy via official Docker image",
+        "description": "Run Envoy as a standalone proxy:\n```bash\ndocker pull envoyproxy/envoy:v1.32.3\ndocker run -d --name envoy -p 10000:10000 -p 9901:9901 envoyproxy/envoy:v1.32.3\n```\nOr install the binary:\n```bash\n# macOS\nbrew install envoy\n\n# Linux (from GetEnvoy)\ncurl -L https://func-e.io/install.sh | bash -s -- -b /usr/local/bin\nfunc-e run --version\n```"
       },
       {
-        "title": "Install Envoy using Helm",
-        "description": "Install Envoy in your Kubernetes cluster with the specified version and create a namespace if it doesn't exist.\n```bash\nhelm install envoy envoy/envoy --namespace envoy --create-namespace --version 1.5.0\n```"
+        "title": "Deploy Envoy on Kubernetes",
+        "description": "Deploy Envoy as a sidecar or standalone proxy:\n```bash\nkubectl create namespace envoy\nkubectl apply -n envoy -f - << 'EOF'\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: envoy\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: envoy\n  template:\n    metadata:\n      labels:\n        app: envoy\n    spec:\n      containers:\n      - name: envoy\n        image: envoyproxy/envoy:v1.32.3\n        ports:\n        - containerPort: 10000\n        - containerPort: 9901\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: envoy\nspec:\n  selector:\n    app: envoy\n  ports:\n  - name: proxy\n    port: 10000\n  - name: admin\n    port: 9901\nEOF\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Envoy pods are running successfully.\n```bash\nkubectl get pods --namespace envoy\n```"
-      },
-      {
-        "title": "Configure resource limits",
-        "description": "Set resource limits for the Envoy deployment to ensure it runs efficiently.\n```bash\nkubectl patch deployment envoy --namespace envoy -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"envoy\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"}}}]}}}}' \n```"
-      },
-      {
-        "title": "Set up port forwarding for access",
-        "description": "Forward a local port to the Envoy service to access it from your local machine.\n```bash\nkubectl port-forward svc/envoy --namespace envoy 8080:80\n```"
+        "description": "Check Envoy is running and access the admin interface:\n```bash\n# Docker\ncurl http://localhost:9901/server_info\n\n# Kubernetes\nkubectl get pods -n envoy\nkubectl port-forward svc/envoy -n envoy 9901:9901\ncurl http://localhost:9901/server_info\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Envoy release from your Kubernetes cluster.\n```bash\nhelm uninstall envoy --namespace envoy\n```"
-      },
-      {
-        "title": "Clean up namespace",
-        "description": "Remove the Envoy namespace and any remaining resources.\n```bash\nkubectl delete namespace envoy\n```"
+        "title": "Remove Envoy",
+        "description": "```bash\n# Docker\ndocker stop envoy && docker rm envoy\n\n# Kubernetes\nkubectl delete namespace envoy\n\n# Binary\nsudo rm /usr/local/bin/envoy\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Export the current configuration and resources for backup purposes.\n```bash\nkubectl get all --namespace envoy -o yaml > envoy-backup.yaml\n```"
-      },
-      {
-        "title": "Update the Helm repository",
-        "description": "Ensure your Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade Envoy",
-        "description": "Upgrade the Envoy installation to the latest version available in the repository.\n```bash\nhelm upgrade envoy envoy/envoy --namespace envoy --version 1.5.0\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check the status of the Envoy pods to confirm the upgrade was successful.\n```bash\nkubectl get pods --namespace envoy\n```"
+        "title": "Update to latest version",
+        "description": "```bash\n# Docker\ndocker pull envoyproxy/envoy:v1.32.3\ndocker stop envoy && docker rm envoy\ndocker run -d --name envoy -p 10000:10000 -p 9901:9901 envoyproxy/envoy:v1.32.3\n\n# Kubernetes\nkubectl set image deployment/envoy envoy=envoyproxy/envoy:v1.32.3 -n envoy\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If your Envoy pods are stuck in a Pending state, check for resource availability in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace envoy\n```"
+        "title": "Envoy crashes on startup",
+        "description": "Check configuration:\n```bash\nenvoy --mode validate -c /etc/envoy/envoy.yaml\n```"
       },
       {
-        "title": "Envoy service not reachable",
-        "description": "If you cannot access the Envoy service, verify that the service is correctly configured and the port forwarding is set up.\n```bash\nkubectl get svc --namespace envoy\n```"
+        "title": "Admin interface not accessible",
+        "description": "The admin interface runs on port 9901 by default. Ensure it's exposed:\n```bash\ncurl http://localhost:9901/help\n```"
       },
       {
-        "title": "High memory usage",
-        "description": "If you notice high memory usage, consider adjusting the resource limits set for the Envoy deployment.\n```bash\nkubectl top pod --namespace envoy\n```"
+        "title": "For production use, consider Istio or Contour",
+        "description": "Envoy is the data plane proxy used by service meshes like Istio and ingress controllers like Contour. For production Kubernetes use, installing Istio or Contour is recommended over standalone Envoy."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Envoy will result in running pods in the 'envoy' namespace, accessible via the specified port. You should also see the Envoy service responding to requests as expected.",
+      "summary": "Envoy proxy is installed and running as a standalone proxy with the admin interface accessible.",
       "codeSnippets": [
-        "helm repo add envoy https://cloudnativeapp.github.io/charts/curated\nhelm repo update",
-        "helm install envoy envoy/envoy --namespace envoy --create-namespace --version 1.5.0",
-        "kubectl get pods --namespace envoy",
-        "kubectl patch deployment envoy --namespace envoy -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"envoy\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"}}}]}}}}'",
-        "kubectl port-forward svc/envoy --namespace envoy 8080:80"
+        "docker run -d --name envoy -p 10000:10000 envoyproxy/envoy:v1.32.3",
+        "curl http://localhost:9901/server_info"
       ]
     }
   },
@@ -106,7 +79,8 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "docker",
+      "kubectl"
     ],
     "maturity": "graduated",
     "projectVersion": "v1.37.0",
@@ -123,7 +97,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
+      "docker",
       "kubectl"
     ],
     "description": "Ensure you have a Kubernetes cluster running and both Helm and kubectl installed on your local machine."

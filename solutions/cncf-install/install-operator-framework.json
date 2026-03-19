@@ -11,75 +11,61 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the official Helm repository for the Operator SDK to your Helm configuration.\n```bash\nhelm repo add operator-sdk https://helm-repository.readthedocs.io/en/latest/repos/stable\nhelm repo update\n```"
+        "title": "Install OLM (Operator Lifecycle Manager)",
+        "description": "Install OLM using the official release manifests:\n```bash\ncurl -Lo install.sh https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/install.sh\nchmod +x install.sh\n./install.sh v0.31.0\n```\nOr manually:\n```bash\nkubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/crds.yaml\nkubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/olm.yaml\n```"
       },
       {
-        "title": "Install the Operator SDK",
-        "description": "Install the Operator SDK using Helm, specifying the desired namespace.\n```bash\nhelm install operator-sdk operator-sdk/operator --namespace operator-sdk --create-namespace --version 21.3.3\n```"
+        "title": "Install the operator-sdk CLI (optional)",
+        "description": "Install the Operator SDK for building operators:\n```bash\ncurl -Lo operator-sdk https://github.com/operator-framework/operator-sdk/releases/download/v1.38.0/operator-sdk_linux_amd64\nchmod +x operator-sdk\nsudo mv operator-sdk /usr/local/bin/\n```"
       },
       {
-        "title": "Verify the installation",
-        "description": "Check that the Operator SDK pods are running successfully.\n```bash\nkubectl get pods -n operator-sdk\n```"
+        "title": "Verify OLM is running",
+        "description": "```bash\nkubectl get pods -n olm\nkubectl get pods -n operators\nkubectl get csv -n olm\n```"
       },
       {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the Operator SDK deployment.\n```bash\nkubectl patch deployment operator-sdk -n operator-sdk --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'\n```"
+        "title": "Install an operator from OperatorHub",
+        "description": "Browse operators at https://operatorhub.io and install one:\n```bash\nkubectl create -f https://operatorhub.io/install/prometheus.yaml\nkubectl get csv -n operators\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Operator SDK release from your cluster.\n```bash\nhelm uninstall operator-sdk --namespace operator-sdk\n```"
+        "title": "Remove OLM",
+        "description": "```bash\nkubectl delete -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/olm.yaml\nkubectl delete -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/crds.yaml\n```"
       },
       {
-        "title": "Clean up CRDs and resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) that were created by the Operator SDK.\n```bash\nkubectl delete crd $(kubectl get crd | grep operator-sdk | awk '{print $1}')\n```"
-      },
-      {
-        "title": "Remove the namespace",
-        "description": "Delete the namespace used for the Operator SDK installation.\n```bash\nkubectl delete namespace operator-sdk\n```"
+        "title": "Remove operator-sdk CLI",
+        "description": "```bash\nsudo rm /usr/local/bin/operator-sdk\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current state of the Operator SDK.\n```bash\nkubectl get all -n operator-sdk -o yaml > operator-sdk-backup.yaml\n```"
+        "title": "Apply new OLM version",
+        "description": "```bash\nkubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/crds.yaml\nkubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/olm.yaml\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Update the Helm repository to ensure you have the latest charts.\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade the Operator SDK",
-        "description": "Upgrade the Operator SDK to the latest version.\n```bash\nhelm upgrade operator-sdk operator-sdk/operator --namespace operator-sdk --version 21.3.3\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the upgraded Operator SDK pods are running successfully.\n```bash\nkubectl get pods -n operator-sdk\n```"
+        "title": "Verify upgrade",
+        "description": "```bash\nkubectl get csv -n olm\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not starting",
-        "description": "If the Operator SDK pods are not starting, check the pod logs for errors.\n```bash\nkubectl logs <pod-name> -n operator-sdk\n```"
+        "title": "CatalogSource pods failing",
+        "description": "```bash\nkubectl get catalogsource -n olm\nkubectl logs -l olm.catalogSource=operatorhubio-catalog -n olm\n```"
       },
       {
-        "title": "CRDs not found",
-        "description": "If you encounter issues with CRDs, verify that they are installed correctly.\n```bash\nkubectl get crd -n operator-sdk\n```"
+        "title": "Subscription stuck in UpgradePending",
+        "description": "Check the install plan:\n```bash\nkubectl get installplan -n operators\nkubectl describe subscription <name> -n operators\n```"
       },
       {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If pods are being OOMKilled, consider increasing the memory limits set in the deployment.\n```bash\nkubectl describe pod <pod-name> -n operator-sdk\n```"
+        "title": "CSV in Failed phase",
+        "description": "```bash\nkubectl get csv -n operators\nkubectl describe csv <name> -n operators\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of the Operator SDK will result in the Operator SDK pods running in the 'operator-sdk' namespace. You can verify this by checking the pod status with 'kubectl get pods -n operator-sdk'.",
+      "summary": "OLM is installed for managing operator lifecycle on Kubernetes, with access to OperatorHub catalogs.",
       "codeSnippets": [
-        "helm repo add operator-sdk https://helm-repository.readthedocs.io/en/latest/repos/stable\nhelm repo update",
-        "helm install operator-sdk operator-sdk/operator --namespace operator-sdk --create-namespace --version 21.3.3",
-        "kubectl get pods -n operator-sdk",
-        "kubectl patch deployment operator-sdk -n operator-sdk --type='json' -p='[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources\", \"value\": {\"limits\": {\"cpu\": \"500m\", \"memory\": \"512Mi\"}, \"requests\": {\"cpu\": \"250m\", \"memory\": \"256Mi\"}}}]'"
+        "kubectl get pods -n olm",
+        "kubectl get csv -n olm"
       ]
     }
   },
@@ -104,7 +90,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "incubating",
     "projectVersion": "v1.42.0",
@@ -121,8 +107,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
     "description": "Ensure you have Kubernetes cluster access and have installed Helm and kubectl."
   },

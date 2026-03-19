@@ -11,72 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the repository",
-        "description": "Clone the Confidential Containers repository to your local machine using the following command:\n```bash\ngit clone https://github.com/confidential-containers/confidential-containers.git\ncd confidential-containers\n```"
+        "title": "Install the Confidential Containers operator",
+        "description": "Deploy the operator from the official release:\n```bash\nexport CC_VERSION=v0.11.0\nkubectl apply -k github.com/confidential-containers/operator/config/release?ref=${CC_VERSION}\n```"
       },
       {
-        "title": "Apply the Kubernetes manifests",
-        "description": "Deploy the necessary resources by applying the Kubernetes manifests provided in the repository:\n```bash\nkubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/config.yaml\nkubectl apply -f deploy/deployment.yaml\n```"
+        "title": "Create a CcRuntime resource",
+        "description": "Deploy the confidential containers runtime:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: confidentialcontainers.org/v1beta1\nkind: CcRuntime\nmetadata:\n  name: ccruntime\nspec:\n  runtimeClass: kata-clh\nEOF\n```\nWait for the runtime to be installed:\n```bash\nkubectl wait --for=condition=Ready ccruntime/ccruntime --timeout=300s\n```"
+      },
+      {
+        "title": "Deploy a confidential workload",
+        "description": "Run a test pod with the confidential runtime:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: v1\nkind: Pod\nmetadata:\n  name: cc-test\nspec:\n  runtimeClassName: kata-clh\n  containers:\n  - name: test\n    image: busybox\n    command: [\"sleep\", \"3600\"]\nEOF\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the pods are running correctly:\n```bash\nkubectl get pods -n confidential-containers\n```"
-      },
-      {
-        "title": "Set up monitoring",
-        "description": "Integrate monitoring by deploying a monitoring solution like Prometheus. You can use the following command to deploy Prometheus:\n```bash\nkubectl apply -f monitoring/prometheus.yaml\n```"
+        "description": "```bash\nkubectl get pods -n confidential-containers-system\nkubectl get runtimeclass\nkubectl get ccruntime\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Kubernetes resources",
-        "description": "Delete the deployment and associated resources using the following commands:\n```bash\nkubectl delete -f deploy/deployment.yaml\nkubectl delete -f deploy/config.yaml\nkubectl delete -f deploy/namespace.yaml\n```"
-      },
-      {
-        "title": "Clean up any remaining resources",
-        "description": "Ensure all resources are removed by checking for any lingering pods or services:\n```bash\nkubectl get all -n confidential-containers\nkubectl delete namespace confidential-containers\n```"
+        "title": "Remove CC operator",
+        "description": "```bash\nkubectl delete ccruntime --all\nkubectl delete -k github.com/confidential-containers/operator/config/release?ref=v0.11.0\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up your current configuration and data:\n```bash\nkubectl get all -n confidential-containers -o yaml > backup.yaml\n```"
-      },
-      {
-        "title": "Update the repository",
-        "description": "Pull the latest changes from the repository to get the updated manifests:\n```bash\ngit pull origin main\n```"
-      },
-      {
-        "title": "Upgrade the deployment",
-        "description": "Apply the updated manifests to upgrade your installation:\n```bash\nkubectl apply -f deploy/deployment.yaml\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the upgraded pods are running:\n```bash\nkubectl get pods -n confidential-containers\n```"
+        "title": "Apply new version",
+        "description": "```bash\nkubectl apply -k github.com/confidential-containers/operator/config/release?ref=v0.12.0\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods not starting",
-        "description": "If pods are not starting, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n confidential-containers\n``` \nLook for any error messages that indicate what might be wrong."
+        "title": "Runtime not installing",
+        "description": "```bash\nkubectl logs -l app=cc-operator -n confidential-containers-system\n```\nRequires hardware TEE support (Intel TDX, AMD SEV, etc.)."
       },
       {
-        "title": "Insufficient resources",
-        "description": "If you encounter errors related to insufficient resources, check the resource requests and limits:\n```bash\nkubectl describe deployment <deployment-name> -n confidential-containers\n``` \nAdjust the resource limits in the deployment YAML as necessary."
+        "title": "Pod stuck in ContainerCreating",
+        "description": "Verify the RuntimeClass exists:\n```bash\nkubectl get runtimeclass\nkubectl describe pod cc-test\n```"
       },
       {
-        "title": "Service not reachable",
-        "description": "If the service is not reachable, check the service configuration:\n```bash\nkubectl get svc -n confidential-containers\nkubectl describe svc <service-name> -n confidential-containers\n``` \nEnsure that the service type is correctly set (e.g., ClusterIP, NodePort)."
+        "title": "Attestation failures",
+        "description": "Check the KBS (Key Broker Service) configuration and connectivity."
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have all pods running in the 'confidential-containers' namespace, and you will be able to access the deployed services as expected. Ensure that monitoring is set up to track the health of your deployment.",
+      "summary": "Confidential Containers operator is installed with TEE-based runtime for running encrypted workloads.",
       "codeSnippets": [
-        "git clone https://github.com/confidential-containers/confidential-containers.git\ncd confidential-containers",
-        "kubectl apply -f deploy/namespace.yaml\nkubectl apply -f deploy/config.yaml\nkubectl apply -f deploy/deployment.yaml",
-        "kubectl get pods -n confidential-containers",
-        "kubectl edit deployment <deployment-name> -n confidential-containers\n# Add resource limits under spec.containers",
-        "kubectl apply -f monitoring/prometheus.yaml"
+        "kubectl apply -k github.com/confidential-containers/operator/config/release?ref=v0.11.0",
+        "kubectl get ccruntime"
       ]
     }
   },
@@ -101,7 +82,7 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "kustomize"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.17.0",

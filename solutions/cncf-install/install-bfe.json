@@ -11,80 +11,49 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the BFE repository",
-        "description": "First, clone the BFE repository to your local machine to access the necessary files for building Docker images.\n```bash\ngit clone https://github.com/bfenetworks/bfe.git\ncd bfe\n```"
+        "title": "Run BFE with Docker",
+        "description": "Start BFE using the official Docker image:\n```bash\ndocker pull bfenetworks/bfe:v1.6.0\ndocker run -d --name bfe -p 8080:8080 -p 8443:8443 -p 8421:8421 bfenetworks/bfe:v1.6.0\n```"
       },
       {
-        "title": "Build Docker images",
-        "description": "Build the Docker images required for BFE. This command compiles the application and creates the necessary images.\n```bash\nmake docker\n```"
+        "title": "Deploy BFE on Kubernetes",
+        "description": "Deploy BFE as a Kubernetes Ingress controller:\n```bash\nkubectl create namespace bfe-system\nkubectl apply -n bfe-system -f - << 'EOF'\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: bfe\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: bfe\n  template:\n    metadata:\n      labels:\n        app: bfe\n    spec:\n      containers:\n      - name: bfe\n        image: bfenetworks/bfe:v1.6.0\n        ports:\n        - containerPort: 8080\n        - containerPort: 8443\n        - containerPort: 8421\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: bfe\nspec:\n  type: LoadBalancer\n  selector:\n    app: bfe\n  ports:\n  - name: http\n    port: 8080\n  - name: https\n    port: 8443\n  - name: monitor\n    port: 8421\nEOF\n```"
       },
       {
-        "title": "Deploy BFE to Kubernetes",
-        "description": "Apply the Kubernetes manifests to deploy BFE in your cluster. Ensure you have the necessary YAML files in the repository.\n```bash\nkubectl apply -f deploy/kubernetes/\n```"
-      },
-      {
-        "title": "Verify BFE deployment",
-        "description": "Check the status of the BFE pods to ensure they are running correctly.\n```bash\nkubectl get pods --namespace default\n```"
+        "title": "Verify the installation",
+        "description": "```bash\n# Docker\ncurl http://localhost:8421/monitor\n\n# Kubernetes\nkubectl get pods -n bfe-system\nkubectl port-forward svc/bfe -n bfe-system 8421:8421\ncurl http://localhost:8421/monitor\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove BFE deployment",
-        "description": "Delete the BFE deployment from your Kubernetes cluster to cleanly uninstall it.\n```bash\nkubectl delete -f deploy/kubernetes/\n```"
-      },
-      {
-        "title": "Clean up remaining resources",
-        "description": "Remove any remaining custom resources or configurations related to BFE.\n```bash\nkubectl delete crd bfeconfigs.bfenetworks.com\n```"
-      },
-      {
-        "title": "Remove the namespace (if created)",
-        "description": "If you created a specific namespace for BFE, delete it to clean up completely.\n```bash\nkubectl delete namespace bfe-namespace\n```"
+        "title": "Remove BFE",
+        "description": "```bash\ndocker stop bfe && docker rm bfe\n# Or:\nkubectl delete namespace bfe-system\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of the BFE deployment.\n```bash\nkubectl get all --namespace default -o yaml > bfe-backup.yaml\n```"
-      },
-      {
-        "title": "Update the repository",
-        "description": "Pull the latest changes from the BFE repository to get the newest version.\n```bash\ngit pull origin main\n```"
-      },
-      {
-        "title": "Rebuild Docker images",
-        "description": "Rebuild the Docker images with the latest changes.\n```bash\nmake docker\n```"
-      },
-      {
-        "title": "Apply updated manifests",
-        "description": "Reapply the updated Kubernetes manifests to upgrade the deployment.\n```bash\nkubectl apply -f deploy/kubernetes/\n```"
-      },
-      {
-        "title": "Verify upgrade",
-        "description": "Check the status of the BFE pods to ensure the upgrade was successful.\n```bash\nkubectl get pods --namespace default\n```"
+        "title": "Update image",
+        "description": "```bash\ndocker pull bfenetworks/bfe:v1.6.0\n# Or:\nkubectl set image deployment/bfe bfe=bfenetworks/bfe:v1.6.0 -n bfe-system\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If your BFE pods are stuck in Pending, check for insufficient resources in your cluster.\n```bash\nkubectl describe pod <pod-name> --namespace default\n```"
+        "title": "BFE not responding",
+        "description": "Check logs:\n```bash\ndocker logs bfe\n# Or:\nkubectl logs -l app=bfe -n bfe-system\n```"
       },
       {
-        "title": "BFE pods crashing",
-        "description": "If BFE pods are crashing, check the logs for errors.\n```bash\nkubectl logs <pod-name> --namespace default\n```"
+        "title": "Configuration errors",
+        "description": "BFE config files are in `/home/work/bfe/conf/`. Mount custom configs via volumes."
       },
       {
-        "title": "Service not reachable",
-        "description": "If the BFE service is not reachable, verify the service configuration and endpoints.\n```bash\nkubectl get svc --namespace default\nkubectl describe svc bfe --namespace default\n```"
+        "title": "Monitor page not accessible",
+        "description": "The monitor interface runs on port 8421:\n```bash\ncurl http://localhost:8421/monitor\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of BFE will result in running pods that are healthy and responding to traffic. You should be able to access the BFE service through the configured endpoints.",
+      "summary": "BFE load balancer is running and accessible with the monitoring interface on port 8421.",
       "codeSnippets": [
-        "git clone https://github.com/bfenetworks/bfe.git\ncd bfe",
-        "make docker",
-        "kubectl apply -f deploy/kubernetes/",
-        "kubectl get pods --namespace default",
-        "kubectl edit deployment bfe --namespace default"
+        "docker run -d --name bfe -p 8080:8080 bfenetworks/bfe:v1.6.0",
+        "curl http://localhost:8421/monitor"
       ]
     }
   },
@@ -109,6 +78,7 @@
       "configuration"
     ],
     "installMethods": [
+      "docker",
       "kubectl"
     ],
     "maturity": "sandbox",
@@ -125,8 +95,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl",
-      "make"
+      "docker",
+      "kubectl"
     ],
     "description": "Ensure you have a Kubernetes cluster running and the necessary tools installed."
   },

@@ -11,75 +11,49 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the Carina Helm chart repository to your local Helm configuration with the following command:\n```bash\nhelm repo add carina https://mgaber7.github.io\nhelm repo update\n```"
+        "title": "Install Carina CSI driver via kubectl",
+        "description": "Deploy Carina from the official release manifests:\n```bash\nkubectl apply -f https://raw.githubusercontent.com/carina-io/carina/main/deploy/kubernetes/release.yaml\n```\nOr use Helm if available from the project:\n```bash\ngit clone https://github.com/carina-io/carina.git\ncd carina\nkubectl apply -f deploy/kubernetes/\n```"
       },
       {
-        "title": "Install the Carina CSI driver",
-        "description": "Install the Carina CSI driver using Helm with the following command:\n```bash\nhelm install carina-csi-driver carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0\n```"
+        "title": "Configure storage classes",
+        "description": "Create a StorageClass for Carina:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: storage.k8s.io/v1\nkind: StorageClass\nmetadata:\n  name: carina-lvm\nprovisioner: carina.storage.io\nparameters:\n  carina.storage.io/disk-type: lvm\nreclaimPolicy: Delete\nvolumeBindingMode: WaitForFirstConsumer\nEOF\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the Carina pods are running successfully:\n```bash\nkubectl get pods -n carina\n```"
-      },
-      {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the Carina CSI driver by editing the Helm values:\n```bash\nhelm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --set controller.resources.csiProvisioner.limits.cpu=200m --set controller.resources.csiProvisioner.limits.memory=500Mi\n```"
+        "description": "```bash\nkubectl get pods -n carina\nkubectl get storageclass | grep carina\nkubectl get csidrivers | grep carina\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Carina CSI driver with the following command:\n```bash\nhelm uninstall carina-csi-driver --namespace carina\n```"
-      },
-      {
-        "title": "Clean up CRDs",
-        "description": "Remove the Custom Resource Definitions (CRDs) associated with Carina:\n```bash\nkubectl delete crd logicvolumes.carina.storage.io\nkubectl delete crd nodestorageresources.carina.storage.io\n```"
-      },
-      {
-        "title": "Remove the namespace",
-        "description": "Delete the Carina namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace carina\n```"
+        "title": "Remove Carina",
+        "description": "```bash\nkubectl delete -f https://raw.githubusercontent.com/carina-io/carina/main/deploy/kubernetes/release.yaml\nkubectl delete storageclass carina-lvm\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state:\n```bash\nkubectl get all -n carina -o yaml > carina-backup.yaml\n```"
-      },
-      {
-        "title": "Update the Helm repository",
-        "description": "Ensure your Helm repository is up to date:\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade the Carina CSI driver",
-        "description": "Upgrade the Carina CSI driver to the latest version:\n```bash\nhelm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --version v0.11.0\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the upgraded Carina pods are running successfully:\n```bash\nkubectl get pods -n carina\n```"
+        "title": "Apply the latest manifests",
+        "description": "```bash\nkubectl apply -f https://raw.githubusercontent.com/carina-io/carina/main/deploy/kubernetes/release.yaml\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If your Carina pods are stuck in the Pending state, check for insufficient resources or scheduling issues:\n```bash\nkubectl describe pod <pod-name> -n carina\n```"
+        "title": "CSI driver not registering",
+        "description": "Check the CSI node plugin DaemonSet:\n```bash\nkubectl get ds -n carina\nkubectl logs -l app=carina-node -n carina\n```"
       },
       {
-        "title": "Pods in CrashLoopBackOff",
-        "description": "If your Carina pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n carina\n```"
+        "title": "PVC stuck in Pending",
+        "description": "Verify the StorageClass and available local disks:\n```bash\nkubectl describe pvc <name>\nkubectl get nodes -o wide\n```"
       },
       {
-        "title": "Failed to provision volume",
-        "description": "If volume provisioning fails, check the events for the PVC:\n```bash\nkubectl describe pvc <pvc-name> -n <namespace>\n```"
+        "title": "LVM volumes not created",
+        "description": "Check that LVM is installed on worker nodes and physical volumes are available:\n```bash\nsudo pvs\nsudo vgs\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Carina will have all pods running in the 'carina' namespace without errors. You can verify this by checking the pod status and ensuring they are in the 'Running' state.",
+      "summary": "Carina CSI driver is installed for providing local storage management on Kubernetes.",
       "codeSnippets": [
-        "helm repo add carina https://mgaber7.github.io\nhelm repo update",
-        "helm install carina-csi-driver carina/carina-csi-driver --namespace carina --create-namespace --version v0.11.0",
         "kubectl get pods -n carina",
-        "helm upgrade carina-csi-driver carina/carina-csi-driver --namespace carina --set controller.resources.csiProvisioner.limits.cpu=200m --set controller.resources.csiProvisioner.limits.memory=500Mi"
+        "kubectl get storageclass | grep carina"
       ]
     }
   },
@@ -103,7 +77,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.14.0",
@@ -121,7 +95,6 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
     "description": "Ensure you have a Kubernetes cluster running and have installed Helm and kubectl."

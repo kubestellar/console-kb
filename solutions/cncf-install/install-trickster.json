@@ -11,80 +11,49 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Trickster Helm repository",
-        "description": "Add the Trickster Helm chart repository to your local Helm configuration with the following command:\n```bash\nhelm repo add trickster https://charts.appscode.com/stable\nhelm repo update\n```"
+        "title": "Deploy Trickster with kubectl",
+        "description": "Deploy Trickster as a reverse proxy cache for Prometheus:\n```bash\nkubectl create namespace trickster\nkubectl apply -n trickster -f - << 'EOF'\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: trickster\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: trickster\n  template:\n    metadata:\n      labels:\n        app: trickster\n    spec:\n      containers:\n      - name: trickster\n        image: trickstercache/trickster:2.0\n        ports:\n        - containerPort: 8480\n        - containerPort: 8481\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: trickster\nspec:\n  selector:\n    app: trickster\n  ports:\n  - name: http\n    port: 8480\n    targetPort: 8480\n  - name: metrics\n    port: 8481\n    targetPort: 8481\nEOF\n```"
       },
       {
-        "title": "Install Trickster using Helm",
-        "description": "Install Trickster in a new namespace called 'trickster' with the following command:\n```bash\nhelm install trickster trickster/trickster --namespace trickster --create-namespace --version v2.0.1\n```"
+        "title": "Configure Trickster for Prometheus",
+        "description": "Create a ConfigMap with Trickster configuration:\n```bash\nkubectl apply -n trickster -f - << 'EOF'\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: trickster-config\ndata:\n  trickster.yaml: |\n    backends:\n      prometheus:\n        provider: prometheus\n        origin_url: http://prometheus.monitoring:9090\n        cache_name: default\n    caches:\n      default:\n        provider: memory\nEOF\n```"
       },
       {
-        "title": "Verify Trickster installation",
-        "description": "Check if the Trickster pods are running successfully:\n```bash\nkubectl get pods --namespace trickster\n```"
-      },
-      {
-        "title": "Configure resource limits",
-        "description": "Update the Trickster deployment to set resource limits. Create a file named `trickster-limits.yaml` with the following content:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: trickster\n  namespace: trickster\nspec:\n  template:\n    spec:\n      containers:\n      - name: trickster\n        resources:\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"\n``` \nThen apply the configuration:\n```bash\nkubectl apply -f trickster-limits.yaml\n```"
-      },
-      {
-        "title": "Port forward Trickster service",
-        "description": "To access Trickster locally, set up port forwarding:\n```bash\nkubectl port-forward service/trickster --namespace trickster 8080:80\n```"
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get pods -n trickster\nkubectl port-forward svc/trickster -n trickster 8480:8480\ncurl http://localhost:8480/health\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of Trickster will show the Trickster pods running in the 'trickster' namespace, and you will be able to access it via port 8080 on your local machine. Resource limits will be configured as specified.",
+      "summary": "Trickster is deployed as a reverse proxy cache for Prometheus/time-series backends.",
       "codeSnippets": [
-        "helm repo add trickster https://charts.appscode.com/stable\nhelm repo update",
-        "helm install trickster trickster/trickster --namespace trickster --create-namespace --version v2.0.1",
-        "kubectl get pods --namespace trickster",
-        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: trickster\n  namespace: trickster\nspec:\n  template:\n    spec:\n      containers:\n      - name: trickster\n        resources:\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"",
-        "kubectl apply -f trickster-limits.yaml"
+        "kubectl get pods -n trickster",
+        "curl http://localhost:8480/health"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Trickster release from the Kubernetes cluster using Helm with the following command:\n```bash\nhelm uninstall trickster --namespace trickster\n```"
-      },
-      {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Remove any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with Trickster. Use the following commands:\n```bash\nkubectl delete pvc --all --namespace trickster\nkubectl delete crd tricksters.trickstercache.org\n```"
-      },
-      {
-        "title": "Remove namespace and verify",
-        "description": "Delete the Trickster namespace and verify that it has been removed:\n```bash\nkubectl delete namespace trickster\nkubectl get namespaces\n```"
+        "title": "Remove Trickster",
+        "description": "```bash\nkubectl delete namespace trickster\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current Trickster configuration and data. You can use the following command to export the current deployment:\n```bash\nkubectl get deployment trickster --namespace trickster -o yaml > trickster-backup.yaml\n```"
-      },
-      {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Trickster Helm repository and upgrade Trickster to the latest version:\n```bash\nhelm repo update\nhelm upgrade trickster trickster/trickster --namespace trickster --version v2.0.2\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check if the Trickster pods are running the new version successfully:\n```bash\nkubectl get pods --namespace trickster\n```"
+        "title": "Update the image version",
+        "description": "```bash\nkubectl set image deployment/trickster trickster=trickstercache/trickster:2.0 -n trickster\nkubectl rollout status deployment/trickster -n trickster\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If Trickster pods are in a CrashLoopBackOff state, check the logs for errors:\n```bash\nkubectl logs <pod-name> --namespace trickster\n``` \nLook for any configuration issues or missing dependencies."
+        "title": "Trickster not caching",
+        "description": "Check the Trickster logs:\n```bash\nkubectl logs -l app=trickster -n trickster\n```\nVerify the origin URL is reachable from the pod."
       },
       {
-        "title": "Service not reachable",
-        "description": "If you cannot access the Trickster service, ensure that the service is running and the port forwarding is set up correctly:\n```bash\nkubectl get svc --namespace trickster\nkubectl port-forward service/trickster --namespace trickster 8080:80\n```"
+        "title": "High latency on first request",
+        "description": "First requests are cache misses. Subsequent requests for the same time range will be cached."
       },
       {
-        "title": "High memory usage",
-        "description": "If Trickster is consuming too much memory, check the resource limits and adjust them if necessary. You can view the resource usage with:\n```bash\nkubectl top pods --namespace trickster\n```"
-      },
-      {
-        "title": "Configuration changes not applied",
-        "description": "If changes to the Trickster configuration are not reflected, ensure that the deployment was updated correctly. Reapply the configuration file:\n```bash\nkubectl apply -f trickster-limits.yaml --namespace trickster\n```"
+        "title": "Metrics not available",
+        "description": "Trickster exposes Prometheus metrics on port 8481:\n```bash\ncurl http://localhost:8481/metrics\n```"
       }
     ]
   },
@@ -110,7 +79,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "sandbox",
     "projectVersion": "v2.0.1",
@@ -127,7 +96,6 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
       "kubectl"
     ],
     "description": "You need a Kubernetes cluster and Helm installed on your local machine."

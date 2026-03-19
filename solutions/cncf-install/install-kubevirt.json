@@ -11,75 +11,69 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Helm repository",
-        "description": "Add the KubeVirt Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add kubevirt https://encircle360-oss.github.io/helm-charts\nhelm repo update\n```"
+        "title": "Install KubeVirt operator",
+        "description": "Deploy the KubeVirt operator from the official release:\n```bash\nexport KUBEVIRT_VERSION=v1.5.0\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml\n```"
       },
       {
-        "title": "Install KubeVirt using Helm",
-        "description": "Install KubeVirt in the 'kubevirt' namespace with the specified version:\n```bash\nhelm install kubevirt kubevirt/kubevirt --namespace kubevirt --create-namespace --version 0.2.0\n```"
+        "title": "Deploy KubeVirt custom resource",
+        "description": "Create the KubeVirt CR to deploy the control plane:\n```bash\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml\n```\nWait for all components to be ready:\n```bash\nkubectl wait --for=condition=Available --timeout=600s kubevirt/kubevirt -n kubevirt\n```"
+      },
+      {
+        "title": "Install virtctl CLI",
+        "description": "Install the virtctl CLI for managing virtual machines:\n```bash\ncurl -Lo virtctl https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64\nchmod +x virtctl\nsudo mv virtctl /usr/local/bin/\n```"
+      },
+      {
+        "title": "Create a test VM",
+        "description": "Deploy a test virtual machine:\n```bash\nkubectl apply -f https://kubevirt.io/labs/manifests/vm.yaml\nvirtctl start testvm\nvirtctl console testvm\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the KubeVirt components are running correctly:\n```bash\nkubectl get pods -n kubevirt\n```"
-      },
-      {
-        "title": "Post-install configuration",
-        "description": "Set resource limits for the KubeVirt components by applying the following configuration:\n```bash\nkubectl apply -f examples/example-migration-policy.yaml\n```"
+        "description": "```bash\nkubectl get pods -n kubevirt\nkubectl get kubevirt -n kubevirt\nkubectl get vms\nvirtctl version\n```"
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the KubeVirt release from your cluster:\n```bash\nhelm uninstall kubevirt --namespace kubevirt\n```"
+        "title": "Delete VMs",
+        "description": "```bash\nkubectl delete vms --all\nkubectl delete vmis --all\n```"
       },
       {
-        "title": "Clean up Custom Resource Definitions",
-        "description": "Delete the KubeVirt CRDs to remove any remaining resources:\n```bash\nkubectl delete crd virtualmachines.kubevirt.io virtualmachineinstances.kubevirt.io migrationpolicies.migrations.kubevirt.io --namespace kubevirt\n```"
+        "title": "Remove KubeVirt",
+        "description": "```bash\nkubectl delete -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml\nkubectl delete -f https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml\n```"
       },
       {
-        "title": "Remove the namespace",
-        "description": "Delete the 'kubevirt' namespace to clean up all resources:\n```bash\nkubectl delete namespace kubevirt\n```"
+        "title": "Remove virtctl",
+        "description": "```bash\nsudo rm /usr/local/bin/virtctl\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Export the current configuration and resources before upgrading:\n```bash\nkubectl get all -n kubevirt -o yaml > kubevirt-backup.yaml\n```"
+        "title": "Apply new operator version",
+        "description": "```bash\nexport NEW_VERSION=v1.5.0\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${NEW_VERSION}/kubevirt-operator.yaml\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${NEW_VERSION}/kubevirt-cr.yaml\n```"
       },
       {
-        "title": "Update the Helm repository",
-        "description": "Ensure you have the latest Helm chart:\n```bash\nhelm repo update\n```"
-      },
-      {
-        "title": "Upgrade KubeVirt",
-        "description": "Upgrade KubeVirt to the latest version:\n```bash\nhelm upgrade kubevirt kubevirt/kubevirt --namespace kubevirt --version 0.2.0\n```"
-      },
-      {
-        "title": "Verify the upgrade",
-        "description": "Check that the KubeVirt components are still running correctly after the upgrade:\n```bash\nkubectl get pods -n kubevirt\n```"
+        "title": "Verify upgrade",
+        "description": "```bash\nkubectl get kubevirt -n kubevirt -o jsonpath='{.items[0].status.observedKubeVirtVersion}'\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in Pending state",
-        "description": "If KubeVirt pods are stuck in a Pending state, check for resource availability:\n```bash\nkubectl describe pod <pod-name> -n kubevirt\n``` \nEnsure that your cluster has enough resources (CPU, memory) to schedule the pods."
+        "title": "Virt-handler pods not ready",
+        "description": "KubeVirt requires hardware virtualization:\n```bash\nkubectl logs -l kubevirt.io=virt-handler -n kubevirt\nvirt-host-validate qemu\n```"
       },
       {
-        "title": "Virtual machines not starting",
-        "description": "If virtual machines fail to start, check the logs of the KubeVirt controller:\n```bash\nkubectl logs -l app=kubevirt-controller -n kubevirt\n``` \nLook for any error messages that may indicate configuration issues."
+        "title": "VM fails to start",
+        "description": "Check the VMI status:\n```bash\nkubectl describe vmi testvm\n```\nCommon issue: nodes don't support nested virtualization."
       },
       {
-        "title": "Migration failures",
-        "description": "If VM migrations are failing, check the migration policy configuration:\n```bash\nkubectl get migrationpolicy -n kubevirt\n``` \nEnsure that the policy allows for the intended migration actions."
+        "title": "Performance issues",
+        "description": "Enable hardware acceleration:\n```bash\nkubectl get kubevirt -n kubevirt -o jsonpath='{.items[0].spec.configuration.developerConfiguration.useEmulation}'\n```\nSet `useEmulation: false` for production."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of KubeVirt will result in all KubeVirt components running in the 'kubevirt' namespace, and you will be able to create and manage virtual machines using Kubernetes resources. You can verify the installation by checking the status of the pods and ensuring they are in a Running state.",
+      "summary": "KubeVirt is installed with the operator, control plane, and virtctl CLI for running virtual machines on Kubernetes.",
       "codeSnippets": [
-        "helm repo add kubevirt https://encircle360-oss.github.io/helm-charts\nhelm repo update",
-        "helm install kubevirt kubevirt/kubevirt --namespace kubevirt --create-namespace --version 0.2.0",
-        "kubectl get pods -n kubevirt",
-        "kubectl apply -f examples/example-migration-policy.yaml"
+        "kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.5.0/kubevirt-operator.yaml",
+        "virtctl start testvm"
       ]
     }
   },
@@ -103,7 +97,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "kubectl"
     ],
     "maturity": "incubating",
     "projectVersion": "v1.7.0",
@@ -118,10 +112,10 @@
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.24",
+    "kubernetes": ">=1.26",
     "tools": [
-      "helm",
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
     "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher, along with Helm and kubectl installed on your local machine."
   },

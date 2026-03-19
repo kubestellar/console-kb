@@ -11,58 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Clone the SlimFaas repository",
-        "description": "Clone the repository to get the deployment manifests:\n```bash\ngit clone https://github.com/AxaFrance/SlimFaas.git\ncd SlimFaas/demo\n```"
+        "title": "Deploy SlimFaas on Kubernetes",
+        "description": "Install SlimFaas from the official manifests:\n```bash\nkubectl create namespace slimfaas\nkubectl apply -n slimfaas -f https://raw.githubusercontent.com/AxaFrance/slimfaas/main/demo/deployment-slimfaas.yml\n```"
       },
       {
-        "title": "Deploy RBAC and SlimFaas",
-        "description": "Apply the ServiceAccount, Role, RoleBinding, and SlimFaas StatefulSet:\n```bash\nkubectl apply -f service-account-slimfaas.yml\nkubectl apply -f deployment-slimfaas.yml\n```\nThis creates the `slimfaas-demo` namespace, a ConfigMap, a 3-replica StatefulSet, and a ClusterIP service on port 5000."
+        "title": "Deploy a sample function",
+        "description": "Deploy a sample function with SlimFaas annotations:\n```bash\nkubectl apply -n slimfaas -f https://raw.githubusercontent.com/AxaFrance/slimfaas/main/demo/deployment-functions.yml\n```"
       },
       {
-        "title": "Expose SlimFaas",
-        "description": "Expose the service via NodePort (or configure an Ingress):\n```bash\nkubectl apply -f slimfaas-nodeport.yml\n```\nSlimFaas will be accessible on NodePort 30021."
-      },
-      {
-        "title": "Deploy sample functions",
-        "description": "Deploy the demo functions to test scale-to-zero:\n```bash\nkubectl apply -f deployment-functions.yml\n```\nThis deploys sample Fibonacci functions (fibonacci1, fibonacci2, fibonacci3) that SlimFaas will scale to zero after idle timeout."
+        "title": "Test the function",
+        "description": "Port-forward and invoke the function:\n```bash\nkubectl port-forward svc/slimfaas -n slimfaas 5000:5000\ncurl http://localhost:5000/function/fibonacci/invoke -d '{\"input\": 10}'\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that SlimFaas and the demo functions are running:\n```bash\nkubectl get statefulset -n slimfaas-demo\nkubectl get pods -n slimfaas-demo\nkubectl get svc -n slimfaas-demo\n```\nYou should see the slimfaas StatefulSet with 3 ready replicas and the function deployments."
+        "description": "```bash\nkubectl get pods -n slimfaas\nkubectl get svc -n slimfaas\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation shows the SlimFaas StatefulSet running with 3 replicas in the slimfaas-demo namespace. The service is accessible on port 5000 (ClusterIP) or NodePort 30021. Functions scale to zero after idle and wake on incoming requests.",
+      "summary": "SlimFaas is deployed as a lightweight FaaS platform with scale-to-zero capability.",
       "codeSnippets": [
-        "kubectl get statefulset -n slimfaas-demo",
-        "kubectl get pods -n slimfaas-demo",
-        "curl http://<node-ip>:30021/function/fibonacci1/hello"
+        "kubectl apply -n slimfaas -f https://raw.githubusercontent.com/AxaFrance/slimfaas/main/demo/deployment-slimfaas.yml",
+        "kubectl get pods -n slimfaas"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove SlimFaas Resources",
-        "description": "Delete all resources and the namespace:\n```bash\nkubectl delete -f deployment-functions.yml\nkubectl delete -f slimfaas-nodeport.yml\nkubectl delete -f deployment-slimfaas.yml\nkubectl delete -f service-account-slimfaas.yml\n```\nNote: PersistentVolumeClaims created by the StatefulSet are not automatically deleted. Clean them up:\n```bash\nkubectl delete pvc --all -n slimfaas-demo\nkubectl delete namespace slimfaas-demo\n```"
+        "title": "Remove SlimFaas",
+        "description": "```bash\nkubectl delete namespace slimfaas\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade SlimFaas",
-        "description": "Pull the latest manifests and reapply:\n```bash\ngit pull origin main\nkubectl apply -f deployment-slimfaas.yml\n```\nThe StatefulSet will perform a rolling update."
+        "title": "Reapply latest manifests",
+        "description": "```bash\nkubectl apply -n slimfaas -f https://raw.githubusercontent.com/AxaFrance/slimfaas/main/demo/deployment-slimfaas.yml\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pod Not Starting",
-        "description": "Check the pod logs and events:\n```bash\nkubectl logs slimfaas-0 -n slimfaas-demo\nkubectl describe pod slimfaas-0 -n slimfaas-demo\n```"
+        "title": "SlimFaas pod not starting",
+        "description": "```bash\nkubectl logs -l app=slimfaas -n slimfaas\n```"
       },
       {
-        "title": "PVC Pending",
-        "description": "SlimFaas uses PersistentVolumeClaims for its consensus layer. If pods are stuck in Pending, check that your cluster has a default StorageClass with available PersistentVolumes:\n```bash\nkubectl get sc\nkubectl get pvc -n slimfaas-demo\n```"
+        "title": "Function not scaling",
+        "description": "Check the SlimFaas annotations on the function deployment:\n```bash\nkubectl describe deployment -n slimfaas\n```"
       },
       {
-        "title": "Functions Not Scaling Up",
-        "description": "If functions remain at 0 replicas after receiving traffic, check SlimFaas logs for errors:\n```bash\nkubectl logs slimfaas-0 -n slimfaas-demo\n```\nVerify the ServiceAccount has the correct RBAC permissions to scale deployments."
+        "title": "Scale to zero not working",
+        "description": "Verify the `SlimFaas/Function` annotation is set on the function deployment."
       }
     ]
   },
@@ -109,8 +104,7 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl",
-      "git"
+      "kubectl"
     ],
     "description": "A Kubernetes cluster with a default StorageClass (for PersistentVolumeClaims), kubectl, and git."
   },
