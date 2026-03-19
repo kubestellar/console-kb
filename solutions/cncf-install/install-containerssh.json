@@ -11,52 +11,52 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Install ContainerSSH via Helm",
-        "description": "Add the ContainerSSH Helm chart and install:\n```bash\nhelm repo add containerssh https://containerssh.github.io/containerssh\nhelm repo update\nkubectl create namespace containerssh\nhelm install containerssh containerssh/containerssh --namespace containerssh\n```\nAlternatively, use the Docker image:\n```bash\ndocker run -d -p 2222:2222 containerssh/containerssh:0.5.0\n```"
+        "title": "Download ContainerSSH binary",
+        "description": "Download the latest ContainerSSH release:\n```bash\nexport CONTAINERSSH_VERSION=0.5.2\ncurl -Lo containerssh.tar.gz https://github.com/containerssh/containerssh/releases/download/v${CONTAINERSSH_VERSION}/containerssh_${CONTAINERSSH_VERSION}_linux_amd64.tar.gz\ntar xzf containerssh.tar.gz\nsudo mv containerssh /usr/local/bin/\nrm containerssh.tar.gz\n```\nOr use Docker:\n```bash\ndocker pull containerssh/containerssh:0.5.2\n```"
       },
       {
-        "title": "Configure the authentication webhook",
-        "description": "ContainerSSH requires an authentication webhook. Create a simple auth server or use the test server:\n```bash\ndocker run -d -p 8080:8080 containerssh/containerssh-test-authconfig-server:0.5.0\n```"
+        "title": "Configure ContainerSSH",
+        "description": "Create the configuration file:\n```bash\nsudo mkdir -p /etc/containerssh\nsudo tee /etc/containerssh/config.yaml << 'EOF'\nssh:\n  listen: 0.0.0.0:2222\n  hostkeys:\n    - /etc/containerssh/ssh_host_rsa_key\nauth:\n  url: http://localhost:8080\nbackend: docker\ndocker:\n  connection:\n    host: unix:///var/run/docker.sock\nEOF\nsudo ssh-keygen -t rsa -f /etc/containerssh/ssh_host_rsa_key -N ''\n```"
+      },
+      {
+        "title": "Start ContainerSSH",
+        "description": "Run ContainerSSH:\n```bash\ncontainerssh --config /etc/containerssh/config.yaml\n```\nOr via Docker:\n```bash\ndocker run -d --name containerssh -p 2222:2222 \\\n  -v /var/run/docker.sock:/var/run/docker.sock \\\n  containerssh/containerssh:0.5.2\n```"
       },
       {
         "title": "Test SSH access",
-        "description": "Connect via SSH to the ContainerSSH server:\n```bash\nssh -p 2222 user@localhost\n```\nEach SSH session launches a new container."
-      },
-      {
-        "title": "Verify the installation",
-        "description": "```bash\nkubectl get pods -n containerssh\nkubectl logs -l app.kubernetes.io/name=containerssh -n containerssh\n```"
+        "description": "Connect via SSH:\n```bash\nssh -p 2222 user@localhost\n```\nEach SSH session launches a new container."
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall Helm release",
-        "description": "```bash\nhelm uninstall containerssh -n containerssh\nkubectl delete namespace containerssh\n```"
+        "title": "Remove ContainerSSH",
+        "description": "```bash\nsudo rm /usr/local/bin/containerssh\nsudo rm -rf /etc/containerssh\n# Or: docker stop containerssh && docker rm containerssh\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade via Helm",
-        "description": "```bash\nhelm repo update\nhelm upgrade containerssh containerssh/containerssh --namespace containerssh\n```"
+        "title": "Download latest release",
+        "description": "```bash\ncurl -Lo containerssh.tar.gz https://github.com/containerssh/containerssh/releases/latest/download/containerssh_linux_amd64.tar.gz\ntar xzf containerssh.tar.gz\nsudo mv containerssh /usr/local/bin/\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "SSH connection refused",
-        "description": "Check that the ContainerSSH pod is running and the service is exposed:\n```bash\nkubectl get svc -n containerssh\nkubectl get pods -n containerssh\n```"
+        "description": "Ensure ContainerSSH is running and listening on port 2222:\n```bash\nss -tlnp | grep 2222\n```"
       },
       {
         "title": "Authentication webhook unreachable",
-        "description": "Verify the auth server URL in the ContainerSSH config and check connectivity from the pod."
+        "description": "ContainerSSH requires an auth webhook. Use the test server for development:\n```bash\ndocker run -d -p 8080:8080 containerssh/containerssh-test-authconfig-server:0.5.2\n```"
       },
       {
         "title": "Container launch failures",
-        "description": "Check ContainerSSH logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=containerssh -n containerssh\n```"
+        "description": "Check that Docker is running and accessible:\n```bash\ndocker ps\n```"
       }
     ],
     "resolution": {
       "summary": "ContainerSSH is installed and provides SSH access that launches isolated containers for each session.",
       "codeSnippets": [
-        "helm install containerssh containerssh/containerssh --namespace containerssh",
+        "containerssh --config /etc/containerssh/config.yaml",
         "ssh -p 2222 user@localhost"
       ]
     }
@@ -83,7 +83,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
+      "binary",
       "docker"
     ],
     "maturity": "sandbox",
@@ -100,8 +100,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl"
+      "docker",
+      "curl"
     ],
     "description": "Ensure you have a working Kubernetes cluster and kubectl installed and configured to interact with it."
   },

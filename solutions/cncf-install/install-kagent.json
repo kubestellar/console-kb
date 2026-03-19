@@ -11,43 +11,39 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Install kagent via Helm",
-        "description": "Add the kagent Helm repository and install:\n```bash\nhelm repo add kagent https://kagent-dev.github.io/kagent\nhelm repo update\nkubectl create namespace kagent\nhelm install kagent kagent/kagent --namespace kagent --version 0.2.1\n```\nSee https://kagent.dev/docs/kagent/introduction/installation for details."
+        "title": "Clone the kagent repository",
+        "description": "Clone the repo which contains the Helm charts:\n```bash\ngit clone https://github.com/kagent-dev/kagent.git\ncd kagent\n```"
       },
       {
-        "title": "Configure an LLM provider",
-        "description": "Create a ModelConfig resource to connect to an LLM provider:\n```bash\nkubectl apply -n kagent -f - << 'EOF'\napiVersion: kagent.dev/v1alpha1\nkind: ModelConfig\nmetadata:\n  name: openai-gpt4\nspec:\n  provider: openai\n  model: gpt-4\n  apiKeySecretRef:\n    name: openai-key\n    key: api-key\nEOF\n```\nCreate the secret first:\n```bash\nkubectl create secret generic openai-key --from-literal=api-key=<your-key> -n kagent\n```"
+        "title": "Install kagent CRDs",
+        "description": "Install the CRDs first:\n```bash\nkubectl create namespace kagent\nhelm install kagent-crds ./helm/kagent-crds/ --namespace kagent\n```"
       },
       {
-        "title": "Create an Agent",
-        "description": "Deploy an AI agent:\n```bash\nkubectl apply -n kagent -f - << 'EOF'\napiVersion: kagent.dev/v1alpha1\nkind: Agent\nmetadata:\n  name: k8s-helper\nspec:\n  systemPrompt: \"You are a Kubernetes expert assistant.\"\n  modelConfigRef:\n    name: openai-gpt4\nEOF\n```"
+        "title": "Install kagent with an LLM provider",
+        "description": "Install kagent with your preferred LLM provider:\n```bash\n# With OpenAI (default)\nhelm install kagent ./helm/kagent/ --namespace kagent \\\n  --set providers.openAI.apiKey=your-openai-api-key\n\n# Or with Anthropic\nhelm install kagent ./helm/kagent/ --namespace kagent \\\n  --set providers.default=anthropic \\\n  --set providers.anthropic.apiKey=your-anthropic-api-key\n\n# Or with local Ollama\nhelm install kagent ./helm/kagent/ --namespace kagent \\\n  --set providers.default=ollama\n```\nSee https://kagent.dev/docs/kagent/introduction/installation for all options."
       },
       {
         "title": "Verify the installation",
-        "description": "```bash\nkubectl get pods -n kagent\nkubectl get agents -n kagent\nkubectl get modelconfigs -n kagent\n```"
+        "description": "```bash\nkubectl get pods -n kagent\nkubectl get agents -n kagent\nkubectl get crd | grep kagent\n```"
       }
     ],
     "resolution": {
-      "summary": "kagent is installed and can deploy AI agents on Kubernetes with configurable LLM providers and MCP tools.",
+      "summary": "kagent is installed for deploying AI agents on Kubernetes with configurable LLM providers.",
       "codeSnippets": [
-        "helm install kagent kagent/kagent --namespace kagent",
-        "kubectl get agents -n kagent"
+        "helm install kagent-crds ./helm/kagent-crds/ --namespace kagent",
+        "helm install kagent ./helm/kagent/ --namespace kagent"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove agents and configs",
-        "description": "```bash\nkubectl delete agents --all -n kagent\nkubectl delete modelconfigs --all -n kagent\n```"
-      },
-      {
-        "title": "Uninstall Helm release",
-        "description": "```bash\nhelm uninstall kagent -n kagent\nkubectl delete namespace kagent\n```"
+        "title": "Remove kagent",
+        "description": "```bash\nhelm uninstall kagent -n kagent\nhelm uninstall kagent-crds -n kagent\nkubectl delete namespace kagent\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade via Helm",
-        "description": "```bash\nhelm repo update\nhelm upgrade kagent kagent/kagent --namespace kagent\n```"
+        "title": "Pull latest and upgrade",
+        "description": "```bash\ncd kagent && git pull\nhelm upgrade kagent-crds ./helm/kagent-crds/ --namespace kagent\nhelm upgrade kagent ./helm/kagent/ --namespace kagent\n```"
       }
     ],
     "troubleshooting": [
@@ -57,11 +53,11 @@
       },
       {
         "title": "LLM API key errors",
-        "description": "Verify the secret exists and has the correct key:\n```bash\nkubectl get secret openai-key -n kagent -o jsonpath='{.data.api-key}' | base64 -d\n```"
+        "description": "Verify the secret was created correctly:\n```bash\nkubectl get secrets -n kagent\n```"
       },
       {
         "title": "CRDs not installed",
-        "description": "```bash\nkubectl get crd | grep kagent\n```\nIf missing, reinstall the Helm chart with `--set installCRDs=true`."
+        "description": "```bash\nkubectl get crd | grep kagent\n```\nEnsure kagent-crds was installed before kagent."
       }
     ]
   },
@@ -102,7 +98,8 @@
     "kubernetes": ">=1.24",
     "tools": [
       "helm",
-      "kubectl"
+      "kubectl",
+      "git"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to interact with your cluster."
   },

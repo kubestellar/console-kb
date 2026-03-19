@@ -11,70 +11,57 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Install KubeEdge CloudCore via Helm",
-        "description": "Add the official KubeEdge Helm repository and install CloudCore on the cloud-side Kubernetes cluster:\n\n```bash\nhelm repo add kubeedge https://kubeedge.io/charts\nhelm repo update\n```\n\nInstall CloudCore in the kubeedge namespace. Replace the advertise address with your cloud node's externally reachable IP:\n\n```bash\nhelm install cloudcore kubeedge/cloudcore \\\n  --namespace kubeedge \\\n  --create-namespace \\\n  --set cloudCore.modules.cloudHub.advertiseAddress[0]=\"YOUR-CLOUD-NODE-IP\"\n```\n\n**Alternative: Install using keadm CLI**\n\nDownload keadm and initialize the cloud side:\n\n```bash\nkeadm init --advertise-address=\"YOUR-CLOUD-NODE-IP\" --kubeedge-version=v1.21.0\n```"
+        "title": "Install keadm CLI",
+        "description": "Download the KubeEdge admin tool:\n```bash\nexport KUBEEDGE_VERSION=v1.23.0\ncurl -Lo keadm.tar.gz https://github.com/kubeedge/kubeedge/releases/download/${KUBEEDGE_VERSION}/keadm-${KUBEEDGE_VERSION}-linux-amd64.tar.gz\ntar xzf keadm.tar.gz\nsudo mv keadm-${KUBEEDGE_VERSION}-linux-amd64/keadm/keadm /usr/local/bin/\nrm -rf keadm.tar.gz keadm-${KUBEEDGE_VERSION}-linux-amd64\n```"
       },
       {
-        "title": "Verify the CloudCore installation",
-        "description": "Check that CloudCore pods are running:\n\n```bash\nkubectl get pods -n kubeedge\n```\n\nYou should see the cloudcore pod in Running state."
-      },
-      {
-        "title": "Get the join token",
-        "description": "Retrieve the token needed for edge nodes to join the cluster:\n\n```bash\nkeadm gettoken\n```\n\nSave this token for the next step."
+        "title": "Initialize the cloud side (control plane)",
+        "description": "On the cloud node (where kubectl has access):\n```bash\nkeadm init --advertise-address=<cloud-node-ip> --kubeedge-version=${KUBEEDGE_VERSION}\n```\nThis installs CloudCore on the cloud node."
       },
       {
         "title": "Join edge nodes",
-        "description": "On each edge node, run keadm join with the token from the cloud side. Cloud and edge versions must match:\n\n```bash\nkeadm join --cloudcore-ipport=\"YOUR-CLOUD-NODE-IP:10000\" \\\n  --token=<TOKEN> \\\n  --kubeedge-version=v1.21.0\n```"
+        "description": "Get the token from the cloud node:\n```bash\nkeadm gettoken\n```\nOn each edge node, join the cluster:\n```bash\nkeadm join --cloudcore-ipport=<cloud-node-ip>:10000 --token=<token> --kubeedge-version=${KUBEEDGE_VERSION}\n```"
       },
       {
-        "title": "Verify edge nodes",
-        "description": "Check that the edge nodes have joined the cluster:\n\n```bash\nkubectl get nodes\n```\n\nEdge nodes will appear with the role 'edge'."
+        "title": "Verify the installation",
+        "description": "```bash\nkubectl get nodes\nkeadm version\n```\nEdge nodes should appear in the node list."
       }
     ],
     "uninstall": [
       {
         "title": "Remove edge nodes",
-        "description": "On each edge node, reset the edge side:\n\n```bash\nkeadm reset\n```"
+        "description": "On each edge node:\n```bash\nkeadm reset\n```"
       },
       {
-        "title": "Remove CloudCore via Helm",
-        "description": "Uninstall the CloudCore release:\n\n```bash\nhelm uninstall cloudcore --namespace kubeedge\n```\n\nOr if installed via keadm:\n\n```bash\nkeadm reset --kube-config=/root/.kube/config\n```"
-      },
-      {
-        "title": "Clean up CRDs and namespace",
-        "description": "Remove KubeEdge CRDs and the namespace:\n\n```bash\nkubectl delete crd $(kubectl get crd | grep kubeedge.io | awk '{print $1}')\nkubectl delete namespace kubeedge\n```"
+        "title": "Remove cloud side",
+        "description": "```bash\nkeadm reset --kube-config ~/.kube/config\nsudo rm /usr/local/bin/keadm\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade CloudCore",
-        "description": "Update the Helm repo and upgrade CloudCore:\n\n```bash\nhelm repo update\nhelm upgrade cloudcore kubeedge/cloudcore --namespace kubeedge\n```\n\nNote: Cloud and edge versions must match. Upgrade edge nodes after the cloud side."
-      },
-      {
-        "title": "Upgrade edge nodes",
-        "description": "On each edge node, upgrade the edge side to match the cloud version:\n\n```bash\nkeadm upgrade edge --kubeedge-version=<NEW_VERSION>\n```"
+        "title": "Upgrade KubeEdge",
+        "description": "```bash\nkeadm upgrade cloud --kubeedge-version=v1.23.0\n# On edge nodes:\nkeadm upgrade edge --kubeedge-version=v1.23.0\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "CloudCore pod not starting",
-        "description": "Check the CloudCore pod logs for errors:\n\n```bash\nkubectl logs -l app=cloudcore -n kubeedge\nkubectl describe pod -l app=cloudcore -n kubeedge\n```"
+        "title": "Edge node not connecting",
+        "description": "Check EdgeCore logs on the edge node:\n```bash\njournalctl -u edgecore -f\n```"
       },
       {
-        "title": "Edge node cannot join",
-        "description": "Ensure the advertise address is reachable from the edge node, and ports 10000-10004 are open. Verify the token is correct:\n\n```bash\nkeadm gettoken\n```"
+        "title": "CloudCore not starting",
+        "description": "```bash\njournalctl -u cloudcore -f\n```\nVerify the advertise address is reachable from edge nodes."
       },
       {
-        "title": "Version mismatch",
-        "description": "Cloud and edge versions must match. Check versions on both sides:\n\n```bash\nkubectl get pods -n kubeedge -o yaml | grep image:\n```"
+        "title": "Pods not scheduling on edge",
+        "description": "Verify the edge node is Ready:\n```bash\nkubectl get nodes\nkubectl describe node <edge-node>\n```"
       }
     ],
     "resolution": {
-      "summary": "A successful installation of KubeEdge will have CloudCore running in the kubeedge namespace on the cloud side, and EdgeCore running on each edge node. Edge nodes will appear in kubectl get nodes with the 'edge' role.",
+      "summary": "KubeEdge is installed with CloudCore on the cloud side and EdgeCore on edge nodes.",
       "codeSnippets": [
-        "helm repo add kubeedge https://kubeedge.io/charts",
-        "helm install cloudcore kubeedge/cloudcore --namespace kubeedge --create-namespace --set cloudCore.modules.cloudHub.advertiseAddress[0]=\"YOUR-CLOUD-NODE-IP\"",
-        "kubectl get pods -n kubeedge"
+        "keadm init --advertise-address=<cloud-node-ip>",
+        "keadm join --cloudcore-ipport=<cloud-node-ip>:10000 --token=<token>"
       ]
     }
   },
@@ -100,8 +87,7 @@
       "configuration"
     ],
     "installMethods": [
-      "helm",
-      "cli"
+      "binary"
     ],
     "maturity": "graduated",
     "projectVersion": "v1.21.0",
@@ -118,11 +104,10 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "helm",
-      "kubectl",
-      "keadm"
+      "keadm",
+      "kubectl"
     ],
-    "description": "Requires a Kubernetes cluster on the cloud side, Helm and kubectl installed. The keadm CLI is needed for joining edge nodes. Edge nodes require root access."
+    "description": "A Kubernetes cluster is required for the cloud side. Edge nodes need network access to the cloud node on port 10000."
   },
   "security": {
     "scannedAt": "2026-03-17T00:00:00.000Z",

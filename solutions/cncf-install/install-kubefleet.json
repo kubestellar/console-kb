@@ -11,61 +11,53 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Set up a Kind cluster for testing",
-        "description": "KubeFleet uses a hub-spoke model. Create clusters for testing:\n```bash\n# Create hub cluster\nkind create cluster --name hub\n\n# Create member clusters\nkind create cluster --name member1\nkind create cluster --name member2\n```"
+        "title": "Set up clusters for testing",
+        "description": "KubeFleet uses a hub-spoke model. Create clusters:\n```bash\nkind create cluster --name hub\nkind create cluster --name member1\n```"
       },
       {
         "title": "Install KubeFleet on the hub cluster",
-        "description": "Install the KubeFleet CRDs and controllers on the hub:\n```bash\nkubectl config use-context kind-hub\nhelm repo add kubefleet https://kubefleet-dev.github.io/charts\nhelm repo update\nhelm install kubefleet kubefleet/kubefleet --namespace kubefleet-system --create-namespace\n```\nSee https://kubefleet-dev.github.io/website/docs/getting-started/kind/ for the full quickstart."
+        "description": "Clone the repo and install from local charts:\n```bash\nkubectl config use-context kind-hub\ngit clone https://github.com/kubefleet-dev/kubefleet.git\ncd kubefleet\nhelm install hub-agent charts/hub-agent --namespace kubefleet-system --create-namespace\n```\nSee https://kubefleet-dev.github.io/website/docs/getting-started/kind/ for the full quickstart."
       },
       {
-        "title": "Join member clusters",
-        "description": "Register member clusters with the hub:\n```bash\nkubectl apply -f - << 'EOF'\napiVersion: cluster.kubefleet.io/v1\nkind: MemberCluster\nmetadata:\n  name: member1\nspec:\n  identity:\n    name: member1\nEOF\n```"
+        "title": "Install member agent on member clusters",
+        "description": "On each member cluster:\n```bash\nkubectl config use-context kind-member1\nhelm install member-agent charts/member-agent --namespace kubefleet-system --create-namespace \\\n  --set hubCluster.apiServer=<hub-api-server-url>\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "```bash\nkubectl get pods -n kubefleet-system\nkubectl get memberclusters\n```"
+        "description": "```bash\nkubectl config use-context kind-hub\nkubectl get pods -n kubefleet-system\nkubectl get memberclusters\n```"
       }
     ],
     "resolution": {
       "summary": "KubeFleet is installed on the hub cluster with member clusters joined for multi-cluster workload management.",
       "codeSnippets": [
-        "helm install kubefleet kubefleet/kubefleet --namespace kubefleet-system",
+        "helm install hub-agent charts/hub-agent --namespace kubefleet-system",
         "kubectl get memberclusters"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove member clusters",
-        "description": "```bash\nkubectl delete memberclusters --all\n```"
-      },
-      {
         "title": "Uninstall KubeFleet",
-        "description": "```bash\nhelm uninstall kubefleet -n kubefleet-system\nkubectl delete namespace kubefleet-system\n```"
-      },
-      {
-        "title": "Delete Kind clusters",
-        "description": "```bash\nkind delete cluster --name hub\nkind delete cluster --name member1\nkind delete cluster --name member2\n```"
+        "description": "```bash\nhelm uninstall hub-agent -n kubefleet-system\nhelm uninstall member-agent -n kubefleet-system\nkind delete cluster --name hub\nkind delete cluster --name member1\n```"
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade via Helm",
-        "description": "```bash\nhelm repo update\nhelm upgrade kubefleet kubefleet/kubefleet --namespace kubefleet-system\n```"
+        "title": "Pull latest and upgrade",
+        "description": "```bash\ncd kubefleet && git pull\nhelm upgrade hub-agent charts/hub-agent --namespace kubefleet-system\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Member cluster not joining",
-        "description": "Check the join agent logs on the member cluster:\n```bash\nkubectl logs -l app=kubefleet-agent -n kubefleet-system\n```"
-      },
-      {
-        "title": "Placement policy not scheduling",
-        "description": "Check the ClusterResourcePlacement status:\n```bash\nkubectl describe clusterresourceplacement <name>\n```"
+        "description": "Check the member agent logs:\n```bash\nkubectl logs -l app=member-agent -n kubefleet-system\n```"
       },
       {
         "title": "Hub controller not starting",
-        "description": "```bash\nkubectl get pods -n kubefleet-system\nkubectl logs -l app=kubefleet-hub -n kubefleet-system\n```"
+        "description": "```bash\nkubectl get pods -n kubefleet-system\nkubectl logs -l app=hub-agent -n kubefleet-system\n```"
+      },
+      {
+        "title": "Placement policy not scheduling",
+        "description": "```bash\nkubectl describe clusterresourceplacement <name>\n```"
       }
     ]
   },
@@ -113,7 +105,8 @@
     "tools": [
       "helm",
       "kubectl",
-      "kind"
+      "kind",
+      "git"
     ],
     "description": "Ensure you have a running Kubernetes cluster and kubectl installed and configured to communicate with your cluster."
   },
