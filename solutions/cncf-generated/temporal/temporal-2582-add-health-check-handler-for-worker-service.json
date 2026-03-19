@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "temporal-2582-add-health-check-handler-for-worker-service",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "temporal: Add health check handler for worker service",
+    "description": "Add health check handler for worker service. Requested by 18+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current temporal deployment",
+        "description": "Verify your temporal version and configuration:\n```bash\nkubectl get pods -n temporal -l app.kubernetes.io/name=temporal\nhelm list -n temporal 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working temporal installation."
+      },
+      {
+        "title": "Review temporal configuration",
+        "description": "Inspect the relevant temporal configuration:\n```bash\nkubectl get all -n temporal -l app.kubernetes.io/name=temporal\nkubectl get configmap -n temporal -l app.kubernetes.io/part-of=temporal\n```\nLooks as currently worker service https://github.com/temporalio/temporal/tree/master/service/worker\ndoes not expose a gRPC handler and the health check method like matching and history services do. \n\nPlease add this if possible."
+      },
+      {
+        "title": "Apply the fix for Add health check handler for worker service",
+        "description": "- Add `server`, `grpcListener`, `healthServer` fields to worker Service struct\n- Register health server in `Start()` with `SERVING` status\n- Set `NOT_SERVING` status and gracefully stop in `Stop()`\n- Add `ServerProvider` in fx.go for dependency injection\n- Add unit test for health check\n```yaml\nlivenessProbe:\n  exec:\n    command:\n      - /bin/sh\n      - -c\n      - pidof your-worker-binary >/dev/null\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n temporal -l app.kubernetes.io/name=temporal\nkubectl get events -n temporal --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Add health check handler for worker service\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "- Add `server`, `grpcListener`, `healthServer` fields to worker Service struct\n- Register health server in `Start()` with `SERVING` status\n- Set `NOT_SERVING` status and gracefully stop in `Stop()`\n- Add `ServerProvider` in fx.go for dependency injection\n- Add unit test for health check functionality",
+      "codeSnippets": [
+        "livenessProbe:\n  exec:\n    command:\n      - /bin/sh\n      - -c\n      - pidof your-worker-binary >/dev/null"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "temporal",
+      "community",
+      "workflow-engine",
+      "feature"
+    ],
+    "cncfProjects": [
+      "temporal"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/temporalio/temporal/issues/2582",
+      "repo": "https://github.com/temporalio/temporal",
+      "pr": "https://github.com/temporalio/temporal/pull/9055"
+    },
+    "reactions": 18,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with temporal installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:52:10.654Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
