@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "knative-eventing-8437-eks-use-aws-web-identity-token-for-sqs-queue",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "knative-eventing: eks use aws web identity token for SQS queue",
+    "description": "eks use aws web identity token for SQS queue. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current knative-eventing deployment",
+        "description": "Verify your knative-eventing version and configuration:\n```bash\nkubectl get pods -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nhelm list -n knative-eventing 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working knative-eventing installation."
+      },
+      {
+        "title": "Review knative-eventing configuration",
+        "description": "Inspect the relevant knative-eventing configuration:\n```bash\nkubectl get all -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nkubectl get configmap -n knative-eventing -l app.kubernetes.io/part-of=knative-eventing\n```\nHi,\n\nI have an EKS cluster and I want to create a SQS integration source on this. The docs suggest that I configure AWS secrets for auth purpose."
+      },
+      {
+        "title": "Apply the fix for eks use aws web identity token for SQS queue",
+        "description": "Here is a sample ContainerSource that is using the `aws-sqs-source` nightly image and the Camel `useDefaultCredentialsProvider=true` property. We are using IRSA so you'll notice that the Deployment template includes a `serviceAccountName` so that the pods will be assigned the correct IAM role. I am\n```yaml\n---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: aws-sqs\n  namespace: testing\n\n---\napiVersion: sources.knative.dev/v1\nkind: ContainerSource\nmetadata:\n  annotations:\n    sources.knative.dev/creator: system:serviceaccount:knative-eventing:eventing-controller\n    sources.knative.dev/lastModifier: system:serviceaccount:knative-eventing:eventing-controller\n  labels:\n    app.kubernetes.io/name: aws-sqs-testing-received-source\n  name: aws-sqs-testing-received-source-containersource\n  namespace: testing\nspec:\n  sink:\n    ref:\n      apiVersion: eventing.knative.dev/v1\n      kind: Broker\n      \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nkubectl get events -n knative-eventing --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"eks use aws web identity token for SQS queue\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Here is a sample ContainerSource that is using the `aws-sqs-source` nightly image and the Camel `useDefaultCredentialsProvider=true` property. We are using IRSA so you'll notice that the Deployment template includes a `serviceAccountName` so that the pods will be assigned the correct IAM role.",
+      "codeSnippets": [
+        "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: aws-sqs\n  namespace: testing\n\n---\napiVersion: sources.knative.dev/v1\nkind: ContainerSource\nmetadata:\n  annotations:\n    sources.knative.dev/creator: system:serviceaccount:knative-eventing:eventing-controller\n    sources.knative.dev/lastModifier: system:serviceaccount:knative-eventing:eventing-controller\n  labels:\n    app.kubernetes.io/name: aws-sqs-testing-received-source\n  name: aws-sqs-testing-received-source-containersource\n  namespace: testing\nspec:\n  sink:\n    ref:\n      apiVersion: eventing.knative.dev/v1\n      kind: Broker\n      name: testing-broker\n  template:\n    metadata:\n      creationTimestamp: null\n      labels:\n        app.kubernetes.io/name: testing-received-source\n    spec:\n      serviceAccountName: \"aws-sqs\"\n      c",
+        "- name: CAMEL_KAMELET_AWS_SQS_SOURCE_USE_DEFAULT_CREDENTIALS_PROVIDER\n      value: \"true\"\n    - name: CAMEL_KAMELET_AWS_SQS_SOURCE_USE_SESSION_CREDENTIALS\n      value: \"true\"",
+        "- name: CAMEL_KAMELET_AWS_SQS_SOURCE_SESSION_TOKEN\n      valueFrom:\n        fieldRef:\n          apiVersion: v1\n          fieldPath: metadata.name"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "knative-eventing",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "knative-eventing"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/knative/eventing/issues/8437",
+      "repo": "https://github.com/knative/eventing"
+    },
+    "reactions": 1,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with knative-eventing installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-20T06:23:18.216Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
