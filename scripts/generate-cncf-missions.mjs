@@ -228,6 +228,37 @@ async function githubApi(url, options = {}) {
 async function findHighEngagementIssues(project) {
   const [owner, repo] = project.repo.split('/')
 
+  /**
+   * Filter out issues that are not user-facing and produce garbage missions.
+   * These are internal dev tasks, proposals, discussions, meeting scheduling, etc.
+   */
+  function isNonUserFacingIssue(issue) {
+    const title = (issue.title || '').toLowerCase()
+    const labels = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name || '').toLowerCase())
+
+    // Proposals, RFCs, design discussions — no actionable user steps
+    if (/\b(proposal|rfc|design doc|discussion)\b/.test(title)) return true
+
+    // Meeting scheduling, SIG organization
+    if (/\b(meeting time|meeting schedule|sig\b.*\bproposal|community meeting)\b/.test(title)) return true
+
+    // Internal dev tasks: linting, e2e tests, CI, code quality, refactoring
+    if (/\b(golangci|lint|revive|e2e test|unit test|test coverage|testing coverage|code quality)\b/.test(title)) return true
+
+    // LFX mentorship tasks — dev mentoring, not user features
+    if (/\blfx.mentorship\b/.test(title)) return true
+
+    // Umbrella/tracking issues — meta-issues with no single fix
+    if (/\[umbrella\]/.test(title)) return true
+
+    // Label-based filtering
+    const nonUserLabels = ['kind/cleanup', 'kind/testing', 'kind/ci', 'kind/refactor',
+      'area/testing', 'area/ci', 'sig/', 'lifecycle/stale', 'priority/awaiting-more-evidence']
+    if (labels.some(l => nonUserLabels.some(nl => l.includes(nl)))) return true
+
+    return false
+  }
+
   // Maturity-weighted thresholds: graduated projects have more content,
   // so we can be less selective. Sandbox projects need higher bar.
   const maturityMultiplier = {
@@ -250,7 +281,10 @@ async function findHighEngagementIssues(project) {
   return data.items.filter(issue => {
     const reactions = issue.reactions?.total_count || 0
     const comments = issue.comments || 0
-    return reactions >= effectiveMinReactions || comments >= 10
+    if (reactions < effectiveMinReactions && comments < 10) return false
+    // Filter out non-user-facing issues that produce garbage missions
+    if (isNonUserFacingIssue(issue)) return false
+    return true
   })
 }
 
@@ -373,6 +407,25 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
     /same here/i,
     /\+1$/,
     /WIP|work in progress/i,
+    // Conversational tone — discussion, not a solution
+    /^I think\b/i,
+    /^I'm not (?:quite )?sure/i,
+    /^Let me explain/i,
+    /^Thanks[.,!]?\s/i,
+    /^Thanks for/i,
+    /^Before you start/i,
+    /^I'd like to ensure/i,
+    /^Rereading this thread/i,
+    /^I can't reproduce/i,
+    // Email reply headers
+    /^On .{10,80} wrote:$/m,
+    // Meeting/scheduling content
+    /\bmeeting time\b/i,
+    /\bgoogle docs?\b.*\blink\b/i,
+    // PR template debris
+    /\*\*What type of PR is this\?\*\*/i,
+    /Pre-submission checklist/i,
+    /Make sure you include information that can help us debug/i,
   ]
 
   function isLowQualityComment(text) {
@@ -414,6 +467,12 @@ function extractResolutionFromIssue(issue, comments, linkedPR) {
         if (bodyLower.match(/^(me too|same (?:issue|problem|here)|i (?:also|too) (?:have|see|get))/)) score -= 6
         // NEGATIVE: bot-generated comments (codecov, stale bot, CI bots)
         if (c.user?.type === 'Bot' || bodyLower.includes('codecov') || bodyLower.includes('stale bot')) score -= 10
+        // NEGATIVE: conversational/discussion tone (not solutions)
+        if (/^(I think|I'm not sure|Let me explain|Thanks|Before you start|Rereading)/i.test(bodyTrimmed)) score -= 6
+        // NEGATIVE: email reply headers
+        if (/^On\s+.{10,80}\s+wrote:/m.test(bodyTrimmed)) score -= 8
+        // NEGATIVE: embedded HTML images (raw GitHub comment screenshots)
+        if (/<img\s+/i.test(bodyTrimmed)) score -= 5
         return { comment: c, score }
       })
       .sort((a, b) => b.score - a.score)
@@ -455,6 +514,14 @@ function cleanText(text) {
     .replace(/# \[?Codecov\]?[\s\S]*?(?=\n#{1,4}\s|\n---|\n\n\n|$)/gi, '')
     // Strip image markdown that's just screenshots/badges (not content)
     .replace(/!\[.*?\]\(https?:\/\/[^)]+\)/g, '')
+    // Strip raw HTML <img> tags (embedded screenshots from GitHub comments)
+    .replace(/<img\s+[^>]*>/gi, '')
+    // Strip email reply headers ("On Thu, 11 Apr 2019, 17:05 User <email> wrote:")
+    .replace(/^On\s+.{10,80}\s+wrote:\s*$/gm, '')
+    // Strip quoted email reply blocks (lines starting with >)
+    .replace(/^>\s.*$/gm, '')
+    // Strip emoji shortcodes (:snail:, :+1:, etc.)
+    .replace(/:[a-z0-9_+-]+:/gi, '')
     // Strip Codecov table rows
     .replace(/\|[^|]*codecov[^|]*\|[^|]*\|[^|]*\|/gi, '')
     // Strip "Checklist:" sections and everything after (PR template boilerplate)
@@ -944,6 +1011,33 @@ function passesQualityGate(resolution, issue) {
   const solutionLower = strippedSolution.toLowerCase()
   if (/^(me too|same (?:issue|problem|here)|\+1|i (?:also|too) (?:have|see|get) this)/i.test(solutionLower.trim())) {
     return false
+  }
+
+  // Reject conversational tone — discussion comments, not actionable solutions
+  if (/^(I think|I'm not sure|Let me explain|Thanks|Before you start|Rereading this)/i.test(strippedSolution.trim())) {
+    return false
+  }
+
+  // Reject if solution starts with a comma (truncated quote fragment)
+  if (strippedSolution.trim().startsWith(',')) {
+    return false
+  }
+
+  // Reject if solution contains email reply headers
+  if (/^On\s+.{10,80}\s+wrote:/m.test(strippedSolution)) {
+    return false
+  }
+
+  // Actionability check — solution should contain commands, config, or clear instructions.
+  // If it has no code blocks, no commands, and no numbered steps, it's likely just discussion.
+  const hasCodeBlock = /```/.test(resolution.solution || '')
+  const hasCommand = /\b(kubectl|helm|docker|curl|apt|brew|pip|npm|go |make)\b/.test(resolution.solution || '')
+  const hasConfig = /\b(apiVersion|kind:|spec:|metadata:)\b/.test(resolution.solution || '')
+  const hasStepsInSolution = /(?:^|\n)\s*\d+[\.\)]\s+/.test(resolution.solution || '')
+  if (!hasCodeBlock && !hasCommand && !hasConfig && !hasStepsInSolution && resolution.yamlSnippets.length === 0) {
+    // Allow through only if the solution is long enough to be a detailed prose explanation
+    const PROSE_MIN_LENGTH = 300
+    if (strippedSolution.length < PROSE_MIN_LENGTH) return false
   }
 
   return true
