@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "traefik-5853-allow-to-add-path-prefix-for-both-api-and-dashboard-endpoints",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "traefik: Allow to add path prefix for both api and dashboard endpoints",
+    "description": "Allow to add path prefix for both api and dashboard endpoints. This issue affects 120+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify traefik troubleshoot symptoms",
+        "description": "Check for the issue in your traefik deployment:\n```bash\nkubectl get pods -n traefik -l app.kubernetes.io/name=traefik\nkubectl logs -l app.kubernetes.io/name=traefik -n traefik --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review traefik configuration",
+        "description": "Inspect the relevant traefik configuration:\n```bash\nkubectl get all -n traefik -l app.kubernetes.io/name=traefik\nkubectl get configmap -n traefik -l app.kubernetes.io/part-of=traefik\n```\n### Do you want to request a *feature* or report a *bug*?\n\nFeature\n\n### What did you expect to see?\n\nAs #5374 has been fixed, now dashboard assets can be served under any path prefix, but it continues to fetch api data from `/api`, which seems to be"
+      },
+      {
+        "title": "Apply the fix for Allow to add path prefix for both api and dashboard…",
+        "description": "On traefik:v2.1.1 this use case is working for me. This is how it looks like:\n\n`compose-traefik.yml`\n\n```yml\n    labels:\n        #___ core configs\n      - traefik.enable=true\n        #___ set traefik dashboard + API. The API is available at: mydomain.club/api/http/routers\n      -\n```yaml\napiVersion: extensions/v1beta1\nkind: Ingress\nmetadata:\n  name: traefik-ingress\n  namespace: kube-system\n  annotations:\n    kubernetes.io/ingress.class: traefik\n    traefik.ingress.kubernetes.io/rule-type: PathPrefixStrip\nspec:\n  rules:\n  - host: host.traefik.com\n    http:\n      paths:\n      - path: /traefik\n        backend:\n          serviceName: traefik-dashboard\n          servicePort: 80\n```"
+      },
+      {
+        "title": "Confirm Allow to add path prefix for both api and… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=traefik -n traefik --tail=50 --since=5m\nkubectl get events -n traefik --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "On traefik:v2.1.1 this use case is working for me. This is how it looks like:\n\n`compose-traefik.yml`\n\n```yml\n    labels:\n        #___ core configs\n      - traefik.enable=true\n        #___ set traefik dashboard + API.",
+      "codeSnippets": [
+        "apiVersion: extensions/v1beta1\nkind: Ingress\nmetadata:\n  name: traefik-ingress\n  namespace: kube-system\n  annotations:\n    kubernetes.io/ingress.class: traefik\n    traefik.ingress.kubernetes.io/rule-type: PathPrefixStrip\nspec:\n  rules:\n  - host: host.traefik.com\n    http:\n      paths:\n      - path: /traefik\n        backend:\n          serviceName: traefik-dashboard\n          servicePort: 80",
+        "labels:\n        #___ core configs\n      - traefik.enable=true\n        #___ set traefik dashboard + API. The API is available at: mydomain.club/api/http/routers\n      - \"traefik.http.routers.traefik.rule=Host(`mydomain.club`) && (PathPrefix(`/traefik`) || PathPrefix(`/api`))\"\n      - \"traefik.http.routers.traefik.service=api@internal\"\n        #___ set TLS (https)\n      - \"traefik.http.routers.traefik.tls=true\"\n      - \"traefik.http.routers.traefik.entrypoints=websecure\"\n      - \"traefik.http.routers.traefik.tls.certresolver=leresolver\"\n        #___ use these middlewares\n      - \"traefik.http.routers.traefik.middlewares=traefik-strip\"\n        #___ specific middleware for traefik (it enables the dashboard at mydomain.com/traefik)\n      - \"traefik.http.middlewares.traefik-strip.stripprefix.pre"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "traefik",
+      "community",
+      "ingress",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "traefik"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/traefik/traefik/issues/5853",
+      "repo": "https://github.com/traefik/traefik"
+    },
+    "reactions": 120,
+    "comments": 74,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with traefik installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-20T06:50:32.412Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
