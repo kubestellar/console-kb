@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentelemetry-operator-199-support-sidecar-injection-in-another-pod-namespace-di",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentelemetry-operator: Support sidecar injection in another pod namespace different from the otel colletor instance.",
+    "description": "Support sidecar injection in another pod namespace different from the otel colletor instance.. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current opentelemetry-operator deployment",
+        "description": "Verify your opentelemetry-operator version and configuration:\n```bash\nkubectl get pods -n opentelemetry-operator -l app.kubernetes.io/name=opentelemetry-operator\nhelm list -n opentelemetry-operator 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working opentelemetry-operator installation."
+      },
+      {
+        "title": "Review opentelemetry-operator configuration",
+        "description": "Inspect the relevant opentelemetry-operator configuration:\n```bash\nkubectl get all -n opentelemetry-operator -l app.kubernetes.io/name=opentelemetry-operator\nkubectl get configmap -n opentelemetry-operator -l app.kubernetes.io/part-of=opentelemetry-operator\n```\nIf I have an OpenTelemetry collector on sidecar mode in one namespace (eg, test1) but want a pod on other namespace (test2) to be injected, this is not actually possible with the opentelemetry-operator."
+      },
+      {
+        "title": "Apply the fix for Support sidecar injection in another pod namespace…",
+        "description": ">If operator service account has a cluster role to update/patch pods - it should work right.\n\nThe operator is certainly able to inject, the concern is whether it should just trust what the user requested, or if it should do the authorization. This is a concern for multi-tenant environments, where\n```yaml\nkubectl apply -n test1 -f - <<EOF\napiVersion: opentelemetry.io/v1alpha1\nkind: OpenTelemetryCollector\nmetadata:\n  name: simplest\nspec:\n  mode: sidecar\n  config: |\n    receivers:\n      jaeger:\n        protocols:\n          grpc:\n    processors:\n      queued_retry:\n\n    exporters:\n      logging:\n\n    service:\n      pipelines:\n        traces:\n          receivers: [jaeger]\n          processors: [queued_retry]\n          exporters: [logging]\nEOF\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n opentelemetry-operator -l app.kubernetes.io/name=opentelemetry-operator\nkubectl get events -n opentelemetry-operator --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support sidecar injection in another pod namespace…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": ">If operator service account has a cluster role to update/patch pods - it should work right.\n\nThe operator is certainly able to inject, the concern is whether it should just trust what the user requested, or if it should do the authorization. This is a concern for multi-tenant environments, where each tenant is located on their own namespace.",
+      "codeSnippets": [
+        "kubectl apply -n test1 -f - <<EOF\napiVersion: opentelemetry.io/v1alpha1\nkind: OpenTelemetryCollector\nmetadata:\n  name: simplest\nspec:\n  mode: sidecar\n  config: |\n    receivers:\n      jaeger:\n        protocols:\n          grpc:\n    processors:\n      queued_retry:\n\n    exporters:\n      logging:\n\n    service:\n      pipelines:\n        traces:\n          receivers: [jaeger]\n          processors: [queued_retry]\n          exporters: [logging]\nEOF",
+        "kubectl apply -n test1 -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: myapp\n  labels:\n    app: myapp\n  annotations:\n    sidecar.opentelemetry.io/inject: \"true\"\nspec:\n  containers:\n  - name: myapp\n    image: jaegertracing/vertx-create-span:operator-e2e-tests\n    ports:\n      - containerPort: 8080\n        protocol: TCP\nEOF",
+        "kubectl apply -n test1 -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: myapp\n  labels:\n    app: myapp\n  annotations:\n    sidecar.opentelemetry.io/inject: \"true\"\nspec:\n  containers:\n  - name: myapp\n    image: jaegertracing/vertx-create-span:operator-e2e-tests\n    ports:\n      - containerPort: 8080\n        protocol: TCP\nEOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentelemetry-operator",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "opentelemetry-operator"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Role"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/open-telemetry/opentelemetry-operator/issues/199",
+      "repo": "https://github.com/open-telemetry/opentelemetry-operator"
+    },
+    "reactions": 3,
+    "comments": 26,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentelemetry-operator installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-20T06:32:06.297Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
