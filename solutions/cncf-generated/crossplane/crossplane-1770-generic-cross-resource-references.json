@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-1770-generic-cross-resource-references",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: Generic Cross-Resource References",
+    "description": "Generic Cross-Resource References. Requested by 28+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current crossplane deployment",
+        "description": "Verify your crossplane version and configuration:\n```bash\nkubectl get pods -n crossplane -l app.kubernetes.io/name=crossplane\nhelm list -n crossplane 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working crossplane installation."
+      },
+      {
+        "title": "Review crossplane configuration",
+        "description": "Inspect the relevant crossplane configuration:\n```bash\nkubectl get all -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl get configmap -n crossplane -l app.kubernetes.io/part-of=crossplane\n```\n### What problem are you facing?\nAs mentioned in the design doc for terraform-based controller codegen(https://github.com/crossplane/crossplane/pull/1677/) , we will need to implement a generic cross-resource referencing scheme to compensate for the"
+      },
+      {
+        "title": "Apply the fix for Generic Cross-Resource References",
+        "description": "Here's a strawman sketch of what generic cross-resource references might look like.\n\nToday we have this for example:\n\n```yaml\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\nspec:\n  ...\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: Subnet\nmetadata:\n \n```yaml\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\nspec:\n  ...\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: Subnet\nmetadata:\n  name: my-subnet\nspec:\n  forProvider\n    vpcId: vpc-33fk3fjdf2  # The VPC's actual external name\n    # Used to resolve the VPC's actual external name.\n    # The resolution logic is written in Go as part of\n    # adding support for a new managed resource.\n    vpcIdRef:\n      name: my-vpc\n  ...\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl get events -n crossplane --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Generic Cross-Resource References\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Here's a strawman sketch of what generic cross-resource references might look like.\n\nToday we have this for example:\n\n```yaml\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\nspec:\n  ...",
+      "codeSnippets": [
+        "---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\nspec:\n  ...\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: Subnet\nmetadata:\n  name: my-subnet\nspec:\n  forProvider\n    vpcId: vpc-33fk3fjdf2  # The VPC's actual external name\n    # Used to resolve the VPC's actual external name.\n    # The resolution logic is written in Go as part of\n    # adding support for a new managed resource.\n    vpcIdRef:\n      name: my-vpc\n  ...",
+        "---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\nspec:\n  ...\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: Subnet\nmetadata:\n  name: my-subnet\nspec:\n  # Open ended naming so we could extend this with other kinds\n  # of field modifiers. Perhaps this is overthinking it?\n  fieldModifiers:\n  - fromRef:\n      apiVersion: v1alpha2\n      kind: VPC\n      name: my-vpc\n      fieldPath: metadata.annotations[crossplane.io/external-name]\n    # Perhaps this should be scoped/limited to spec.forProvider?\n    toFieldPath: spec.forProvider.vpcId\n  forProvider:\n    vpcId: vpc-33fk3fjdf2  # The VPC's actual external name\n  ...",
+        "---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: VPC\nmetadata:\n  name: my-vpc\n  annotations:\n    crossplane.io/external-name: vpc-123jdfdf\nspec:\n  ...\n---\napiVersion: network.aws.crossplane.io/v1alpha2\nkind: Subnet\nmetadata:\n  name: my-subnet\nspec:\n  forProvider:\n    vpcId: \"\" # I need a value to function!\n  ...\n---\napiVersion: crossplane.io/v1alpha1\ntype: Reference\nmetadata:\n  name: subnet-to-vpc\nspec:\n  # A reference \"from\" a subnet \"to\" a VPC\n  from:\n    apiVersion: network.aws.crossplane.io/v1alpha2\n    kind: Subnet\n    name: my-subnet\n    fieldPath: spec.forProvider.vpcId\n  to:\n  # An array to support the case where a reference is derived from multiple\n  # fields in multiple objects? This would likely end up pretty close to\n  # Composition patches, with transforms etc. We'd pr"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/issues/1770",
+      "repo": "https://github.com/crossplane/crossplane"
+    },
+    "reactions": 28,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-21T06:17:14.118Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
