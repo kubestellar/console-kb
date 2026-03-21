@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "linkerd-11480-linkerd-proxy-using-stale-endpoints",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "linkerd: linkerd-proxy using stale endpoints",
+    "description": "linkerd-proxy using stale endpoints. This issue affects 7+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify linkerd troubleshoot symptoms",
+        "description": "Check for the issue in your linkerd deployment:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl logs -l app.kubernetes.io/name=linkerd -n linkerd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review linkerd configuration",
+        "description": "Inspect the relevant linkerd configuration:\n```bash\nkubectl get all -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get configmap -n linkerd -l app.kubernetes.io/part-of=linkerd\n```\n### What is the issue?\n\nSince the update to 2.13.5 we experience sporadic issues where the linkerd-proxy seems to connect to endpoints that don't exist anymore since days."
+      },
+      {
+        "title": "Apply the fix for linkerd-proxy using stale endpoints",
+        "description": "## edge-23.10.3\n\nThis edge release fixes issues in the proxy and destination controller which can\nresult in Linkerd proxies sending traffic to stale endpoints. In addition, it\ncontains other bugfixes and updates dependencies to include patches for the\nsecurity advisories\n```yaml\n❯ curl -s localhost:8000/metrics | grep endpoints | grep myservice\noutbound_http_balancer_endpoints{parent_group=\"core\",parent_kind=\"Service\",parent_namespace=\"prod\",parent_name=\"myservice\",parent_port=\"80\",parent_section_name=\"\",backend_group=\"\",backend_kind=\"default\",backend_namespace=\"\",backend_name=\"service\",backend_port=\"\",backend_section_name=\"\",endpoint_state=\"pending\"} 0\noutbound_http_balancer_endpoints{parent_group=\"core\",parent_kind=\"Service\",parent_namespace=\"prod\",parent_name=\"myservice\",parent_port=\"80\",parent_section_name=\"\",backend_group=\"\",backend_kind=\"default\",backend_namespa\n```"
+      },
+      {
+        "title": "Confirm linkerd-proxy using stale endpoints is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=linkerd -n linkerd --tail=50 --since=5m\nkubectl get events -n linkerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "## edge-23.10.3\n\nThis edge release fixes issues in the proxy and destination controller which can\nresult in Linkerd proxies sending traffic to stale endpoints. In addition, it\ncontains other bugfixes and updates dependencies to include patches for the\nsecurity advisories [CVE-2023-44487]/GHSA-qppj-fm5r-hxr3 and GHSA-c827-hfw6-qwvm.",
+      "codeSnippets": [
+        "❯ curl -s localhost:8000/metrics | grep endpoints | grep myservice\noutbound_http_balancer_endpoints{parent_group=\"core\",parent_kind=\"Service\",parent_namespace=\"prod\",parent_name=\"myservice\",parent_port=\"80\",parent_section_name=\"\",backend_group=\"\",backend_kind=\"default\",backend_namespace=\"\",backend_name=\"service\",backend_port=\"\",backend_section_name=\"\",endpoint_state=\"pending\"} 0\noutbound_http_balancer_endpoints{parent_group=\"core\",parent_kind=\"Service\",parent_namespace=\"prod\",parent_name=\"myservice\",parent_port=\"80\",parent_section_name=\"\",backend_group=\"\",backend_kind=\"default\",backend_namespace=\"\",backend_name=\"service\",backend_port=\"\",backend_section_name=\"\",endpoint_state=\"ready\"} 419",
+        "{\n\t\t\"message\": \"HTTP/1.1 request failed\",\n\t\t\"attributes\": {\n\t\t\t\"threadId\": \"ThreadId(1)\",\n\t\t\t\"spans\": [\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"outbound\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"proxy\",\n\t\t\t\t\t\"addr\": \"172.20.207.194:80\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"rescue\",\n\t\t\t\t\t\"client\": {\n\t\t\t\t\t\t\"addr\": \"10.250.154.125:56774\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t],\n\t\t\t\"level\": \"INFO\",\n\t\t\t\"fields\": {\n\t\t\t\t\"error\": \"logical service myservice.prod.svc.cluster.local:80: Service.myservice:80: endpoint 10.250.162.250:80: operation was canceled: connection was not ready\"\n\t\t\t},\n\t\t\t\"timestamp\": \"[104343.356432s]\",\n\t\t\t\"target\": \"linkerd_app_core::errors::respond\"\n\t\t}\n\t}\n}",
+        "{\n\t\t\"message\": \"Unexpected error\",\n\t\t\"attributes\": {\n\t\t\t\"threadId\": \"ThreadId(1)\",\n\t\t\t\"spans\": [\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"outbound\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"proxy\",\n\t\t\t\t\t\"addr\": \"172.20.207.194:80\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"name\": \"rescue\",\n\t\t\t\t\t\"client\": {\n\t\t\t\t\t\t\"addr\": \"10.250.154.125:56774\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t],\n\t\t\t\"level\": \"WARN\",\n\t\t\t\"fields\": {\n\t\t\t\t\"error\": \"logical service myservice.prod.svc.cluster.local:80: Service.prod.myservice:80: endpoint 10.250.162.250:80: operation was canceled: connection was not ready\"\n\t\t\t},\n\t\t\t\"timestamp\": \"[104343.356447s]\",\n\t\t\t\"target\": \"linkerd_app_outbound::http::server\"\n\t\t}\n\t}\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "linkerd",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "linkerd"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Serviceaccount",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/linkerd/linkerd2/issues/11480",
+      "repo": "https://github.com/linkerd/linkerd2",
+      "pr": "https://github.com/linkerd/linkerd2/pull/11513"
+    },
+    "reactions": 7,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with linkerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-21T06:18:59.078Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
