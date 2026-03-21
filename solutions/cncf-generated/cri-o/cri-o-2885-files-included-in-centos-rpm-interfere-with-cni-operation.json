@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cri-o-2885-files-included-in-centos-rpm-interfere-with-cni-operation",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cri-o: Files included in CentOS RPM interfere with CNI operation",
+    "description": "Files included in CentOS RPM interfere with CNI operation. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current cri-o deployment",
+        "description": "Verify your cri-o version and configuration:\n```bash\nkubectl get pods -n cri-o -l app.kubernetes.io/name=cri-o\nhelm list -n cri-o 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working cri-o installation."
+      },
+      {
+        "title": "Review cri-o configuration",
+        "description": "Inspect the relevant cri-o configuration:\n```bash\nkubectl get all -n cri-o -l app.kubernetes.io/name=cri-o\nkubectl get configmap -n cri-o -l app.kubernetes.io/part-of=cri-o\n```\n**Description**\n\nWhen I deploy Calico CNI to together with crio, the overlay network doesn't work at all.\n\n1. Install crio on nodes\n2. Deploy calico\n\n**Describe the results you received:**\n\ncrio itself seems to be working."
+      },
+      {
+        "title": "Apply the fix for Files included in CentOS RPM interfere with CNI operation",
+        "description": "ah yes this makes sense. I suppose the solution would be to separate the CNI plugin installation from CRI-O, and have the CNI plugin installation optional. We would also need to update documentation to make sure users see how best to install the bridge plugin if they're looking for that.\n\nout of\n```yaml\n$ rpm -qf  /etc/cni/net.d/100-crio-bridge.conf\ncri-o-1.14.9-1.el7.x86_64\n$ rpm -qf  /etc/cni/net.d/200-loopback.conf\ncri-o-1.14.9-1.el7.x86_64\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n cri-o -l app.kubernetes.io/name=cri-o\nkubectl get events -n cri-o --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Files included in CentOS RPM interfere with CNI operation\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "ah yes this makes sense. I suppose the solution would be to separate the CNI plugin installation from CRI-O, and have the CNI plugin installation optional. We would also need to update documentation to make sure users see how best to install the bridge plugin if they're looking for that.\n\nout of curiosity, what operating system are you installing on  ?",
+      "codeSnippets": [
+        "$ rpm -qf  /etc/cni/net.d/100-crio-bridge.conf\ncri-o-1.14.9-1.el7.x86_64\n$ rpm -qf  /etc/cni/net.d/200-loopback.conf\ncri-o-1.14.9-1.el7.x86_64",
+        "$ cat /etc/os-release\nNAME=\"CentOS Linux\"\nVERSION=\"7 (Core)\"\nID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"7\"\nPRETTY_NAME=\"CentOS Linux 7 (Core)\"\nANSI_COLOR=\"0;31\"\nCPE_NAME=\"cpe:/o:centos:centos:7\"\nHOME_URL=\"https://www.centos.org/\"\nBUG_REPORT_URL=\"https://bugs.centos.org/\"\n\nCENTOS_MANTISBT_PROJECT=\"CentOS-7\"\nCENTOS_MANTISBT_PROJECT_VERSION=\"7\"\nREDHAT_SUPPORT_PRODUCT=\"centos\"\nREDHAT_SUPPORT_PRODUCT_VERSION=\"7\"",
+        "$ k get pods -A -o wide\nNAMESPACE     NAME                            READY   STATUS    RESTARTS   AGE     IP              NODE    NOMINATED NODE   READINESS GATES\nkube-system   coredns-78fcd69978-g6dgz        1/1     Running   0          2m36s   10.85.0.3       devel   <none>           <none>\nkube-system   coredns-78fcd69978-lwtwv        1/1     Running   0          2m36s   10.85.0.2       devel   <none>           <none>\nkube-system   etcd-devel                      1/1     Running   5          2m36s   10.237.72.187   devel   <none>           <none>\nkube-system   kube-apiserver-devel            1/1     Running   5          2m36s   10.237.72.187   devel   <none>           <none>\nkube-system   kube-controller-manager-devel   1/1     Running   5          2m36s   10.237.72.187   devel   <none"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cri-o",
+      "graduated",
+      "runtime",
+      "feature"
+    ],
+    "cncfProjects": [
+      "cri-o"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Daemonset"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cri-o/cri-o/issues/2885",
+      "repo": "https://github.com/cri-o/cri-o"
+    },
+    "reactions": 3,
+    "comments": 27,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cri-o installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-21T06:16:24.256Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
