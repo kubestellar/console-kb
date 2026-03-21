@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kserve-1558-kubeflow-1-3-unable-to-route-requests-to-the-kfserving-pod-due-to-au",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kserve: [kubeflow 1.3] unable to route requests to the kfserving pod due to auth policy",
+    "description": "[kubeflow 1.3] unable to route requests to the kfserving pod due to auth policy. This issue affects 7+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kserve troubleshoot symptoms",
+        "description": "Check for the issue in your kserve deployment:\n```bash\nkubectl get pods -n kserve -l app.kubernetes.io/name=kserve\nkubectl logs -l app.kubernetes.io/name=kserve -n kserve --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kserve configuration",
+        "description": "Inspect the relevant kserve configuration:\n```bash\nkubectl get all -n kserve -l app.kubernetes.io/name=kserve\nkubectl get configmap -n kserve -l app.kubernetes.io/part-of=kserve\n```\n**What steps did you take and what happened:**\ndeploy and inferenceserving example\n\nI am installing in a preexisting knative deployment and perhaps I'm missing some steps."
+      },
+      {
+        "title": "Apply the fix for [kubeflow 1.3] unable to route requests to the kfserving…",
+        "description": "I also had to add `/v1/models/*` path to allow Transformer->Predictor requests.\n\nWithout it the Transformer gets a 403 forbidden\n```BASH\n$ curl -v -H \"Cookie: authservice_session=$SESSION\" -H \"Host: ${SERVICE_HOSTNAME}\" -d $INPUT_PATH\n```yaml\n{\"level\":\"error\",\"ts\":\"2021-04-24T19:10:16.241Z\",\"logger\":\"activator\",\"caller\":\"net/revision_backends.go:322\",\"msg\":\"Failed to probe clusterIP 172.30.171.229:80\",\"knative.dev/controller\":\"activator\",\"knative.dev/pod\":\"activator-886cd96fb-4gqq5\",\"knative.dev/key\":\"raffa/flowers-sample-predictor-default-00002\",\"error\":\"unexpected body: want \\\"queue\\\", got \\\"RBAC: access denied\\\"\",\"stacktrace\":\"knative.dev/serving/pkg/activator/net.(*revisionWatcher).checkDests\\n\\t/opt/app-root/src/go/src/knative.dev/serving/pkg/activator/net/revision_backends.go:322\\nknative.dev/serving/pkg/activator/net.(*revis\n```"
+      },
+      {
+        "title": "Upgrade kserve to include the fix",
+        "description": "If the fix is included in a newer release, upgrade kserve:\n```bash\nhelm repo update\nhelm upgrade kserve kserve/kserve --namespace kserve\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n kserve\nhelm list -n kserve\n```"
+      },
+      {
+        "title": "Confirm [kubeflow 1.3] unable to route requests to the… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kserve -n kserve --tail=50 --since=5m\nkubectl get events -n kserve --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "I also had to add `/v1/models/*` path to allow Transformer->Predictor requests.\n\nWithout it the Transformer gets a 403 forbidden\n```BASH\n$ curl -v -H \"Cookie: authservice_session=$SESSION\" -H \"Host: ${SERVICE_HOSTNAME}\" -d $INPUT_PATH http://${INGRESS_HOST}:${INGRESS_PORT}/v1/models/$MODEL_NAME:predict\n...",
+      "codeSnippets": [
+        "{\"level\":\"error\",\"ts\":\"2021-04-24T19:10:16.241Z\",\"logger\":\"activator\",\"caller\":\"net/revision_backends.go:322\",\"msg\":\"Failed to probe clusterIP 172.30.171.229:80\",\"knative.dev/controller\":\"activator\",\"knative.dev/pod\":\"activator-886cd96fb-4gqq5\",\"knative.dev/key\":\"raffa/flowers-sample-predictor-default-00002\",\"error\":\"unexpected body: want \\\"queue\\\", got \\\"RBAC: access denied\\\"\",\"stacktrace\":\"knative.dev/serving/pkg/activator/net.(*revisionWatcher).checkDests\\n\\t/opt/app-root/src/go/src/knative.dev/serving/pkg/activator/net/revision_backends.go:322\\nknative.dev/serving/pkg/activator/net.(*revisionWatcher).run\\n\\t/opt/app-root/src/go/src/knative.dev/serving/pkg/activator/net/revision_backends.go:366\"}\n{\"level\":\"warn\",\"ts\":\"2021-04-24T19:10:16.440Z\",\"logger\":\"activator\",\"caller\":\"net/revision",
+        "spec:\n  rules:\n    - when:\n        - key: 'request.headers[kubeflow-userid]'\n          values:\n            - raffa\n    - when:\n        - key: source.namespace\n          values:\n            - raffa",
+        "apiVersion: security.istio.io/v1beta1\nkind: AuthorizationPolicy\nmetadata:\n name: test-service\nspec:\n selector:\n   matchLabels:\n     serving.kubeflow.org/inferenceservice: test-service  \n rules:\n   -  {}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kserve",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kserve"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Ingress"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kserve/kserve/issues/1558",
+      "repo": "https://github.com/kserve/kserve"
+    },
+    "reactions": 7,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kserve installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-21T06:19:29.551Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
