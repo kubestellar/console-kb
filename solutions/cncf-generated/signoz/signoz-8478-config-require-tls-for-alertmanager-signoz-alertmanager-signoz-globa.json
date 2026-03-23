@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "signoz-8478-config-require-tls-for-alertmanager-signoz-alertmanager-signoz-globa",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "signoz: [config] require tls for alertmanager (SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__REQUIRE__TLS) is not working ",
+    "description": "[config] require tls for alertmanager (SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__REQUIRE__TLS) is not working . Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify signoz troubleshoot symptoms",
+        "description": "Check for the issue in your signoz deployment:\n```bash\nkubectl get pods -n signoz -l app.kubernetes.io/name=signoz\nkubectl logs -l app.kubernetes.io/name=signoz -n signoz --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review signoz configuration",
+        "description": "Inspect the relevant signoz configuration:\n```bash\nkubectl get all -n signoz -l app.kubernetes.io/name=signoz\nkubectl get configmap -n signoz -l app.kubernetes.io/part-of=signoz\n```\nI've been trying to get SMTP forwarding configured to work with alerting on an Ubuntu install of Signoz v0.84.1."
+      },
+      {
+        "title": "Apply the fix for [config] require tls for alertmanager…",
+        "description": "#### Current Approach\nPreserve the explicit field value before merge, restore it after in both of the mentioned instances:\n```go\nsmtpRequireTls := globalConfig.SMTPRequireTLS\nerr := mergo.Merge(&globalConfig, config.DefaultGlobalConfig())\nif err != nil {\n    return nil,\n```yaml\nThis minimal patch fixes the problem without altering struct definitions or wider behaviour but is not future proof.\nAny future boolean or similar field requires another manual restore line.\n\n<!-- Describe how reviewers can test this PR -->\n---\n\n## ✅ Changes\n- [x] Bug fix: Fixes boolean merge issue where `SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__REQUIRE__TLS=false` was ignored due to Mergo treating `false` as a zero value and overwriting it with the default `true`.\n\n\n---\n\n## 🏷️ Required: Add Relevant Labels\n- `bug`\n- `backend`\n---\n\n## 👥 Reviewers\n- backend\n\n---\n\n## 🧪 How to Test\n\n1. In the p\n```"
+      },
+      {
+        "title": "Confirm [config] require tls for alertmanager… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=signoz -n signoz --tail=50 --since=5m\nkubectl get events -n signoz --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "#### Current Approach\nPreserve the explicit field value before merge, restore it after in both of the mentioned instances:\n```go\nsmtpRequireTls := globalConfig.SMTPRequireTLS\nerr := mergo.Merge(&globalConfig, config.DefaultGlobalConfig())\nif err != nil {\n    return nil, err\n}\nglobalConfig.SMTPRequireTLS = smtpRequireTls\n``` \nThis minimal patch fixes the problem without altering struct definitions",
+      "codeSnippets": [
+        "This minimal patch fixes the problem without altering struct definitions or wider behaviour but is not future proof.\nAny future boolean or similar field requires another manual restore line.\n\n<!-- Describe how reviewers can test this PR -->\n---\n\n## ✅ Changes\n- [x] Bug fix: Fixes boolean merge issue where `SIGNOZ_ALERTMANAGER_SIGNOZ_GLOBAL_SMTP__REQUIRE__TLS=false` was ignored due to Mergo treating `false` as a zero value and overwriting it with the default `true`.\n\n\n---\n\n## 🏷️ Required: Add Relevant Labels\n- `bug`\n- `backend`\n---\n\n## 👥 Reviewers\n- backend\n\n---\n\n## 🧪 How to Test\n\n1. In the project root, open the `Makefile`.\n   Add the following environment variables under the `go-run-community` target:",
+        "2. Start a new instance:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "signoz",
+      "community",
+      "apm",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "signoz"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/SigNoz/signoz/issues/8478",
+      "repo": "https://github.com/SigNoz/signoz",
+      "pr": "https://github.com/SigNoz/signoz/pull/9418"
+    },
+    "reactions": 2,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with signoz installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-23T07:00:11.900Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
