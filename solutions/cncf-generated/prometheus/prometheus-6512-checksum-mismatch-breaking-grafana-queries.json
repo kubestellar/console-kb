@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-6512-checksum-mismatch-breaking-grafana-queries",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: checksum mismatch breaking Grafana queries",
+    "description": "checksum mismatch breaking Grafana queries. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify prometheus troubleshoot symptoms",
+        "description": "Check for the issue in your prometheus deployment:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl logs -l app.kubernetes.io/name=prometheus -n prometheus --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review prometheus configuration",
+        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\n**What did you do?**\nUpdated Prometheus 2.12.0 to 2.15.0. Look at queries in grafana. Sometimes graphs show errors like:\n\nUsually seems to happen only when I had a long time window. The same error occurs on all queries intermittently."
+      },
+      {
+        "title": "Apply the fix for checksum mismatch breaking Grafana queries",
+        "description": "Yup, we have race on `s.crc32` and `s.buf` on chunk file reader. https://github.com/prometheus/prometheus/pull/6514 fixed most of it, s.buf is still to remove (: \n\n are you on it? Can take it over. We might need patch release for this.\n```yaml\nenableAdminAPI: false\n    image: docker.io/prom/prometheus:v2.15.0\n    podMetadata:\n      annotations:\n        sidecar.istio.io/inject: \"false\"\n      labels:\n        app: prometheus\n    resources:\n      requests:\n        memory: 32Gi\n    retention: 72h\n    scrapeInterval: 15s\n    secrets:\n    - istio.prometheus\n    securityContext:\n      fsGroup: 2000\n      runAsNonRoot: true\n      runAsUser: 1000\n    serviceAccountName: prometheus\n    serviceMonitorNamespaceSelector:\n      any: true\n    serviceMonitorSelector:\n      any: true\n    storage:\n      volumeClaimTemplate:\n        selector: {}\n      \n```"
+      },
+      {
+        "title": "Confirm checksum mismatch breaking Grafana queries is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=prometheus -n prometheus --tail=50 --since=5m\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Yup, we have race on `s.crc32` and `s.buf` on chunk file reader. https://github.com/prometheus/prometheus/pull/6514 fixed most of it, s.buf is still to remove (: \n\n are you on it? Can take it over. We might need patch release for this.",
+      "codeSnippets": [
+        "enableAdminAPI: false\n    image: docker.io/prom/prometheus:v2.15.0\n    podMetadata:\n      annotations:\n        sidecar.istio.io/inject: \"false\"\n      labels:\n        app: prometheus\n    resources:\n      requests:\n        memory: 32Gi\n    retention: 72h\n    scrapeInterval: 15s\n    secrets:\n    - istio.prometheus\n    securityContext:\n      fsGroup: 2000\n      runAsNonRoot: true\n      runAsUser: 1000\n    serviceAccountName: prometheus\n    serviceMonitorNamespaceSelector:\n      any: true\n    serviceMonitorSelector:\n      any: true\n    storage:\n      volumeClaimTemplate:\n        selector: {}\n        spec:\n          accessModes:\n          - ReadWriteOnce\n          resources:\n            requests:\n              storage: 500Gi\n          storageClassName: ssd\n    version: v2.15.0",
+        "for TIME in {1577173160..1577174660}; do curl \"http://localhost:9090/api/v1/query?query=sum(increase(gateway_wan_bytes_received%5B30d%5D))&start=${TIME}&end=$((TIME+300))&step=15\"; done;",
+        "for TIME in {1577173500..1577174000}; do curl \"http://localhost:9090/api/v1/query?query=sum(increase(gateway_wan_bytes_sent%5B5y%5D))%2F(sum(increase(gateway_wan_bytes_received%5B5y%5D))%2Bsum(increase(gateway_wan_bytes_sent%5B5y%5D)))&start=${TIME}&end=$((TIME+300))&step=15\"; done;"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/issues/6512",
+      "repo": "https://github.com/prometheus/prometheus"
+    },
+    "reactions": 11,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-23T06:32:47.996Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
