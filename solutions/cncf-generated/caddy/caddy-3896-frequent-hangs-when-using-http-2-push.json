@@ -20,7 +20,7 @@
       },
       {
         "title": "Apply the fix for Frequent hangs when using http/2 push",
-        "description": "Okay, I took a few minutes and was able to reproduce this in Chrome -- I had mistakenly thought you were trying to push local static resources but then I realized you had no file_server -- you're proxying everything to an external server, including pushes. I noticed that none of the requests stuck\n```yaml\n### How to reproduce\nIt depends on the proxied website and caddy config, and some random factors, thus it occurs with different frequency on different hardware. The steps are:\n1. Start caddy with the configuration provided below\n2. Open developer tools network tab, to visually see the hangs; checking the \"disable cache\" toggle will help reproduce the problem faster, but is not necessary\n3. Navigate to `/` page in a browser (i.e., https://terem-pro.localhost)\n4. Wait till it fully loads\n5. If it didn't hang on step 4 - hit f5, and again, wait till it fully loads; repeat several times if needed\n\n```"
+        "description": "This issue was caused by a Go standard library bug (golang/go#42534) affecting HTTP/2 server push. Chrome has since dropped HTTP/2 push support entirely.\n\nTo resolve the hangs, remove any `push` directives from your Caddyfile:\n```\n# Before (causes hangs):\nexample.com {\n  push\n  reverse_proxy backend:8080\n}\n\n# After (remove push directive):\nexample.com {\n  reverse_proxy backend:8080\n}\n```\nHTTP/2 push is no longer supported by major browsers and should not be used."
       },
       {
         "title": "Confirm Frequent hangs when using http/2 push is resolved",
@@ -28,10 +28,8 @@
       }
     ],
     "resolution": {
-      "summary": "Okay, I took a few minutes and was able to reproduce this in Chrome -- I had mistakenly thought you were trying to push local static resources but then I realized you had no file_server -- you're proxying everything to an external server, including pushes.",
-      "codeSnippets": [
-        "### How to reproduce\nIt depends on the proxied website and caddy config, and some random factors, thus it occurs with different frequency on different hardware. The steps are:\n1. Start caddy with the configuration provided below\n2. Open developer tools network tab, to visually see the hangs; checking the \"disable cache\" toggle will help reproduce the problem faster, but is not necessary\n3. Navigate to `/` page in a browser (i.e., https://terem-pro.localhost)\n4. Wait till it fully loads\n5. If it didn't hang on step 4 - hit f5, and again, wait till it fully loads; repeat several times if needed\n\nOn our test server, it usually hangs after 2-3 reloads. On some devices, it might require 10-15 attempts but still hangs at some point.\n\n### Caddy version\nReproduces on:\n- v2.2.1\n- v2.3.0-beta.1\n- cu"
-      ]
+      "summary": "The root cause of the HTTP/2 push hangs was traced to a Go standard library bug (golang/go#42534) in the HTTP/2 server push implementation. The issue was ultimately closed as won't-fix because Chrome dropped support for HTTP/2 server push entirely, making the feature obsolete. Users experiencing this issue should remove HTTP/2 push directives from their Caddy configuration.",
+      "codeSnippets": []
     }
   },
   "metadata": {
