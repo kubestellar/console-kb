@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "falco-3643-memory-leak-in-modern-bpf-driver-on-bottlerocket-os-causing-frequent-",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "falco: Memory leak in modern-bpf driver on Bottlerocket OS causing frequent OOMKills",
+    "description": "Memory leak in modern-bpf driver on Bottlerocket OS causing frequent OOMKills. This issue affects 7+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify falco troubleshoot symptoms",
+        "description": "Check for the issue in your falco deployment:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl logs -l app.kubernetes.io/name=falco -n falco --tail=100 | grep -i error\n```\nLook for error: `libelf.h: No such file or directory`"
+      },
+      {
+        "title": "Review falco configuration",
+        "description": "Inspect the relevant falco configuration:\n```bash\nkubectl get all -n falco -l app.kubernetes.io/name=falco\nkubectl get configmap -n falco -l app.kubernetes.io/part-of=falco\n```\nFalco 0.41.3 with `modern-bpf` driver experiences severe memory leaks on AWS Bottlerocket OS, consuming 40-50 MiB/minute and causing frequent OOMKills. This makes Falco unusable on Bottlerocket clusters in production environments."
+      },
+      {
+        "title": "Apply the fix for Memory leak in modern-bpf driver on Bottlerocket OS causing…",
+        "description": "Apply the configuration change to resolve the issue:\n```yaml\nTime      Pod A      Pod B      Pod C\nT+0min    116Mi     122Mi      133Mi\nT+2min    224Mi     243Mi      147Mi  \nT+4min    269Mi     280Mi      158Mi\nGrowth:   ~38Mi/min ~53Mi/min  ~8Mi/min\n```"
+      },
+      {
+        "title": "Confirm Memory leak in modern-bpf driver on Bottlerocket… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=falco -n falco --tail=50 --since=5m\nkubectl get events -n falco --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `libelf.h: No such file or directory` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "See the source issue for the community-verified solution: https://github.com/falcosecurity/falco/issues/3643",
+      "codeSnippets": [
+        "Time      Pod A      Pod B      Pod C\nT+0min    116Mi     122Mi      133Mi\nT+2min    224Mi     243Mi      147Mi  \nT+4min    269Mi     280Mi      158Mi\nGrowth:   ~38Mi/min ~53Mi/min  ~8Mi/min",
+        "OOMKilling container \"falco\" in pod \"falco-xxxx\"\nExit code: 137 (OOMKilled)\nRestart count: 21 (example pod)",
+        "Falco version: 0.41.3 (x86_64)\nFalco initialized with configuration file: /etc/falco/falco.yaml\nLoading rules from file /etc/falco/falco_rules.yaml\nLoading rules from file /etc/falco/falco_rules.local.yaml  \nLoading rules from file /etc/falco/k8s_audit_rules.yaml\nStarting internal webserver, listening on port 8765"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "falco",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "falco"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/falcosecurity/falco/issues/3643",
+      "repo": "https://github.com/falcosecurity/falco"
+    },
+    "reactions": 7,
+    "comments": 64,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with falco installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T06:29:53.922Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
