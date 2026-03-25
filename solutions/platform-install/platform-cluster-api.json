@@ -1,0 +1,157 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-cluster-api",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Cluster API (CAPI)",
+    "description": "Cluster API (CAPI) is a Kubernetes operator that provides declarative APIs and tooling to simplify the provisioning, upgrading, and management of multiple Kubernetes clusters. It is particularly useful for platform operators looking to automate cluster lifecycle management across various infrastructure environments. Key trade-offs include the complexity of initial setup and the need for familiarity with Kubernetes concepts.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Cluster API Helm repository",
+        "description": "This step adds the official Cluster API Helm repository to your local Helm configuration, allowing you to install the necessary components.\n\n```bash\n\nhelm repo add cluster-api https://charts.cluster-api.sigs.k8s.io\n\n```\n\n> This command adds the Cluster API Helm chart repository.",
+        "commands": [
+          "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io"
+        ]
+      },
+      {
+        "title": "Install Cluster API components",
+        "description": "This step installs the Cluster API components using Helm, which includes the necessary Custom Resource Definitions (CRDs) and controllers.\n\n```bash\n\nhelm install cluster-api cluster-api/cluster-api --namespace kube-system --version v1.12.4\n\n```\n\n> Install Cluster API in the kube-system namespace.",
+        "commands": [
+          "helm install cluster-api cluster-api/cluster-api --namespace kube-system --version v1.12.4"
+        ]
+      },
+      {
+        "title": "Create a Cluster API custom resource",
+        "description": "This step creates a Cluster API custom resource to define a new Kubernetes cluster.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: MyInfrastructureProviderCluster\n    name: my-infra-cluster\nEOF\n\n```\n\n> Replace 'MyInfrastructureProviderCluster' with your actual infrastructure provider.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: MyInfrastructureProviderCluster\n    name: my-infra-cluster\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Cluster API installation",
+        "description": "This step checks the status of the Cluster API components to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n kube-system\n\n```\n\n> Ensure all Cluster API pods are in the Running state.",
+        "commands": [
+          "kubectl get pods -n kube-system"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Cluster API",
+        "description": "This step removes the Cluster API components and warns about potential data loss and orphaned resources.\n\n```bash\n\nhelm uninstall cluster-api --namespace kube-system\n\nkubectl delete cluster my-cluster\n\n```\n\n> This will remove the Cluster API installation.\n> This will delete the custom resource and associated resources.",
+        "commands": [
+          "helm uninstall cluster-api --namespace kube-system",
+          "kubectl delete cluster my-cluster"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Cluster API",
+        "description": "Before upgrading, ensure you back up your cluster state. This step includes draining nodes if necessary, upgrading the components, and verifying the upgrade.\n\n```bash\n\nkubectl get clusters\n\nhelm upgrade cluster-api cluster-api/cluster-api --namespace kube-system --version v1.12.4\n\nkubectl get pods -n kube-system\n\n```\n\n> Check the status of your clusters before proceeding.\n> Upgrade to the latest version.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get clusters",
+          "helm upgrade cluster-api cluster-api/cluster-api --namespace kube-system --version v1.12.4",
+          "kubectl get pods -n kube-system"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Failed to install CRDs'",
+        "description": "**Cause:** This may occur if the CRDs are already installed or if there are version mismatches.\n\n**Fix:**\nRun 'kubectl get crd' to check existing CRDs and uninstall them if necessary."
+      },
+      {
+        "title": "Error: 'Cluster not found'",
+        "description": "**Cause:** This indicates that the specified cluster resource does not exist.\n\n**Fix:**\nVerify the cluster name and namespace using 'kubectl get clusters'."
+      },
+      {
+        "title": "Pods in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can happen due to misconfiguration in the Cluster API components.\n\n**Fix:**\nCheck the logs of the pods using 'kubectl logs <pod-name> -n kube-system' for more details."
+      },
+      {
+        "title": "Error: 'Unable to connect to the server'",
+        "description": "**Cause:** This may indicate issues with your kubeconfig or the API server.\n\n**Fix:**\nEnsure your kubeconfig is correctly set up and that the API server is running."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.12.4",
+        "changes": "Added support for new infrastructure providers and improved error handling.",
+        "deprecations": "Deprecated some legacy APIs related to cluster management.",
+        "migrationSteps": "If upgrading from v1.11.x, ensure to update your custom resources to the new API versions."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get clusters' showing your cluster with a status of 'Ready'.",
+      "codeSnippets": [
+        "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io",
+        "helm install cluster-api cluster-api/cluster-api --namespace kube-system --version v1.12.4",
+        "kubectl apply -f - <<EOF\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: MyInfrastructureProviderCluster\n    name: my-infra-cluster\nEOF",
+        "kubectl get pods -n kube-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "cluster-management-operator",
+      "kubernetes-sig"
+    ],
+    "platform": "cluster-api",
+    "platformType": "operator",
+    "platformProvider": "Kubernetes SIG",
+    "platformVersions": [
+      "v1.12.4"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/kubernetes-sigs/cluster-api-controller:v1.12.4"
+    ],
+    "sourceUrls": {
+      "docs": "https://cluster-api.sigs.k8s.io/",
+      "repo": "https://github.com/kubernetes-sigs/cluster-api"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T00:06:13.386Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
