@@ -1,0 +1,167 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-cluster-api",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Cluster API (CAPI)",
+    "description": "Cluster API (CAPI) is a Kubernetes operator that provides declarative APIs and tooling to simplify the provisioning, upgrading, and management of multiple Kubernetes clusters. It is particularly useful for platform operators who need to automate cluster lifecycle management across various infrastructure environments. Key trade-offs include the complexity of setup and the need for familiarity with Kubernetes concepts.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Cluster API Helm repository",
+        "description": "This step adds the official Cluster API Helm repository to your Helm configuration, allowing you to install the necessary components.\n\n```bash\n\nhelm repo add cluster-api https://charts.cluster-api.sigs.k8s.io\n\n```\n\n> This adds the Cluster API Helm chart repository.",
+        "commands": [
+          "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io"
+        ]
+      },
+      {
+        "title": "Install the Cluster API components",
+        "description": "This command installs the Cluster API components into the specified namespace, which is essential for managing clusters.\n\n```bash\n\nkubectl create namespace capi-system\n\nhelm install cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4\n\n```\n\n> Create the namespace for Cluster API.\n> Install Cluster API with the specified version.",
+        "commands": [
+          "kubectl create namespace capi-system",
+          "helm install cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4"
+        ]
+      },
+      {
+        "title": "Install the Cluster API Provider",
+        "description": "You need to install a specific provider (e.g., AWS, Azure) to manage the infrastructure for your clusters.\n\n```bash\n\nhelm install cluster-api-provider-aws cluster-api/cluster-api-provider-aws --namespace capi-system --version v1.12.4\n\n```\n\n> Install the AWS provider for Cluster API.",
+        "commands": [
+          "helm install cluster-api-provider-aws cluster-api/cluster-api-provider-aws --namespace capi-system --version v1.12.4"
+        ]
+      },
+      {
+        "title": "Create a Cluster Custom Resource",
+        "description": "This step creates a Cluster Custom Resource (CR) that defines the desired state of your Kubernetes cluster.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: AWSCluster\n    name: my-cluster\nEOF\n\n```\n\n> This creates a Cluster CR named 'my-cluster'.",
+        "commands": [
+          "cat <<EOF | kubectl apply -f -\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: AWSCluster\n    name: my-cluster\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Cluster Custom Resource",
+        "description": "Check the status of the Cluster Custom Resource to ensure it is created and ready.\n\n```bash\n\nkubectl get clusters -A\n\n```\n\n> This command lists all clusters and their statuses.",
+        "commands": [
+          "kubectl get clusters -A"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Cluster API components",
+        "description": "This step removes the Cluster API components and may result in data loss. Ensure you backup any important data before proceeding.\n\n```bash\n\nhelm uninstall cluster-api --namespace capi-system\n\nkubectl delete namespace capi-system\n\n```\n\n> Uninstall the Cluster API components.\n> Delete the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall cluster-api --namespace capi-system",
+          "kubectl delete namespace capi-system"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Cluster API components",
+        "description": "Before upgrading, ensure you backup your cluster state. This step will upgrade the Cluster API components to the specified version.\n\n```bash\n\nkubectl get clusters -A -o yaml > clusters-backup.yaml\n\nhelm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4\n\nkubectl get clusters -A\n\n```\n\n> Backup the current cluster state.\n> Upgrade to the latest version of Cluster API.\n> Verify that the clusters are still in a healthy state after the upgrade.",
+        "commands": [
+          "kubectl get clusters -A -o yaml > clusters-backup.yaml",
+          "helm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4",
+          "kubectl get clusters -A"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'failed to create cluster: no provider found'",
+        "description": "**Cause:** The required infrastructure provider is not installed or configured.\n\n**Fix:**\nEnsure the correct provider (e.g., AWS, Azure) is installed and configured properly."
+      },
+      {
+        "title": "Error: 'Cluster is not ready'",
+        "description": "**Cause:** The cluster may be in a pending state due to insufficient resources or misconfiguration.\n\n**Fix:**\nCheck the events for the cluster using 'kubectl describe cluster <cluster-name>' and resolve any issues."
+      },
+      {
+        "title": "Error: 'unable to connect to the server: x509: certificate signed by unknown authority'",
+        "description": "**Cause:** The kubeconfig may not be set up correctly or the cluster is not reachable.\n\n**Fix:**\nVerify your kubeconfig file and ensure the cluster is accessible."
+      },
+      {
+        "title": "Error: 'no matches for kind \"Cluster\" in version \"cluster.x-k8s.io/v1beta1\"'",
+        "description": "**Cause:** The Cluster API CRDs may not be installed or are outdated.\n\n**Fix:**\nReinstall the CRDs using 'kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml'."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.12.4",
+        "changes": "Added support for new infrastructure providers and improved the stability of existing providers.",
+        "deprecations": "Deprecated the old API versions for Cluster and Machine resources.",
+        "migrationSteps": "If upgrading from v1.12.3, ensure to migrate your existing Cluster and Machine resources to the new API versions."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get clusters -A' showing your clusters with their statuses as 'Ready'.",
+      "codeSnippets": [
+        "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io",
+        "kubectl create namespace capi-system",
+        "helm install cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4",
+        "helm install cluster-api-provider-aws cluster-api/cluster-api-provider-aws --namespace capi-system --version v1.12.4",
+        "cat <<EOF | kubectl apply -f -\napiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: my-cluster\n  namespace: default\nspec:\n  infrastructureRef:\n    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\n    kind: AWSCluster\n    name: my-cluster\nEOF",
+        "kubectl get clusters -A"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "cluster-management-operator",
+      "kubernetes-sig"
+    ],
+    "platform": "cluster-api",
+    "platformType": "operator",
+    "platformProvider": "Kubernetes SIG",
+    "platformVersions": [
+      "v1.12.4"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/kubernetes-sigs/cluster-api-controller:v1.12.4"
+    ],
+    "sourceUrls": {
+      "docs": "https://cluster-api.sigs.k8s.io/",
+      "repo": "https://github.com/kubernetes-sigs/cluster-api"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running version 1.26 or higher and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-26T18:16:12.915Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
