@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rook-1125-cephfs-volumes-handling-via-pvcs-dynamic-provisioning",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "rook: CephFS volumes handling via PVCs (dynamic provisioning)",
+    "description": "CephFS volumes handling via PVCs (dynamic provisioning). Requested by 37+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current rook deployment",
+        "description": "Verify your rook version and configuration:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nhelm list -n rook 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working rook installation."
+      },
+      {
+        "title": "Review rook configuration",
+        "description": "Inspect the relevant rook configuration:\n```bash\nkubectl get all -n rook -l app.kubernetes.io/name=rook\nkubectl get configmap -n rook -l app.kubernetes.io/part-of=rook\n```\nPer #1115, it'd be interesting if CephFS volumes could be handled by storage classes and PVCs, I think this would make it a lot easier to deploy these volumes to helm charts for instance where people would just need to set the `storageClass` to"
+      },
+      {
+        "title": "Apply the fix for CephFS volumes handling via PVCs (dynamic provisioning)",
+        "description": "So just to clear something up: **rook/cephfs works just fine via PVCs**, and has done so for approximately ever.\n\nHere's a rook/cephfs PVC I use daily (from parallel workers in a complex jenkins job as it happens):\n```yaml\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: oe-scratch\n \n```yaml\nvolumes:\n- name: mysql-persistent-storage\n   persistentVolumeClaim:\n      claimName: mysql-pv-claim\n   mountOptions: path\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nkubectl get events -n rook --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"CephFS volumes handling via PVCs (dynamic provisioning)\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "So just to clear something up: **rook/cephfs works just fine via PVCs**, and has done so for approximately ever.",
+      "codeSnippets": [
+        "volumes:\n- name: mysql-persistent-storage\n   persistentVolumeClaim:\n      claimName: mysql-pv-claim\n   mountOptions: path",
+        "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: oe-scratch\n  namespace: jenkins\nspec:\n  accessModes:\n  - ReadWriteMany\n  selector:\n    matchLabels:\n      name: oe-scratch\n  storageClassName: rook-cephfs",
+        "apiVersion: v1\nkind: PersistentVolume\nmetadata:\n  labels:\n    name: oe-scratch\n  name: oe-scratch\nspec:\n  accessModes:\n  - ReadWriteMany\n  capacity:\n    storage: 200Gi\n  flexVolume:\n    driver: ceph.rook.io/rook\n    fsType: ceph\n    options:\n      clusterNamespace: rook-ceph\n      fsName: ceph-filesystem\n  persistentVolumeReclaimPolicy: Recycle\n  storageClassName: rook-cephfs"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [
+      "Statefulset",
+      "Namespace",
+      "Persistentvolumeclaim"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/rook/rook/issues/1125",
+      "repo": "https://github.com/rook/rook"
+    },
+    "reactions": 37,
+    "comments": 26,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with rook installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-26T06:33:32.850Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
