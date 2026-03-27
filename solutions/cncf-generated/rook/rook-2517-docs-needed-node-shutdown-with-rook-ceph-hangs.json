@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rook-2517-docs-needed-node-shutdown-with-rook-ceph-hangs",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "rook: Docs needed: Node Shutdown with Rook/Ceph hangs",
+    "description": "Docs needed: Node Shutdown with Rook/Ceph hangs. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current rook deployment",
+        "description": "Verify your rook version and configuration:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nhelm list -n rook 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working rook installation."
+      },
+      {
+        "title": "Review rook configuration",
+        "description": "Inspect the relevant rook configuration:\n```bash\nkubectl get all -n rook -l app.kubernetes.io/name=rook\nkubectl get configmap -n rook -l app.kubernetes.io/part-of=rook\n```\n**Is this a bug report or feature request?**\n* Feature Request\n\n**What should the feature do:**\nPlease document the procedure how to cleanly shutdown a Rook operated Ceph."
+      },
+      {
+        "title": "Apply the fix for Docs needed: Node Shutdown with Rook/Ceph hangs",
+        "description": "CSI part is fixed in https://github.com/ceph/ceph-csi/pull/809 which will be part of the next ceph-csi release. we also need deployment template change in rook to mount `/run/mount` from host to container in daemonset pod\n```yaml\n$ cat /etc/systemd/system/rook-umount.service\n[Unit]\nDescription=rook-ceph mounts\nRequires=docker.service\nBefore=docker.service\nAfter=network-online.target\n\n[Service]\nExecStop=/etc/periodic/rook-umount.sh\nType=oneshot\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n\n$ cat /etc/periodic/rook-umount.sh\n#!/bin/bash\nfor m in `mount | grep cephfs | sed -r 's/.* on (.*?) type ceph .*/\\1/'`; do\n    timeout 5 umount $m || timeout 5 umount -l $m || timeout 5 umount -f $m\ndone\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nkubectl get events -n rook --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Docs needed: Node Shutdown with Rook/Ceph hangs\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "CSI part is fixed in https://github.com/ceph/ceph-csi/pull/809 which will be part of the next ceph-csi release. we also need deployment template change in rook to mount `/run/mount` from host to container in daemonset pod",
+      "codeSnippets": [
+        "$ cat /etc/systemd/system/rook-umount.service\n[Unit]\nDescription=rook-ceph mounts\nRequires=docker.service\nBefore=docker.service\nAfter=network-online.target\n\n[Service]\nExecStop=/etc/periodic/rook-umount.sh\nType=oneshot\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n\n$ cat /etc/periodic/rook-umount.sh\n#!/bin/bash\nfor m in `mount | grep cephfs | sed -r 's/.* on (.*?) type ceph .*/\\1/'`; do\n    timeout 5 umount $m || timeout 5 umount -l $m || timeout 5 umount -f $m\ndone",
+        "A Stop job is running for /var/lib/kubelet/po..9028-941a99a037e1/mount (3min 22s / 4min 35s)",
+        "(...)\n[  OK  ] Stopped Raise network interfaces.\n[  OK  ] Stopped target Network (Pre).\n[  OK  ] Stopped Initial cloud-init job (pre-networking).\n[  OK  ] Stopped Apply Kernel Variables.\n[  OK  ] Stopped Load Kernel Modules.\n[  OK  ] Stopped target Local File Systems.\n         Unmounting /data/kubelet/pods/93732...io~secret/default-token-hk25t...\n         Unmounting /data/kubelet/pods/ad296...o~secret/filebeat-token-rxjhp...\n         Unmounting /data/kubelet/pods/59260....io~secret/cattle-token-djt65...\n         Unmounting /data/kubelet/pods/58277...ubernetes.io~cephfs/workspace...\n         Unmounting /run/docker/netns/default...\n         Unmounting /data/kubelet/pods/75dcc...s.io~secret/canal-token-6pprm...\n         Unmounting /var/lib/rancher...\n         Unmounting /data/kubelet/pods/dd2"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Daemonset"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/rook/rook/issues/2517",
+      "repo": "https://github.com/rook/rook"
+    },
+    "reactions": 12,
+    "comments": 41,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with rook installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:34:08.287Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
