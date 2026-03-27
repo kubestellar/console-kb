@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rook-13257-cephpgimbalance-prometheus-alert-doesn-t-account-for-device-differenc",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "rook: CephPGImbalance Prometheus Alert doesn't account for device differences",
+    "description": "CephPGImbalance Prometheus Alert doesn't account for device differences. This issue affects 8+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify rook troubleshoot symptoms",
+        "description": "Check for the issue in your rook deployment:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nkubectl logs -l app.kubernetes.io/name=rook -n rook --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review rook configuration",
+        "description": "Inspect the relevant rook configuration:\n```bash\nkubectl get all -n rook -l app.kubernetes.io/name=rook\nkubectl get configmap -n rook -l app.kubernetes.io/part-of=rook\n```\nThe `CephPGImbalance` alert fires in our cluster for every nvme OSD because they have fewer PGs than the \"average\" OSD.  Aren't there a variety of reasons an OSD would have fewer or more PGs than average?  Device Class..."
+      },
+      {
+        "title": "Apply the fix for CephPGImbalance Prometheus Alert doesn't account for device…",
+        "description": "Any suggestion on how to fix this query? Or shall we just remove the alert completely? Based on the comments, maybe we just remove the alert for now. \n\nThis originally was defined in the [Ceph repo](https://github.com/ceph/ceph/blob/main/monitoring/ceph-mixin/prometheus_alerts.yml#L236C17-L249), so\n```yaml\nabs(\n ((ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) - on (job, device_class) group_left avg(ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) by (job, device_class)) /\n on (job, device_class) group_left avg(ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) by (job, device_class)\n) * on (ceph_daemon) group_left(hostname, device_class) ceph_osd_metadata > 0.30\n```"
+      },
+      {
+        "title": "Confirm CephPGImbalance Prometheus Alert doesn't account… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=rook -n rook --tail=50 --since=5m\nkubectl get events -n rook --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Any suggestion on how to fix this query? Or shall we just remove the alert completely? Based on the comments, maybe we just remove the alert for now. \n\nThis originally was defined in the [Ceph repo](https://github.com/ceph/ceph/blob/main/monitoring/ceph-mixin/prometheus_alerts.yml#L236C17-L249), so it's surprising the alert is still defined in the same form there.",
+      "codeSnippets": [
+        "abs(\n ((ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) - on (job, device_class) group_left avg(ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) by (job, device_class)) /\n on (job, device_class) group_left avg(ceph_osd_numpg * on (ceph_daemon) group_left(device_class) ceph_osd_metadata > 0) by (job, device_class)\n) * on (ceph_daemon) group_left(hostname, device_class) ceph_osd_metadata > 0.30",
+        "abs(\n  ((ceph_osd_numpg > 0) / ceph_osd_stat_bytes) * \n  on (job) group_left max(ceph_osd_stat_bytes) by (job)\n)",
+        "(\n  (\n    (\n      ((ceph_osd_numpg > 0) / ceph_osd_stat_bytes) * \n      on (job) group_left max(ceph_osd_stat_bytes) by (job)\n    ) -\n    on (job) group_left avg(\n      (\n        ((ceph_osd_numpg > 0) / ceph_osd_stat_bytes) * \n        on (job) group_left max(ceph_osd_stat_bytes) by (job)\n      )\n    ) by (job)\n  ) /\n  on (job) group_left avg(\n    (\n      ((ceph_osd_numpg > 0) / ceph_osd_stat_bytes) * \n      on (job) group_left max(ceph_osd_stat_bytes) by (job)\n    )\n  )\n  by (job)\n) * on (ceph_daemon) group_left(device_class,hostname) ceph_osd_metadata"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/rook/rook/issues/13257",
+      "repo": "https://github.com/rook/rook"
+    },
+    "reactions": 8,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with rook installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:34:33.460Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
