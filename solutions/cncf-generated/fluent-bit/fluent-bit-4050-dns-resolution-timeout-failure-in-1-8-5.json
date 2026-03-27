@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-4050-dns-resolution-timeout-failure-in-1-8-5",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: DNS resolution timeout/failure in >= 1.8.5",
+    "description": "DNS resolution timeout/failure in >= 1.8.5. This issue affects 20+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify fluent-bit troubleshoot symptoms",
+        "description": "Check for the issue in your fluent-bit deployment:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nHi, I am facing a DNS resolution timeout/failure since upgrading to >= 1.8.5 with the forward module to a fluentd instance. It is working fine with 1.8.4. I am running on ubuntu 20.04 and the local resolver accept UDP and TCP requests."
+      },
+      {
+        "title": "Apply the fix for DNS resolution timeout/failure in >= 1.8.5",
+        "description": "Hey folks, here is the results of my repro attempts. I was able to confirm this issue report, at least for the datadog output. \n\n#### Base Config\n\nI tested 4 different outputs:\n* cloudwatch_logs\n* es (sending to Amazon OpenSearch, and I also sourced credentials from the STS API, so two AWS service\n```yaml\n[2021/09/03 11:27:49] [ info] [engine] started (pid=2320367)\n[2021/09/03 11:27:49] [ info] [storage] version=1.1.1, initializing...\n[2021/09/03 11:27:49] [ info] [storage] root path '/var/td-agent-bit/storage'\n[2021/09/03 11:27:49] [ info] [storage] normal synchronization mode, checksum disabled, max_chunks_up=128\n[2021/09/03 11:27:49] [ info] [storage] backlog input plugin: storage_backlog.2\n[2021/09/03 11:27:49] [ info] [cmetrics] version=0.2.1\n[2021/09/03 11:27:49] [ info] [input:storage_backlog:storage_backlog.2] queue memory limit: 95.4M\n[2021/09/03 11:27:55] [ info] [http_server] listen \n```"
+      },
+      {
+        "title": "Upgrade fluent-bit to include the fix",
+        "description": "If the fix is included in a newer release, upgrade fluent-bit:\n```bash\nhelm repo update\nhelm upgrade fluent-bit fluent-bit/fluent-bit --namespace fluent-bit\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n fluent-bit\nhelm list -n fluent-bit\n```"
+      },
+      {
+        "title": "Confirm DNS resolution timeout/failure in >= 1.8.5 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=50 --since=5m\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Hey folks, here is the results of my repro attempts. I was able to confirm this issue report, at least for the datadog output.",
+      "codeSnippets": [
+        "[2021/09/03 11:27:49] [ info] [engine] started (pid=2320367)\n[2021/09/03 11:27:49] [ info] [storage] version=1.1.1, initializing...\n[2021/09/03 11:27:49] [ info] [storage] root path '/var/td-agent-bit/storage'\n[2021/09/03 11:27:49] [ info] [storage] normal synchronization mode, checksum disabled, max_chunks_up=128\n[2021/09/03 11:27:49] [ info] [storage] backlog input plugin: storage_backlog.2\n[2021/09/03 11:27:49] [ info] [cmetrics] version=0.2.1\n[2021/09/03 11:27:49] [ info] [input:storage_backlog:storage_backlog.2] queue memory limit: 95.4M\n[2021/09/03 11:27:55] [ info] [http_server] listen iface=127.0.0.1 tcp_port=2020\n[2021/09/03 11:27:55] [ info] [sp] stream processor started\n[2021/09/03 11:27:55] [ info] [input:tail:tail_proftpd_log] inotify_fs_add(): inode=516227 watch_fd=1 name=/va",
+        "# Output all logs to fluentd instances\n[OUTPUT]\n    Name forward\n    Alias forward_to_fluentd\n    Match das.scanner.*\n    Upstream upstream.conf\n    Retry_Limit False\n    tls on\n[UPSTREAM]\n    name    forward-balancing\n[NODE]\n    name    fluentd\n    host    fluentd.example.org\n    port    24224\n    tls     on",
+        "[INPUT]\n    Name dummy\n    Tag dummy\n\n[OUTPUT]\n    Name datadog\n    Match *\n    Host http-intake.logs.datadoghq.com\n    TLS On\n    apikey  REDACTED\n    dd_service my-test-service-dns-issue\n    dd_source fluent-bit\n    dd_tags project:example\n    provider ecs\n\n\n[OUTPUT]\n    Name  http\n    Match *\n    Host  google.com\n    Port  80\n    URI   /\n\n[OUTPUT]\n    Name  es\n    Match *\n    Host  REDACTED\n    Port  443\n    Index my_index\n    Type  my_type\n    AWS_Auth On\n    AWS_Region us-west-2\n    tls     On\n    AWS_Role_Arn REDACTED\n\n[OUTPUT]\n    Name cloudwatch_logs\n    Match   *\n    region us-east-1\n    log_group_name fluent-bit-cloudwatch\n    log_stream_prefix from-fluent-bit-\n    auto_create_group On\n    net.dns.mode TCP"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/4050",
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "reactions": 20,
+    "comments": 31,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:33:23.001Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
