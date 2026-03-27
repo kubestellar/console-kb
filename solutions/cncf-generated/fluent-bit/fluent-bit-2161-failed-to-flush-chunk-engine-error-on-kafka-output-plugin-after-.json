@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-2161-failed-to-flush-chunk-engine-error-on-kafka-output-plugin-after-",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: Failed to flush chunk engine error on Kafka output plugin after recover",
+    "description": "Failed to flush chunk engine error on Kafka output plugin after recover. This issue affects 22+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify fluent-bit troubleshoot symptoms",
+        "description": "Check for the issue in your fluent-bit deployment:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\n## Bug Report\n\nOur fluentBit fails to flush chunks to Kafka output plugin after Kafka cluster is recover from downtime."
+      },
+      {
+        "title": "Apply the fix for Failed to flush chunk engine error on Kafka output plugin…",
+        "description": "If Kafka is down, our Kafka output connector (based on librdkafka) won't be able to deliver the records, hence every time the engine passes records to the plugin will be enqueued by librdkafka. If the message cannot be enqueued in librdkafka, Fluent Bit will retry later.\n\nIf librdkafka queue is not\n```yaml\n[SERVICE]\n    Flush        5\n    Daemon       Off\n    Log_Level    ${LOG_LEVEL}\n\n    Parsers_File parsers.conf\n    Plugins_File plugins.conf\n\n    HTTP_Server  On\n    HTTP_Listen  0.0.0.0\n    HTTP_Port    2020\n\n[INPUT]\n    Name   dummy\n    Rate   1\n    Tag    dummy.log\n\n[OUTPUT]\n    Name  stdout\n    Match *\n\n[OUTPUT]\n    Name                           kafka\n    Match                          *\n    Brokers                        ${BROKER_ADDRESS}\n    Topics                         bit\n    Timestamp_Key  @timestamp\n    Retry_Limit    false\n    # Specify the number of extra seconds to monitor a fi\n```"
+      },
+      {
+        "title": "Upgrade fluent-bit to include the fix",
+        "description": "If the fix is included in a newer release, upgrade fluent-bit:\n```bash\nhelm repo update\nhelm upgrade fluent-bit fluent-bit/fluent-bit --namespace fluent-bit\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n fluent-bit\nhelm list -n fluent-bit\n```"
+      },
+      {
+        "title": "Confirm Failed to flush chunk engine error on Kafka… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=50 --since=5m\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "If Kafka is down, our Kafka output connector (based on librdkafka) won't be able to deliver the records, hence every time the engine passes records to the plugin will be enqueued by librdkafka. If the message cannot be enqueued in librdkafka, Fluent Bit will retry later.\n\nIf librdkafka queue is not flushed you will face this issue and is expected.",
+      "codeSnippets": [
+        "[SERVICE]\n    Flush        5\n    Daemon       Off\n    Log_Level    ${LOG_LEVEL}\n\n    Parsers_File parsers.conf\n    Plugins_File plugins.conf\n\n    HTTP_Server  On\n    HTTP_Listen  0.0.0.0\n    HTTP_Port    2020\n\n[INPUT]\n    Name   dummy\n    Rate   1\n    Tag    dummy.log\n\n[OUTPUT]\n    Name  stdout\n    Match *\n\n[OUTPUT]\n    Name                           kafka\n    Match                          *\n    Brokers                        ${BROKER_ADDRESS}\n    Topics                         bit\n    Timestamp_Key  @timestamp\n    Retry_Limit    false\n    # Specify the number of extra seconds to monitor a file once is rotated in case some pending data is flushed\n    Rotate_Wait    20\n    rdkafka.queue.buffering.max.ms ${KAFKA_QUEUE_BUFFER_MAX_MS}\n    # for logs you'll probably want this to be 0 or 1, not"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/2161",
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "reactions": 22,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:33:17.177Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
