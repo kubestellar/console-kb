@@ -1,0 +1,168 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kagenti",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kagenti",
+    "description": "Kagenti is a cloud-native middleware designed for deploying and orchestrating AI agents through standardized communication protocols. It simplifies the deployment complexity and enhances security for agent-based applications, making it suitable for production environments. Key trade-offs include the need for a Kubernetes environment and potential resource overhead for running AI agents.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Kagenti Helm repository",
+        "description": "This step adds the Kagenti Helm repository to your local Helm configuration, allowing you to install Kagenti using Helm.\n\n```bash\n\nhelm repo add kagenti https://kagenti.github.io/kagenti\n\n```\n\n> This command sets up the repository for future installations.",
+        "commands": [
+          "helm repo add kagenti https://kagenti.github.io/kagenti"
+        ]
+      },
+      {
+        "title": "Install Kagenti CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Kagenti to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml\n\n```\n\n> Ensure CRDs are installed before deploying the Helm chart.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml"
+        ]
+      },
+      {
+        "title": "Install Kagenti using Helm",
+        "description": "This command installs the Kagenti application in the specified namespace, ensuring all necessary components are deployed.\n\n```bash\n\nhelm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1\n\n```\n\n> This installs Kagenti with the specified version.",
+        "commands": [
+          "helm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1"
+        ]
+      },
+      {
+        "title": "Create an example Custom Resource",
+        "description": "This step creates an example Custom Resource (CR) for Kagenti, which defines the configuration for an AI agent.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\nEOF\n\n```\n\n> Replace the image with the desired agent image.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\nEOF"
+        ]
+      },
+      {
+        "title": "Verify the Custom Resource is ready",
+        "description": "This command checks the status of the deployed Custom Resource to ensure it is running correctly.\n\n```bash\n\nkubectl get kagent example-agent -o yaml\n\n```\n\n> Look for 'status' to confirm the agent is running.",
+        "commands": [
+          "kubectl get kagent example-agent -o yaml"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kagenti",
+        "description": "This step removes the Kagenti installation and its associated resources. Be aware that this will delete all data associated with the agents and may leave orphaned resources.\n\n```bash\n\nhelm uninstall kagenti --namespace kagenti\n\nkubectl delete namespace kagenti\n\n```\n\n> This command removes the Helm release.\n> This command deletes the namespace and any remaining resources.",
+        "commands": [
+          "helm uninstall kagenti --namespace kagenti",
+          "kubectl delete namespace kagenti"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kagenti",
+        "description": "Before upgrading, ensure you backup your configurations. This step will upgrade Kagenti to the latest version while ensuring the existing resources are preserved.\n\n```bash\n\nkubectl get kagent -o yaml > kagenti-backup.yaml\n\nhelm upgrade kagenti kagenti/kagenti --namespace kagenti --version 0.5.1\n\nkubectl get kagent example-agent -o yaml\n\n```\n\n> Backup existing Custom Resources.\n> This command upgrades Kagenti to the specified version.\n> Verify the Custom Resource status post-upgrade.",
+        "commands": [
+          "kubectl get kagent -o yaml > kagenti-backup.yaml",
+          "helm upgrade kagenti kagenti/kagenti --namespace kagenti --version 0.5.1",
+          "kubectl get kagent example-agent -o yaml"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'KAgent not found'",
+        "description": "**Cause:** The specified KAgent resource does not exist in the cluster.\n\n**Fix:**\nEnsure the KAgent resource is created with the correct name and namespace."
+      },
+      {
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** The specified container image cannot be found or accessed.\n\n**Fix:**\nVerify the image name and ensure it is available in the specified container registry."
+      },
+      {
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The KAgent container is failing to start due to misconfiguration or missing dependencies.\n\n**Fix:**\nCheck the logs of the KAgent pod using 'kubectl logs <pod-name>' for more details."
+      },
+      {
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** The Kubernetes API server is unreachable, possibly due to network issues.\n\n**Fix:**\nCheck your Kubernetes cluster status and network connectivity."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.5.1",
+        "changes": "Added support for new agent types and improved security features.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the KAgent resource with a status indicating it is running and healthy. Example output: 'status: { phase: Running }'.",
+      "codeSnippets": [
+        "helm repo add kagenti https://kagenti.github.io/kagenti",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml",
+        "helm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1",
+        "kubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\nEOF",
+        "kubectl get kagent example-agent -o yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-agents",
+      "kagenti"
+    ],
+    "platform": "kagenti",
+    "platformType": "ai-platform",
+    "platformProvider": "Kagenti",
+    "platformVersions": [
+      "v0.5.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "kagenti/agent:latest"
+    ],
+    "sourceUrls": {
+      "docs": "https://kagenti.github.io/.github/",
+      "repo": "https://github.com/kagenti/kagenti"
+    },
+    "qualityScore": 97
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the necessary tools installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T12:10:16.937Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

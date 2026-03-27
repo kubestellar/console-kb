@@ -1,0 +1,161 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-cluster-api",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Cluster API (CAPI)",
+    "description": "Cluster API (CAPI) is a Kubernetes operator that provides declarative APIs and tooling to simplify the provisioning, upgrading, and management of multiple Kubernetes clusters. It is particularly useful for platform operators who need to manage clusters across various infrastructures like AWS, Azure, or vSphere. The key trade-off is the complexity of setup versus the automation and consistency it provides for cluster lifecycle management.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Cluster API Helm repository",
+        "description": "This step adds the official Cluster API Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add cluster-api https://charts.cluster-api.sigs.k8s.io\n\nhelm repo update\n\n```\n\n> This command adds the Cluster API Helm repository.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io",
+          "helm repo update"
+        ]
+      },
+      {
+        "title": "Install the Cluster API CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Cluster API to function.\n\n```bash\n\nkubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml\n\n```\n\n> This command applies the CRDs from the latest release.",
+        "commands": [
+          "kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml"
+        ]
+      },
+      {
+        "title": "Install Cluster API components",
+        "description": "This step installs the Cluster API components using Helm in the 'capi-system' namespace.\n\n```bash\n\nkubectl create namespace capi-system\n\nhelm install cluster-api cluster-api/cluster-api --namespace capi-system --version 1.12.4\n\n```\n\n> Creates the namespace for Cluster API.\n> Installs the Cluster API components.",
+        "commands": [
+          "kubectl create namespace capi-system",
+          "helm install cluster-api cluster-api/cluster-api --namespace capi-system --version 1.12.4"
+        ]
+      },
+      {
+        "title": "Verify Cluster API installation",
+        "description": "This step checks if the Cluster API components are running correctly.\n\n```bash\n\nkubectl get pods -n capi-system\n\n```\n\n> This command lists all pods in the capi-system namespace to verify their status.",
+        "commands": [
+          "kubectl get pods -n capi-system"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Cluster API",
+        "description": "This step removes Cluster API components and CRDs. Be aware that this may lead to data loss of any clusters managed by CAPI.\n\n```bash\n\nhelm uninstall cluster-api --namespace capi-system\n\nkubectl delete -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml\n\n```\n\n> Uninstalls the Cluster API components.\n> Removes the CRDs installed earlier.",
+        "commands": [
+          "helm uninstall cluster-api --namespace capi-system",
+          "kubectl delete -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Cluster API",
+        "description": "Before upgrading, ensure to backup your existing clusters. This step involves upgrading the Cluster API components and verifying the installation.\n\n```bash\n\nkubectl get clusters -A\n\nhelm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version 1.12.4\n\nkubectl get pods -n capi-system\n\n```\n\n> Backup your cluster state.\n> Upgrades the Cluster API components to the specified version.\n> Verifies that the upgraded components are running.",
+        "commands": [
+          "kubectl get clusters -A",
+          "helm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version 1.12.4",
+          "kubectl get pods -n capi-system"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'no matches for kind \"Cluster\" in version \"cluster.x-k8s.io/v1alpha4\"'",
+        "description": "**Cause:** This indicates that the Cluster CRD has not been installed or is not available.\n\n**Fix:**\nRun 'kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml' to install the CRDs."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This usually means that the Cluster API controller is not responding, possibly due to resource constraints.\n\n**Fix:**\nCheck the resource allocation for the CAPI pods and ensure they have sufficient CPU and memory."
+      },
+      {
+        "title": "Pods in 'capi-system' namespace are in 'CrashLoopBackOff'",
+        "description": "**Cause:** This can happen if there are misconfigurations in the Cluster API components.\n\n**Fix:**\nCheck the logs of the pods using 'kubectl logs <pod-name> -n capi-system' to identify the issue."
+      },
+      {
+        "title": "Error: 'failed to create cluster: failed to create control plane'",
+        "description": "**Cause:** This indicates issues with the infrastructure provider configuration.\n\n**Fix:**\nVerify the provider configurations and ensure that all required credentials and permissions are set correctly."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.12.4",
+        "changes": "Added support for new infrastructure providers and improved error handling in the controller.",
+        "deprecations": "Deprecated the old v1alpha3 API version in favor of v1alpha4.",
+        "migrationSteps": "If upgrading from v1.11.x, ensure to migrate your existing Cluster resources to the new API version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods -n capi-system' showing all pods in the 'Running' state.",
+      "codeSnippets": [
+        "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io",
+        "helm repo update",
+        "kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api.crds.yaml",
+        "kubectl create namespace capi-system",
+        "helm install cluster-api cluster-api/cluster-api --namespace capi-system --version 1.12.4",
+        "kubectl get pods -n capi-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "cluster-management-operator",
+      "kubernetes-sig"
+    ],
+    "platform": "cluster-api",
+    "platformType": "operator",
+    "platformProvider": "Kubernetes SIG",
+    "platformVersions": [
+      "v1.12.4"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/kubernetes-sigs/cluster-api-controller:v1.12.4"
+    ],
+    "sourceUrls": {
+      "docs": "https://cluster-api.sigs.k8s.io/",
+      "repo": "https://github.com/kubernetes-sigs/cluster-api"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running version 1.26 or higher and have kubectl and Helm installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T12:09:55.193Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
