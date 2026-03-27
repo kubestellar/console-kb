@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-4940-multiline-filter-crashes-after-buffer-limit-is-reached-causing-h",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: Multiline filter crashes after buffer limit is reached causing high cpu and memory usage",
+    "description": "Multiline filter crashes after buffer limit is reached causing high cpu and memory usage. This issue affects 24+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify fluent-bit troubleshoot symptoms",
+        "description": "Check for the issue in your fluent-bit deployment:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nHello \n\nMultiline filter is crashing on pods that generate a large amount of logs after reaching  Emitter_Mem_Buf_Limit ."
+      },
+      {
+        "title": "Apply the fix for Multiline filter crashes after buffer limit is reached…",
+        "description": "Multiple fitler means like I show in the issue like this:\n\n```\n[FILTER]\n     name                  multiline\n     match                 *\n     multiline.key_content log\n     multiline.parser\t   go\n\n[FILTER]\n     name                  multiline\n     match                 *\n     multiline.key_content\n```yaml\n[2022/02/25 15:40:06] [ info] [input:tail:tail.0] inode=4540032 handle rotation(): /var/log/containers/xxxxx.log => /var/lib/docker/containers/xxxxx/xxxxx-json.log.5\n[2022/02/25 15:40:06] [ info] [input:tail:tail.0] inotify_fs_add(): inode=4540032 watch_fd=113 name=/var/lib/docker/containers/xxxxx/xxxxx-json.log.5\n[2022/02/25 15:40:07] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=4592513 watch_fd=111\n[2022/02/25 15:40:12] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=3353782 watch_fd=112\n[2022/02/25 15:40:12] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=4540032 wat\n```"
+      },
+      {
+        "title": "Confirm Multiline filter crashes after buffer limit is… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluent-bit -n fluent-bit --tail=50 --since=5m\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Multiple fitler means like I show in the issue like this:\n\n```\n[FILTER]\n     name                  multiline\n     match                 *\n     multiline.key_content log\n     multiline.parser\t   go\n\n[FILTER]\n     name                  multiline\n     match                 *\n     multiline.key_content log\n     multiline.parser      multiline-regex-test\n```\n\nInstead, the CORRECT way is what you show,",
+      "codeSnippets": [
+        "[2022/02/25 15:40:06] [ info] [input:tail:tail.0] inode=4540032 handle rotation(): /var/log/containers/xxxxx.log => /var/lib/docker/containers/xxxxx/xxxxx-json.log.5\n[2022/02/25 15:40:06] [ info] [input:tail:tail.0] inotify_fs_add(): inode=4540032 watch_fd=113 name=/var/lib/docker/containers/xxxxx/xxxxx-json.log.5\n[2022/02/25 15:40:07] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=4592513 watch_fd=111\n[2022/02/25 15:40:12] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=3353782 watch_fd=112\n[2022/02/25 15:40:12] [ info] [input:tail:tail.0] inotify_fs_remove(): inode=4540032 watch_fd=113\n[2022/02/25 15:40:27] [ info] [input:tail:tail.0] inode=3353789 handle rotation(): /var/log/containers/xxxxx.log => /var/lib/docker/containers/xxxxx/xxxxx-json.log.7\n[2022/02/25 15:40:27] [ ",
+        "[INPUT]\n        Name tail\n        Path /var/log/containers/*.log\n        DB /var/log/containers/fluentbit_db.db\n        Parser docker\n        Tag kube.*\n        Mem_Buf_Limit 10MB\n        Buffer_Chunk_Size 256k\n        Buffer_Max_Size 256k\n        Skip_Long_Lines On\n        Refresh_Interval 1\n        multiline.parser docker,cri\n......\n\n\n    [FILTER]\n        name multiline\n        Emitter_Mem_Buf_Limit 2.4GB\n        match kube.*\n        multiline.key_content log\n        multiline.parser java,go,python\n    [FILTER]\n        Name kubernetes\n        Buffer_Size 512k\n        Match kube.*\n        Merge_Log On\n        Merge_Log_Key log_json\n        Merge_Log_Trim On\n        Keep_Log On\n        K8S-Logging.Parser On\n        K8S-Logging.Exclude On\n\n....",
+        "[2022/04/04 03:38:14] [ warn] [input] emitter.1 paused (mem buf overlimit)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/4940",
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "reactions": 24,
+    "comments": 51,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:33:11.216Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
