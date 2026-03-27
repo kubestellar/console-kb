@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-5546-loki-output-remove-keys-skipped-if-used-in-labels",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: Loki Output - remove_keys skipped if used in labels",
+    "description": "Loki Output - remove_keys skipped if used in labels. Requested by 11+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current fluent-bit deployment",
+        "description": "Verify your fluent-bit version and configuration:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nhelm list -n fluent-bit 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working fluent-bit installation."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nUsing Loki output, `remove_keys` don't work as expected when values within `remove_keys` are used by `labels`\n\nusing `fluent/fluent-bit:1.9.4`\n\n**To Reproduce**\n\n```yaml"
+      },
+      {
+        "title": "Apply the fix for Loki Output - remove_keys skipped if used in labels",
+        "description": "out_loki tries to remove key/value using flb_mp_accessor_keys_remove.\nThe API needs a key lists to indicate which key should be removed.\n\nI tested the API and I found that the list should be sorted if it is passed nested key/value.\nHowever the lists is not sorted at current master. It may not work\n```yaml\n# docker-compose.yaml\nversion: \"3.7\"\n\nservices:\n  fluent-bit:\n    image: fluent/fluent-bit\n    network_mode: \"host\"\n    volumes:\n      - ./fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml\n    command: \"/fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.yaml\"\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Loki Output - remove_keys skipped if used in labels\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "out_loki tries to remove key/value using flb_mp_accessor_keys_remove.\nThe API needs a key lists to indicate which key should be removed.\n\nI tested the API and I found that the list should be sorted if it is passed nested key/value.\nHowever the lists is not sorted at current master. It may not work if user passes nested key/value.\n\nThis patch is to fix it.",
+      "codeSnippets": [
+        "# docker-compose.yaml\nversion: \"3.7\"\n\nservices:\n  fluent-bit:\n    image: fluent/fluent-bit\n    network_mode: \"host\"\n    volumes:\n      - ./fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml\n    command: \"/fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.yaml\"",
+        "# fluent-bit.yaml\nenv:\n  log_level: debug\n  flush_interval: 5\n\npipeline:\n  inputs:\n  - dummy:\n      dummy: '{\"log\":\"blahblah\",\"kubernetes\":{\"pod_name\":\"nginx\", \"namespace_name\":\"default\"}}'\n\n  outputs:\n  - loki:\n      match: '*'\n      auto_kubernetes_labels: off\n      labels: pod=$kubernetes['pod_name']\n      remove_keys: kubernetes",
+        "$ docker-compose up\n\n$ nc -l 3100\nPOST /loki/api/v1/push HTTP/1.1\nHost: 127.0.0.1:3100\nContent-Length: 148\nUser-Agent: Fluent-Bit\nContent-Type: application/json\n\n{\"streams\":[{\"stream\":{\"pod\":\"nginx\"},\"values\":[[\"1654686265055834768\",\"{\\\"log\\\":\\\"blahblah\\\",\\\"kubernetes\\\":{\\\"namespace_name\\\":\\\"default\\\"}}\"]]}]}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/5546",
+      "repo": "https://github.com/fluent/fluent-bit",
+      "pr": "https://github.com/fluent/fluent-bit/pull/5590"
+    },
+    "reactions": 11,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:33:59.930Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
