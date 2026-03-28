@@ -1,0 +1,157 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-cluster-api",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Cluster API (CAPI)",
+    "description": "Cluster API (CAPI) is a Kubernetes operator that simplifies the management of Kubernetes clusters through declarative APIs. It is particularly useful for platform operators who need to provision, upgrade, and operate multiple clusters consistently across various infrastructures. Key trade-offs include the complexity of setup and the need for familiarity with Kubernetes concepts.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "title": "Add the Cluster API Helm repository",
+        "description": "This step adds the official Cluster API Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add cluster-api https://charts.cluster-api.sigs.k8s.io\n\n```\n\n> This is necessary to access the Cluster API charts.",
+        "commands": [
+          "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io"
+        ]
+      },
+      {
+        "title": "Install the Cluster API CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Cluster API to function.\n\n```bash\n\nkubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml\n\n```\n\n> This YAML file contains all necessary CRDs.",
+        "commands": [
+          "kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml"
+        ]
+      },
+      {
+        "title": "Install Cluster API components",
+        "description": "This step installs the Cluster API components using Helm in the 'capi-system' namespace.\n\n```bash\n\nhelm install cluster-api cluster-api/cluster-api --namespace capi-system --create-namespace --version v1.12.4\n\n```\n\n> Ensure the namespace is created for the components.",
+        "commands": [
+          "helm install cluster-api cluster-api/cluster-api --namespace capi-system --create-namespace --version v1.12.4"
+        ]
+      },
+      {
+        "title": "Verify Cluster API installation",
+        "description": "This step checks if the Cluster API components are running correctly.\n\n```bash\n\nkubectl get pods -n capi-system\n\n```\n\n> You should see all pods in a Running state.",
+        "commands": [
+          "kubectl get pods -n capi-system"
+        ]
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Cluster API components",
+        "description": "This step removes the Cluster API components and CRDs. Be aware that this may lead to data loss of any clusters managed by CAPI.\n\n```bash\n\nhelm uninstall cluster-api --namespace capi-system\n\nkubectl delete -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml\n\n```\n\n> This removes the installed components.\n> This removes the CRDs.",
+        "commands": [
+          "helm uninstall cluster-api --namespace capi-system",
+          "kubectl delete -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Cluster API",
+        "description": "Before upgrading, ensure you backup your cluster configurations. This step will upgrade the Cluster API components to the latest version.\n\n```bash\n\nkubectl get clusters -A -o yaml > cluster-backup.yaml\n\nhelm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4\n\nkubectl get pods -n capi-system\n\n```\n\n> Backup your current cluster configurations.\n> This upgrades the Cluster API components.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get clusters -A -o yaml > cluster-backup.yaml",
+          "helm upgrade cluster-api cluster-api/cluster-api --namespace capi-system --version v1.12.4",
+          "kubectl get pods -n capi-system"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'no matches for kind \"Cluster\" in version \"cluster.x-k8s.io/v1alpha4\"'",
+        "description": "**Cause:** This indicates that the Cluster CRD is not installed or not recognized.\n\n**Fix:**\nReapply the CRDs using the command: kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml"
+      },
+      {
+        "title": "Pod 'capi-controller-manager' is in CrashLoopBackOff",
+        "description": "**Cause:** This may be due to misconfiguration or missing dependencies.\n\n**Fix:**\nCheck the logs of the pod using: kubectl logs -n capi-system <pod-name> and fix any configuration issues."
+      },
+      {
+        "title": "Error: 'failed to connect to the API server'",
+        "description": "**Cause:** This indicates that the kubeconfig is not set up correctly or the API server is down.\n\n**Fix:**\nEnsure your kubeconfig is correct and the API server is running: kubectl cluster-info"
+      },
+      {
+        "title": "Error: 'unable to recognize \"\": no matches for kind \"Machine\" in version \"cluster.x-k8s.io/v1alpha4\"'",
+        "description": "**Cause:** This indicates that the Machine CRD is not installed or not recognized.\n\n**Fix:**\nReapply the CRDs using the command: kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml"
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v1.12.4",
+        "changes": "Fixed issues with Machine health checks and improved error messages.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see all Cluster API components running with 'kubectl get pods -n capi-system' showing all pods in the Running state.",
+      "codeSnippets": [
+        "helm repo add cluster-api https://charts.cluster-api.sigs.k8s.io",
+        "kubectl apply -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.4/cluster-api-components.yaml",
+        "helm install cluster-api cluster-api/cluster-api --namespace capi-system --create-namespace --version v1.12.4",
+        "kubectl get pods -n capi-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "operator",
+      "cluster-management-operator",
+      "kubernetes-sig"
+    ],
+    "platform": "cluster-api",
+    "platformType": "operator",
+    "platformProvider": "Kubernetes SIG",
+    "platformVersions": [
+      "v1.12.4"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/kubernetes-sigs/cluster-api-controller:v1.12.4"
+    ],
+    "sourceUrls": {
+      "docs": "https://cluster-api.sigs.k8s.io/",
+      "repo": "https://github.com/kubernetes-sigs/cluster-api"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have a Kubernetes cluster running version 1.26 or higher and have kubectl and Helm installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-28T00:06:31.207Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
