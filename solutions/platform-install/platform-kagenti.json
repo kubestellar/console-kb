@@ -1,0 +1,186 @@
+{
+  "version": "kc-mission-v1",
+  "name": "platform-kagenti",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Kagenti",
+    "description": "Kagenti is a cloud-native middleware designed for deploying and orchestrating AI agents with a focus on security and scalability. It simplifies the deployment complexity and operational overhead associated with various AI frameworks by providing a standardized platform. Key trade-offs include the need for a Kubernetes environment and the complexity of initial setup.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "title": "Install the Kagenti CLI",
+        "description": "This step installs the Kagenti command-line interface, which is necessary for managing the Kagenti deployment.\n\n```bash\n\ncurl -LO https://github.com/kagenti/kagenti/releases/download/v0.5.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti\n\n```\n\n> This command downloads the CLI, makes it executable, and moves it to a directory in your PATH.",
+        "commands": [
+          "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.5.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti"
+        ]
+      },
+      {
+        "title": "Create a Kubernetes Cluster",
+        "description": "This step creates a new Kubernetes cluster using Google Kubernetes Engine (GKE) with the specified version and node count.\n\n```bash\n\ngcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1\n\n```\n\n> Ensure you have gcloud CLI installed and authenticated.",
+        "commands": [
+          "gcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1"
+        ]
+      },
+      {
+        "title": "Set Up Kubeconfig",
+        "description": "This step configures your local kubeconfig to connect to the newly created Kubernetes cluster.\n\n```bash\n\ngcloud container clusters get-credentials kagenti-cluster --region=us-central1\n\n```\n\n> This command updates your kubeconfig with the cluster's credentials.",
+        "commands": [
+          "gcloud container clusters get-credentials kagenti-cluster --region=us-central1"
+        ]
+      },
+      {
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks the status of the nodes in your Kubernetes cluster to ensure they are running correctly.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in the 'Ready' state.",
+        "commands": [
+          "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Install Kagenti",
+        "description": "This step deploys Kagenti to your Kubernetes cluster using Helm.\n\n```bash\n\nhelm repo add kagenti https://kagenti.github.io/kagenti\n\nhelm install kagenti kagenti/kagenti --version 0.5.1 --namespace kagenti --create-namespace\n\n```\n\n> Adds the Kagenti Helm repository.\n> Installs Kagenti in a dedicated namespace.",
+        "commands": [
+          "helm repo add kagenti https://kagenti.github.io/kagenti",
+          "helm install kagenti kagenti/kagenti --version 0.5.1 --namespace kagenti --create-namespace"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step configures autoscaling and monitoring for your Kagenti deployment.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/autoscaling.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/monitoring.yaml\n\n```\n\n> Applies the autoscaling configuration.\n> Applies the monitoring configuration.",
+        "commands": [
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/autoscaling.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/monitoring.yaml"
+        ]
+      },
+      {
+        "title": "Cost Warning",
+        "description": "Be aware that running a Kubernetes cluster incurs costs based on the resources allocated. Monitor your usage to avoid unexpected charges.",
+        "commands": []
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Uninstall Kagenti",
+        "description": "This step removes the Kagenti deployment from your Kubernetes cluster. Be aware that this will result in data loss for any persistent data stored by Kagenti.\n\n```bash\n\nhelm uninstall kagenti --namespace kagenti\n\nkubectl delete namespace kagenti\n\n```\n\n> This command removes the Kagenti release.\n> This command deletes the namespace and all resources within it.",
+        "commands": [
+          "helm uninstall kagenti --namespace kagenti",
+          "kubectl delete namespace kagenti"
+        ]
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Upgrade Kagenti",
+        "description": "Before upgrading, ensure you back up any important data. This step will upgrade your Kagenti installation to the latest version.\n\n```bash\n\nkubectl get pods -n kagenti -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data\n\nhelm upgrade kagenti kagenti/kagenti --version 0.5.1 --namespace kagenti\n\nkubectl get pods -n kagenti\n\n```\n\n> Drains all pods in the Kagenti namespace.\n> Upgrades the Kagenti installation.\n> Verify that all pods are running after the upgrade.",
+        "commands": [
+          "kubectl get pods -n kagenti -o jsonpath='{.items[*].metadata.name}' | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-local-data",
+          "helm upgrade kagenti kagenti/kagenti --version 0.5.1 --namespace kagenti",
+          "kubectl get pods -n kagenti"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Error: 'Error: unable to connect to the server: dial tcp <IP>:<PORT>: connect: connection refused'",
+        "description": "**Cause:** This indicates that the Kubernetes API server is not reachable, possibly due to network issues or incorrect kubeconfig.\n\n**Fix:**\nCheck your kubeconfig and ensure that the cluster is running with 'gcloud container clusters list'."
+      },
+      {
+        "title": "Error: 'Error: release kagenti not found'",
+        "description": "**Cause:** This indicates that the Kagenti release has not been installed in the specified namespace.\n\n**Fix:**\nEnsure you have installed Kagenti with 'helm install kagenti kagenti/kagenti --namespace kagenti --create-namespace'."
+      },
+      {
+        "title": "Pods in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can occur due to misconfiguration or missing environment variables.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n kagenti' for more details."
+      },
+      {
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** This indicates that a request to the Kubernetes API server has timed out, often due to high load or network issues.\n\n**Fix:**\nCheck the cluster's resource usage and ensure that it is not overloaded."
+      }
+    ],
+    "versionNotes": [
+      {
+        "version": "v0.5.1",
+        "changes": "Added support for new AI agent protocols and improved security features.",
+        "deprecations": "None.",
+        "migrationSteps": "No specific migration steps required for this version."
+      }
+    ],
+    "resolution": {
+      "summary": "You should see the output of 'kubectl get pods -n kagenti' showing all pods in the 'Running' state.",
+      "codeSnippets": [
+        "curl -LO https://github.com/kagenti/kagenti/releases/download/v0.5.1/kagenti-cli-linux-amd64 && chmod +x kagenti-cli-linux-amd64 && sudo mv kagenti-cli-linux-amd64 /usr/local/bin/kagenti",
+        "gcloud container clusters create kagenti-cluster --cluster-version=1.30 --num-nodes=3 --region=us-central1",
+        "gcloud container clusters get-credentials kagenti-cluster --region=us-central1",
+        "kubectl get nodes",
+        "helm repo add kagenti https://kagenti.github.io/kagenti",
+        "helm install kagenti kagenti/kagenti --version 0.5.1 --namespace kagenti --create-namespace",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/autoscaling.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/main/docs/monitoring.yaml"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "ai-platform",
+      "ai-agents",
+      "kagenti"
+    ],
+    "platform": "kagenti",
+    "platformType": "ai-platform",
+    "platformProvider": "Kagenti",
+    "platformVersions": [
+      "v0.5.1"
+    ],
+    "supportedK8sVersions": [
+      "1.26",
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli",
+      "helm"
+    ],
+    "containerImages": [
+      "ghcr.io/kagenti/kagenti:v0.5.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://kagenti.github.io/.github/",
+      "repo": "https://github.com/kagenti/kagenti"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.26",
+    "tools": [
+      "kubectl",
+      "helm 3.x"
+    ],
+    "cloudCLI": "gcloud >= 450.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the necessary tools and resources before starting the installation."
+  },
+  "security": {
+    "scannedAt": "2026-03-30T18:14:54.353Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
