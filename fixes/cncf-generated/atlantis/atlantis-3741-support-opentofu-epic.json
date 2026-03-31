@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "atlantis-3741-support-opentofu-epic",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "atlantis: Support OpenTofu (epic)",
+    "description": "Support OpenTofu (epic). Requested by 283+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current atlantis deployment",
+        "description": "Verify your atlantis version and configuration:\n```bash\nkubectl get pods -n atlantis -l app.kubernetes.io/name=atlantis\nhelm list -n atlantis 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working atlantis installation."
+      },
+      {
+        "title": "Review atlantis configuration",
+        "description": "Inspect the relevant atlantis configuration:\n```bash\nkubectl get all -n atlantis -l app.kubernetes.io/name=atlantis\nkubectl get configmap -n atlantis -l app.kubernetes.io/part-of=atlantis\n```"
+      },
+      {
+        "title": "Apply the fix for Support OpenTofu (epic)",
+        "description": "A workaround for users that want to go down the opentofu path before support is official could do the following.\n\n1. Set [`--tf-download=false`](https://www.runatlantis.io/docs/server-configuration.html#tf-download) to avoid downloading terraform versions\n2. Use a custom container to [download a\n```yaml\ninitConfig:\n  enabled: true\n  image: alpine:latest\n  imagePullPolicy: IfNotPresent\n  # sharedDir is set as env var INIT_SHARED_DIR\n  sharedDir: /plugins\n  workDir: /tmp\n  sizeLimit: 250Mi\n  # example of how the script can be configured to install tools/providers required by the atlantis pod\n  script: |\n    #!/bin/sh\n    set -eoux pipefail\n\n    # terragrunt\n    TG_VERSION=\"0.55.10\"\n    TG_SHA256_SUM=\"1ad609399352348a41bb5ea96fdff5c7a18ac223742f60603a557a54fc8c6cff\"\n    TG_FILE=\"${INIT_SHARED_DIR}/terragrunt\"\n    wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/te\n```"
+      },
+      {
+        "title": "Upgrade atlantis to include the fix",
+        "description": "If the fix is included in a newer release, upgrade atlantis:\n```bash\nhelm repo update\nhelm upgrade atlantis atlantis/atlantis --namespace atlantis\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n atlantis\nhelm list -n atlantis\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n atlantis -l app.kubernetes.io/name=atlantis\nkubectl get events -n atlantis --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support OpenTofu (epic)\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "A workaround for users that want to go down the opentofu path before support is official could do the following.\n\n1. Set [`--tf-download=false`](https://www.runatlantis.io/docs/server-configuration.html#tf-download) to avoid downloading terraform versions\n2. Use a custom container to [download a opentofu release](https://github.com/opentofu/opentofu/releases) as `/usr/bin/opentofu_<version>`\n3.",
+      "codeSnippets": [
+        "initConfig:\n  enabled: true\n  image: alpine:latest\n  imagePullPolicy: IfNotPresent\n  # sharedDir is set as env var INIT_SHARED_DIR\n  sharedDir: /plugins\n  workDir: /tmp\n  sizeLimit: 250Mi\n  # example of how the script can be configured to install tools/providers required by the atlantis pod\n  script: |\n    #!/bin/sh\n    set -eoux pipefail\n\n    # terragrunt\n    TG_VERSION=\"0.55.10\"\n    TG_SHA256_SUM=\"1ad609399352348a41bb5ea96fdff5c7a18ac223742f60603a557a54fc8c6cff\"\n    TG_FILE=\"${INIT_SHARED_DIR}/terragrunt\"\n    wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64 -O \"${TG_FILE}\"\n    echo \"${TG_SHA256_SUM} ${TG_FILE}\" | sha256sum -c\n    chmod 755 \"${TG_FILE}\"\n    terragrunt -v\n\n    # OpenTofu\n    TF_VERSION=\"1.6.2\"\n    TF_FILE=\"${INIT_SHARE",
+        "environment: \n  ATLANTIS_TF_DOWNLOAD: false\n  TERRAGRUNT_TFPATH: /plugins/tofu",
+        "repoConfig: |\n  ---\n  repos:\n  - id: /.*/\n    apply_requirements: [approved, mergeable]\n    allow_custom_workflows: true\n    allowed_overrides: [workflow, apply_requirements, delete_source_branch_on_merge]"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "atlantis",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "atlantis"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/runatlantis/atlantis/issues/3741",
+      "repo": "https://github.com/runatlantis/atlantis"
+    },
+    "reactions": 283,
+    "comments": 26,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with atlantis installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:29:21.223Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

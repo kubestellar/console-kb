@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "node-exporter-1574-feature-include-os-release-version-metric",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "node-exporter: Feature: Include OS release/version metric",
+    "description": "Feature: Include OS release/version metric. Requested by 11+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current node-exporter deployment",
+        "description": "Verify your node-exporter version and configuration:\n```bash\nkubectl get pods -n node-exporter -l app.kubernetes.io/name=node-exporter\nhelm list -n node-exporter 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working node-exporter installation."
+      },
+      {
+        "title": "Review node-exporter configuration",
+        "description": "Inspect the relevant node-exporter configuration:\n```bash\nkubectl get all -n node-exporter -l app.kubernetes.io/name=node-exporter\nkubectl get configmap -n node-exporter -l app.kubernetes.io/part-of=node-exporter\n```\nCurrently Node Exporter has a metric called: node_uname_info which of course exposes uname info. While this is nice, it does not help if you are running different OSes which could have similar uname info."
+      },
+      {
+        "title": "Apply the fix for Feature: Include OS release/version metric",
+        "description": "I agree with the statement. Also these values won't change a lot, so to achieve this, I added this simple textfile collector script executed via `cron` at reboot updating the value (in case if it changes). Let me know if this serves the purpose, I can check and create a PR on\n```yaml\n#!/bin/bash\n\nTEXTFILE_COLLECTOR_PATH=/var/lib/node_exporter/textfile_collector\n. /etc/os-release\n\ncat << INFO > ${TEXTFILE_COLLECTOR_PATH}/os-release.prom.xx\n# HELP node_os_info A metric with a constant '1' value labeled by id, id_like, name, pretty_name, version, version_codename and version_id\n# TYPE node_os_info gauge\nINFO\necho \"node_os_info{id=\\\"${ID}\\\",id_like=\\\"${ID_LIKE}\\\",name=\\\"${NAME}\\\",pretty_name=\\\"${PRETTY_NAME}\\\",version=\\\"${VERSION}\\\",version_codename=\\\"${VERSION_CODENAME}\\\",version_id=\\\"${VERSION_ID}\\\"} 1\" >> ${TEXTFILE_COLLECTOR_PATH}/os-release.prom.xx\n\nmv ${TEXTFILE_COLLECTO\n```"
+      },
+      {
+        "title": "Upgrade node-exporter to include the fix",
+        "description": "If the fix is included in a newer release, upgrade node-exporter:\n```bash\nhelm repo update\nhelm upgrade node-exporter node-exporter/node-exporter --namespace node-exporter\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n node-exporter\nhelm list -n node-exporter\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n node-exporter -l app.kubernetes.io/name=node-exporter\nkubectl get events -n node-exporter --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Feature: Include OS release/version metric\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I agree with the statement. Also these values won't change a lot, so to achieve this, I added this simple textfile collector script executed via `cron` at reboot updating the value (in case if it changes). Let me know if this serves the purpose, I can check and create a PR on https://github.com/prometheus-community/node-exporter-textfile-collector-scripts for the same.",
+      "codeSnippets": [
+        "#!/bin/bash\n\nTEXTFILE_COLLECTOR_PATH=/var/lib/node_exporter/textfile_collector\n. /etc/os-release\n\ncat << INFO > ${TEXTFILE_COLLECTOR_PATH}/os-release.prom.xx\n# HELP node_os_info A metric with a constant '1' value labeled by id, id_like, name, pretty_name, version, version_codename and version_id\n# TYPE node_os_info gauge\nINFO\necho \"node_os_info{id=\\\"${ID}\\\",id_like=\\\"${ID_LIKE}\\\",name=\\\"${NAME}\\\",pretty_name=\\\"${PRETTY_NAME}\\\",version=\\\"${VERSION}\\\",version_codename=\\\"${VERSION_CODENAME}\\\",version_id=\\\"${VERSION_ID}\\\"} 1\" >> ${TEXTFILE_COLLECTOR_PATH}/os-release.prom.xx\n\nmv ${TEXTFILE_COLLECTOR_PATH}/os-release.prom.xx ${TEXTFILE_COLLECTOR_PATH}/os-release.prom"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "node-exporter",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "node-exporter"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/node_exporter/issues/1574",
+      "repo": "https://github.com/prometheus/node_exporter"
+    },
+    "reactions": 11,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with node-exporter installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T06:30:28.586Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

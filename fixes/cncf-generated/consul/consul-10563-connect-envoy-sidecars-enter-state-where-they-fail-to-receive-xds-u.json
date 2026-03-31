@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "consul-10563-connect-envoy-sidecars-enter-state-where-they-fail-to-receive-xds-u",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "consul: Connect: Envoy sidecars enter state where they fail to receive xds updates from Consul",
+    "description": "Connect: Envoy sidecars enter state where they fail to receive xds updates from Consul. This issue affects 19+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify consul troubleshoot symptoms",
+        "description": "Check for the issue in your consul deployment:\n```bash\nkubectl get pods -n consul -l app.kubernetes.io/name=consul\nkubectl logs -l app.kubernetes.io/name=consul -n consul --tail=100 | grep -i error\n```\nLook for error: `\"rpc error: code = Canceled desc = context canceled\"`"
+      },
+      {
+        "title": "Review consul configuration",
+        "description": "Inspect the relevant consul configuration:\n```bash\nkubectl get all -n consul -l app.kubernetes.io/name=consul\nkubectl get configmap -n consul -l app.kubernetes.io/part-of=consul\n```\nWe'll see this in a specific Envoy sidecar on a Nomad Client. For this detail, we'll say Service A (svc-a) is talking to Service B (svc-b). IPs/names are redacted here but we can provide more info securely via email."
+      },
+      {
+        "title": "Apply the fix for Connect: Envoy sidecars enter state where they fail to…",
+        "description": "The `resourceVersion` map was doing two jobs prior to this PR. The first job was to track what version of every resource we know envoy currently has. The second was to track subscriptions to those resources (by way of the empty string for a version). This mostly works out fine, but occasionally\n```yaml\n$ consul info\nagent:\n\tcheck_monitors = 1\n\tcheck_ttls = 39\n\tchecks = 159\n\tservices = 123\nbuild:\n\tversion = 1.10.0\nconsul:\n\tacl = disabled\n\tknown_servers = 3\n\tserver = false\nruntime:\n\tarch = amd64\n\tcpu_count = 12\n\tgoroutines = 2096\n\tmax_procs = 12\n\tos = linux\n\tversion = go1.16.5\nserf_lan:\n\tcoordinate_resets = 0\n\tencrypted = false\n\tevent_queue = 0\n\tevent_time = 106\n\tfailed = 0\n\thealth_score = 0\n\tintent_queue = 0\n\tleft = 0\n\tmember_time = 67643\n\tmembers = 230\n\tquery_queue = 0\n\tquery_time = 4\n```"
+      },
+      {
+        "title": "Upgrade consul to include the fix",
+        "description": "If the fix is included in a newer release, upgrade consul:\n```bash\nhelm repo update\nhelm upgrade consul consul/consul --namespace consul\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n consul\nhelm list -n consul\n```"
+      },
+      {
+        "title": "Confirm Connect: Envoy sidecars enter state where they… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=consul -n consul --tail=50 --since=5m\nkubectl get events -n consul --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `\"rpc error: code = Canceled desc = context canceled\"` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The `resourceVersion` map was doing two jobs prior to this PR. The first job was to track what version of every resource we know envoy currently has. The second was to track subscriptions to those resources (by way of the empty string for a version). This mostly works out fine, but occasionally leads to consul removing a resource and accidentally (effectively) unsubscribing at the same time.",
+      "codeSnippets": [
+        "$ consul info\nagent:\n\tcheck_monitors = 1\n\tcheck_ttls = 39\n\tchecks = 159\n\tservices = 123\nbuild:\n\tversion = 1.10.0\nconsul:\n\tacl = disabled\n\tknown_servers = 3\n\tserver = false\nruntime:\n\tarch = amd64\n\tcpu_count = 12\n\tgoroutines = 2096\n\tmax_procs = 12\n\tos = linux\n\tversion = go1.16.5\nserf_lan:\n\tcoordinate_resets = 0\n\tencrypted = false\n\tevent_queue = 0\n\tevent_time = 106\n\tfailed = 0\n\thealth_score = 0\n\tintent_queue = 0\n\tleft = 0\n\tmember_time = 67643\n\tmembers = 230\n\tquery_queue = 0\n\tquery_time = 4",
+        "~# consul info\nagent:\n\tcheck_monitors = 1\n\tcheck_ttls = 0\n\tchecks = 5\n\tservices = 4\nbuild:\n\tversion = 1.10.0\nconsul:\n\tacl = disabled\n\tbootstrap = false\n\tknown_datacenters = 4\n\tleader = false\n\tleader_addr = 10.133.0.146:8300\n\tserver = true\nraft:\n\tapplied_index = 322772439\n\tcommit_index = 322772439\n\tfsm_pending = 0\n\tlast_contact = 32.532339ms\n\tlast_log_index = 322772440\n\tlast_log_term = 475\n\tlast_snapshot_index = 322768509\n\tlast_snapshot_term = 475\n\tlatest_configuration = [{Suffrage:Voter ID:a6f23f31-d2a8-239d-401b-57d54a7521f9 Address:x.x.x.x:8300} {Suffrage:Voter ID:f6f24d3e-352e-ce6a-f5a7-1dc5ad5ad4d5 Address:10.133.0.147:8300} {Suffrage:Voter ID:3ddfa25a-fd64-ceee-ae54-f89e24c1ce70 Address:10.133.0.145:8300}]\n\tlatest_configuration_index = 0\n\tnum_peers = 2\n\tprotocol_version = 3\n\tprotocol_",
+        "# nomad -v\nNomad v1.1.2 (60638a086ef9630e2a9ba1e237e8426192a44244)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "consul",
+      "community",
+      "service-mesh",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "consul"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/hashicorp/consul/issues/10563",
+      "repo": "https://github.com/hashicorp/consul",
+      "pr": "https://github.com/hashicorp/consul/pull/10987"
+    },
+    "reactions": 19,
+    "comments": 26,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with consul installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:50:35.055Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

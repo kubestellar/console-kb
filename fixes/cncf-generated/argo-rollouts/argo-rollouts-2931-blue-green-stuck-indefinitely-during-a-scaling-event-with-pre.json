@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-rollouts-2931-blue-green-stuck-indefinitely-during-a-scaling-event-with-pre",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-rollouts: blue-green stuck indefinitely during a scaling event with prePromotionAnalysis & previewReplicaCount",
+    "description": "blue-green stuck indefinitely during a scaling event with prePromotionAnalysis & previewReplicaCount. This issue affects 27+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo-rollouts troubleshoot symptoms",
+        "description": "Check for the issue in your argo-rollouts deployment:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl logs -l app.kubernetes.io/name=argo-rollouts -n argo-rollouts --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review argo-rollouts configuration",
+        "description": "Inspect the relevant argo-rollouts configuration:\n```bash\nkubectl get all -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get configmap -n argo-rollouts -l app.kubernetes.io/part-of=argo-rollouts\n```\nArgo Rollouts v1.4.0\n\nWe have the following rollout:\n\n```yaml\n  strategy:\n    blueGreen:\n      activeService: guestbook-prod\n      autoPromotionEnabled: true\n      prePromotionAnalysis:\n        templates:\n        - templateName:"
+      },
+      {
+        "title": "Apply the fix for blue-green stuck indefinitely during a scaling event with…",
+        "description": "During a scaling event, we will now only perform scaling against our ReplicaSets, and only reconcile:\n* `status.availableReplicas`\n* `status.HPAReplicas`\n\nThis fixes a bug where we would lose some information in status (because we did not perform the normal full logic of reconciliation).\n```yaml\nstrategy:\n    blueGreen:\n      activeService: guestbook-prod\n      autoPromotionEnabled: true\n      prePromotionAnalysis:\n        templates:\n        - templateName: guestbook-prod-synthetics\n      previewReplicaCount: 1\n      previewService: guestbook-prod-preview\n      scaleDownDelayRevisionLimit: 3\n      scaleDownDelaySeconds: 21600\n```"
+      },
+      {
+        "title": "Confirm blue-green stuck indefinitely during a scaling… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo-rollouts -n argo-rollouts --tail=50 --since=5m\nkubectl get events -n argo-rollouts --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "During a scaling event, we will now only perform scaling against our ReplicaSets, and only reconcile:\n* `status.availableReplicas`\n* `status.HPAReplicas`\n\nThis fixes a bug where we would lose some information in status (because we did not perform the normal full logic of reconciliation).",
+      "codeSnippets": [
+        "strategy:\n    blueGreen:\n      activeService: guestbook-prod\n      autoPromotionEnabled: true\n      prePromotionAnalysis:\n        templates:\n        - templateName: guestbook-prod-synthetics\n      previewReplicaCount: 1\n      previewService: guestbook-prod-preview\n      scaleDownDelayRevisionLimit: 3\n      scaleDownDelaySeconds: 21600",
+        "\"2023-07-31T17:57:31Z\",\"\"\"guestbook-prod\"\"\",\"\"\"guestbook\"\"\",\"Started syncing rollout\"\n\"2023-07-31T17:57:31Z\",\"\"\"guestbook-prod\"\"\",\"\"\"guestbook\"\"\",\"Syncing replicas only due to scaling event\"\n\"2023-07-31T17:57:31Z\",,,\"Event(v1.ObjectReference{Kind:\\\"\"Rollout\\\"\", Namespace:\\\"\"guestbook\\\"\", Name:\\\"\"guestbook-prod\\\"\", UID:\\\"\"11111111-2222-3333-4444-5555555555\\\"\", APIVersion:\\\"\"argoproj.io/v1alpha1\\\"\", ResourceVersion:\\\"\"1301676025\\\"\", FieldPath:\\\"\"\\\"\"}): type: 'Normal' reason: 'ScalingReplicaSet' Scaled down ReplicaSet guestbook-prod-945f86b8d (revision 1578) from 11 to 10\"\n\"2023-07-31T17:57:31Z\",\"\"\"guestbook-prod\"\"\",\"\"\"guestbook\"\"\",\"Scaled down ReplicaSet guestbook-prod-945f86b8d (revision 1578) from 11 to 10\"\n\"2023-07-31T17:57:31Z\",\"\"\"guestbook-prod\"\"\",\"\"\"guestbook\"\"\",\"Scaled down ReplicaSet",
+        "{\n    \"status\": {\n        \"blueGreen\": {\n            \"prePromotionAnalysisRunStatus\": null     // <<<<<<<<< this should not have happened\n        },\n        \"conditions\": [\n            {\n                \"lastTransitionTime\": \"2023-04-04T15:42:04Z\",\n                \"lastUpdateTime\": \"2023-04-04T15:42:04Z\",\n                \"message\": \"Rollout is paused\",\n                \"reason\": \"RolloutPaused\",\n                \"status\": \"False\",\n                \"type\": \"Paused\"\n            },\n            {\n                \"lastTransitionTime\": \"2023-07-31T17:52:17Z\",\n                \"lastUpdateTime\": \"2023-07-31T17:52:17Z\",\n                \"message\": \"Rollout is not healthy\",\n                \"reason\": \"RolloutHealthy\",\n                \"status\": \"False\",\n                \"type\": \"Healthy\"\n            },\n    "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-rollouts",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-rollouts"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Namespace",
+      "Replicaset"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-rollouts/issues/2931",
+      "repo": "https://github.com/argoproj/argo-rollouts",
+      "pr": "https://github.com/argoproj/argo-rollouts/pull/3060"
+    },
+    "reactions": 27,
+    "comments": 7,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-rollouts installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:23:36.129Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

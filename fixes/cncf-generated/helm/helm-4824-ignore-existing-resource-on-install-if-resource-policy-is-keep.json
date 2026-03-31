@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-4824-ignore-existing-resource-on-install-if-resource-policy-is-keep",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: Ignore existing resource on install if resource-policy is keep",
+    "description": "Ignore existing resource on install if resource-policy is keep. Requested by 64+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current helm deployment",
+        "description": "Verify your helm version and configuration:\n```bash\nhelm list --all-namespaces 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working helm installation."
+      },
+      {
+        "title": "Review helm configuration",
+        "description": "Inspect the relevant helm configuration:\n```bash\nhelm version\n```\nI wanted to know if there is possibility for Helm install command to ignore existing resource (if already created) if the **helm/resource-policy** is **keep**.\n\n**Scenario:**\n1. I created release with Secret containing random generated password."
+      },
+      {
+        "title": "Apply the fix for Ignore existing resource on install if resource-policy is\u2026",
+        "description": "Alternative implementation to https://github.com/helm/helm/pull/7627, https://github.com/helm/helm/pull/7625, and https://github.com/helm/helm/pull/7575.\n\nHelp with validation would be appreciated, but in theory this closes https://github.com/helm/helm/issues/6850, closes\n```yaml\nKIND=deployment\nNAME=my-app-staging\nRELEASE=staging\nNAMESPACE=default\nkubectl annotate $KIND $NAME meta.helm.sh/release-name=$RELEASE\nkubectl annotate $KIND $NAME meta.helm.sh/release-namespace=$NAMESPACE\nkubectl label $KIND $NAME app.kubernetes.io/managed-by=Helm\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nhelm version\n```\nConfirm the feature described in \"Ignore existing resource on install if resource-policy is\u2026\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Alternative implementation to https://github.com/helm/helm/pull/7627, https://github.com/helm/helm/pull/7625, and https://github.com/helm/helm/pull/7575.",
+      "codeSnippets": [
+        "KIND=deployment\nNAME=my-app-staging\nRELEASE=staging\nNAMESPACE=default\nkubectl annotate $KIND $NAME meta.helm.sh/release-name=$RELEASE\nkubectl annotate $KIND $NAME meta.helm.sh/release-namespace=$NAMESPACE\nkubectl label $KIND $NAME app.kubernetes.io/managed-by=Helm",
+        "apiVersion: apps/v1beta2\nkind: Deployment\nmetadata:\n  name: {{ .Chart.Name}}-deployment-{{ .Values.app.version }}\n  namespace: {{ .Values.namespace }} \nspec:\n  replicas: {{ .Values.replicaCount }}\n  selector:\n    matchLabels:\n      app: {{.Chart.Name}}\n  template:\n    metadata:\n      labels:\n        app: {{.Chart.Name}}\n        version: {{ .Values.app.version }}\n    spec:\n      containers:\n        - name: {{ .Chart.Name }}\n          image: \"{{ .Values.image.repository }}:{{ .Chart.AppVersion }}\"\n          imagePullPolicy: {{ .Values.image.pullPolicy }}\n          ports:\n            - name: http\n              containerPort: {{ .Values.container.port }}\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{.Chart.Name}}-service\n  namespace: {{ .Values.namespace }}\nspec:\n  ports:\n    - port: {{",
+        "{{- if not (lookup \"rbac.authorization.k8s.io/v1\" \"ClusterRole\" \"\" .Values.clusterrole.name) }}\nresources template\n{{- end}}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/helm/helm/issues/4824",
+      "repo": "https://github.com/helm/helm",
+      "pr": "https://github.com/helm/helm/pull/7649"
+    },
+    "reactions": 64,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with helm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:20:43.385Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

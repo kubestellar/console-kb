@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "jaeger-2638-jaeger-agent-reproducible-memory-leak-in-1-21-0",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "jaeger: jaeger-agent reproducible memory leak in 1.21.0",
+    "description": "jaeger-agent reproducible memory leak in 1.21.0. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify jaeger troubleshoot symptoms",
+        "description": "Check for the issue in your jaeger deployment:\n```bash\nkubectl get pods -n observability -l app.kubernetes.io/name=jaeger\nkubectl logs -l app.kubernetes.io/name=jaeger -n observability --tail=100 | grep -i error\n```\nLook for error: `don't know what type: 15\",\"stacktrace\":\"github.com/jaegertracing/jaeger/cmd/agent/app/processors.(*ThriftProcessor).proc`"
+      },
+      {
+        "title": "Review jaeger configuration",
+        "description": "Inspect the relevant jaeger configuration:\n```bash\nkubectl get all -n observability -l app.kubernetes.io/name=jaeger\nkubectl get configmap -n observability -l app.kubernetes.io/part-of=jaeger\n```\nI am observing very high and rapidly increasing memory usage of `jaeger-agent` which may be a memory leak.\nEventually the agent (container) may run out of memory and crash.\n\n**I am able to reproduce the behavior reliably."
+      },
+      {
+        "title": "Apply the fix for jaeger-agent reproducible memory leak in 1.21.0",
+        "description": "Status update: I got a reproducer that touches far less code, so, might be easier to isolate and fix the issue:\n\n```go\npackage main\n\nimport\n```yaml\njaeger-agent        | {\"level\":\"error\",\"ts\":1605909716.7062023,\"caller\":\"processors/thrift_processor.go:123\",\"msg\":\"Processor failed\",\"error\":\"*jaeger.Batch error reading struct: *jaeger.Span error reading struct: error reading list begin: don't know what type: 14\",\"stacktrace\":\"github.com/jaegertracing/jaeger/cmd/agent/app/processors.(*ThriftProcessor).processBuffer\\n\\tgithub.com/jaegertracing/jaeger/cmd/agent/app/processors/thrift_processor.go:123\\ngithub.com/jaegertracing/jaeger/cmd/agent/app/processors.NewThriftProcessor.func2\\n\\tgithub.com/jaegertracing/jaeger/cmd/agent/app/processors/thr\n```"
+      },
+      {
+        "title": "Confirm jaeger-agent reproducible memory leak in 1.21.0 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=jaeger -n observability --tail=50 --since=5m\nkubectl get events -n observability --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `don't know what type: 15\",\"stacktrace\":\"github.com/jaegertracing/jaeger/cmd/agent/app/processors.(*ThriftProcessor).proc` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Status update: I got a reproducer that touches far less code, so, might be easier to isolate and fix the issue:\n\n```go\npackage main\n\nimport",
+      "codeSnippets": [
+        "jaeger-agent        | {\"level\":\"error\",\"ts\":1605909716.7062023,\"caller\":\"processors/thrift_processor.go:123\",\"msg\":\"Processor failed\",\"error\":\"*jaeger.Batch error reading struct: *jaeger.Span error reading struct: error reading list begin: don't know what type: 14\",\"stacktrace\":\"github.com/jaegertracing/jaeger/cmd/agent/app/processors.(*ThriftProcessor).processBuffer\\n\\tgithub.com/jaegertracing/jaeger/cmd/agent/app/processors/thrift_processor.go:123\\ngithub.com/jaegertracing/jaeger/cmd/agent/app/processors.NewThriftProcessor.func2\\n\\tgithub.com/jaegertracing/jaeger/cmd/agent/app/processors/thrift_processor.go:87\"}\njaeger-agent        | {\"level\":\"error\",\"ts\":1605909751.7633333,\"caller\":\"processors/thrift_processor.go:123\",\"msg\":\"Processor failed\",\"error\":\"*jaeger.Batch error reading struct:",
+        "jaeger_agent_thrift_udp_t_processor_handler_errors_total{protocol=\"compact\",model=\"jaeger\"}",
+        "$ go tool pprof -web http://localhost:14269/debug/pprof/heap"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "jaeger",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "jaeger"
+    ],
+    "targetResourceKinds": [
+      "Deployment"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/jaegertracing/jaeger/issues/2638",
+      "repo": "https://github.com/jaegertracing/jaeger"
+    },
+    "reactions": 6,
+    "comments": 56,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with jaeger installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:36:31.156Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

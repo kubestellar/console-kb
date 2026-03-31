@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-6544-add-namespace-labels-to-kubernetes-metadata",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: Add namespace_labels to kubernetes metadata",
+    "description": "Add namespace_labels to kubernetes metadata. Requested by 14+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current fluent-bit deployment",
+        "description": "Verify your fluent-bit version and configuration:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nhelm list -n fluent-bit 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working fluent-bit installation."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nWhat is the problem:\nWe are using fluentbit for our logcollection. The output flows through fluentd to logstash to ES. In ES we find that we only get a subset of kubernetes metadata in the index."
+      },
+      {
+        "title": "Apply the fix for Add namespace_labels to kubernetes metadata",
+        "description": "This provides the ability to have the filter_kubernetes plugin fetch namespace labels & annotations and add them to the record under a `kubernetes_namespace` key. \n\n- Added 3 new configuration options:\n   - `kube_meta_namespace_cache_ttl` - `FLB_CONFIG_MAP_TIME` - the TTL for the namespace cache\n  \n```yaml\n[FILTER]\n    Name kubernetes\n    Match kube*\n    K8S-Logging.Parser Off\n    K8S-Logging.Exclude Off\n    Use_Kubelet On\n    Buffer_Size  1MB\n    Annotations Off\n    namespace_labels  On\n    namespace_annotations On\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Add namespace_labels to kubernetes metadata\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This provides the ability to have the filter_kubernetes plugin fetch namespace labels & annotations and add them to the record under a `kubernetes_namespace` key.",
+      "codeSnippets": [
+        "[FILTER]\n    Name kubernetes\n    Match kube*\n    K8S-Logging.Parser Off\n    K8S-Logging.Exclude Off\n    Use_Kubelet On\n    Buffer_Size  1MB\n    Annotations Off\n    namespace_labels  On\n    namespace_annotations On"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/6544",
+      "repo": "https://github.com/fluent/fluent-bit",
+      "pr": "https://github.com/fluent/fluent-bit/pull/8279"
+    },
+    "reactions": 14,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:33:34.965Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

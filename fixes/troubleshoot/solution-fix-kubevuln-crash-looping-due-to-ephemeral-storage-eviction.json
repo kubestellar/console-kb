@@ -1,0 +1,72 @@
+{
+  "version": "kc-mission-v1",
+  "title": "Fix kubevuln crash-looping due to ephemeral storage eviction",
+  "description": "**Problem:** kubevuln pods crash or get evicted, leaving behind failed pods that accumulate and cause DiskPressure on the node. This manifests in two ways: (1) ephemeral storage eviction when the 10Gi default limit is exceeded by Grype DB downloads and scan caches, and (2) failed pod accumulation where 50-100+ dead pods pile up because kubelet doesn't garbage-collect deployment pod corpses fast enough.\n\n**Solution:** Increase ephemeral storage limits via Helm, clean up failed pods, and monitor for recurrence.",
+  "type": "troubleshoot",
+  "missionClass": "fixer",
+  "tags": [
+    "CrashLoopBackOff",
+    "DiskPressure",
+    "Deployment",
+    "Kubescape",
+    "kubevuln",
+    "ephemeral-storage"
+  ],
+  "category": "troubleshooting",
+  "cncfProject": "Kubescape",
+  "resourceKind": "Deployment",
+  "mission": {
+    "steps": [
+      {
+        "title": "Identify affected nodes",
+        "description": "Check which nodes have DiskPressure and find kubevuln pods on them:\n```bash\n# Find nodes with DiskPressure\nkubectl get nodes -o custom-columns='NAME:.metadata.name,DISK_PRESSURE:.status.conditions[?(@.type==\"DiskPressure\")].status' | grep True\n\n# Count failed pods in kubescape namespace\nkubectl get pods -n kubescape --field-selector status.phase=Failed --no-headers | wc -l\n```\nIf there are dozens of failed kubevuln pods, they are consuming disk via overlayfs layers and container logs."
+      },
+      {
+        "title": "Clean up failed pods (immediate fix)",
+        "description": "Delete all failed pods to free disk space immediately:\n```bash\nkubectl delete pods -n kubescape --field-selector status.phase=Failed\n```\nDiskPressure should clear within 15-30 seconds. Verify:\n```bash\nkubectl get node <NODE_NAME> -o jsonpath='{.status.conditions[?(@.type==\"DiskPressure\")].status}'\n```\nExpected output: `False`"
+      },
+      {
+        "title": "Increase ephemeral storage limits",
+        "description": "The default kubevuln ephemeral storage limit (10Gi) is too small for clusters with many images to scan. The Grype vulnerability database alone can be 500MB+, and each image scan uses temporary storage. Increase to 50Gi:\n```bash\nhelm upgrade kubescape-operator kubescape/kubescape-operator \\\n  --namespace kubescape \\\n  --reuse-values \\\n  --set kubevuln.resources.requests.ephemeral-storage=10Gi \\\n  --set kubevuln.resources.limits.ephemeral-storage=50Gi\n```"
+      },
+      {
+        "title": "Check for partial container profile errors",
+        "description": "kubevuln may log non-fatal errors like 'container profile is partial (workload restart required)'. These occur when the Kubescape node-agent hasn't finished profiling a container before kubevuln tries to scan it:\n```bash\nkubectl logs -n kubescape -l app.kubernetes.io/component=kubevuln --tail=30 | grep 'partial'\n```\nThese errors are informational and do NOT cause crashes. kubevuln skips the scan and retries later. If you see many of these, check node-agent health:\n```bash\nkubectl get pods -n kubescape -l app.kubernetes.io/component=node-agent\n```\nHigh restart counts on node-agent indicate it cannot profile containers."
+      },
+      {
+        "title": "Verify fix",
+        "description": "Confirm kubevuln is running with updated limits and no failed pods remain:\n```bash\n# Check kubevuln pod is running\nkubectl get pods -n kubescape -l app.kubernetes.io/component=kubevuln\n\n# Verify updated resource limits\nkubectl get deployment kubevuln -n kubescape \\\n  -o jsonpath='{.spec.template.spec.containers[0].resources.limits.ephemeral-storage}'\n\n# Verify no failed pods\nkubectl get pods -n kubescape --field-selector status.phase=Failed --no-headers | wc -l\n\n# Verify no DiskPressure on any node\nkubectl get nodes -o custom-columns='NAME:.metadata.name,DISK_PRESSURE:.status.conditions[?(@.type==\"DiskPressure\")].status' | grep True || echo 'No DiskPressure'\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Ephemeral storage eviction",
+        "description": "**Symptom:** kubevuln pod events show 'Pod ephemeral local storage usage exceeds the total limit of containers 10Gi'.\n\n**Cause:** The Grype vulnerability database (~500MB) plus image layer caches exceed the default 10Gi ephemeral storage limit. Larger clusters with many container images amplify this.\n\n**Fix:** Increase ephemeral storage to 50Gi via Helm upgrade (see Step 3)."
+      },
+      {
+        "title": "Failed pod accumulation causing DiskPressure",
+        "description": "**Symptom:** Node shows DiskPressure condition. `kubectl get pods -n kubescape --field-selector status.phase=Failed` shows 50-100+ dead pods.\n\n**Cause:** When kubevuln pods crash (OOMKill, eviction, scan errors), the Recreate deployment strategy replaces them, but kubelet's terminated pod GC doesn't clean up fast enough. Each dead pod's overlayfs layers and logs consume 100-500MB. The kubevuln deployment uses 4 emptyDir volumes (tmp-dir, grype-db-cache, grype-db, cloud-secret) with no sizeLimit, allowing unbounded growth within the ephemeral allocation.\n\n**Fix:** Delete failed pods immediately (Step 2). For prevention, periodically run: kubectl delete pods -n kubescape --field-selector status.phase=Failed"
+      },
+      {
+        "title": "Container profile partial errors (non-fatal)",
+        "description": "**Symptom:** kubevuln logs show repeated 'container profile is partial (workload restart required)' errors.\n\n**Cause:** The Kubescape node-agent DaemonSet needs to observe a container's full lifecycle to build a runtime profile. If the container started before node-agent, or if node-agent restarted, the profile is incomplete.\n\n**Fix:** These are non-fatal. kubevuln skips the relevancy scan and falls back to a full vulnerability scan. To resolve, restart the target workload so node-agent can profile it from container start."
+      }
+    ],
+    "resolution": {
+      "summary": "kubevuln disk pressure is caused by either ephemeral storage eviction (fix: increase limits to 50Gi) or failed pod accumulation (fix: delete failed pods). The emptyDir volumes for Grype DB cache have no sizeLimit, allowing unbounded growth. Partial container profile errors are non-fatal and can be ignored.",
+      "steps": [
+        "Check nodes for DiskPressure: kubectl get nodes -o custom-columns='NAME:.metadata.name,DISK_PRESSURE:.status.conditions[?(@.type==\"DiskPressure\")].status'",
+        "Delete failed pods: kubectl delete pods -n kubescape --field-selector status.phase=Failed",
+        "Increase ephemeral storage: helm upgrade kubescape-operator kubescape/kubescape-operator --namespace kubescape --reuse-values --set kubevuln.resources.requests.ephemeral-storage=10Gi --set kubevuln.resources.limits.ephemeral-storage=50Gi",
+        "Verify: kubectl get pods -n kubescape -l app.kubernetes.io/component=kubevuln"
+      ],
+      "yaml": "# Helm values override for kubevuln ephemeral storage\nkubevuln:\n  resources:\n    requests:\n      ephemeral-storage: 10Gi\n    limits:\n      ephemeral-storage: 50Gi"
+    }
+  },
+  "metadata": {
+    "author": "You",
+    "source": "kubestellar-console",
+    "createdAt": "2026-03-10T15:20:38.029Z",
+    "updatedAt": "2026-03-16T18:30:00.000Z"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flux-4910-unable-to-leverage-chart-version-as-label-with-ocirepository",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flux: unable to leverage chart version as label with `OCIRepository`",
+    "description": "unable to leverage chart version as label with `OCIRepository`. This issue affects 5+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify flux troubleshoot symptoms",
+        "description": "Check for the issue in your flux deployment:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nkubectl logs -l app.kubernetes.io/name=flux -n flux --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review flux configuration",
+        "description": "Inspect the relevant flux configuration:\n```bash\nkubectl get all -n flux -l app.kubernetes.io/name=flux\nkubectl get configmap -n flux -l app.kubernetes.io/part-of=flux\n```\n### Describe the bug\n\nWhen applying an helm chart from an oci repository, chart version appended with a suffix leading to edge cases on some charts."
+      },
+      {
+        "title": "Apply the fix for unable to leverage chart version as label with",
+        "description": "Hmm they should've used AppVersion like Helm recommends: https://github.com/actions/actions-runner-controller/blob/a152741a1a6afa992f8d836a029d551984149c8f/charts/gha-runner-scale-set/templates/_helpers.tpl#L41\n\nThe workaround is to replace the label value:\n\n```yaml\napiVersion:\n```yaml\napiVersion: source.toolkit.fluxcd.io/v1beta2\nkind: OCIRepository\nmetadata:\n  name: arc\n  # namespace: default\nspec:\n  interval: 10m\n  layerSelector:\n    mediaType: \"application/vnd.cncf.helm.chart.content.v1.tar+gzip\"\n    operation: copy\n  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller\n  ref:\n    semver: \"0.9.3\"\n---\napiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\nmetadata:\n  name: arc\nspec:\n  interval: 1m0s\n  chartRef:\n    kind: OCIRepository\n    name: arc\n  values:\n    githubConfigSecret: pre-defined-secret\n    serviceAccount:\n      name: \"\n```"
+      },
+      {
+        "title": "Upgrade flux to include the fix",
+        "description": "If the fix is included in a newer release, upgrade flux:\n```bash\nhelm repo update\nhelm upgrade flux flux/flux --namespace flux\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n flux\nhelm list -n flux\n```"
+      },
+      {
+        "title": "Confirm unable to leverage chart version as label with is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=flux -n flux --tail=50 --since=5m\nkubectl get events -n flux --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Hmm they should've used AppVersion like Helm recommends: https://github.com/actions/actions-runner-controller/blob/a152741a1a6afa992f8d836a029d551984149c8f/charts/gha-runner-scale-set/templates/_helpers.tpl#L41\n\nThe workaround is to replace the label value:\n\n```yaml\napiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\nspec:\n  postRenderers:\n    - kustomize:\n        patches:\n          -",
+      "codeSnippets": [
+        "apiVersion: source.toolkit.fluxcd.io/v1beta2\nkind: OCIRepository\nmetadata:\n  name: arc\n  # namespace: default\nspec:\n  interval: 10m\n  layerSelector:\n    mediaType: \"application/vnd.cncf.helm.chart.content.v1.tar+gzip\"\n    operation: copy\n  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller\n  ref:\n    semver: \"0.9.3\"\n---\napiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\nmetadata:\n  name: arc\nspec:\n  interval: 1m0s\n  chartRef:\n    kind: OCIRepository\n    name: arc\n  values:\n    githubConfigSecret: pre-defined-secret\n    serviceAccount:\n      name: \"service-account-arc\"",
+        "apiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\nspec:\n  postRenderers:\n    - kustomize:\n        patches:\n          - target:\n              kind: Deployment\n            patch: |\n              - op: replace\n                path: /spec/template/metadata/labels/app.kubernetes.io~1version\n                value: latest",
+        "❯ helm get all dagger\napiVersion: apps/v1\nkind: DaemonSet\nmetadata:\n  labels:\n    app.kubernetes.io/instance: dagger\n    app.kubernetes.io/managed-by: Helm\n    app.kubernetes.io/name: dagger-helm\n    app.kubernetes.io/part-of: dagger-helm\n    app.kubernetes.io/version: v0.13.5+a076bb44441a\n    helm.sh/chart: dagger-helm-0.13.5_a076bb44441a\n    helm.toolkit.fluxcd.io/name: dagger\n    helm.toolkit.fluxcd.io/namespace: xxx\n  name: dagger-dagger-helm-engine\n  namespace: xxx"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flux",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "flux"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Namespace",
+      "Serviceaccount"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flux2/issues/4910",
+      "repo": "https://github.com/fluxcd/flux2"
+    },
+    "reactions": 5,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flux installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:06.034Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

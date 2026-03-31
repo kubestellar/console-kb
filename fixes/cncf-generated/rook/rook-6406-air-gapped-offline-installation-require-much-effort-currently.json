@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rook-6406-air-gapped-offline-installation-require-much-effort-currently",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "rook: Air-Gapped/Offline installation require much effort currently",
+    "description": "Air-Gapped/Offline installation require much effort currently. Requested by 8+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current rook deployment",
+        "description": "Verify your rook version and configuration:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nhelm list -n rook 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working rook installation."
+      },
+      {
+        "title": "Review rook configuration",
+        "description": "Inspect the relevant rook configuration:\n```bash\nkubectl get all -n rook -l app.kubernetes.io/name=rook\nkubectl get configmap -n rook -l app.kubernetes.io/part-of=rook\n```\n# Feature Request\nI'm currently confronted with a project, where we dont have a network connection to the outer world.\nTherefore we need to do a Air-Gapped (offline) installation of rook-ceph."
+      },
+      {
+        "title": "Apply the fix for Air-Gapped/Offline installation require much effort…",
+        "description": "create file tests/scripts/rook-ceph-image.txt which\nwill have list of images required for offline installation.\r\nCommit titles and messages follow guidelines in the [developer guide](https://rook.io/docs/rook/master/development-flow.html#commit-structure).\n```yaml\n$ kubectl get pods -n rook-ceph -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\\n' |sort |uniq -c\n    106 ceph/ceph:v14.2.9\n     48 quay.io/cephcsi/cephcsi:v2.1.2\n      8 quay.io/k8scsi/csi-attacher:v2.1.0\n     16 quay.io/k8scsi/csi-node-driver-registrar:v1.2.0\n      8 quay.io/k8scsi/csi-provisioner:v1.4.0\n      8 quay.io/k8scsi/csi-resizer:v0.4.0\n      4 quay.io/k8scsi/csi-snapshotter:v1.2.2\n     20 rook/ceph:v1.3.11\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nkubectl get events -n rook --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Air-Gapped/Offline installation require much effort…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "create file tests/scripts/rook-ceph-image.txt which\nwill have list of images required for offline installation.\r\nCommit titles and messages follow guidelines in the [developer guide](https://rook.io/docs/rook/master/development-flow.html#commit-structure).",
+      "codeSnippets": [
+        "$ kubectl get pods -n rook-ceph -o jsonpath=\"{..image}\" |tr -s '[[:space:]]' '\\n' |sort |uniq -c\n    106 ceph/ceph:v14.2.9\n     48 quay.io/cephcsi/cephcsi:v2.1.2\n      8 quay.io/k8scsi/csi-attacher:v2.1.0\n     16 quay.io/k8scsi/csi-node-driver-registrar:v1.2.0\n      8 quay.io/k8scsi/csi-provisioner:v1.4.0\n      8 quay.io/k8scsi/csi-resizer:v0.4.0\n      4 quay.io/k8scsi/csi-snapshotter:v1.2.2\n     20 rook/ceph:v1.3.11",
+        "$ awk '/image:/ {print $2}' cluster/examples/kubernetes/ceph/operator.yaml cluster/examples/kubernetes/ceph/cluster.yaml | tee -a rook-ceph-image.txt && awk '/quay.io/ || /k8s.gcr.io/ {print $3}' cluster/examples/kubernetes/ceph/operator.yaml | tr -d '\"' | tee -a rook-ceph-image.txt                                                          \nrook/ceph:master\nceph/ceph:v15.2.4\nquay.io/cephcsi/cephcsi:v3.1.1\nk8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.0.1\nk8s.gcr.io/sig-storage/csi-resizer:v1.0.0\nk8s.gcr.io/sig-storage/csi-provisioner:v2.0.0\nk8s.gcr.io/sig-storage/csi-snapshotter:v3.0",
+        "That renders the complete yamls and shows the images used.. \nFor offline usage - I then override each of these image values with my own (in my values file) - and point them to my local Helm repo in artifactory. That works great.\n> 我所做的 - 只是使用`helm template rook/rook --values myvalues.yaml | grep image`\n> 它呈现完整的 yaml 并显示使用的图像..\n> 对于离线使用 - 然后我用我自己的（在我的值文件中）覆盖这些图像值中的每一个 - 并将它们指向我的本地 Helm 存储库在人工制品。这很好用。\n\nbut helm just install rook operator, not install ceph cluster\nin china , we can't pull k8s.gcr.io , for chinese install rook More difficult!"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/rook/rook/issues/6406",
+      "repo": "https://github.com/rook/rook",
+      "pr": "https://github.com/rook/rook/pull/8596"
+    },
+    "reactions": 8,
+    "comments": 19,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with rook installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:34:27.491Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

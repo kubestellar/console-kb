@@ -88,7 +88,7 @@ jobs:
         with:
           name: install-missions-batch-${{ matrix.batch }}
           path: |
-            solutions/cncf-install/
+            fixes/cncf-install/
             install-report*.md
           if-no-files-found: ignore
 
@@ -140,8 +140,8 @@ jobs:
           done
 
           # Count published vs draft vs rejected
-          PUBLISHED=$(find solutions/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | wc -l | tr -d ' ')
-          DRAFTS=$(find solutions/cncf-install -name '*.draft.json' 2>/dev/null | wc -l | tr -d ' ')
+          PUBLISHED=$(find fixes/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | wc -l | tr -d ' ')
+          DRAFTS=$(find fixes/cncf-install -name '*.draft.json' 2>/dev/null | wc -l | tr -d ' ')
           TOTAL=$((PUBLISHED + DRAFTS))
           echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
           echo "drafts=$DRAFTS" >> $GITHUB_OUTPUT
@@ -154,7 +154,7 @@ jobs:
             AVG=$(node -e "
               const fs = require('fs');
               const path = require('path');
-              const dir = 'solutions/cncf-install';
+              const dir = 'fixes/cncf-install';
               const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && f !== '.gitkeep');
               const scores = files.map(f => {
                 try {
@@ -180,8 +180,8 @@ jobs:
       - name: Check for new missions
         id: check
         run: |
-          if [ -d "solutions/cncf-install" ]; then
-            COUNT=$(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' | wc -l | tr -d ' ')
+          if [ -d "fixes/cncf-install" ]; then
+            COUNT=$(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' | wc -l | tr -d ' ')
           else
             COUNT=0
           fi
@@ -198,7 +198,7 @@ jobs:
         run: |
           echo "## Schema Validation" >> install-report.md
           FAIL=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep'); do
             if ! node scripts/validate-schema.mjs "$f" >> install-report.md 2>&1; then
               FAIL=$((FAIL + 1))
               echo "  ❌ $f: INVALID" | tee -a install-report.md
@@ -223,7 +223,7 @@ jobs:
           echo "" >> install-report.md
           echo "## Security Scan" >> install-report.md
           FINDINGS=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep'); do
             RESULT=$(node -e "
               import {scanMissionFile} from './scripts/scanner.mjs';
               import {readFileSync} from 'fs';
@@ -253,7 +253,7 @@ jobs:
           echo "## Link Validation" >> install-report.md
           BROKEN=0
           CHECKED=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             REPO_URL=$(node -e "const d=JSON.parse(require('fs').readFileSync('$f','utf-8')); console.log(d.metadata?.sourceUrls?.repo || '')")
             if [ -n "$REPO_URL" ]; then
               CHECKED=$((CHECKED + 1))
@@ -284,7 +284,7 @@ jobs:
           echo "## Version Freshness" >> install-report.md
           STALE=0
           CHECKED=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             read -r REPO VERSION <<< $(node -e "
               const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
               console.log((d.metadata?.sourceUrls?.repo || '').replace('https://github.com/','') + ' ' + (d.metadata?.projectVersion || 'latest'))
@@ -313,7 +313,7 @@ jobs:
         if: steps.check.outputs.count != '0'
         run: |
           if node scripts/build-index.mjs 2>&1; then
-            INDEXED=$(node -e "const d=JSON.parse(require('fs').readFileSync('solutions/index.json','utf-8')); console.log(d.count)")
+            INDEXED=$(node -e "const d=JSON.parse(require('fs').readFileSync('fixes/index.json','utf-8')); console.log(d.count)")
             echo "" >> install-report.md
             echo "## Index: $INDEXED missions indexed ✅" | tee -a install-report.md
             echo "result=pass" >> $GITHUB_OUTPUT
@@ -332,7 +332,7 @@ jobs:
           echo "## Command Smoke Test" >> install-report.md
           BAD=0
           TOTAL=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             TOTAL=$((TOTAL + 1))
             CMDS=$(node -e "
               const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
@@ -365,7 +365,7 @@ jobs:
           echo "## Section Completeness" >> install-report.md
           TOTAL=0
           COMPLETE=0
-          for f in $(find solutions/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+          for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             TOTAL=$((TOTAL + 1))
             SECTIONS=$(node -e "
               const d=JSON.parse(require('fs').readFileSync('$f','utf-8'));
@@ -502,7 +502,7 @@ jobs:
         with:
           name: reviewed-missions
           path: |
-            solutions/
+            fixes/
             install-report.md
 
   # ════════════════════════════════════════════════════════════════
@@ -557,7 +557,7 @@ jobs:
           PREFERRED="cilium prometheus envoy"
           SELECTED=""
           for proj in $PREFERRED; do
-            FILE=$(find solutions/cncf-install -name "${proj}.json" ! -name '*.draft.json' 2>/dev/null | head -1)
+            FILE=$(find fixes/cncf-install -name "${proj}.json" ! -name '*.draft.json' 2>/dev/null | head -1)
             if [ -n "$FILE" ]; then
               SELECTED="$SELECTED $FILE"
             fi
@@ -565,7 +565,7 @@ jobs:
           # Fill remaining slots with random missions
           REMAINING=$((3 - $(echo $SELECTED | wc -w | tr -d ' ')))
           if [ "$REMAINING" -gt 0 ]; then
-            RANDOM_FILES=$(find solutions/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | shuf | head -$REMAINING)
+            RANDOM_FILES=$(find fixes/cncf-install -name '*.json' ! -name '*.draft.json' ! -name '.gitkeep' 2>/dev/null | shuf | head -$REMAINING)
             SELECTED="$SELECTED $RANDOM_FILES"
           fi
           SELECTED=$(echo $SELECTED | xargs)
@@ -739,7 +739,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH="cncf-install-gen-$(date +%Y%m%d)-$(date +%s | tail -c 5)"
           git checkout -b "$BRANCH"
-          git add solutions/cncf-install/ solutions/index.json
+          git add fixes/cncf-install/ fixes/index.json
           git commit -s -m "✨ Auto-generate CNCF install missions ($(date +%Y-%m-%d))
 
           Generated install & configure missions across ${{ needs.plan.outputs.batch_count }} batches.

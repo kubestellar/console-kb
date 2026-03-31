@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kong-7954-unable-to-set-datadog-hostname-or-port-with-environment-variables",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kong: Unable to set datadog hostname or port with environment variables",
+    "description": "Unable to set datadog hostname or port with environment variables. This issue affects 10+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kong troubleshoot symptoms",
+        "description": "Check for the issue in your kong deployment:\n```bash\nkubectl get pods -n kong -l app.kubernetes.io/name=kong\nkubectl logs -l app.kubernetes.io/name=kong -n kong --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kong configuration",
+        "description": "Inspect the relevant kong configuration:\n```bash\nkubectl get all -n kong -l app.kubernetes.io/name=kong\nkubectl get configmap -n kong -l app.kubernetes.io/part-of=kong\n```\n### Is there an existing issue for this?\n\n- [X] I have searched the existing issues\n\n### Kong version (`$ kong version`)\n\n2.6\n\n### Current Behavior\n\nWhen I try to use `KONG_DATADOG_AGENT_HOST`, the Datadog plugin uses the default `localhost`."
+      },
+      {
+        "title": "Apply the fix for Unable to set datadog hostname or port with environment…",
+        "description": "The workaround we used:\n\n* Update to Kubernetes 1.21\n* Set the `ServiceInternalTrafficPolicy` feature gate to `true`\n* In your Datadog helm chart, set `agents.localService.forceLocalServiceEnabled=true`\n\nOr, if you upgrade to k8s 1.22, you can skip the other steps; the\n```yaml\napiVersion: configuration.konghq.com/v1\n kind: KongClusterPlugin\n metadata:\n  name: datadog\n  annotations:\n     kubernetes.io/ingress.class: kong\n   labels:\n     global: \"true\"\n config:\n   host: \n   port: 8125\n   metrics:\n   prefix: api-gateway\n```"
+      },
+      {
+        "title": "Upgrade kong to include the fix",
+        "description": "If the fix is included in a newer release, upgrade kong:\n```bash\nhelm repo update\nhelm upgrade kong kong/kong --namespace kong\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n kong\nhelm list -n kong\n```"
+      },
+      {
+        "title": "Confirm Unable to set datadog hostname or port with… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kong -n kong --tail=50 --since=5m\nkubectl get events -n kong --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The workaround we used:\n\n* Update to Kubernetes 1.21\n* Set the `ServiceInternalTrafficPolicy` feature gate to `true`\n* In your Datadog helm chart, set `agents.localService.forceLocalServiceEnabled=true`\n\nOr, if you upgrade to k8s 1.22, you can skip the other steps; the `ServiceInternalTrafficPolicy` gate defaults to True, as does the DD helm chart flag.",
+      "codeSnippets": [
+        "apiVersion: configuration.konghq.com/v1\n kind: KongClusterPlugin\n metadata:\n  name: datadog\n  annotations:\n     kubernetes.io/ingress.class: kong\n   labels:\n     global: \"true\"\n config:\n   host: \n   port: 8125\n   metrics:\n   prefix: api-gateway",
+        "image:\n  repository: kong\n  tag: \"2.6\"\n\nenv:\n  datadog_agent_host:\n    valueFrom:\n      fieldRef:\n        fieldPath: status.hostIP",
+        "❯ kubectl exec -it pod/api-gateway-v1-kong-6cf47678f6-rvdpt -c proxy -n kong -- bash\n$ set | grep -e DATADOG -e VERSION\nbash-5.1$ set | grep -e DATADOG -e VERSION\nBASH_VERSION='5.1.4(1)-release'\nKONG_DATADOG_AGENT_HOST=192.168.64.26\nKONG_VERSION=2.6.0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kong",
+      "community",
+      "api-gateway",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kong"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/Kong/kong/issues/7954",
+      "repo": "https://github.com/Kong/kong"
+    },
+    "reactions": 10,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kong installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:52:51.295Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

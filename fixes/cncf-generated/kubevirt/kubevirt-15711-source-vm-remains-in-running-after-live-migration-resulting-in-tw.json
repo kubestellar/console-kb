@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubevirt-15711-source-vm-remains-in-running-after-live-migration-resulting-in-tw",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubevirt: Source VM remains in Running after live migration, resulting in two instances running",
+    "description": "Source VM remains in Running after live migration, resulting in two instances running. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubevirt troubleshoot symptoms",
+        "description": "Check for the issue in your kubevirt deployment:\n```bash\nkubectl get pods -n kubevirt -l app.kubernetes.io/name=kubevirt\nkubectl logs -l app.kubernetes.io/name=kubevirt -n kubevirt --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kubevirt configuration",
+        "description": "Inspect the relevant kubevirt configuration:\n```bash\nkubectl get all -n kubevirt -l app.kubernetes.io/name=kubevirt\nkubectl get configmap -n kubevirt -l app.kubernetes.io/part-of=kubevirt\n```\nIn a 1.6.0 environment, after performing a VM live migration, the source VM does not shut down properly upon completion, causing two instances to run simultaneously."
+      },
+      {
+        "title": "Apply the fix for Source VM remains in Running after live migration,…",
+        "description": "Delivery of signals can actually drop signal\nif multiple signals are generated while the signal is being blocked.\nIn this case only one signal is delivered after it is un-blocked. Because we always do Wait4 per signal we can actually miss a process being terminated.\nSometimes the ordering happen to\n```yaml\nps aux\nUSER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\nqemu           1  0.0  0.0 1679844 13328 ?       Ssl  Aug21   0:00 /usr/bin/virt-launcher-monitor --qemu-timeout 248s --name rhel9-3195 --uid 0db4e8a0-c0e4-4e95-9b1c-bd7f2a16c8d4 --namespace vm-ns-32 --kubevirt-\nqemu           8  0.0  0.0      0     0 ?        Z    Aug21  13:51 [virt-launcher] <defunct>\nqemu         444  0.5  0.0   4452  2688 pts/0    Ss   09:19   0:00 bash\nqemu         445  0.0  0.0   7032  2688 pts/0    R+   09:19   0:00 ps aux\n```"
+      },
+      {
+        "title": "Confirm Source VM remains in Running after live… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubevirt -n kubevirt --tail=50 --since=5m\nkubectl get events -n kubevirt --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Delivery of signals can actually drop signal\nif multiple signals are generated while the signal is being blocked.\nIn this case only one signal is delivered after it is un-blocked. Because we always do Wait4 per signal we can actually miss a process being terminated.\nSometimes the ordering happen to be unfortunate and the virt-launcher process is missed and never cleaned up.",
+      "codeSnippets": [
+        "ps aux\nUSER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\nqemu           1  0.0  0.0 1679844 13328 ?       Ssl  Aug21   0:00 /usr/bin/virt-launcher-monitor --qemu-timeout 248s --name rhel9-3195 --uid 0db4e8a0-c0e4-4e95-9b1c-bd7f2a16c8d4 --namespace vm-ns-32 --kubevirt-\nqemu           8  0.0  0.0      0     0 ?        Z    Aug21  13:51 [virt-launcher] <defunct>\nqemu         444  0.5  0.0   4452  2688 pts/0    Ss   09:19   0:00 bash\nqemu         445  0.0  0.0   7032  2688 pts/0    R+   09:19   0:00 ps aux",
+        "{\"component\":\"virt-launcher\",\"level\":\"info\",\"msg\":\"Exiting...\",\"pos\":\"virt-launcher.go:513\",\"timestamp\":\"2025-08-29T18:18:58.885293Z\"}\n{\"component\":\"virt-launcher-monitor\",\"level\":\"info\",\"msg\":\"Reaped pid 19 with status 9\",\"pos\":\"virt-launcher-monitor.go:202\",\"timestamp\":\"2025-08-29T18:18:58.886212Z\"}\n{\"component\":\"virt-launcher-monitor\",\"level\":\"info\",\"msg\":\"Reaped pid 18 with status 9\",\"pos\":\"virt-launcher-monitor.go:202\",\"timestamp\":\"2025-08-29T18:18:58.889628Z\"}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubevirt",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubevirt"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubevirt/kubevirt/issues/15711",
+      "repo": "https://github.com/kubevirt/kubevirt",
+      "pr": "https://github.com/kubevirt/kubevirt/pull/15676"
+    },
+    "reactions": 3,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubevirt installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:24:39.145Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "distribution-462-implement-asynchronous-cleanup-of-unreferenced-blob-data",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "distribution: Implement asynchronous cleanup of unreferenced blob data",
+    "description": "Implement asynchronous cleanup of unreferenced blob data. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current distribution deployment",
+        "description": "Verify your distribution version and configuration:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nhelm list -n distribution 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working distribution installation."
+      },
+      {
+        "title": "Review distribution configuration",
+        "description": "Inspect the relevant distribution configuration:\n```bash\nkubectl get all -n distribution -l app.kubernetes.io/name=distribution\nkubectl get configmap -n distribution -l app.kubernetes.io/part-of=distribution\n```\nA process should lock and sweep registry data to garbage collect unreferenced. https://github.com/docker/distribution/issues/422#issuecomment-97165192 covers many of the issues will implementing such a solution."
+      },
+      {
+        "title": "Apply the fix for Implement asynchronous cleanup of unreferenced blob data",
+        "description": "Pruner tools removes orphaned blobs, dangling references and empty directories.\n\n```\n$ pruner -h\npruner allows to print and/or delete registry's orphaned blobs.\n\nMake sure that registry instance isn't running or is running in a read-only\nmode before launching this executable.\n\nUsage:\n  <config>\n```yaml\n$ pruner -h\npruner allows to print and/or delete registry's orphaned blobs.\n\nMake sure that registry instance isn't running or is running in a read-only\nmode before launching this executable.\n\nUsage:\n  <config> [flags]\nFlags:\n  -c, --confirm=true: ask for confirmation before making changes\n  -n, --dry-run=false: perform a trial prune with no changes to registry\n  -h, --help=false: help for <config>\n  -e, --remove-empty=false: remove empty repositories (containing 0 manifest revisions)\n  -v, --verbose=false: turn on verbosive output\n  -V, --version=false: show the version and exit\n```"
+      },
+      {
+        "title": "Upgrade distribution to include the fix",
+        "description": "If the fix is included in a newer release, upgrade distribution:\n```bash\nhelm repo update\nhelm upgrade distribution distribution/distribution --namespace distribution\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n distribution\nhelm list -n distribution\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nkubectl get events -n distribution --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Implement asynchronous cleanup of unreferenced blob data\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Pruner tools removes orphaned blobs, dangling references and empty directories.\n\n```\n$ pruner -h\npruner allows to print and/or delete registry's orphaned blobs.\n\nMake sure that registry instance isn't running or is running in a read-only\nmode before launching this executable.",
+      "codeSnippets": [
+        "$ pruner -h\npruner allows to print and/or delete registry's orphaned blobs.\n\nMake sure that registry instance isn't running or is running in a read-only\nmode before launching this executable.\n\nUsage:\n  <config> [flags]\nFlags:\n  -c, --confirm=true: ask for confirmation before making changes\n  -n, --dry-run=false: perform a trial prune with no changes to registry\n  -h, --help=false: help for <config>\n  -e, --remove-empty=false: remove empty repositories (containing 0 manifest revisions)\n  -v, --verbose=false: turn on verbosive output\n  -V, --version=false: show the version and exit",
+        "tx := begin()\ntx.add(blob)\nreferences := tx.add(manifest)\nincrement(references)\ncommit(tx) // must apply all changes or none",
+        "tx := begin()\nreferences := tx.delete(manifest)\ndecrement(references)\ncommit(tx)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "distribution",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "distribution"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/distribution/distribution/issues/462",
+      "repo": "https://github.com/distribution/distribution",
+      "pr": "https://github.com/distribution/distribution/pull/1032"
+    },
+    "reactions": 4,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "docker",
+      "curl"
+    ],
+    "description": "A running Kubernetes cluster with distribution installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:31:59.926Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

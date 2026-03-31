@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kagenti-115-bug-question-keycloak-connection-recovery-long-lived-kind-cluster",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kagenti: bug/question: Keycloak connection recovery (long-lived KIND cluster?)",
+    "description": "bug/question: Keycloak connection recovery (long-lived KIND cluster?). This issue affects 0+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kagenti troubleshoot symptoms",
+        "description": "Check for the issue in your kagenti deployment:\n```bash\nkubectl get pods -n kagenti -l app.kubernetes.io/name=kagenti\nkubectl logs -l app.kubernetes.io/name=kagenti -n kagenti --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kagenti configuration",
+        "description": "Inspect the relevant kagenti configuration:\n```bash\nkubectl get all -n kagenti -l app.kubernetes.io/name=kagenti\nkubectl get configmap -n kagenti -l app.kubernetes.io/part-of=kagenti\n```\n### Describe the bug\n\nI’ve left a kagenti installation for a couple days each time but it will puzzlingly stop working. The containers all stay up, but it is unclear to me how to ‘reset’ the connections where necessary."
+      },
+      {
+        "title": "Apply the fix for bug/question: Keycloak connection recovery (long-lived KIND",
+        "description": "## Summary\n\nBy making Postgres stateful, we avoid data loss in case of Postgres pod restarts. This fix is also trying to address the issue #115 - but need longer term testing to assess if it helps (restart of both Postgres and keycloak may still be required\n\nFixes: should address #115 but to be\n```yaml\n2025-08-18 16:07:51,552 WARN  [io.agroal.pool] (agroal-11) Datasource '<default>': The connection attempt failed.\n2025-08-18 16:07:51,553 WARN  [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator] (JPA Startup Thread) HHH000342: Could not obtain connection to query metadata: org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection [The connection attempt failed.] [n/a]\n```"
+      },
+      {
+        "title": "Confirm bug/question: Keycloak connection recovery is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kagenti -n kagenti --tail=50 --since=5m\nkubectl get events -n kagenti --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "## Summary\n\nBy making Postgres stateful, we avoid data loss in case of Postgres pod restarts. This fix is also trying to address the issue #115 - but need longer term testing to assess if it helps (restart of both Postgres and keycloak may still be required\n\nFixes: should address #115 but to be verified",
+      "codeSnippets": [
+        "2025-08-18 16:07:51,552 WARN  [io.agroal.pool] (agroal-11) Datasource '<default>': The connection attempt failed.\n2025-08-18 16:07:51,553 WARN  [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator] (JPA Startup Thread) HHH000342: Could not obtain connection to query metadata: org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection [The connection attempt failed.] [n/a]",
+        "kubectl rollout restart statefulset -n keycloak postgres \nsleep 10\nkubectl rollout restart statefulset -n keycloak keycloak \n# cd to Kagenti installer dir\n# need to re-run installer as the client config got lost even if we had the PVC for Postgres\nuv run kagenti-installer. \n# if an agent was not working then need also to restart agent - e.g.\n kubectl rollout restart -n team1 deployment weather-service",
+        "- name: KC_DB_URL_PROPERTIES\n          value: ?sslmode=disable"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kagenti",
+      "community",
+      "ai-agents",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kagenti"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Statefulset",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/kagenti/kagenti/issues/115",
+      "repo": "https://github.com/kagenti/kagenti",
+      "pr": "https://github.com/kagenti/kagenti/pull/137"
+    },
+    "reactions": 0,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kagenti installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:43:07.245Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "nats-7760-consumer-filter-subjects-stop-matching-after-leader-step-down",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "nats: Consumer filter subjects stop matching after leader step-down",
+    "description": "Consumer filter subjects stop matching after leader step-down. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current nats deployment",
+        "description": "Verify your nats version and configuration:\n```bash\nkubectl get pods -n nats -l app.kubernetes.io/name=nats\nhelm list -n nats 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working nats installation."
+      },
+      {
+        "title": "Review nats configuration",
+        "description": "Inspect the relevant nats configuration:\n```bash\nkubectl get all -n nats -l app.kubernetes.io/name=nats\nkubectl get configmap -n nats -l app.kubernetes.io/part-of=nats\n```\n### Observed behavior\n\nConsumer stops working after filterSubject has been modified (edit) and the consumer leader has been stepped down.\nAlso all messages are dropped even if they match the filter subjects."
+      },
+      {
+        "title": "Apply the fix for Consumer filter subjects stop matching after leader",
+        "description": "An interest-based replicated stream could desync after a consumer filter update, with new messages being persisted on some but not all replicas. This was due to the sublist being cleared and only updated for the server that's the consumer leader. The stream on the consumer leader would persist the\n```yaml\n# other params are default\nnats stream add foo-stream  --subjects \"foo.>\" --replicas 5 --storage file --retention interest --ack --discard old --dupe-window 2m --no-allow-direct\n\n# other params are default\nnats consumer add foo-stream foo-consumer --pull --filter \"foo.bar\" --filter \"foo.bar1\" --deliver all  --ack explicit    --replay instant   --max-deliver 20   --max-pending 1000\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n nats -l app.kubernetes.io/name=nats\nkubectl get events -n nats --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Consumer filter subjects stop matching after leader\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "An interest-based replicated stream could desync after a consumer filter update, with new messages being persisted on some but not all replicas. This was due to the sublist being cleared and only updated for the server that's the consumer leader. The stream on the consumer leader would persist the messages, but followers wouldn't.",
+      "codeSnippets": [
+        "# other params are default\nnats stream add foo-stream  --subjects \"foo.>\" --replicas 5 --storage file --retention interest --ack --discard old --dupe-window 2m --no-allow-direct\n\n# other params are default\nnats consumer add foo-stream foo-consumer --pull --filter \"foo.bar\" --filter \"foo.bar1\" --deliver all  --ack explicit    --replay instant   --max-deliver 20   --max-pending 1000",
+        "# use 2nd terminal to put some data in\nnats pub \"foo.bar\" 'check {{ .Count }}' --sleep 1s --count 5\n\n# use 3rd terminal to get messages from the consumer\nnats consumer next foo-stream foo-consumer --wait 2s --count 5\n\n# use 4th terminal to monitor the consumer state itself\nwatch nats consumer info foo-stream foo-consumer",
+        "nats consumer edit foo-stream foo-consumer  --filter \"foo.bar\" --filter \"foo.bar2\"\n\n# ==> right here Step 2 has expected behavior\n\nnats consumer cluster step-down foo-stream foo-consumer\n\n# ==> staring here Step 2 has unexpected behavior"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "nats",
+      "incubating",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "nats"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/nats-io/nats-server/issues/7760",
+      "repo": "https://github.com/nats-io/nats-server",
+      "pr": "https://github.com/nats-io/nats-server/pull/7773"
+    },
+    "reactions": 12,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with nats installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T03:01:45.446Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-events-920-infinite-creation-of-new-workflows",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-events: Infinite creation of new Workflows.",
+    "description": "Infinite creation of new Workflows.. This issue affects 7+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo-events troubleshoot symptoms",
+        "description": "Check for the issue in your argo-events deployment:\n```bash\nkubectl get pods -n argo-events -l app.kubernetes.io/name=argo-events\nkubectl logs -l app.kubernetes.io/name=argo-events -n argo-events --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review argo-events configuration",
+        "description": "Inspect the relevant argo-events configuration:\n```bash\nkubectl get all -n argo-events -l app.kubernetes.io/name=argo-events\nkubectl get configmap -n argo-events -l app.kubernetes.io/part-of=argo-events\n```\nWhen we start Argo Workflows it works ok, but in some moment (let's say two or three hours later) it starts creating new workflows and it never stops."
+      },
+      {
+        "title": "Apply the fix for Infinite creation of new Workflows.",
+        "description": "When connection/channel is closed, it keeps reading empty messages from the channel without checking if it's successful.\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Sensor\nmetadata:\n  name: amqp\n  namespace: argo-events\nspec:\n  template:\n    serviceAccountName: events\n  dependencies:\n    - name: test-dep\n      eventSourceName: amqp\n      eventName: example\n  triggers:\n    - template:\n        name: amqp-workflow-trigger\n        k8s:\n          group: argoproj.io\n          version: v1alpha1\n          resource: workflows\n          operation: create\n          source:\n            resource:\n              apiVersion: argoproj.io/v1alpha1\n              kind: Workflow\n              metadata:\n                namespace: argo-wor\n```"
+      },
+      {
+        "title": "Confirm Infinite creation of new Workflows. is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo-events -n argo-events --tail=50 --since=5m\nkubectl get events -n argo-events --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "When connection/channel is closed, it keeps reading empty messages from the channel without checking if it's successful.",
+      "codeSnippets": [
+        "apiVersion: argoproj.io/v1alpha1\nkind: Sensor\nmetadata:\n  name: amqp\n  namespace: argo-events\nspec:\n  template:\n    serviceAccountName: events\n  dependencies:\n    - name: test-dep\n      eventSourceName: amqp\n      eventName: example\n  triggers:\n    - template:\n        name: amqp-workflow-trigger\n        k8s:\n          group: argoproj.io\n          version: v1alpha1\n          resource: workflows\n          operation: create\n          source:\n            resource:\n              apiVersion: argoproj.io/v1alpha1\n              kind: Workflow\n              metadata:\n                namespace: argo-workflows\n                generateName: sync-by-id-\n              spec:\n                entrypoint: sync\n                arguments:\n                  parameters:\n                    - name: id\n          "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-events",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-events"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-events/issues/920",
+      "repo": "https://github.com/argoproj/argo-events",
+      "pr": "https://github.com/argoproj/argo-events/pull/925"
+    },
+    "reactions": 7,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-events installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:18:03.231Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

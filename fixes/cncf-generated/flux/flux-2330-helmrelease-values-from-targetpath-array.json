@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flux-2330-helmrelease-values-from-targetpath-array",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flux: HelmRelease Values from targetPath array",
+    "description": "HelmRelease Values from targetPath array. Requested by 7+ users.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current flux deployment",
+        "description": "Verify your flux version and configuration:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nhelm list -n flux 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working flux installation."
+      },
+      {
+        "title": "Review flux configuration",
+        "description": "Inspect the relevant flux configuration:\n```bash\nkubectl get all -n flux -l app.kubernetes.io/name=flux\nkubectl get configmap -n flux -l app.kubernetes.io/part-of=flux\n```\n### Describe the bug\n\nHello, I cannot seem to be able to use the `targetFrom` field to access an existing array within the `valuesFrom` object in a helm release."
+      },
+      {
+        "title": "Apply the fix for HelmRelease Values from targetPath array",
+        "description": "`spec.values` is documented to merge after `valuesFrom`\n(maybe we made the wront behavior/API choice here seeing as there are two issues here with a misconception of this + Secrets/Configs typically have fewer, more specific, sensitive fields + the --set/valuesFrom style supports nested keys and\n```yaml\napiVersion: helm.toolkit.fluxcd.io/v2beta1\nkind: HelmRelease\nmetadata:\n  name: release-name\n  namespace: flux-system\nspec:\n  values:\n    confd:\n      file.yaml:\n        init_config:\n          service: kafka-consumers\n        instances:\n          - kafka_connect_str: xxx:9092\n            monitor_unlisted_consumer_groups: true\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n flux -l app.kubernetes.io/name=flux\nkubectl get events -n flux --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"HelmRelease Values from targetPath array\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "`spec.values` is documented to merge after `valuesFrom`\n(maybe we made the wront behavior/API choice here seeing as there are two issues here with a misconception of this + Secrets/Configs typically have fewer, more specific, sensitive fields + the --set/valuesFrom style supports nested keys and array indexing)\n\nIn your example, your `instances` list is first being built by valuesFrom, and then",
+      "codeSnippets": [
+        "apiVersion: helm.toolkit.fluxcd.io/v2beta1\nkind: HelmRelease\nmetadata:\n  name: release-name\n  namespace: flux-system\nspec:\n  values:\n    confd:\n      file.yaml:\n        init_config:\n          service: kafka-consumers\n        instances:\n          - kafka_connect_str: xxx:9092\n            monitor_unlisted_consumer_groups: true",
+        "valuesFrom:\n    - kind: Secret\n      name: secrets\n      valuesKey: username\n      targetPath: confd.file\\.yaml.instances[0].sasl_plain_username\n    - kind: Secret\n      name: secrets\n      valuesKey: password\n      targetPath: confd.file\\.yaml.instances[0].sasl_plain_password",
+        "❯ flux check\n► checking prerequisites\n✔ Kubernetes 1.20.10-gke.1600 >=1.19.0-0\n► checking controllers\n✔ helm-controller: deployment ready\n► ghcr.io/fluxcd/helm-controller:v0.14.1\n✔ image-automation-controller: deployment ready\n► ghcr.io/fluxcd/image-automation-controller:v0.18.0\n✔ image-reflector-controller: deployment ready\n► ghcr.io/fluxcd/image-reflector-controller:v0.14.0\n✔ kustomize-controller: deployment ready\n► ghcr.io/fluxcd/kustomize-controller:v0.18.2\n✔ notification-controller: deployment ready\n► ghcr.io/fluxcd/notification-controller:v0.19.0\n✔ source-controller: deployment ready\n► ghcr.io/fluxcd/source-controller:v0.19.2\n✔ all checks passed"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flux",
+      "graduated",
+      "app-definition",
+      "deploy"
+    ],
+    "cncfProjects": [
+      "flux"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Configmap",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "deploy"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flux2/issues/2330",
+      "repo": "https://github.com/fluxcd/flux2"
+    },
+    "reactions": 7,
+    "comments": 3,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flux installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:17:36.419Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

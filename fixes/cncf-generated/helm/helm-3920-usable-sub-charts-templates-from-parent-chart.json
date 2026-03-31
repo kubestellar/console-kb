@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-3920-usable-sub-charts-templates-from-parent-chart",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: Usable sub-charts templates from parent chart",
+    "description": "Usable sub-charts templates from parent chart. Requested by 86+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current helm deployment",
+        "description": "Verify your helm version and configuration:\n```bash\nkubectl get pods -n helm -l app.kubernetes.io/name=helm\nhelm list -n helm 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working helm installation."
+      },
+      {
+        "title": "Review helm configuration",
+        "description": "Inspect the relevant helm configuration:\n```bash\nkubectl get all -n helm -l app.kubernetes.io/name=helm\nkubectl get configmap -n helm -l app.kubernetes.io/part-of=helm\n```\n~~Templates are global are recursively namespaced~~ Named templates are global, so the guideline is to namespace them with the chart name to avoid collision.\n\nThis leads to the natural desire to use sub-charts templates from parent charts."
+      },
+      {
+        "title": "Apply the fix for Usable sub-charts templates from parent chart",
+        "description": "There have been many requests for a way to use templates for chart `values.yaml` (#2492, #2133, ...). The main reason being that it's currently impossible to derive the values of the subcharts from templates. However, having templates in `values.yaml` make them unparsable and create a \"chicken or\n```yaml\n### values/subchart.yaml ###\r\n    subchart:\r\n        fullnameOverride: subchart-{{ .Relese.Name }}\r\n        debug: {{ default \"false\" .Values.debug }}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n helm -l app.kubernetes.io/name=helm\nkubectl get events -n helm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Usable sub-charts templates from parent chart\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "There have been many requests for a way to use templates for chart `values.yaml` (#2492, #2133, ...). The main reason being that it's currently impossible to derive the values of the subcharts from templates. However, having templates in `values.yaml` make them unparsable and create a \"chicken or the egg\" problem when rendering them.",
+      "codeSnippets": [
+        "### values/subchart.yaml ###\r\n    subchart:\r\n        fullnameOverride: subchart-{{ .Relese.Name }}\r\n        debug: {{ default \"false\" .Values.debug }}",
+        "### Chart.yaml ###\r\n    dependencies:\r\n    - name: subchart\r\n      condition: subchart.enabled\r\n    \r\n    ### values/subchart.yaml ###\r\n    subchart:\r\n    {{- if eq .Values.environment \"production\" -}}\r\n      enabled: true\r\n    {{- else -}}\r\n      enabled: false\r\n    {{- end -}}",
+        "### values.yaml ###\r\n    environment: development\r\n    replicas: auto\r\n\r\n    ### values/default.yaml ###\r\n    {{- if eq .Values.replicas \"auto\" -}}\r\n    {{- if eq .Values.environment \"production\" -}}\r\n    replicas: 3\r\n    {{- else -}}\r\n    replicas: 1\r\n    {{- end -}}\r\n    {{- end -}}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Configmap",
+      "Namespace",
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/helm/helm/issues/3920",
+      "repo": "https://github.com/helm/helm",
+      "pr": "https://github.com/helm/helm/pull/6876"
+    },
+    "reactions": 86,
+    "comments": 34,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with helm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:14:40.826Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

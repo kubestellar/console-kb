@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "k3s-60-cannot-run-k3s-server",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "k3s: cannot run k3s server",
+    "description": "cannot run k3s server. Users encounter: \"code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify k3s troubleshoot symptoms",
+        "description": "Check for the issue in your k3s deployment:\n```bash\nk3s --version\nsystemctl status k3s\njournalctl -u k3s --no-pager --lines=100 | grep -i error\n```\nLook for error: `code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection error: desc = \"trans`"
+      },
+      {
+        "title": "Review k3s configuration",
+        "description": "Inspect the relevant k3s configuration:\n```bash\nk3s --version\nkubectl get nodes -o wide\nkubectl get pods -A\n```\nI just run k3s server. But got the error. \"Waiting for containerd startup: rpc error: code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection error: desc = \"transport: Error while dialing dial unix"
+      },
+      {
+        "title": "Apply the fix for cannot run k3s server",
+        "description": "I had the same issue on Ubuntu 16.04.5 LTS with Ansible on Vagrant/VirtualBox. Strangely sometimes it worked, other times with connect: connection refused error on containerd.sock. \n\nBut I found out that restarting the k3s service using `systemctl restart k3s` seems a workaround. Altough the error\n```yaml\ncurl -sfL https://get.k3s.io | sh -\n    # Check for Ready node, takes maybe 30 seconds\n    k3s kubectl get node\n```"
+      },
+      {
+        "title": "Confirm cannot run k3s server is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\njournalctl -u k3s --no-pager --lines=50 --since='5 minutes ago'\nkubectl get events -A --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection error: desc = \"trans` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "I had the same issue on Ubuntu 16.04.5 LTS with Ansible on Vagrant/VirtualBox. Strangely sometimes it worked, other times with connect: connection refused error on containerd.sock. \n\nBut I found out that restarting the k3s service using `systemctl restart k3s` seems a workaround. Altough the error still contains in the logs after restart, it seems only temprorary.",
+      "codeSnippets": [
+        "curl -sfL https://get.k3s.io | sh -\n    # Check for Ready node, takes maybe 30 seconds\n    k3s kubectl get node",
+        "16:36 root@k3ss:~ ->  systemctl status k3s\n\u25cf k3s.service - Lightweight Kubernetes\n   Loaded: loaded (/etc/systemd/system/k3s.service; enabled; vendor preset: enabled)\n   Active: failed (Result: exit-code) since Wed 2019-02-27 16:36:50 CST; 4s ago\n     Docs: https://k3s.io\n  Process: 1340 ExecStart=/usr/local/bin/k3s server (code=exited, status=1/FAILURE)\n  Process: 1338 ExecStartPre=/sbin/modprobe overlay (code=exited, status=0/SUCCESS)\n  Process: 1335 ExecStartPre=/sbin/modprobe br_netfilter (code=exited, status=0/SUCCESS)\n Main PID: 1340 (code=exited, status=1/FAILURE)\n\nFeb 27 16:36:50 k3ss k3s[1340]: time=\"2019-02-27T16:36:50.390778428+08:00\" level=info msg=\"Wrote kubeconfig /etc/rancher/k3s/k3s.yaml\"\nFeb 27 16:36:50 k3ss k3s[1340]: time=\"2019-02-27T16:36:50.391199273+08:00\" level=info ",
+        "time=\"2019-03-02T08:29:51.846191974-03:00\" level=fatal msg=\"Failed to run CRI service\" error=\"stream server error: listen tcp: lookup francisco-pc on 8.8.8.8:53: no such host\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "k3s",
+      "sandbox",
+      "orchestration",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "k3s"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/k3s-io/k3s/issues/60",
+      "repo": "https://github.com/k3s-io/k3s",
+      "pr": "https://github.com/k3s-io/k3s/pull/750"
+    },
+    "reactions": 12,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "k3s",
+      "kubectl"
+    ],
+    "description": "A running k3s cluster or a system where k3s can be installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:37:13.844Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

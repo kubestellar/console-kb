@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "open-webui-278-feat-ability-to-work-with-multiple-ollama-servers",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "open-webui: Feat: Ability to work with multiple Ollama servers",
+    "description": "Feat: Ability to work with multiple Ollama servers. Requested by 19+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current open-webui deployment",
+        "description": "Verify your open-webui version and configuration:\n```bash\nkubectl get pods -n open-webui -l app.kubernetes.io/name=open-webui\nhelm list -n open-webui 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working open-webui installation."
+      },
+      {
+        "title": "Review open-webui configuration",
+        "description": "Inspect the relevant open-webui configuration:\n```bash\nkubectl get all -n open-webui -l app.kubernetes.io/name=open-webui\nkubectl get configmap -n open-webui -l app.kubernetes.io/part-of=open-webui\n```\nOn my system I have a capable CPU with a large amount of RAM that is able to run quite large models, albeit slowly. I also have an RTX 3060 which is able to run smaller models quite quickly."
+      },
+      {
+        "title": "Apply the fix for Feat: Ability to work with multiple Ollama servers",
+        "description": "Adds support for hitting OpenAI compatible UIs.\n\nThe backend uses the ENV as a simple key:value store, so to store an array of compatible APIs, I stored them as a `;` separated list like: `localhost1;localhost2;localhost3`\n\nThe backend/frontend implementations for OpenAI Compat are mostly copy\n```yaml\nINFO:     127.0.0.1:42702 - \"GET /api/v1/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42718 - \"GET /themes/rosepine-dawn.css HTTP/1.1\" 304 Not Modified\nINFO:     127.0.0.1:42674 - \"GET /themes/rosepine.css HTTP/1.1\" 304 Not Modified\nINFO:     127.0.0.1:42702 - \"GET /api/v1/auths/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/modelfiles/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/prompts/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/documents/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/chats/tags/all HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42674 - \"G\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n open-webui -l app.kubernetes.io/name=open-webui\nkubectl get events -n open-webui --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Feat: Ability to work with multiple Ollama servers\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Adds support for hitting OpenAI compatible UIs.\n\nThe backend uses the ENV as a simple key:value store, so to store an array of compatible APIs, I stored them as a `;` separated list like: `localhost1;localhost2;localhost3`\n\nThe backend/frontend implementations for OpenAI Compat are mostly copy pastes of the original OpenAI implemenation, with the changes:\n- Compat needs model labels because we",
+      "codeSnippets": [
+        "INFO:     127.0.0.1:42702 - \"GET /api/v1/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42718 - \"GET /themes/rosepine-dawn.css HTTP/1.1\" 304 Not Modified\nINFO:     127.0.0.1:42674 - \"GET /themes/rosepine.css HTTP/1.1\" 304 Not Modified\nINFO:     127.0.0.1:42702 - \"GET /api/v1/auths/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/modelfiles/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/prompts/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/documents/ HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /api/v1/chats/tags/all HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42674 - \"GET /ollama/api/version HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /ollama/api/tags HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:42702 - \"GET /user.png HTTP/1.1\" 304 Not Modified\nINFO:     127.0.0.1:427",
+        "http {\n    upstream backend_servers {\n        least_conn;                     # Enable least connections load balancing\n\n        # Add your Ollama servers here eg. if one of them was http://localhost:11434/api then you would add `server localhost:11434`\n        server localhost:11434;          # Ollama server 1\n        server localhost:11435;          # Ollama server 2\n    }\n\n    server {\n        listen 9090;                     # This is the port you would use for the Ollama API URL in the WebUI eg. http://localhost:9090/api\n\n        location / {\n            proxy_pass http://backend_servers; # Forward requests to the upstream block\n        }\n    }\n}",
+        "server localhost:11434 max_fails=3 fail_timeout=30s;  # Primary GPU server\n        server localhost:11435 backup;                      # Backup CPU only server"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "open-webui",
+      "community",
+      "ai-app",
+      "feature"
+    ],
+    "cncfProjects": [
+      "open-webui"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/open-webui/open-webui/issues/278",
+      "repo": "https://github.com/open-webui/open-webui",
+      "pr": "https://github.com/open-webui/open-webui/pull/697"
+    },
+    "reactions": 19,
+    "comments": 18,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with open-webui installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:51:24.539Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

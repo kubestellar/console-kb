@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "litellm-13781-bug-openai-gpt-5-chat-model-does-not-support-temperature-parameter",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "litellm: [Bug]: OpenAI GPT-5 Chat model does not support \"temperature\" parameter",
+    "description": "[Bug]: OpenAI GPT-5 Chat model does not support \"temperature\" parameter. Users encounter: \"`litellm.UnsupportedParamsError: gpt-5 models don't support temperature=0.3. Only temperature=1 is s\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify litellm troubleshoot symptoms",
+        "description": "Check for the issue in your litellm deployment:\n```bash\nkubectl get pods -n litellm -l app.kubernetes.io/name=litellm\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=100 | grep -i error\n```\nLook for error: ``litellm.UnsupportedParamsError: gpt-5 models don't support temperature=0.3. Only temperature=1 is supported. To drop un`"
+      },
+      {
+        "title": "Review litellm configuration",
+        "description": "Inspect the relevant litellm configuration:\n```bash\nkubectl get all -n litellm -l app.kubernetes.io/name=litellm\nkubectl get configmap -n litellm -l app.kubernetes.io/part-of=litellm\n```\n### What happened?\n\nWhen using the **gpt-5-chat-latest** model, an intelligence model, it throws a LiteLLM error:\n\n`litellm.UnsupportedParamsError: gpt-5 models don't support temperature=0.3. Only temperature=1 is supported."
+      },
+      {
+        "title": "Apply the fix for [Bug]: OpenAI GPT-5 Chat model does not support…",
+        "description": "## Support temperature for GPT-5 Chat model\n\nGPT-5 chat is not an inference model, and since it requires support for parameters like temperature or tool_choice that are unavailable in inference models, I modified gpt_5_transformation to apply only when the model is a reasoning model.\n\nNote: Since\n```yaml\nimport os\nimport openai\n\nclient = openai.OpenAI(\n    api_key=os.getenv(\"litellm_api_key\"),\n    base_ur=os.getenv(\"litellm_url\")\n)\n\nclient.chat.completions.create(\n    model=\"openai/gpt-5-chat-latest\",\n    messages=[\n        {\n            \"role\": \"user\",\n            \"content\": \"What is the capital of México?\",\n        },\n    ],\n    temperature=0.3,\n)\n```"
+      },
+      {
+        "title": "Confirm [Bug]: OpenAI GPT-5 Chat model does not support… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=50 --since=5m\nkubectl get events -n litellm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that ``litellm.UnsupportedParamsError: gpt-5 models don't support temperature=0.3. Only temperature=1 is supported. To drop un` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "## Support temperature for GPT-5 Chat model\n\nGPT-5 chat is not an inference model, and since it requires support for parameters like temperature or tool_choice that are unavailable in inference models, I modified gpt_5_transformation to apply only when the model is a reasoning model.",
+      "codeSnippets": [
+        "import os\nimport openai\n\nclient = openai.OpenAI(\n    api_key=os.getenv(\"litellm_api_key\"),\n    base_ur=os.getenv(\"litellm_url\")\n)\n\nclient.chat.completions.create(\n    model=\"openai/gpt-5-chat-latest\",\n    messages=[\n        {\n            \"role\": \"user\",\n            \"content\": \"What is the capital of México?\",\n        },\n    ],\n    temperature=0.3,\n)",
+        "litellm.UnsupportedParamsError: gpt-5 models don't support temperature=0.3. Only temperature=1 is supported. To drop unsupported params set `litellm.drop_params = True`",
+        "litellm_params:\n      model: openai/gpt-5-chat-latest\n      api_key: os.environ/OPENAI_API_KEY\n      allowed_openai_params: [\"temperature\"]"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "litellm",
+      "community",
+      "llm-gateway",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "litellm"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/BerriAI/litellm/issues/13781",
+      "repo": "https://github.com/BerriAI/litellm",
+      "pr": "https://github.com/BerriAI/litellm/pull/15198"
+    },
+    "reactions": 20,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with litellm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:59:50.365Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

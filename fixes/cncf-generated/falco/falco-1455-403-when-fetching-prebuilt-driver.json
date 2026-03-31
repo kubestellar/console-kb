@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "falco-1455-403-when-fetching-prebuilt-driver",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "falco: 403 when fetching prebuilt driver",
+    "description": "403 when fetching prebuilt driver. This issue affects 5+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify falco troubleshoot symptoms",
+        "description": "Check for the issue in your falco deployment:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl logs -l app.kubernetes.io/name=falco -n falco --tail=100 | grep -i error\n```\nLook for error: `403 Forbidden`"
+      },
+      {
+        "title": "Review falco configuration",
+        "description": "Inspect the relevant falco configuration:\n```bash\nkubectl get all -n falco -l app.kubernetes.io/name=falco\nkubectl get configmap -n falco -l app.kubernetes.io/part-of=falco\n```\nFalco gets a 403 error when trying to fetch the pre-built driver on EKS running on Amazon Linux.\n\nAttempt to run Falco via the Helm chart on EKS with ami-0c504dda1302b182f.\n\nI expected Falco to successfully start."
+      },
+      {
+        "title": "Apply the fix for 403 when fetching prebuilt driver",
+        "description": "It replaces the default value of `DRIVERS_REPO` variable with the new drivers storage on AWS S3 (as per 's [proposal](https://github.com/falcosecurity/falco/blob/master/proposals/20201025-drivers-storage-s3.md)).\n\nThe new storage is at https://download.falco.org\n```yaml\n* Setting up /usr/src links from host\n* Running falco-driver-loader with: driver=module, compile=yes, download=yes\n* Unloading falco module, if present\n* Trying to dkms install falco module with GCC /usr/bin/gcc\nDIRECTIVE: MAKE=\"'/tmp/falco-dkms-make'\"\n* Running dkms build failed, couldn't find /var/lib/dkms/falco/2aa88dcf6243982697811df4c1b484bcbe9488a2/build/make.log (with GCC /usr/bin/gcc)\n* Trying to dkms install falco module with GCC /usr/bin/gcc-8\nDIRECTIVE: MAKE=\"'/tmp/falco-dkms-make'\"\n* Running dkms build failed, couldn't find /var/lib/dkms/falco/2aa88dcf6243982697811df4c1b484bcbe9488\n```"
+      },
+      {
+        "title": "Confirm 403 when fetching prebuilt driver is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=falco -n falco --tail=50 --since=5m\nkubectl get events -n falco --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `403 Forbidden` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "It replaces the default value of `DRIVERS_REPO` variable with the new drivers storage on AWS S3 (as per 's [proposal](https://github.com/falcosecurity/falco/blob/master/proposals/20201025-drivers-storage-s3.md)).\n\nThe new storage is at https://download.falco.org",
+      "codeSnippets": [
+        "* Setting up /usr/src links from host\n* Running falco-driver-loader with: driver=module, compile=yes, download=yes\n* Unloading falco module, if present\n* Trying to dkms install falco module with GCC /usr/bin/gcc\nDIRECTIVE: MAKE=\"'/tmp/falco-dkms-make'\"\n* Running dkms build failed, couldn't find /var/lib/dkms/falco/2aa88dcf6243982697811df4c1b484bcbe9488a2/build/make.log (with GCC /usr/bin/gcc)\n* Trying to dkms install falco module with GCC /usr/bin/gcc-8\nDIRECTIVE: MAKE=\"'/tmp/falco-dkms-make'\"\n* Running dkms build failed, couldn't find /var/lib/dkms/falco/2aa88dcf6243982697811df4c1b484bcbe9488a2/build/make.log (with GCC /usr/bin/gcc-8)\n* Trying to dkms install falco module with GCC /usr/bin/gcc-6\nDIRECTIVE: MAKE=\"'/tmp/falco-dkms-make'\"\n* Running dkms build failed, couldn't find /var/lib/d",
+        "{\n  \"machine\": \"x86_64\",\n  \"nodename\": \"falcotest\",\n  \"release\": \"4.14.198-152.320.amzn2.x86_64\",\n  \"sysname\": \"Linux\",\n  \"version\": \"#1 SMP Wed Sep 23 23:57:28 UTC 2020\"\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "falco",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "falco"
+    ],
+    "targetResourceKinds": [
+      "Node"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/falcosecurity/falco/issues/1455",
+      "repo": "https://github.com/falcosecurity/falco",
+      "pr": "https://github.com/falcosecurity/falco/pull/1460"
+    },
+    "reactions": 5,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with falco installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T06:30:15.023Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

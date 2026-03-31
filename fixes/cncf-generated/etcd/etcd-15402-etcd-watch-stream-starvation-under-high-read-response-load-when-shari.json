@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-15402-etcd-watch-stream-starvation-under-high-read-response-load-when-shari",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "etcd: Etcd watch stream starvation under high read response load when sharing same connection and TLS is enabled",
+    "description": "Etcd watch stream starvation under high read response load when sharing same connection and TLS is enabled. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify etcd troubleshoot symptoms",
+        "description": "Check for the issue in your etcd deployment:\n```bash\nkubectl get pods -n etcd -l app.kubernetes.io/name=etcd\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review etcd configuration",
+        "description": "Inspect the relevant etcd configuration:\n```bash\nkubectl get all -n etcd -l app.kubernetes.io/name=etcd\nkubectl get configmap -n etcd -l app.kubernetes.io/part-of=etcd\n```\n### What happened?\n\nWhen etcd client is generating high read response load, it can result in watch response stream in the same connection being starved."
+      },
+      {
+        "title": "Apply the fix for Etcd watch stream starvation under high read response load…",
+        "description": "## Clarification\nIf I understand it correctly, the following proposal\n```\nImplement changes and execute backports in the order below:\n   1. [v3.4+] https://github.com/etcd-io/etcd/pull/15452.\n   2. [v3.4+] https://github.com/etcd-io/etcd/pull/15446 by passing --listen-client-http-urls.\n   3.\n```yaml\n./bin/etcd   --cert-file ./tests/fixtures/server2.crt --key-file ./tests/fixtures/server2.key.insecure --listen-client-urls https://127.0.0.1:2379 --advertise-client-urls https://127.0.0.1:2379 --experimental-watch-progress-notify-interval=100ms\n```"
+      },
+      {
+        "title": "Confirm Etcd watch stream starvation under high read… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=50 --since=5m\nkubectl get events -n etcd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "## Clarification\nIf I understand it correctly, the following proposal\n```\nImplement changes and execute backports in the order below:\n   1. [v3.4+] https://github.com/etcd-io/etcd/pull/15452.\n   2. [v3.4+] https://github.com/etcd-io/etcd/pull/15446 by passing --listen-client-http-urls.\n   3. [v3.6+] https://github.com/etcd-io/etcd/pull/15510 by .\n   4.",
+      "codeSnippets": [
+        "./bin/etcd   --cert-file ./tests/fixtures/server2.crt --key-file ./tests/fixtures/server2.key.insecure --listen-client-urls https://127.0.0.1:2379 --advertise-client-urls https://127.0.0.1:2379 --experimental-watch-progress-notify-interval=100ms",
+        "go run ./tools/benchmark/main.go  put --total 10000 --val-size=10000 --key-space-size 10000 --key ./tests/fixtures/server.key.insecure --cacert ./tests/fixtures/ca.crt --cert ./tests/fixtures/server.crt",
+        "package main\n\nimport (\n\t\"context\"\n\t\"crypto/tls\"\n\t\"fmt\"\n\t\"time\"\n\n\tclientv3 \"go.etcd.io/etcd/client/v3\"\n)\n\nfunc main() {\n\tc, err := clientv3.New(clientv3.Config{\n\t\tEndpoints: []string{\"127.0.0.1:2379\"},\n\t\tTLS:       &tls.Config{InsecureSkipVerify: true},\n\t})\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer c.Close()\n\tfor i := 0; i < 10; i++ {\n\t\tgo func() {\n\t\t\tfor {\n\t\t\t\tstart := time.Now()\n\t\t\t\tresp, err := c.Get(context.Background(), \"\", clientv3.WithPrefix())\n\t\t\t\tif err != nil {\n\t\t\t\t\tfmt.Printf(\"Error: %v\\n\", err)\n\t\t\t\t}\n\t\t\t\tfmt.Printf(\"Got %d, took %s\\n\", len(resp.Kvs), time.Since(start))\n\t\t\t}\n\t\t}()\n\t}\n\tstart := time.Now()\n\tfor resp := range c.Watch(context.Background(), \"a\", clientv3.WithProgressNotify()) {\n\t\tfmt.Printf(\"Got notify, rev: %d, since last: %s\\n\", resp.Header.Revision, time.Since(start)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/etcd-io/etcd/issues/15402",
+      "repo": "https://github.com/etcd-io/etcd"
+    },
+    "reactions": 6,
+    "comments": 28,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with etcd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T06:29:13.910Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

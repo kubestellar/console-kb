@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-11321-etcd-cluster-fails-to-start-when-using-dns-srv-discovery-with-non-tls",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "etcd: etcd cluster fails to start when using DNS SRV discovery with non-TLS",
+    "description": "etcd cluster fails to start when using DNS SRV discovery with non-TLS. This issue affects 8+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify etcd troubleshoot symptoms",
+        "description": "Check for the issue in your etcd deployment:\n```bash\nkubectl get pods -n etcd -l app.kubernetes.io/name=etcd\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review etcd configuration",
+        "description": "Inspect the relevant etcd configuration:\n```bash\nkubectl get all -n etcd -l app.kubernetes.io/name=etcd\nkubectl get configmap -n etcd -l app.kubernetes.io/part-of=etcd\n```\nI am running etcd (version 3.4.3) on Fedora CoreOS (version 30) using Podman.\n\nWhen running etcd with no TLS and SRV discovery, the installation is **failing** because it doesn't find `_etcd-server-ssl` entries."
+      },
+      {
+        "title": "Apply the fix for etcd cluster fails to start when using DNS SRV discovery…",
+        "description": "embed: Fix cluster peer HTTP SRV discovery\n\nFixed issue where peer SRV discovery failed if no HTTPS endpoints were discovered. HTTP endpoints were never added to the address list due to a bad error check, and the `_etcd-server-ssl._tcp.<domain>` failure masked the subsequent success of lookups for\n```yaml\n2019-10-31 09:53:30.575647 E | embed: couldn't resolve during SRV discovery (error querying DNS SRV records for _etcd-server-ssl lookup _etcd-server-ssl._tcp.libvirt.labs on 172.16.10.1:53: no such host)\n2019-10-31 09:53:30.575892 C | etcdmain: error setting up initial cluster: error querying DNS SRV records for _etcd-server-ssl lookup _etcd-server-ssl._tcp.libvirt.labs on 172.16.10.1:53: no such host\n```"
+      },
+      {
+        "title": "Confirm etcd cluster fails to start when using DNS SRV… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=etcd -n etcd --tail=50 --since=5m\nkubectl get events -n etcd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "embed: Fix cluster peer HTTP SRV discovery\n\nFixed issue where peer SRV discovery failed if no HTTPS endpoints were discovered. HTTP endpoints were never added to the address list due to a bad error check, and the `_etcd-server-ssl._tcp.<domain>` failure masked the subsequent success of lookups for `_etcd-server._tcp.<domain>`",
+      "codeSnippets": [
+        "2019-10-31 09:53:30.575647 E | embed: couldn't resolve during SRV discovery (error querying DNS SRV records for _etcd-server-ssl lookup _etcd-server-ssl._tcp.libvirt.labs on 172.16.10.1:53: no such host)\n2019-10-31 09:53:30.575892 C | etcdmain: error setting up initial cluster: error querying DNS SRV records for _etcd-server-ssl lookup _etcd-server-ssl._tcp.libvirt.labs on 172.16.10.1:53: no such host",
+        "+--------------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+\n|            ENDPOINT            |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |\n+--------------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+\n| http://etcd1.libvirt.labs:2379 | ceb796e1dfaeb27e |  3.3.17 |   20 kB |      true |      false |        11 |          9 |                  0 |        |\n| http://etcd2.libvirt.labs:2379 | b8dfd5ef2d30984a |  3.3.17 |   20 kB |     false |      false |        11 |          9 |                  0 |        |\n| http://etcd3.libvirt.labs:23",
+        "ETCD_UUID=\"5d9701ad-6c02-4f64-b614-1e4561c29181\" # $(uuidgen)\nETCD_VERSION=\"v3.4.3\"\nETCD_NODE_NAME=\"$(hostname -s)\"\nETCD_NODE_CLIENT_ADVERTISE_URL=\"http://$(hostname | cut -d' ' -f1):2379\"\nETCD_NODE_SERVER_ADVERTISE_URL=\"http://$(hostname | cut -d' ' -f1):2380\"\nETCD_NODE_CLIENT_LISTEN_URL=\"http://$(hostname -I | cut -d' ' -f1):2379\"\nETCD_NODE_SERVER_LISTEN_URL=\"http://$(hostname -I | cut -d' ' -f1):2380\"\nETCD_DATA_DIR=\"/var/lib/etcd\"\nETCD_DNS_SRV_DOMAIN=\"$(dnsdomainname)\"\n\nmkdir -p ${ETCD_DATA_DIR}\n\npodman run \\\n  --name etcd \\\n  --volume ${ETCD_DATA_DIR}:/etcd-data:z \\\n  --net=host \\\n  quay.io/coreos/etcd:${ETCD_VERSION} \\\n    /usr/local/bin/etcd \\\n      --name ${ETCD_NODE_NAME} \\\n      --data-dir /etcd-data \\\n      --initial-cluster-state new \\\n      --initial-cluster-token ${ETCD_UUID} "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/etcd-io/etcd/issues/11321",
+      "repo": "https://github.com/etcd-io/etcd",
+      "pr": "https://github.com/etcd-io/etcd/pull/11776"
+    },
+    "reactions": 8,
+    "comments": 15,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with etcd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-24T06:29:38.150Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "langflow-4572-langflow-not-starting-with-postgres-giving-sqlite-error",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "langflow: Langflow not starting with postgres - giving Sqlite error",
+    "description": "Langflow not starting with postgres - giving Sqlite error. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify langflow troubleshoot symptoms",
+        "description": "Check for the issue in your langflow installation:\n```bash\npip show langflow | grep Version\n```\nLook for errors related to SQLite dialect being used when PostgreSQL is configured via `LANGFLOW_DATABASE_URL`."
+      },
+      {
+        "title": "Review langflow configuration",
+        "description": "When Langflow is configured to use PostgreSQL (via `LANGFLOW_DATABASE_URL=postgresql://...`), it may still attempt to use the SQLite dialect due to a missing dialect mapping in the SQLAlchemy connection setup. This manifests as a startup error referencing SQLite even though PostgreSQL is the configured backend."
+      },
+      {
+        "title": "Apply the fix for Langflow not starting with postgres",
+        "description": "Ensure your Docker Compose configuration correctly sets the PostgreSQL connection:\n```yaml\nservices:\n  langflow:\n    image: langflowai/langflow:latest\n    ports:\n      - \"7860:7860\"\n    depends_on:\n      - postgres\n    environment:\n      - LANGFLOW_DATABASE_URL=postgresql://langflow:langflow@postgres:5432/langflow\n      - LANGFLOW_LANGCHAIN_CACHE=InMemoryCache\n\n  postgres:\n    image: postgres:15\n    ports:\n      - \"5432:5432\"\n    environment:\n      POSTGRES_DB: langflow\n      POSTGRES_USER: langflow\n      POSTGRES_PASSWORD: langflow\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n\nvolumes:\n  pgdata:\n```\nUpgrade to a version that includes the fix for the missing SQLite dialect in the SQLAlchemy connection."
+      },
+      {
+        "title": "Confirm the issue is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\nRestart Langflow and confirm it connects to PostgreSQL without SQLite errors.\nCheck logs with `docker compose logs langflow` to verify successful startup."
+      }
+    ],
+    "resolution": {
+      "summary": "Fixed the missing SQLite dialect mapping in the SQLAlchemy connection setup that caused Langflow to fail when configured with PostgreSQL as the database backend.",
+      "codeSnippets": [
+        "services:\n  langflow:\n    image: langflowai/langflow:latest\n    ports:\n      - \"7860:7860\"\n    depends_on:\n      - postgres\n    environment:\n      - LANGFLOW_DATABASE_URL=postgresql://langflow:langflow@postgres:5432/langflow\n\n  postgres:\n    image: postgres:15\n    environment:\n      POSTGRES_DB: langflow\n      POSTGRES_USER: langflow\n      POSTGRES_PASSWORD: langflow"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "langflow",
+      "community",
+      "ai-app",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "langflow"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/langflow-ai/langflow/issues/4572",
+      "repo": "https://github.com/langflow-ai/langflow",
+      "pr": "https://github.com/langflow-ai/langflow/pull/4599"
+    },
+    "reactions": 3,
+    "comments": 17,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "pip",
+      "python",
+      "docker"
+    ],
+    "description": "Python 3.10+ with langflow installed (pip install langflow). Docker and Docker Compose for containerized deployment with PostgreSQL."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:48:30.808Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

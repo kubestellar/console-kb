@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluentd-3401-memory-leak",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluentd: Memory leak",
+    "description": "Memory leak. This issue affects 7+ users.",
+    "type": "analyze",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify fluentd analyze symptoms",
+        "description": "Check for the issue in your fluentd deployment:\n```bash\nkubectl get pods -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl logs -l app.kubernetes.io/name=fluentd -n fluentd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review fluentd configuration",
+        "description": "Inspect the relevant fluentd configuration:\n```bash\nkubectl get all -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl get configmap -n fluentd -l app.kubernetes.io/part-of=fluentd\n```\nI noticed a memory issue, what looks to me as a leak. I had a more complex configuration, but boiled it down to this simple config just to rule out the specifics in my config. Even with this (see below) config, I observe the memory leakage."
+      },
+      {
+        "title": "Apply the fix for Memory leak",
+        "description": "I've confirmed the issue.\nI think it's not fluentd's issue, it's fluent-plugin-systemd's issue.\nPlease forward the report to https://github.com/fluent-plugin-systemd/fluent-plugin-systemd\n\nDetails:\n\n* I cannot reproduce it by replacing `<source>` with other plugins like in_tail (with tailing a huge\n```yaml\nMemory leak:\n```"
+      },
+      {
+        "title": "Confirm Memory leak is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluentd -n fluentd --tail=50 --since=5m\nkubectl get events -n fluentd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "I've confirmed the issue.\nI think it's not fluentd's issue, it's fluent-plugin-systemd's issue.\nPlease forward the report to https://github.com/fluent-plugin-systemd/fluent-plugin-systemd\n\nDetails:\n\n* I cannot reproduce it by replacing `<source>` with other plugins like in_tail (with tailing a huge file).\n* The issue is caused by `read_from_head` of in_systemd.",
+      "codeSnippets": [
+        "Memory leak:",
+        "When you use jemalloc, `MALLOC_ARENA_MAX` doesn't make sense, so you can remove it.\nI face memory leak as well\nI use input: \n\n- `forward`\n- `http` for the liveness and readiness probes\n- `systemd`\n\noutput:\n\n- `null` for fluent logs\n- `opensearch` with **file buffer**\n- `stdout` for health checks.\n\nThe file buffer is always flushed but memory is getting increased.\n![image](https://user-images.githubusercontent.com/51335355/171393052-7eab1730-5e53-4eea-b835-c9d0f81531a4.png)\n\nVersion:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluentd",
+      "graduated",
+      "observability",
+      "analyze"
+    ],
+    "cncfProjects": [
+      "fluentd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "analyze"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluentd/issues/3401",
+      "repo": "https://github.com/fluent/fluentd"
+    },
+    "reactions": 7,
+    "comments": 33,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluentd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-26T06:32:13.811Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

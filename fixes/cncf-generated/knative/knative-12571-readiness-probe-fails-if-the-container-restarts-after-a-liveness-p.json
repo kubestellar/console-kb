@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "knative-12571-readiness-probe-fails-if-the-container-restarts-after-a-liveness-p",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "knative: Readiness probe fails if the container restarts after a liveness probe fail",
+    "description": "Readiness probe fails if the container restarts after a liveness probe fail. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify knative troubleshoot symptoms",
+        "description": "Check for the issue in your knative deployment:\n```bash\nkubectl get pods -n knative -l app.kubernetes.io/name=knative\nkubectl logs -l app.kubernetes.io/name=knative -n knative --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review knative configuration",
+        "description": "Inspect the relevant knative configuration:\n```bash\nkubectl get all -n knative -l app.kubernetes.io/name=knative\nkubectl get configmap -n knative -l app.kubernetes.io/part-of=knative\n```\n## What version of Knative?\nv1.2\n\n## Expected Behavior\nAfter a liveness probe fail, the container should restart and ideally should start serving the traffic again, just like how it would happen for a k8s deployment."
+      },
+      {
+        "title": "Apply the fix for Readiness probe fails if the container restarts after a…",
+        "description": "Thanks for the deep breakdown everyone -  I think what we really need is a clear signal to distinguish between the Pod shutting down and either container (queue-proxy/user-container) restarting. \n\nI'm not sure that's straightforward. Will dig into this for the next release.\n\nI worry about the\n```yaml\napiVersion: serving.knative.dev/v1\nkind: Service\nmetadata:\n  name: healthprobes-go\nspec:\n  template:\n    spec:\n      containers:\n        - image: shashankft/healthprobes@sha256:cc1cb4323e4d1cdee62e3ae7623ff6a213db72e89c17ad4772c39fe841b98fb9\n          env:\n            - name: TARGET\n              value: \"Go Sample v1\"\n          livenessProbe:\n            httpGet:\n              path: /healthz/liveness\n              port: 0\n            periodSeconds: 15\n            failureThreshould: 1\n```"
+      },
+      {
+        "title": "Confirm Readiness probe fails if the container restarts… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=knative -n knative --tail=50 --since=5m\nkubectl get events -n knative --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Thanks for the deep breakdown everyone -  I think what we really need is a clear signal to distinguish between the Pod shutting down and either container (queue-proxy/user-container) restarting. \n\nI'm not sure that's straightforward. Will dig into this for the next release.",
+      "codeSnippets": [
+        "apiVersion: serving.knative.dev/v1\nkind: Service\nmetadata:\n  name: healthprobes-go\nspec:\n  template:\n    spec:\n      containers:\n        - image: shashankft/healthprobes@sha256:cc1cb4323e4d1cdee62e3ae7623ff6a213db72e89c17ad4772c39fe841b98fb9\n          env:\n            - name: TARGET\n              value: \"Go Sample v1\"\n          livenessProbe:\n            httpGet:\n              path: /healthz/liveness\n              port: 0\n            periodSeconds: 15\n            failureThreshould: 1",
+        "Normal   Created    2m                 kubelet            Created container queue-proxy\n  Normal   Started    2m                 kubelet            Started container queue-proxy\n  Normal   Killing    60s                kubelet            Container user-container failed liveness probe, will be restarted\n  Warning  Unhealthy  60s (x3 over 90s)  kubelet            Liveness probe failed: HTTP probe failed with statuscode: 500\n  Normal   Started    9s (x2 over 2m)    kubelet            Started container user-container\n  Normal   Created    9s (x2 over 2m)    kubelet            Created container user-container\n  Normal   Pulled     9s                 kubelet            Container image \"shashankft/healthprobes@sha256:cc1cb4323e4d1cdee62e3ae7623ff6a213db72e89c17a1b98fb9\" already present on machine",
+        "I0208 01:54:37.906694   12942 http.go:137] Probe failed for http://10.233.65.50:8012/ with request headers map[Accept:[*/*] K-Network-Probe:[queue] User-Agent:[kube-probe/1.20]], response body: shutting down\nI0208 01:54:37.906752   12942 prober.go:117] Readiness probe for \"healthprobes-go-00001-deployment-55cf484684-dhgct_default(b0570c26-41ea-4156-9367-372f5775415e):queue-proxy\" failed (failure): HTTP probe failed with statuscode: 503"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "knative",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "knative"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/knative/serving/issues/12571",
+      "repo": "https://github.com/knative/serving"
+    },
+    "reactions": 4,
+    "comments": 18,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with knative installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:25:55.677Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

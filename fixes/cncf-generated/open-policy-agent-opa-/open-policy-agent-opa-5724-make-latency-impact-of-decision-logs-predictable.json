@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "open-policy-agent-opa-5724-make-latency-impact-of-decision-logs-predictable",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "open-policy-agent-opa-: Make latency impact of decision logs predictable",
+    "description": "Make latency impact of decision logs predictable. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current open-policy-agent-opa- deployment",
+        "description": "Verify your open-policy-agent-opa- version and configuration:\n```bash\nkubectl get pods -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nhelm list -n open-policy-agent-opa- 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working open-policy-agent-opa- installation."
+      },
+      {
+        "title": "Review open-policy-agent-opa- configuration",
+        "description": "Inspect the relevant open-policy-agent-opa- configuration:\n```bash\nkubectl get all -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nkubectl get configmap -n open-policy-agent-opa- -l app.kubernetes.io/part-of=open-policy-agent-opa-\n```\n## What is the underlying problem you're trying to solve?\n\nThe current decision log plugin runs in two variants: unbounded (all decisions are kept) and bound (decisions are discarded if the buffer has an overflow)."
+      },
+      {
+        "title": "Apply the fix for Make latency impact of decision logs predictable",
+        "description": "### Why the changes in this PR are needed?\n\nDecision logging is heavy on mutexes which increases the latency of decisions (see #5724) and also limits the parallelism. This PR removes two of the three Mutexes and replaces them with Golang structures for those use cases\n\n### What are the changes in\n```yaml\n$ echo 'POST http://localhost:8181/v1/data/foo/allow' | vegeta attack --duration=300s -rate=500 | tee results.bin | vegeta report\nRequests      [total, rate, throughput]         150000, 500.00, 500.00\nDuration      [total, attack, wait]             5m0s, 5m0s, 267.833µs\nLatencies     [min, mean, 50, 90, 95, 99, max]  104.541µs, 689.407µs, 341.12µs, 504.51µs, 605.328µs, 14.288ms, 77.812ms\nBytes In      [total, mean]                     23700000, 158.00\nBytes Out     [total, mean]                     0, 0.00\nSuccess       [ratio]                           100.00%\nStatus Codes  [code:count]      \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nkubectl get events -n open-policy-agent-opa- --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Make latency impact of decision logs predictable\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "### Why the changes in this PR are needed?\n\nDecision logging is heavy on mutexes which increases the latency of decisions (see #5724) and also limits the parallelism.",
+      "codeSnippets": [
+        "$ echo 'POST http://localhost:8181/v1/data/foo/allow' | vegeta attack --duration=300s -rate=500 | tee results.bin | vegeta report\nRequests      [total, rate, throughput]         150000, 500.00, 500.00\nDuration      [total, attack, wait]             5m0s, 5m0s, 267.833µs\nLatencies     [min, mean, 50, 90, 95, 99, max]  104.541µs, 689.407µs, 341.12µs, 504.51µs, 605.328µs, 14.288ms, 77.812ms\nBytes In      [total, mean]                     23700000, 158.00\nBytes Out     [total, mean]                     0, 0.00\nSuccess       [ratio]                           100.00%\nStatus Codes  [code:count]                      200:150000\nError Set:",
+        "$ echo 'POST http://localhost:8181/v1/data/foo/allow' | vegeta attack --duration=300s -rate=500 | tee results.bin | vegeta report\nRequests      [total, rate, throughput]         150000, 500.00, 500.00\nDuration      [total, attack, wait]             5m0s, 5m0s, 435.583µs\nLatencies     [min, mean, 50, 90, 95, 99, max]  115.75µs, 378.295µs, 352.412µs, 483.206µs, 524.698µs, 784.635µs, 20.485ms\nBytes In      [total, mean]                     23700000, 158.00\nBytes Out     [total, mean]                     0, 0.00\nSuccess       [ratio]                           100.00%\nStatus Codes  [code:count]                      200:150000\nError Set:",
+        "➜  decision_logs_improvements benchstat v0.68.0_1s.txt fix_1s.txt                                                                                                                                                                       10ms\ngoos: darwin\ngoarch: arm64\npkg: github.com/zalando/skipper/filters/openpolicyagent/opaauthorizerequest\ncpu: Apple M1 Max\n                                                                     │ v0.68.0_1s.txt │              fix_1s.txt              │\n                                                                     │     sec/op     │    sec/op     vs base                │\nAuthorizeRequest/minimal/with-decision-logs-10                           54.83µ ±  3%   12.26µ ±  2%  -77.64% (p=0.000 n=10)\nAuthorizeRequest/minimal/with-decision-logs/P50-10             "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "open-policy-agent-opa-",
+      "graduated",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "open-policy-agent-opa-"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/open-policy-agent/opa/issues/5724",
+      "repo": "https://github.com/open-policy-agent/opa",
+      "pr": "https://github.com/open-policy-agent/opa/pull/6797"
+    },
+    "reactions": 4,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with open-policy-agent-opa- installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-22T06:23:37.265Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

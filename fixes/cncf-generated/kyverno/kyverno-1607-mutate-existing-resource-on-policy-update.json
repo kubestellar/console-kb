@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-1607-mutate-existing-resource-on-policy-update",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: Mutate existing resource on policy update",
+    "description": "Mutate existing resource on policy update. Requested by 16+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kyverno deployment",
+        "description": "Verify your kyverno version and configuration:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nhelm list -n kyverno 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kyverno installation."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\n**Is your feature request related to a problem? Please describe.**\nNot sure if it's a bug or a feature.\nI've got a mutating policy that injects some stuff for vault."
+      },
+      {
+        "title": "Apply the fix for Mutate existing resource on policy update",
+        "description": "and  (and others following along), with Kyverno 1.7.0 your use cases will be solvable. See below for working policies.\n\n## Update Image Tag\n\n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: update-image-tag\n  annotations:\n    policies.kyverno.io/title: Update Image Tag\n   \n```yaml\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: update-image-tag\n  annotations:\n    policies.kyverno.io/title: Update Image Tag\n    policies.kyverno.io/category: other\n    policies.kyverno.io/severity: medium\n    policies.kyverno.io/subject: Deployment\n    kyverno.io/kyverno-version: 1.7.0\n    policies.kyverno.io/minversion: 1.7.0\n    kyverno.io/kubernetes-version: \"1.23\"\n    policies.kyverno.io/description: >-\n      This policy updates the image tag on existing Deployments which have the given annotation set but\n      only for a single container.\n      It may be necessary to g\n```"
+      },
+      {
+        "title": "Upgrade kyverno to include the fix",
+        "description": "If the fix is included in a newer release, upgrade kyverno:\n```bash\nhelm repo update\nhelm upgrade kyverno kyverno/kyverno --namespace kyverno\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n kyverno\nhelm list -n kyverno\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Mutate existing resource on policy update\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "and  (and others following along), with Kyverno 1.7.0 your use cases will be solvable. See below for working policies.",
+      "codeSnippets": [
+        "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: update-image-tag\n  annotations:\n    policies.kyverno.io/title: Update Image Tag\n    policies.kyverno.io/category: other\n    policies.kyverno.io/severity: medium\n    policies.kyverno.io/subject: Deployment\n    kyverno.io/kyverno-version: 1.7.0\n    policies.kyverno.io/minversion: 1.7.0\n    kyverno.io/kubernetes-version: \"1.23\"\n    policies.kyverno.io/description: >-\n      This policy updates the image tag on existing Deployments which have the given annotation set but\n      only for a single container.\n      It may be necessary to grant additional privileges to the Kyverno ServiceAccount,\n      via one of the existing ClusterRoleBindings or a new one, so it can modify Deployments.\nspec:\n  mutateExistingOnPolicyUpdate: true\n  rul",
+        "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: label-existing-namespaces\n  annotations:\n    policies.kyverno.io/title: Label Existing Namespaces\n    policies.kyverno.io/category: other\n    policies.kyverno.io/severity: medium\n    policies.kyverno.io/subject: Namespace\n    kyverno.io/kyverno-version: 1.7.0\n    policies.kyverno.io/minversion: 1.7.0\n    kyverno.io/kubernetes-version: \"1.23\"\n    policies.kyverno.io/description: >-\n      There must be some AdmissionReview request which pertains to some Namespace\n      to trigger this policy. As long as this rule exists, Kyverno will manage\n      this label on all target resources, either re-adding or replacing the label value.\nspec:\n  mutateExistingOnPolicyUpdate: true\n  rules:\n  - name: label-existing-namespaces-rule\n    match",
+        "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: sync-cms\nspec:\n  mutateExistingOnPolicyUpdate: false\n  rules:\n  - name: concat-cm\n    match:\n      any:\n      - resources:\n          kinds:\n          - ConfigMap\n          names:\n          - cmone\n          namespaces:\n          - foo\n    mutate:\n      targets:\n        - apiVersion: v1\n          kind: ConfigMap\n          name: cmtwo\n          namespace: bar\n      patchStrategicMerge:\n        data:\n          key: \"{{@}} plus {{request.object.data.keyone}}\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Namespace",
+      "Serviceaccount"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/1607",
+      "repo": "https://github.com/kyverno/kyverno"
+    },
+    "reactions": 16,
+    "comments": 18,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:37:36.248Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

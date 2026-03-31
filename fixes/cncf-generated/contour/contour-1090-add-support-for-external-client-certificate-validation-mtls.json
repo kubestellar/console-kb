@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "contour-1090-add-support-for-external-client-certificate-validation-mtls",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "contour: Add support for external client certificate validation (mTLS)",
+    "description": "Add support for external client certificate validation (mTLS). Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current contour deployment",
+        "description": "Verify your contour version and configuration:\n```bash\nkubectl get pods -n contour -l app.kubernetes.io/name=contour\nhelm list -n contour 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working contour installation."
+      },
+      {
+        "title": "Review contour configuration",
+        "description": "Inspect the relevant contour configuration:\n```bash\nkubectl get all -n contour -l app.kubernetes.io/name=contour\nkubectl get configmap -n contour -l app.kubernetes.io/part-of=contour\n```\nEnable client certificate validation for external clients ([mTLS](https://en.wikipedia.org/wiki/Mutual_authentication))\n\nSince mTLS is done for a virtual server, not a path, annotations in service manifests can not be used."
+      },
+      {
+        "title": "Apply the fix for Add support for external client certificate validation…",
+        "description": "The client certificate is not forwarded from Envoy to the backend POD (I got that wrong) but envoy should forward client certificate details\n```yaml\napiVersion: contour.heptio.com/v1beta1\nkind: IngressRoute\nmetadata:\n  name: www\n  namespace: default\nspec:\n  virtualhost:\n    fqdn: foo.com\n    tls:\n      secretName: server-secret\n      clientValidation:\n        secretName: client-secret\n  routes:\n    - match: /\n      services:\n        - name: s1\n          port: 80\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n contour -l app.kubernetes.io/name=contour\nkubectl get events -n contour --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Add support for external client certificate validation…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "The client certificate is not forwarded from Envoy to the backend POD (I got that wrong) but envoy should forward client certificate details ([doc](https://www.envoyproxy.io/docs/envoy/latest/api-v2/config/filter/network/http_connection_manager/v2/http_connection_manager.proto#envoy-api-enum-config-filter-network-http-connection-manager-v2-httpconnectionmanager-forwardclientcertdetails)); \n\n```\n ",
+      "codeSnippets": [
+        "apiVersion: contour.heptio.com/v1beta1\nkind: IngressRoute\nmetadata:\n  name: www\n  namespace: default\nspec:\n  virtualhost:\n    fqdn: foo.com\n    tls:\n      secretName: server-secret\n      clientValidation:\n        secretName: client-secret\n  routes:\n    - match: /\n      services:\n        - name: s1\n          port: 80",
+        "tls_context:\n        require_client_certificate: true\n        common_tls_context:\n          validation_context:\n            verify_certificate_spki: j1fFFSBuF7S/Hzk5xsIq7N7wvVm8xdMpMnt0OUsz5rs=",
+        "openssl x509 -in default/cert/kahttp.crt -noout -pubkey \\\n  | openssl pkey -pubin -outform DER \\\n  | openssl dgst -sha256 -binary \\\n  | openssl enc -base64"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "contour",
+      "incubating",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "contour"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/projectcontour/contour/issues/1090",
+      "repo": "https://github.com/projectcontour/contour"
+    },
+    "reactions": 4,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with contour installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-19T06:25:47.681Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

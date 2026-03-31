@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "traefik-5598-healthchecks-for-tcp-forwarded-connections",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "traefik: Healthchecks for TCP forwarded connections",
+    "description": "Healthchecks for TCP forwarded connections. This issue affects 39+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify traefik feature symptoms",
+        "description": "Check for the issue in your traefik deployment:\n```bash\nkubectl get pods -n cert-manager -l app=traefik\nkubectl logs -l app.kubernetes.io/name=traefik -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `msg=\"Error while connection to backend: dial tcp 172.25.0.3:6443: connect: connection refused\"`"
+      },
+      {
+        "title": "Check current Service configuration",
+        "description": "Inspect the relevant traefik resources:\n```bash\nkubectl get service -A\nkubectl describe service <name> -n <namespace>\n```\nTraefik forward connections even if there is no open TCP port.\nIn general there are a lot of cases when you may export more then one TCP port from single container or when container is up but specific"
+      },
+      {
+        "title": "Apply the fix for Healthchecks for TCP forwarded connections",
+        "description": "### What does this PR do?\nWhen no up servers left in a service, exclude it from WRR to avoid 503-s.\n\n### Motivation\n\n### More\n\n### Additional Notes\n```yaml\ntraefik version\r\nVersion:      2.0.1\r\nCodename:     montdor\r\nGo version:   go1.13.1\r\nBuilt:        2019-09-26T16:18:03Z\r\nOS/Arch:      linux/amd64\n```"
+      },
+      {
+        "title": "Confirm Healthchecks for TCP forwarded connections is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=traefik -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `msg=\"Error while connection to backend: dial tcp 172.25.0.3:6443: connect: connection refused\"` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: ### What does this PR do?\nWhen no up servers left in a service, exclude it from WRR to avoid 503-s.\n\n### Motivation\n\n### More\n\n### Additional Notes. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "traefik version\r\nVersion:      2.0.1\r\nCodename:     montdor\r\nGo version:   go1.13.1\r\nBuilt:        2019-09-26T16:18:03Z\r\nOS/Arch:      linux/amd64",
+        "version: '3.0'                                                                                                                           services:\r\n  lb:\r\n    hostname: lb\r\n    image: traefik:latest\r\n    command:\r\n      - --api.insecure=true\r\n      - --providers.docker\r\n      - --entryPoints.http.address=:80\r\n      - --entryPoints.kubeapi.address=:6443\r\n      - --log.level=DEBUG\r\n    ports:\r\n      - \"6443:6443\"\r\n      - \"8080:8080\"\r\n      - \"80:80\"\r\n    labels:\r\n      - \"traefik.enable=false\"\r\n    restart: always\r\n    volumes:\r\n      - /var/run/docker.sock:/var/run/docker.sock:ro\r\n  node1:\r\n    build:\r\n      context: ./config\r\n    hostname: node1\r\n    image: kube\r\n    labels:\r\n      - traefik.tcp.routers.kube-apiserver.entrypoints=kubeapi\r\n      - traefik.tcp.routers.kube-apiserver.rule=Ho",
+        "lb_1     | time=\"2019-10-08T12:25:36Z\" level=debug msg=\"Handling connection from 172.25.0.4:54836\"\r\nlb_1     | time=\"2019-10-08T12:25:36Z\" level=error msg=\"Error while connection to backend: dial tcp 172.25.0.3:6443: connect: connection refused\"\r\nlb_1     | time=\"2019-10-08T12:25:36Z\" level=debug msg=\"Handling connection from 172.25.0.4:54846\"\r\nlb_1     | time=\"2019-10-08T12:25:36Z\" level=error msg=\"Error while connection to backend: dial tcp 172.25.0.5:6443: connect: connection refused\"\r\nlb_1     | time=\"2019-10-08T12:25:36Z\" level=debug msg=\"Handling connection from 172.25.0.4:54850\"\r\nlb_1     | time=\"2019-10-08T12:25:36Z\" level=debug msg=\"Error while terminating connection: close tcp 172.25.0.2:6443->172.25.0.4:54850: shutdown:\r\ntransport endpoint is not connected\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "traefik",
+      "community",
+      "ingress",
+      "feature"
+    ],
+    "cncfProjects": [
+      "traefik"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/traefik/traefik/issues/5598",
+      "repo": "https://github.com/traefik/traefik",
+      "pr": "https://github.com/traefik/traefik/pull/7716"
+    },
+    "reactions": 39,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with traefik installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:51:05.107Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

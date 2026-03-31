@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "longhorn-12521-bug-instance-manager-on-nodes-that-don-t-have-hard-or-solid-state",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "longhorn: [BUG]  `instance-manager` on nodes that don't have hard or solid state disk DDOSing cluster DNS server with TXT query  `_grpc_config.localhost`",
+    "description": "[BUG]  `instance-manager` on nodes that don't have hard or solid state disk DDOSing cluster DNS server with TXT query  `_grpc_config.localhost`. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify longhorn troubleshoot symptoms",
+        "description": "Check for the issue in your longhorn deployment:\n```bash\nkubectl get pods -n longhorn -l app.kubernetes.io/name=longhorn\nkubectl logs -l app.kubernetes.io/name=longhorn -n longhorn --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review longhorn configuration",
+        "description": "Inspect the relevant longhorn configuration:\n```bash\nkubectl get all -n longhorn -l app.kubernetes.io/name=longhorn\nkubectl get configmap -n longhorn -l app.kubernetes.io/part-of=longhorn\n```\n### Describe the Bug\n\nThe instance managers on nodes that don't have hard drive keep flooding my DNS server with TXT DNS query `_grpc_config.localhost`."
+      },
+      {
+        "title": "Apply the fix for [BUG]  `instance-manager` on nodes that don't have hard or…",
+        "description": "since instance manager (plus the engine instance copied from engine image) are running inside a pod managed by the InstanceManager controller, it is not likely to disable such DNS queries using envvar `GRPC_ENABLE_TXT_SERVICE_CONFIG=false`. But you can still try the latest nightly build.\n\n- Helm\n```yaml\nsudo kubectl apply -f https://github.com/longhorn/longhorn/releases/download/v1.10.1/longhorn.yaml\n```"
+      },
+      {
+        "title": "Confirm [BUG]  `instance-manager` on nodes that don't… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=longhorn -n longhorn --tail=50 --since=5m\nkubectl get events -n longhorn --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "since instance manager (plus the engine instance copied from engine image) are running inside a pod managed by the InstanceManager controller, it is not likely to disable such DNS queries using envvar `GRPC_ENABLE_TXT_SERVICE_CONFIG=false`. But you can still try the latest nightly build.",
+      "codeSnippets": [
+        "sudo kubectl apply -f https://github.com/longhorn/longhorn/releases/download/v1.10.1/longhorn.yaml",
+        "apiVersion: v1\nkind: Pod\nmetadata:\n  name: tcpdump-pod\nspec:\n  hostNetwork: true  # Allows the pod to use the host network\n  containers:\n  - name: tcpdump\n    image: nicolaka/netshoot:v0.15\n    command:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"tcpdump -i cni0 -nn -v | grep '_grpc_config.localhost'\"\n    securityContext:\n      privileged: true  # Required to run tcpdump with necessary permissions",
+        "tcpdump: listening on cni0, link-type EN10MB (Ethernet), snapshot length 262144 bytes\n    10.42.12.171.42798 > 10.42.0.18.53: 10582+ [1au] TXT? _grpc_config.localhost.longhorn-system.svc.cluster.local. (85)\n    10.42.12.171.36650 > 10.42.0.18.53: 53215+ [1au] TXT? _grpc_config.localhost.svc.cluster.local. (69)\n    10.42.12.171.36599 > 10.42.0.18.53: 15220+ [1au] TXT? _grpc_config.localhost.cluster.local. (65)\n    10.42.12.171.38321 > 10.42.0.18.53: 1446+ [1au] TXT? _grpc_config.localhost.lan. (55)\n    10.42.12.171.37982 > 10.42.0.18.53: 5946+ [1au] TXT? _grpc_config.localhost. (51)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "longhorn",
+      "incubating",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "longhorn"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Node"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/longhorn/longhorn/issues/12521",
+      "repo": "https://github.com/longhorn/longhorn"
+    },
+    "reactions": 1,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with longhorn installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:44:31.186Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

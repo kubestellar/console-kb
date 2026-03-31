@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "vllm-2422-phi-2-broken",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "vllm: Phi-2 model broken (AttributeError in PhiConfig)",
+    "description": "Fix for the Phi-2 model failing to load in vLLM due to AttributeError: 'PhiConfig' object has no attribute 'layer_norm_epsilon' (should be 'layer_norm_eps') and missing 'rotary_dim' attribute. This affected vLLM v0.2.x with newer versions of the transformers library. Reported by 29+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the issue",
+        "description": "When loading the Phi-2 model (microsoft/phi-2) in vLLM, you may see one of these errors:\n```python\nAttributeError: 'PhiConfig' object has no attribute 'layer_norm_epsilon'. Did you mean: 'layer_norm_eps'?\n```\nor:\n```python\nAttributeError: 'PhiConfig' object has no attribute 'rotary_dim'\n```\nThis happens because the transformers library updated the Phi config attribute names, but older vLLM versions referenced the old names."
+      },
+      {
+        "title": "Check your vLLM and transformers versions",
+        "description": "Verify your installed versions:\n```bash\npip show vllm | grep Version\npip show transformers | grep Version\n```\nThis issue occurs with vLLM v0.2.x and transformers >= 4.36.0 where the PhiConfig attribute names changed."
+      },
+      {
+        "title": "Apply the fix",
+        "description": "Upgrade vLLM to a version that handles the updated PhiConfig attributes:\n```bash\npip install vllm --upgrade\n```\nThe fix in vLLM updated the model executor code (`phi_1_5.py`) to use the correct config attribute names (`layer_norm_eps` instead of `layer_norm_epsilon`, and `partial_rotary_factor` instead of `rotary_dim`)."
+      },
+      {
+        "title": "Verify Phi-2 loads correctly",
+        "description": "Test that Phi-2 loads and runs without errors:\n```bash\npython -m vllm.entrypoints.openai.api_server \\\n  --model microsoft/phi-2\n```\nThen test inference:\n```bash\ncurl http://localhost:8000/v1/completions \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"model\": \"microsoft/phi-2\", \"prompt\": \"def hello_world():\", \"max_tokens\": 50}'\n```\nYou should receive a valid completion without any AttributeError."
+      }
+    ],
+    "resolution": {
+      "summary": "The Phi-2 model broke in vLLM due to a mismatch between the PhiConfig attribute names used in vLLM's model executor and the updated attribute names in the transformers library. Specifically, 'layer_norm_epsilon' was renamed to 'layer_norm_eps' and 'rotary_dim' was replaced with 'partial_rotary_factor'. The fix updated vLLM's Phi model code to use the correct attribute names.",
+      "codeSnippets": [
+        "# Error: AttributeError: 'PhiConfig' object has no attribute 'layer_norm_epsilon'\n# Fix: Use 'layer_norm_eps' instead of 'layer_norm_epsilon'\n# Fix: Use 'partial_rotary_factor' instead of 'rotary_dim'",
+        "# Upgrade vLLM to fix the issue\npip install vllm --upgrade"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "vllm",
+      "community",
+      "llm-serving",
+      "troubleshoot",
+      "phi-2",
+      "model-loading"
+    ],
+    "cncfProjects": [
+      "vllm"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/vllm-project/vllm/issues/2422",
+      "repo": "https://github.com/vllm-project/vllm",
+      "pr": "https://github.com/vllm-project/vllm/pull/2383"
+    },
+    "reactions": 29,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "python",
+      "pip"
+    ],
+    "description": "Python 3.8+, pip, a CUDA-capable GPU, and a working vLLM installation (pip install vllm)."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:45:29.589Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

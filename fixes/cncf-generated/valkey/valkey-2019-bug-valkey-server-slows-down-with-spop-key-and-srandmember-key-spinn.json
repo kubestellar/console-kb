@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "valkey-2019-bug-valkey-server-slows-down-with-spop-key-and-srandmember-key-spinn",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "valkey: [BUG] valkey-server slows down with `spop <key>` and `srandmember <key>` spinning in hashtableScanDefrag after a few hours",
+    "description": "[BUG] valkey-server slows down with `spop <key>` and `srandmember <key>` spinning in hashtableScanDefrag after a few hours. This issue affects 7+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify valkey troubleshoot symptoms",
+        "description": "Check for the issue in your valkey installation:\n```bash\nvalkey-server --version\nvalkey-cli ping\n```\nLook for errors or warnings that may indicate the issue."
+      },
+      {
+        "title": "Review valkey configuration",
+        "description": "Review the relevant valkey configuration:\nAfter a few hours of uptime, one of our valkey-server processes (Docker `8.1.1-alpine` and `8.1.1` images) starts consuming 100% CPU usage and only sporadically responds to application requests."
+      },
+      {
+        "title": "Apply the fix for [BUG] valkey-server slows down with `spop <key>` and…",
+        "description": "Tested with starting Valkey with `activedefrag no` instead, I observed the process staying at ~30% CPU usage for about 4 hours and then quickly ramp up to 100% within a few (~10) minutes.\n\nThe same set now shows this information:\n```\n127.0.0.1:38542> debug object urls:unretrievable\nValue\n```yaml\n127.0.0.1:38542> debug object urls:unretrievable\nValue at:0x725d06994530 refcount:1 encoding:hashtable serializedlength:1668169541 lru:1044411 lru_seconds_idle:0 lfu_freq:0 lfu_access_time_minutes:4079\n(20.73s)\n127.0.0.1:38542> debug htstats-key urls:unretrievable full\nHash table 0 stats (main hash table):\n table size: 14680064\n number of entries: 1850367\n top-level buckets: 2097152\n child buckets: 200170\n max chain length: 4\n avg chain length: 0.10\n chain length distribution:\n   0: 1958960 (93.41%)\n   1: 81106 (3.87%)\n   2: 52290 (2.49%)\n   3: 4700 (0.22%)\n   4: 96 (0.00%)\nHash table 1 stats \n```"
+      },
+      {
+        "title": "Confirm [BUG] valkey-server slows down with `spop <key>`… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\nTest valkey to confirm the issue is resolved.\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Tested with starting Valkey with `activedefrag no` instead, I observed the process staying at ~30% CPU usage for about 4 hours and then quickly ramp up to 100% within a few (~10) minutes.",
+      "codeSnippets": [
+        "127.0.0.1:38542> debug object urls:unretrievable\nValue at:0x725d06994530 refcount:1 encoding:hashtable serializedlength:1668169541 lru:1044411 lru_seconds_idle:0 lfu_freq:0 lfu_access_time_minutes:4079\n(20.73s)\n127.0.0.1:38542> debug htstats-key urls:unretrievable full\nHash table 0 stats (main hash table):\n table size: 14680064\n number of entries: 1850367\n top-level buckets: 2097152\n child buckets: 200170\n max chain length: 4\n avg chain length: 0.10\n chain length distribution:\n   0: 1958960 (93.41%)\n   1: 81106 (3.87%)\n   2: 52290 (2.49%)\n   3: 4700 (0.22%)\n   4: 96 (0.00%)\nHash table 1 stats (rehashing target):\n table size: 29360128\n number of entries: 14611037\n top-level buckets: 4194304\n child buckets: 699571\n max chain length: 3\n avg chain length: 0.17\n chain length distribution:\n   0:",
+        "valkey-server\n--activedefrag yes\n--aof-timestamp-enabled yes\n--appendfsync everysec\n--appendonly yes\n--bind ::\n--bind 0.0.0.0\n--client-output-buffer-limit normal 1gb 16mb 15\n--client-output-buffer-limit pubsub 64mb 8mb 15\n--client-output-buffer-limit replica 16gb 1gb 300\n--client-query-buffer-limit 512mb\n--databases 1\n--dual-channel-replication-enabled yes\n--enable-debug-command local\n--enable-module-command local\n--enable-protected-configs local\n--hide-user-data-from-log no\n--io-threads 8\n--log-format logfmt\n--loglevel verbose\n--log-timestamp-format iso8601\n--maxmemory 128gb\n--maxmemory-clients 1%\n--maxmemory-policy noeviction\n--max-new-connections-per-cycle 100\n--no-appendfsync-on-rewrite yes\n--oom-score-adj relative\n--port ${PORT}\n--proto-max-bulk-len 512mb\n--repl-backlog-size 64mb\n--re",
+        "127.0.0.1:38542> debug object urls:unretrievable\nValue at:0x7b9cbddac3d8 refcount:1 encoding:hashtable serializedlength:998526629 lru:1058857 lru_seconds_idle:0 lfu_freq:0 lfu_access_time_minutes:4136\n(14.93s)\n127.0.0.1:38542> debug htstats-key urls:unretrievable full\nHash table 0 stats (main hash table):\n table size: 29360128\n number of entries: 10100000\n top-level buckets: 4194304\n child buckets: 386767\n max chain length: 3\n avg chain length: 0.09\n chain length distribution:\n   0: 3811245 (90.87%)\n   1: 379352 (9.04%)\n   2: 3706 (0.09%)\n   3: 1 (0.00%)\n(1.46s)\n127.0.0.1:38542>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "valkey",
+      "community",
+      "cache",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "valkey"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/valkey-io/valkey/issues/2019",
+      "repo": "https://github.com/valkey-io/valkey"
+    },
+    "reactions": 7,
+    "comments": 17,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "valkey-server",
+      "valkey-cli"
+    ],
+    "description": "A working valkey installation or development environment."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:52:28.539Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

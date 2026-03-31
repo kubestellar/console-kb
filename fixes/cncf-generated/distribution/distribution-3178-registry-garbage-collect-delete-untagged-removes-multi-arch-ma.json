@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "distribution-3178-registry-garbage-collect-delete-untagged-removes-multi-arch-ma",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "distribution: Registry garbage-collect --delete-untagged removes multi-arch manifests",
+    "description": "Registry garbage-collect --delete-untagged removes multi-arch manifests. Requested by 17+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current distribution deployment",
+        "description": "Verify your distribution version and configuration:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nhelm list -n distribution 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working distribution installation."
+      },
+      {
+        "title": "Review distribution configuration",
+        "description": "Inspect the relevant distribution configuration:\n```bash\nkubectl get all -n distribution -l app.kubernetes.io/name=distribution\nkubectl get configmap -n distribution -l app.kubernetes.io/part-of=distribution\n```\nHello!\nWe are currently experimenting with using multi-arch images in our infrastructure, as we have a mix of IBM Power and regular AMD64-based machines, and are currently using different tags/repositories to distinguish between the architectures,"
+      },
+      {
+        "title": "Apply the fix for Registry garbage-collect --delete-untagged removes\u2026",
+        "description": "Updates the Manifest and ManifestBuilder to distinguish between blob and manifest references. Uses this new interface to fix the garbage collection logic to do a proper transitive closure on references so that untagged sub manifests referenced by (tagged) manifest lists do not get removed even if\n```yaml\n# Remove old registry, clean slate\ndocker rm -f registry\ndocker system prune --all --volumes -f\n\n# Start registry\ndocker run -d -p 5000:5000 --name registry registry\n\n# Pull AMD64-image\ndocker pull \"docker\"\ndocker tag \"docker\" \"localhost:5000/amd64/docker:latest\"\ndocker push \"localhost:5000/amd64/docker:latest\"\n\n# ARM-image\ndocker pull \"ppc64le/docker\"\ndocker tag \"ppc64le/docker\" \"localhost:5000/ppc64le/docker:latest\"\ndocker push \"localhost:5000/ppc64le/docker:latest\"\n\n#Create and push manifest for multi-arch ubuntu\ndocker manifest create --insecure \"localhost:5000/docker:latest\" \"localhost:50\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n distribution -l app.kubernetes.io/name=distribution\nkubectl get events -n distribution --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Registry garbage-collect --delete-untagged removes\u2026\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Updates the Manifest and ManifestBuilder to distinguish between blob and manifest references. Uses this new interface to fix the garbage collection logic to do a proper transitive closure on references so that untagged sub manifests referenced by (tagged) manifest lists do not get removed even if remove-untagged is given to the garbage collector.",
+      "codeSnippets": [
+        "# Remove old registry, clean slate\ndocker rm -f registry\ndocker system prune --all --volumes -f\n\n# Start registry\ndocker run -d -p 5000:5000 --name registry registry\n\n# Pull AMD64-image\ndocker pull \"docker\"\ndocker tag \"docker\" \"localhost:5000/amd64/docker:latest\"\ndocker push \"localhost:5000/amd64/docker:latest\"\n\n# ARM-image\ndocker pull \"ppc64le/docker\"\ndocker tag \"ppc64le/docker\" \"localhost:5000/ppc64le/docker:latest\"\ndocker push \"localhost:5000/ppc64le/docker:latest\"\n\n#Create and push manifest for multi-arch ubuntu\ndocker manifest create --insecure \"localhost:5000/docker:latest\" \"localhost:5000/amd64/docker:latest\" \"localhost:5000/ppc64le/docker:latest\"\ndocker manifest push -p \"localhost:5000/docker:latest\"\n\n# Clear local cache\ndocker system prune --all -f\n\n# Garbage-collect registry\ndock",
+        "Total reclaimed space: 439.4MB\namd64/docker\namd64/docker: marking manifest sha256:5782329618eaf703204c70f61c1697a428275bc8d8e5a58fa324798e78e31937 \namd64/docker: marking blob sha256:61d75b305666b5c672c2dc789c526f405402c3d37eb44a77470e9217790b9a41\namd64/docker: marking blob sha256:530afca65e2ea04227630ae746e0c85b2bd1a179379cbf2b6501b49c4cab2ccc\namd64/docker: marking blob sha256:33702c1843d19cf7c37af730bcf50c456ac6456ed789053432b000db75d3bed3\namd64/docker: marking blob sha256:d1c203384d5b9b22606055f5a6708153653df701158a6c04748cb77be8238c9e\namd64/docker: marking blob sha256:146feb07c33136aba6d87c2a8d6882cd4d438d957eaaa8f388f59214f1269bd0\namd64/docker: marking blob sha256:cee6b871713b8386f334ada3f80a6f187b8e9130ce7d69236e34fee9f9d44556\namd64/docker: marking blob sha256:db8946a7c6c2c651e2344e7e",
+        "Client: Docker Engine - Community\n Version:           20.10.17\n API version:       1.41\n Go version:        go1.17.11\n Git commit:        100c701\n Built:             Mon Jun  6 23:02:57 2022\n OS/Arch:           linux/amd64\n Context:           default\n Experimental:      true\n\nServer: Docker Engine - Community\n Engine:\n  Version:          20.10.17\n  API version:      1.41 (minimum version 1.12)\n  Go version:       go1.17.11\n  Git commit:       a89b842\n  Built:            Mon Jun  6 23:01:03 2022\n  OS/Arch:          linux/amd64\n  Experimental:     false\n containerd:\n  Version:          1.6.6\n  GitCommit:        10c12954828e7c7c9b6e0ea9b0c02b01407d3ae1\n runc:\n  Version:          1.1.2\n  GitCommit:        v1.1.2-0-ga916309\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "distribution",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "distribution"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/distribution/distribution/issues/3178",
+      "repo": "https://github.com/distribution/distribution",
+      "pr": "https://github.com/distribution/distribution/pull/3402"
+    },
+    "reactions": 17,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "docker",
+      "curl"
+    ],
+    "description": "A running Kubernetes cluster with distribution installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:31:43.785Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

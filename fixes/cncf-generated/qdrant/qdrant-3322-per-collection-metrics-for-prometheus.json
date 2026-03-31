@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "qdrant-3322-per-collection-metrics-for-prometheus",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "qdrant: Per-collection metrics for Prometheus",
+    "description": "Per-collection metrics for Prometheus. Requested by 6+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current qdrant deployment",
+        "description": "Verify your qdrant version and configuration:\n```bash\nkubectl get pods -n qdrant -l app.kubernetes.io/name=qdrant\nhelm list -n qdrant 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working qdrant installation."
+      },
+      {
+        "title": "Review qdrant configuration",
+        "description": "Inspect the relevant qdrant configuration:\n```bash\nkubectl get all -n qdrant -l app.kubernetes.io/name=qdrant\nkubectl get configmap -n qdrant -l app.kubernetes.io/part-of=qdrant\n```\nCurrently, all metrics in `/metrics` are global, meaning that it’s impossible to see differences per collection."
+      },
+      {
+        "title": "Apply the fix for Per-collection metrics for Prometheus",
+        "description": "Currently, the `/metrics` collection is strongly coupled with the `/telemetry` collection. The `/metrics` endpoint is just a filtered-out telemetry metrics. (filtering happens in `MetricsProvider::add_metrics` trait method).\nDoes the `/telemetry` endpoint need to be updated as well?\n\nI see multiple\n```yaml\ngrpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\"} 0.000046\ngrpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\",collection=\"my-collection\"} 0.000049\ngrpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\",collection=\"my-collection-2\"} 0.000046\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n qdrant -l app.kubernetes.io/name=qdrant\nkubectl get events -n qdrant --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Per-collection metrics for Prometheus\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Currently, the `/metrics` collection is strongly coupled with the `/telemetry` collection. The `/metrics` endpoint is just a filtered-out telemetry metrics. (filtering happens in `MetricsProvider::add_metrics` trait method).\nDoes the `/telemetry` endpoint need to be updated as well?\n\nI see multiple options to implement this.\n1. Decouple metrics and telemetry collection.",
+      "codeSnippets": [
+        "grpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\"} 0.000046\ngrpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\",collection=\"my-collection\"} 0.000049\ngrpc_responses_min_duration_seconds{endpoint=\"/qdrant.Points/Upsert\",collection=\"my-collection-2\"} 0.000046"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "qdrant",
+      "community",
+      "vector-db",
+      "feature"
+    ],
+    "cncfProjects": [
+      "qdrant"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/qdrant/qdrant/issues/3322",
+      "repo": "https://github.com/qdrant/qdrant"
+    },
+    "reactions": 6,
+    "comments": 36,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with qdrant installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-24T06:50:01.988Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

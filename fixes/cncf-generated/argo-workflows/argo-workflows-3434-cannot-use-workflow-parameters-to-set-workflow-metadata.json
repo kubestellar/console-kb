@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-3434-cannot-use-workflow-parameters-to-set-workflow-metadata",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: Cannot use `workflow.parameters` to set Workflow metadata?",
+    "description": "Cannot use `workflow.parameters` to set Workflow metadata?. This issue affects 27+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo-workflows troubleshoot symptoms",
+        "description": "Check for the issue in your argo-workflows deployment:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl logs -l app.kubernetes.io/name=argo-workflows -n argo-workflows --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nWorkflow templates that attempt to set metadata labels using workflow parameters (e.g., `jobId: \"{{workflow.parameters.job_id}}\"`) fail because parameter substitution does not occur in the metadata section."
+      },
+      {
+        "title": "Apply the fix for Cannot use `workflow.parameters` to set Workflow metadata?",
+        "description": "Use `spec.workflowMetadata` with `labelsFrom` to set workflow labels from parameters. Labels are updated on the first reconciliation:\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  generateName: render-\nspec:\n  workflowMetadata:\n    labelsFrom:\n      job-id:\n        expression: workflow.parameters[\"job_id\"]\n  arguments:\n    parameters:\n    - name: job_id\n      value: my-job-123\n```"
+      },
+      {
+        "title": "Confirm Cannot use `workflow.parameters` to set Workflow\u2026 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo-workflows -n argo-workflows --tail=50 --since=5m\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Refactored spec.workflowMetadata and added labelsFrom/annotationsFrom fields. Workflow labels are now updated on first reconciliation using expressions that reference workflow parameters.",
+      "codeSnippets": [
+        "apiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  generateName: render-\n  labels:\n    jobId: \"{{workflow.parameters.job_id}}\"",
+        "spec:\n  workflowMetadata:\n    labels: {}\n    annotations: {}\n    labelsFrom: {}\n    annotationsFrom: {}",
+        "apiVersion: argoproj.io/v1alpha1\nkind: CronWorkflow\nmetadata:\n  name: asd\n  namespace: argo\n\nspec:\n  # ...\n  workflowMetadata:\n    labels:\n      example-parameter-from-label: {{workflow.parameters.my-param-label}}\n      my-generally-defined-uuid: {{workflow.uid}}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/3434",
+      "repo": "https://github.com/argoproj/argo-workflows",
+      "pr": "https://github.com/argoproj/argo-workflows/pull/7711"
+    },
+    "reactions": 27,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:19:09.672Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

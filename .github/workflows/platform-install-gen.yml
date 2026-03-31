@@ -50,7 +50,7 @@ jobs:
               import { K8S_PLATFORMS } from './k8s-platforms.mjs';
               import { OTHER_PROJECTS } from './other-projects.mjs';
               import { readdirSync, existsSync } from 'fs';
-              const dir = '../solutions/platform-install';
+              const dir = '../fixes/platform-install';
               const existing = existsSync(dir) ? readdirSync(dir).filter(f=>f.endsWith('.json')).length : 0;
               const total = K8S_PLATFORMS.length + OTHER_PROJECTS.length;
               const toGen = total - existing;
@@ -95,7 +95,7 @@ jobs:
         run: cd scripts && npm ci --silent
 
       - name: Create solutions directory
-        run: mkdir -p solutions/platform-install
+        run: mkdir -p fixes/platform-install
 
       - name: Generate platform missions
         env:
@@ -114,7 +114,7 @@ jobs:
         with:
           name: platform-missions-batch-${{ matrix.batch_index }}
           path: |
-            solutions/platform-install/*.json
+            fixes/platform-install/*.json
             platform-report-*.md
 
   collect:
@@ -142,17 +142,17 @@ jobs:
 
       - name: Move mission files to solutions dir
         run: |
-          mkdir -p solutions/platform-install
+          mkdir -p fixes/platform-install
           # Move any missions that ended up at repo root
-          find . -maxdepth 1 -name 'platform-*.json' -exec mv {} solutions/platform-install/ \;
+          find . -maxdepth 1 -name 'platform-*.json' -exec mv {} fixes/platform-install/ \;
           echo "Platform missions:"
-          ls -la solutions/platform-install/platform-*.json 2>/dev/null | wc -l
+          ls -la fixes/platform-install/platform-*.json 2>/dev/null | wc -l
 
       - name: Schema validation
         id: schema
         run: |
           ERRORS=0
-          for f in solutions/platform-install/platform-*.json; do
+          for f in fixes/platform-install/platform-*.json; do
             [ -f "$f" ] || continue
             node --input-type=module -e "
               import { validateMissionExport } from './scripts/scanner.mjs';
@@ -169,7 +169,7 @@ jobs:
         id: security
         run: |
           BLOCKED=0
-          for f in solutions/platform-install/platform-*.json; do
+          for f in fixes/platform-install/platform-*.json; do
             [ -f "$f" ] || continue
             node --input-type=module -e "
               import { scanForSensitiveData, scanForMaliciousContent } from './scripts/scanner.mjs';
@@ -199,7 +199,7 @@ jobs:
           echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> collect-report.md
           echo "" >> collect-report.md
 
-          NEW_COUNT=$(ls solutions/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
+          NEW_COUNT=$(ls fixes/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
           echo "## Results" >> collect-report.md
           echo "- New platform missions: $NEW_COUNT" >> collect-report.md
           echo "- Schema errors: ${{ steps.schema.outputs.schema_errors || '0' }}" >> collect-report.md
@@ -217,12 +217,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NEW_COUNT=$(ls solutions/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
+          NEW_COUNT=$(ls fixes/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
           [ "$NEW_COUNT" -eq 0 ] && echo "No new missions, skipping PR" && exit 0
 
           BRANCH="platform-install-gen-$(date +%Y%m%d)-$((RANDOM % 10000))"
           git checkout -b "$BRANCH"
-          git add solutions/platform-install/ solutions/index.json
+          git add fixes/platform-install/ fixes/index.json
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -s -m "✨ Platform install mission generation $(date +%Y-%m-%d)
@@ -234,7 +234,7 @@ jobs:
 
           AVG_SCORE=$(node -e "
             const fs = require('fs');
-            const path = 'solutions/platform-install';
+            const path = 'fixes/platform-install';
             const files = fs.readdirSync(path).filter(f=>f.startsWith('platform-')&&f.endsWith('.json'));
             if (!files.length) { console.log(0); process.exit(); }
             const scores = files.map(f => JSON.parse(fs.readFileSync(path+'/'+f,'utf-8')).metadata?.qualityScore || 0);

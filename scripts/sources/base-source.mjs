@@ -106,7 +106,7 @@ export async function buildMission({ title, description, problem, solution, step
     return {
       version: 'kc-mission-v1',
       name: slug,
-      missionClass: 'solution',
+      missionClass: 'fixer',
       author: 'KubeStellar Bot',
       authorGithub: 'kubestellar',
       mission: {
@@ -155,7 +155,7 @@ export async function buildMission({ title, description, problem, solution, step
   return {
     version: 'kc-mission-v1',
     name: slug,
-    missionClass: 'solution',
+    missionClass: 'fixer',
     author: 'KubeStellar Bot',
     authorGithub: 'kubestellar',
     mission: {

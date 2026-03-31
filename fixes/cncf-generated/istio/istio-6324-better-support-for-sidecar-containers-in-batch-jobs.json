@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "istio-6324-better-support-for-sidecar-containers-in-batch-jobs",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "istio: Better support for sidecar containers in batch jobs",
+    "description": "Better support for sidecar containers in batch jobs. This issue affects 76+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify istio feature symptoms",
+        "description": "Check for the issue in your istio deployment:\n```bash\nkubectl get pods -n cert-manager -l app=istio\nkubectl logs -l app.kubernetes.io/name=istio -n cert-manager --tail=100 | grep -i error\n```\nLook for errors related to: Better support for sidecar containers in batch jobs"
+      },
+      {
+        "title": "Check current Job configuration",
+        "description": "Inspect the relevant istio resources:\n```bash\nkubectl get job -A\nkubectl describe job <name> -n <namespace>\n```\nSidecar containers do not play well with k8s jobs. The job will keep running so long as the sidecar proxy is running. This is a general problem not specific to Istio (see https://github.com/kubernetes"
+      },
+      {
+        "title": "Apply the fix for Better support for sidecar containers in batch jobs",
+        "description": "It fixes #6324 \n\nI looked through both envoy and pilot-agent and could notice [Agent waits until the next 'config update'](https://github.com/istio/istio/blob/a4df8f85dcf3c32d4fd944e69f662a51b1eb43da/pilot/pkg/proxy/agent.go#L185), if the last epoch terminates normally. I think in case of 'config up\n```yaml\nState:          Terminated\r\n      Reason:       Error\r\n      Exit Code:    143\n```"
+      },
+      {
+        "title": "Confirm Better support for sidecar containers in batch job is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=istio -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: It fixes #6324 \n\nI looked through both envoy and pilot-agent and could notice [Agent waits until the next 'config update'](https://github.com/istio/istio/blob/a4df8f85dcf3c32d4fd944e69f662a51b1eb43da/pilot/pkg/proxy/agent.go#L185), if the last epoch terminates normally. I think in case of 'config update' Istio users do not explicitly terminate epochs, since it supports hot-reloading. So the main p. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "State:          Terminated\r\n      Reason:       Error\r\n      Exit Code:    143",
+        "Command:\r\n     sh\r\n     -c\r\n     sleep 20;/usr/bin/curl http://dl-cdn.alpinelinux.org --fail; exit_code=$?; echo code is $exit_code; pkill -f /usr/local/bin/pilot-agent; exit $exit_code;\r\n   State:          Terminated\r\n     Reason:       Error\r\n     Exit Code:    143",
+        "Command:\r\n      sh\r\n      -c\r\n      sleep 20;/usr/bin/curl http://dl-cdn.alpinelinux.org --fail; exit_code=$?; echo code is $exit_code; pkill -INT /usr/local/bin/pilot-agent; exit $exit_code;\r\n    State:          Terminated\r\n      Reason:       Completed\r\n      Exit Code:    0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "istio",
+      "graduated",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "istio"
+    ],
+    "targetResourceKinds": [
+      "Job"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/istio/istio/issues/6324",
+      "repo": "https://github.com/istio/istio",
+      "pr": "https://github.com/istio/istio/pull/6734"
+    },
+    "reactions": 76,
+    "comments": 36,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with istio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T05:15:48.456Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "caddy-3784-support-per-host-prometheus-metrics",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "caddy: Support per-host Prometheus metrics",
+    "description": "Support per-host Prometheus metrics. This issue affects 49+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify caddy feature symptoms",
+        "description": "Check for the issue in your caddy deployment:\n```bash\nkubectl get pods -n cert-manager -l app=caddy\nkubectl logs -l app.kubernetes.io/name=caddy -n cert-manager --tail=100 | grep -i error\n```\nLook for errors related to: Support per-host Prometheus metrics"
+      },
+      {
+        "title": "Check current resource configuration",
+        "description": "Inspect the relevant caddy resources:\n```bash\nkubectl get resource -A\nkubectl describe resource <name> -n <namespace>\n```\nInitiated through [this](https://caddy.community/t/per-host-prometheus-metrics/10035) forum post – involving @hairyhenderson –, I'd like to open the discussion about extending the `metrics` directive "
+      },
+      {
+        "title": "Apply the fix for Support per-host Prometheus metrics",
+        "description": "Thanks for logging this @muety!\n\nJust to bring the goal into view, the v1 prometheus module had the ability to set a value to be used by the `host` label, which effectively solved the cardinality problem (i.e. the fact that there isn't a bounded set of values that can be used if it's determined auto\n```yaml\nexample.org {\r\n    root /var/www/html\r\n    file_server\r\n    metrics /metrics {\r\n        host \"example.org\"\r\n    }\r\n}\n```"
+      },
+      {
+        "title": "Confirm Support per-host Prometheus metrics is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=caddy -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: Thanks for logging this @muety!\n\nJust to bring the goal into view, the v1 prometheus module had the ability to set a value to be used by the `host` label, which effectively solved the cardinality problem (i.e. the fact that there isn't a bounded set of values that can be used if it's determined automatically by looking at the `Host` header).\n\nCaddy v2 is quite different from v1, and one of those d. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "example.org {\r\n    root /var/www/html\r\n    file_server\r\n    metrics /metrics {\r\n        host \"example.org\"\r\n    }\r\n}",
+        "example.com {\r\n  respond /foo \"hello world\"\r\n}\r\nexample2.com {\r\n  respond /bar \"hello world\"\r\n}\r\nexample2.com:8443 {\r\n  respond /baz \"hello world\"\r\n}",
+        "{\r\n  \"apps\": {\r\n    \"http\": {\r\n      \"servers\": {\r\n        \"srv0\": {\r\n          \"listen\": [ \":443\" ],\r\n          \"routes\": [ {\r\n              \"match\": [ { \"host\": [ \"example2.com\" ] } ],\r\n              \"handle\": [ {\r\n                  \"handler\": \"subroute\",\r\n                  \"routes\": [ {\r\n                      \"handle\": [ { \"body\": \"hello world\", \"handler\": \"static_response\" } ],\r\n                      \"match\": [ { \"path\": [ \"/bar\" ] } ]\r\n                    } ]\r\n                } ],\r\n              \"terminal\": true\r\n            },\r\n            {\r\n              \"match\": [ { \"host\": [ \"example.com\" ] } ],\r\n              \"handle\": [ {\r\n                  \"handler\": \"subroute\",\r\n                  \"routes\": [ {\r\n                      \"handle\": [ { \"body\": \"hello world\", \"handler\": \"static_resp"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "caddy",
+      "community",
+      "web-server",
+      "feature"
+    ],
+    "cncfProjects": [
+      "caddy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/caddyserver/caddy/issues/3784",
+      "repo": "https://github.com/caddyserver/caddy",
+      "pr": "https://github.com/caddyserver/caddy/pull/4015"
+    },
+    "reactions": 49,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "caddy"
+    ],
+    "description": "A working caddy installation or development environment."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T06:51:47.154Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

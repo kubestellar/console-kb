@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cilium-38059-multiple-consecutive-retries-of-updating-taints-and-conditions-for-",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cilium: Multiple consecutive retries of updating taints and conditions for a node failed",
+    "description": "Multiple consecutive retries of updating taints and conditions for a node failed. Users encounter: \"\"Node.core \\\"XXXXX\\\" not\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cilium troubleshoot symptoms",
+        "description": "Check for the issue in your cilium deployment:\n```bash\nkubectl get pods -n cilium -l app.kubernetes.io/name=cilium\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=100 | grep -i error\n```\nLook for error: `\"Node.core \\\"XXXXX\\\" not found\"`"
+      },
+      {
+        "title": "Review cilium configuration",
+        "description": "Inspect the relevant cilium configuration:\n```bash\nkubectl get all -n cilium -l app.kubernetes.io/name=cilium\nkubectl get configmap -n cilium -l app.kubernetes.io/part-of=cilium\n```\n### Is there an existing issue for this?\n\n### Version\n\nequal or higher than v1.17.1 and lower than v1.18.0\n\n### What happened?\n\nHi there,\n\nSince the upgrade of v1.17.1, we have a ton of such warn logs:\n\n```\nlevel=warn msg=\"Multiple consecutive"
+      },
+      {
+        "title": "Apply the fix for Multiple consecutive retries of updating taints and…",
+        "description": "The Cilium Operator logs are filled with attempts to retry updating taints/conditions on nodes even if we can't get the node from the local store due to node deletion. Skip retry in this case.\n```yaml\ncni:\n  chainingMode: aws-cni\n  exclusive: false\nenableIPv4Masquerade: false\nroutingMode: native\nendpointRoutes:\n  enabled: true\ndnsProxy:\n  endpointMaxIpPerHostname: 500\n```"
+      },
+      {
+        "title": "Confirm Multiple consecutive retries of updating taints… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=50 --since=5m\nkubectl get events -n cilium --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `\"Node.core \\\"XXXXX\\\" not found\"` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The Cilium Operator logs are filled with attempts to retry updating taints/conditions on nodes even if we can't get the node from the local store due to node deletion. Skip retry in this case.",
+      "codeSnippets": [
+        "cni:\n  chainingMode: aws-cni\n  exclusive: false\nenableIPv4Masquerade: false\nroutingMode: native\nendpointRoutes:\n  enabled: true\ndnsProxy:\n  endpointMaxIpPerHostname: 500",
+        "Facing the same here:",
+        "* Notes: \n  * I had to remove the node with `kubectl delete`, without draining first. \n  * Restarting the ds (`kubectl rollout restart ds/cilium -n kube-system`) did not fix the issue.\n\n### version details for reference\n#### cilium status"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Node"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cilium/cilium/issues/38059",
+      "repo": "https://github.com/cilium/cilium",
+      "pr": "https://github.com/cilium/cilium/pull/39517"
+    },
+    "reactions": 24,
+    "comments": 5,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cilium installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:26:11.473Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

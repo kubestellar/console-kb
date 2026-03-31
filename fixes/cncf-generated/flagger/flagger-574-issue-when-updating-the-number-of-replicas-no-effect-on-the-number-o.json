@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flagger-574-issue-when-updating-the-number-of-replicas-no-effect-on-the-number-o",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flagger: Issue when updating the number of replicas, no effect on the number of primary pods",
+    "description": "Issue when updating the number of replicas, no effect on the number of primary pods. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify flagger troubleshoot symptoms",
+        "description": "Check for the issue in your flagger deployment:\n```bash\nkubectl get pods -n flagger -l app.kubernetes.io/name=flagger\nkubectl logs -l app.kubernetes.io/name=flagger -n flagger --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review flagger configuration",
+        "description": "Inspect the relevant flagger configuration:\n```bash\nkubectl get all -n flagger -l app.kubernetes.io/name=flagger\nkubectl get configmap -n flagger -l app.kubernetes.io/part-of=flagger\n```\nHi,\n\nI notice when I change the number of replicas to scale up the app, then it does not have the desired effect, like if Flagger is interfering and hijack the new setting for the canary pods only."
+      },
+      {
+        "title": "Apply the fix for Issue when updating the number of replicas, no effect on",
+        "description": "Fix: #574 \n\nThis pull request sets the replica of the primary to the replica of the canary during promotion if `spec.autoscalerRef` isn't set in the canary custom resource.\n```yaml\napiVersion: autoscaling/v2beta1\nkind: HorizontalPodAutoscaler\nmetadata:\n  labels:\n    app: \"avd\"\n  name: \"avd\"\nspec:\n  scaleTargetRef:\n    apiVersion: extensions/v2beta1\n    kind: Deployment\n    name: \"avd\"\n  minReplicas: 1\n  maxReplicas: 6\n  metrics:\n    - type: Resource\n      resource:\n        name: cpu\n        targetAverageUtilization: 50\n```"
+      },
+      {
+        "title": "Confirm Issue when updating the number of replicas, no is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=flagger -n flagger --tail=50 --since=5m\nkubectl get events -n flagger --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Fix: #574 \n\nThis pull request sets the replica of the primary to the replica of the canary during promotion if `spec.autoscalerRef` isn't set in the canary custom resource.",
+      "codeSnippets": [
+        "apiVersion: autoscaling/v2beta1\nkind: HorizontalPodAutoscaler\nmetadata:\n  labels:\n    app: \"avd\"\n  name: \"avd\"\nspec:\n  scaleTargetRef:\n    apiVersion: extensions/v2beta1\n    kind: Deployment\n    name: \"avd\"\n  minReplicas: 1\n  maxReplicas: 6\n  metrics:\n    - type: Resource\n      resource:\n        name: cpu\n        targetAverageUtilization: 50",
+        "apiVersion: flagger.app/v1beta1\nkind: Canary\nmetadata:\n  name: avd\n  namespace: poc-flagger\nspec:\n  # deployment reference\n  targetRef:\n    apiVersion: apps/v1\n    kind: Deployment\n    name: avd\n  # the maximum time in seconds for the canary deployment\n  # to make progress before it is rollback (default 600s)\n  progressDeadlineSeconds: 600\n  # HPA reference (optional)\n  autoscalerRef:\n    apiVersion: autoscaling/v2beta1\n    kind: HorizontalPodAutoscaler\n    name: avd\n  service:\n    # service port number\n    port: 8080\n    # container port number or name (optional)\n    targetPort: 8080\n    # Istio gateways (optional)\n    gateways:\n      - istio-system/wildcard-istio-gateway\n    # Istio virtual service host names (optional)\n    hosts:\n      - avd.poc-flagger.svc.cluster.local\n      - avd.ist"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flagger",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "flagger"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluxcd/flagger/issues/574",
+      "repo": "https://github.com/fluxcd/flagger",
+      "pr": "https://github.com/fluxcd/flagger/pull/1106"
+    },
+    "reactions": 6,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flagger installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:53.543Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

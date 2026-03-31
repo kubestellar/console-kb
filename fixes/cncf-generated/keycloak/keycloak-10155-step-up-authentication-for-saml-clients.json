@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-10155-step-up-authentication-for-saml-clients",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: Step-up authentication for SAML clients",
+    "description": "Keycloak does not properly handle the SAML AuthnContextClassRef element in authentication requests from SAML clients. When a service provider requests a specific authentication context (e.g., MFA via https://refeds.org/profile/mfa), Keycloak returns an 'unspecified' value instead of honoring the requested context. Requested by 22+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current Keycloak setup",
+        "description": "Verify your Keycloak version and SAML client configuration:\n```bash\n# Check Keycloak version:\ndocker exec keycloak /opt/keycloak/bin/kc.sh show-config\n\n# List SAML clients in the realm:\ndocker exec keycloak /opt/keycloak/bin/kcadm.sh get clients \\\n  -r myrealm --query protocol=saml --fields 'id,clientId'\n```\nThis feature requires a Keycloak version that includes step-up authentication support for SAML."
+      },
+      {
+        "title": "Understand the SAML step-up authentication requirement",
+        "description": "SAML service providers can request specific authentication contexts via the `RequestedAuthnContext` element:\n```xml\n<samlp:RequestedAuthnContext>\n  <saml:AuthnContextClassRef\n    xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">\n    https://refeds.org/profile/mfa\n  </saml:AuthnContextClassRef>\n</samlp:RequestedAuthnContext>\n```\nPreviously, Keycloak did not process this element for step-up authentication, always returning `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified` regardless of the requested context."
+      },
+      {
+        "title": "Upgrade to the fixed version",
+        "description": "Upgrade your Keycloak installation to a version that includes SAML step-up authentication support from [PR #42984](https://github.com/keycloak/keycloak/pull/42984):\n```bash\ndocker pull quay.io/keycloak/keycloak:latest\ndocker stop keycloak && docker rm keycloak\ndocker run -d --name keycloak \\\n  -e KEYCLOAK_ADMIN=admin \\\n  -e KEYCLOAK_ADMIN_PASSWORD=admin \\\n  -p 8080:8080 \\\n  quay.io/keycloak/keycloak:latest start-dev\n```\nAfter upgrading, configure your SAML client's authentication flow to map the requested AuthnContextClassRef to the appropriate authentication steps."
+      },
+      {
+        "title": "Verify step-up authentication works for SAML clients",
+        "description": "Test the feature:\n1. Configure a SAML client that sends a `RequestedAuthnContext` with a specific `AuthnContextClassRef` (e.g., MFA)\n2. Initiate a SAML login flow from the service provider\n3. Verify that Keycloak triggers the appropriate step-up authentication (e.g., OTP prompt)\n4. Check the SAML response contains the correct `AuthnContextClassRef` instead of `unspecified`"
+      }
+    ],
+    "resolution": {
+      "summary": "Keycloak now supports step-up authentication for SAML clients by processing the RequestedAuthnContext element in SAML authentication requests. When a service provider requests a specific authentication context (e.g., MFA), Keycloak triggers the appropriate authentication flow and returns the correct AuthnContextClassRef in the SAML response.",
+      "codeSnippets": [
+        "<samlp:RequestedAuthnContext>\n  <saml:AuthnContextClassRef\n    xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">\n    https://refeds.org/profile/mfa\n  </saml:AuthnContextClassRef>\n</samlp:RequestedAuthnContext>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "feature"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/10155",
+      "repo": "https://github.com/keycloak/keycloak",
+      "pr": "https://github.com/keycloak/keycloak/pull/42984"
+    },
+    "reactions": 22,
+    "comments": 7,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes) with SAML client configuration access."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:49:07.366Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-events-1339-possible-memory-leak-in-sensor",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-events: Possible memory leak in sensor",
+    "description": "Possible memory leak in sensor. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo-events troubleshoot symptoms",
+        "description": "Check for the issue in your argo-events deployment:\n```bash\nkubectl get pods -n argo-events -l app.kubernetes.io/name=argo-events\nkubectl logs -l app.kubernetes.io/name=argo-events -n argo-events --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review argo-events configuration",
+        "description": "Inspect the relevant argo-events configuration:\n```bash\nkubectl get all -n argo-events -l app.kubernetes.io/name=argo-events\nkubectl get configmap -n argo-events -l app.kubernetes.io/part-of=argo-events\n```\nA sensor deployed with 49 dependencies has the tendency to consume over `6144Mi` of memory.\n\n**To Reproduce**\nSteps to reproduce the behavior:\n1. Deploy argo wrokflows as described in their release notes.\n2."
+      },
+      {
+        "title": "Apply the fix for Possible memory leak in sensor",
+        "description": "The `bool expression simplifier` is used by the Sensor to simplify and group different trigger conditions, fox example, `a || (a && b) || c` will be simplified as `a || c`, so that different triggers using same condition will only start one subscription to NATS Streaming. It's implemented by using\n```yaml\n$ kubectl version\nClient Version: version.Info{Major:\"1\", Minor:\"21\", GitVersion:\"v1.21.4\", GitCommit:\"3cce4a82b44f032d0cd1a1790e6d2f5a55d20aae\", GitTreeState:\"clean\", BuildDate:\"2021-08-11T18:16:05Z\", GoVersion:\"go1.16.7\", Compiler:\"gc\", Platform:\"darwin/amd64\"}\nServer Version: version.Info{Major:\"1\", Minor:\"21\", GitVersion:\"v1.21.4\", GitCommit:\"3cce4a82b44f032d0cd1a1790e6d2f5a55d20aae\", GitTreeState:\"clean\", BuildDate:\"2021-08-11T18:10:22Z\", GoVersion:\"go1.16.7\", Compiler:\"gc\", Platform:\"linux/amd64\"}\n```"
+      },
+      {
+        "title": "Confirm Possible memory leak in sensor is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo-events -n argo-events --tail=50 --since=5m\nkubectl get events -n argo-events --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The `bool expression simplifier` is used by the Sensor to simplify and group different trigger conditions, fox example, `a || (a && b) || c` will be simplified as `a || c`, so that different triggers using same condition will only start one subscription to NATS Streaming. It's implemented by using [Quine–McCluskey](https://en.wikipedia.org/wiki/Quine%E2%80%93McCluskey_algorithm) algorithm.",
+      "codeSnippets": [
+        "$ kubectl version\nClient Version: version.Info{Major:\"1\", Minor:\"21\", GitVersion:\"v1.21.4\", GitCommit:\"3cce4a82b44f032d0cd1a1790e6d2f5a55d20aae\", GitTreeState:\"clean\", BuildDate:\"2021-08-11T18:16:05Z\", GoVersion:\"go1.16.7\", Compiler:\"gc\", Platform:\"darwin/amd64\"}\nServer Version: version.Info{Major:\"1\", Minor:\"21\", GitVersion:\"v1.21.4\", GitCommit:\"3cce4a82b44f032d0cd1a1790e6d2f5a55d20aae\", GitTreeState:\"clean\", BuildDate:\"2021-08-11T18:10:22Z\", GoVersion:\"go1.16.7\", Compiler:\"gc\", Platform:\"linux/amd64\"}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-events",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-events"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Serviceaccount"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-events/issues/1339",
+      "repo": "https://github.com/argoproj/argo-events",
+      "pr": "https://github.com/argoproj/argo-events/pull/1363"
+    },
+    "reactions": 11,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-events installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:17:07.045Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-ovn-4217-feature-request-announce-nat-gw-eip-over-bgp",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-ovn: [Feature Request] Announce NAT-GW EIP over BGP",
+    "description": "[Feature Request] Announce NAT-GW EIP over BGP. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kube-ovn deployment",
+        "description": "Verify your kube-ovn version and configuration:\n```bash\nkubectl get pods -n kube-system -l app.kubernetes.io/name=kube-ovn\nhelm list -n kube-system 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kube-ovn installation."
+      },
+      {
+        "title": "Review kube-ovn configuration",
+        "description": "Inspect the relevant kube-ovn configuration:\n```bash\nkubectl get all -n kube-system -l app.kubernetes.io/name=kube-ovn\nkubectl get configmap -n kube-system -l app.kubernetes.io/part-of=kube-ovn\n```\nWhen adding EIPs from an \"external subnet\", the act of receiving the traffic for our EIPs is ensured by ARP on the L2 segment between the \"external subnet\" GW and the NAT-GW from Kube-OVN.\nA more suited way of announcing those IPs would be BGP."
+      },
+      {
+        "title": "Apply the fix for [Feature Request] Announce NAT-GW EIP over BGP",
+        "description": "# Pull Request\n\n## What type of this PR\n\nExamples of user facing changes:\n- Introduces a flag to the BGP speaker to turn it into a \"NAT GW mode\", this makes the speaker announce EIPs linked to the GW the speaker is currently in. This disables announcement of Pod IPs/Services/Subnets by the speaker.\n```yaml\napiVersion: \"k8s.cni.cncf.io/v1\"\nkind: NetworkAttachmentDefinition\nmetadata:\n  name: ovn-nad\n  namespace: default\nspec:\n  config: '{\n      \"cniVersion\": \"0.3.0\",\n      \"type\": \"kube-ovn\",\n      \"server_socket\": \"/run/openvswitch/kube-ovn-daemon.sock\",\n      \"provider\": \"ovn-nad.default.ovn\"\n    }'\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kube-system -l app.kubernetes.io/name=kube-ovn\nkubectl get events -n kube-system --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Feature Request] Announce NAT-GW EIP over BGP\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "# Pull Request\n\n## What type of this PR\n\nExamples of user facing changes:\n- Introduces a flag to the BGP speaker to turn it into a \"NAT GW mode\", this makes the speaker announce EIPs linked to the GW the speaker is currently in. This disables announcement of Pod IPs/Services/Subnets by the speaker.",
+      "codeSnippets": [
+        "apiVersion: \"k8s.cni.cncf.io/v1\"\nkind: NetworkAttachmentDefinition\nmetadata:\n  name: ovn-nad\n  namespace: default\nspec:\n  config: '{\n      \"cniVersion\": \"0.3.0\",\n      \"type\": \"kube-ovn\",\n      \"server_socket\": \"/run/openvswitch/kube-ovn-daemon.sock\",\n      \"provider\": \"ovn-nad.default.ovn\"\n    }'",
+        "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  labels:\n    kubernetes.io/bootstrapping: rbac-defaults\n  name: system:vpc-nat-gw\nrules:\n  - apiGroups:\n    - \"\"\n    resources:\n    - services\n    - pods\n    verbs:\n    - list\n    - watch\n  - apiGroups:\n    - kubeovn.io\n    resources:\n    - iptables-eips\n    - subnets\n    - vpc-nat-gateways\n    verbs:\n    - list\n    - watch\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  annotations:\n    rbac.authorization.kubernetes.io/autoupdate: \"true\"\n  labels:\n    kubernetes.io/bootstrapping: rbac-defaults\n  name: vpc-nat-gw\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: system:vpc-nat-gw\nsubjects:\n- kind: ServiceAccount\n  name: vpc-nat-gw\n  namespace: kube-system\n---\napi"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-ovn",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kube-ovn"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Configmap",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeovn/kube-ovn/issues/4217",
+      "repo": "https://github.com/kubeovn/kube-ovn",
+      "pr": "https://github.com/kubeovn/kube-ovn/pull/4285"
+    },
+    "reactions": 1,
+    "comments": 27,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with Kube-OVN installed as the CNI plugin."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:37:38.847Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

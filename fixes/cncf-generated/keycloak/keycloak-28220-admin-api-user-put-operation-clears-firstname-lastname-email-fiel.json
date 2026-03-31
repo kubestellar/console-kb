@@ -1,0 +1,71 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-28220-admin-api-user-put-operation-clears-firstname-lastname-email-fiel",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: Admin API: User PUT operation clears firstname, lastname email fields",
+    "description": "Admin API: User PUT operation clears firstname, lastname email fields. This issue affects 32+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the User PUT field-clearing issue",
+        "description": "Check if your Keycloak Admin REST API User PUT operation clears fields that were not included in the request body:\n```bash\n# Get a user's current representation:\ncurl -s -H \"Authorization: Bearer $TOKEN\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID | jq '.firstName, .lastName, .email'\n\n# Update a single attribute (e.g., only lastName) with PUT:\ncurl -X PUT -H \"Authorization: Bearer $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"lastName\": \"NewLastName\"}' \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID\n\n# Check if firstName and email were cleared:\ncurl -s -H \"Authorization: Bearer $TOKEN\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID | jq '.firstName, .lastName, .email'\n```\nIf firstName and email are now null/empty, you are affected by this issue."
+      },
+      {
+        "title": "Understand the root cause",
+        "description": "The Admin REST API uses a PUT endpoint for user updates, which replaces the entire user representation. If you omit fields like `firstName`, `lastName`, or `email` from the PUT body, those fields are set to null because PUT semantics replace the full resource.\n\nThis is technically correct HTTP behavior (PUT replaces the whole resource), but it is a common source of data loss when callers only intend to update a subset of fields."
+      },
+      {
+        "title": "Apply the workaround",
+        "description": "Until a PATCH endpoint is available, always send the complete user representation when using PUT:\n```bash\n# First GET the full user representation:\nUSER=$(curl -s -H \"Authorization: Bearer $TOKEN\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID)\n\n# Modify only the field you want to change:\nUPDATED=$(echo \"$USER\" | jq '.lastName = \"NewLastName\"')\n\n# PUT the complete modified representation:\ncurl -X PUT -H \"Authorization: Bearer $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d \"$UPDATED\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID\n```\nThis ensures no fields are accidentally cleared."
+      },
+      {
+        "title": "Verify fields are preserved",
+        "description": "After applying the workaround, verify that all user fields are preserved after a PUT update:\n```bash\ncurl -s -H \"Authorization: Bearer $TOKEN\" \\\n  https://your-keycloak/admin/realms/your-realm/users/$USER_ID | jq '{firstName, lastName, email}'\n```\nConfirm that firstName, lastName, and email all retain their expected values."
+      }
+    ],
+    "resolution": {
+      "summary": "The Admin REST API User PUT endpoint replaces the entire user representation, clearing any omitted fields. The workaround is to always GET the full user representation first, modify only the desired fields, then PUT the complete object back. A PATCH endpoint has been requested to allow partial updates.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/28220",
+      "repo": "https://github.com/keycloak/keycloak"
+    },
+    "reactions": 32,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes with the Keycloak Operator) with Admin REST API access."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:48:45.361Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

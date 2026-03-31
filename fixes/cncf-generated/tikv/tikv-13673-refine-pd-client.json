@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "tikv-13673-refine-pd-client",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "tikv: Refine PD client",
+    "description": "Refine PD client. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current tikv deployment",
+        "description": "Verify your tiup --version and configuration:\n```bash\nkubectl get pods -n tikv -l app.kubernetes.io/name=tikv\nhelm list -n tikv 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working tikv installation."
+      },
+      {
+        "title": "Review tikv configuration",
+        "description": "Inspect the relevant tikv configuration:\n```bash\nkubectl get all -n tikv -l app.kubernetes.io/name=tikv\nkubectl get configmap -n tikv -l app.kubernetes.io/part-of=tikv\n```\n## Development Task\n\nPD client (and PD worker) has been too complicated to be maintained in the past years. There are subtle bugs due to its complicated reconnect mechanism and lock usage."
+      },
+      {
+        "title": "Apply the fix for Refine PD client",
+        "description": "### What is changed and how it works?\n\nIssue Number: Close #13673 \n\nWhat's Changed:\n\n- Move reconnect logic to one single coroutine `reconnect_loop`\n- Move streaming RPCs to individual long-running coroutines that are not destroyed even when connection is rebuilt\n- All client methods take mutable\n```yaml\npub fn hearbeat(&self) -> Sender {\n        let (tx, rx) = tikv_util::futures::bounded();\n        let client = self.cached_client.clone();\n        self.rpc_client.spawn(async move {\n            loop {\n                client.latest().wait_for_ready().await;\n                let (g_tx, g_rx) = client.heartbeat();\n                select!(g_tx.send_all(rx).await, g_rx);\n            }\n        });\n     }\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n tikv -l app.kubernetes.io/name=tikv\nkubectl get events -n tikv --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Refine PD client\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "### What is changed and how it works?\n\nIssue Number: Close #13673 \n\nWhat's Changed:\n\n- Move reconnect logic to one single coroutine `reconnect_loop`\n- Move streaming RPCs to individual long-running coroutines that are not destroyed even when connection is rebuilt\n- All client methods take mutable reference now\n- `PdConnector` and some other constants are shared with v1\n- Old client tests are\n\nSee the source issue and linked PR for the complete solution details.",
+      "codeSnippets": [
+        "pub fn hearbeat(&self) -> Sender {\n        let (tx, rx) = tikv_util::futures::bounded();\n        let client = self.cached_client.clone();\n        self.rpc_client.spawn(async move {\n            loop {\n                client.latest().wait_for_ready().await;\n                let (g_tx, g_rx) = client.heartbeat();\n                select!(g_tx.send_all(rx).await, g_rx);\n            }\n        });\n     }",
+        "### Related changes\n\n### Check List <!--REMOVE the items that are not applicable-->\n\nTests <!-- At least one of them must be included. -->\n\n- Unit test\n\n\n### Release note <!-- bugfixes or new feature need a release note -->"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "tikv",
+      "graduated",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "tikv"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/tikv/tikv/issues/13673",
+      "repo": "https://github.com/tikv/tikv",
+      "pr": "https://github.com/tikv/tikv/pull/13696"
+    },
+    "reactions": 5,
+    "comments": 2,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "tikv-ctl",
+      "tiup"
+    ],
+    "description": "A running TiKV cluster (standalone or deployed on Kubernetes via TiDB Operator). TiUP and tikv-ctl are the primary CLI tools for managing TiKV."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:20:39.218Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

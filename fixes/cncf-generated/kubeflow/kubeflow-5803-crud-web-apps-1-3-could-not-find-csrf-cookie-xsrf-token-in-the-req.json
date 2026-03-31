@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubeflow-5803-crud-web-apps-1-3-could-not-find-csrf-cookie-xsrf-token-in-the-req",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubeflow: crud-web-apps 1.3 Could not find CSRF cookie XSRF-TOKEN in the request",
+    "description": "crud-web-apps 1.3 Could not find CSRF cookie XSRF-TOKEN in the request. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubeflow troubleshoot symptoms",
+        "description": "Check for the issue in your kubeflow deployment:\n```bash\nkubectl get pods -n kubeflow -l app.kubernetes.io/name=kubeflow\nkubectl logs -l app.kubernetes.io/name=kubeflow -n kubeflow --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kubeflow configuration",
+        "description": "Inspect the relevant kubeflow configuration:\n```bash\nkubectl get all -n kubeflow -l app.kubernetes.io/name=kubeflow\nkubectl get configmap -n kubeflow -l app.kubernetes.io/part-of=kubeflow\n```\nWhen trying to create a new notebook server, tensorboard in the tensorboards-web-app or PVC with the volumes web app it fails with the following error:\n```\nCould not find CSRF cookie XSRF-TOKEN in the request."
+      },
+      {
+        "title": "Apply the fix for crud-web-apps 1.3 Could not find CSRF cookie XSRF-TOKEN in…",
+        "description": "This is because by default the CSRF cookie will be set using the `Secure` attribute.\n\nBut in your case I see that you connect via plain http, which prevents the cookie to be set. Here's the relevant section from MDN https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#Secure\n> Note:\n```yaml\nCould not find CSRF cookie XSRF-TOKEN in the request. http://10.14.0.121/jupyter/api/namespaces/kubeflow-user/notebooks\n```"
+      },
+      {
+        "title": "Confirm crud-web-apps 1.3 Could not find CSRF cookie… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubeflow -n kubeflow --tail=50 --since=5m\nkubectl get events -n kubeflow --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "This is because by default the CSRF cookie will be set using the `Secure` attribute.\n\nBut in your case I see that you connect via plain http, which prevents the cookie to be set.",
+      "codeSnippets": [
+        "Could not find CSRF cookie XSRF-TOKEN in the request. http://10.14.0.121/jupyter/api/namespaces/kubeflow-user/notebooks",
+        "time=\"2021-04-22T06:48:12Z\" level=error msg=\"OIDC provider setup failed, retrying in 10 seconds: Get https://192.168.114.40/dex/.well-known/openid-configuration: x509: certificate signed by unknown authority\"",
+        "apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata:\n  name: kubeflow-ingressgateway-certs\n  namespace: istio-system\nspec:\n  secretName: kubeflow-ingressgateway-certs\n  issuerRef:\n    name: gateways-issuer\n    kind: ClusterIssuer\n  commonName: kubeflow.example.com\n  dnsNames:\n    - kubeflow.example.com"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubeflow",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubeflow"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeflow/kubeflow/issues/5803",
+      "repo": "https://github.com/kubeflow/kubeflow"
+    },
+    "reactions": 3,
+    "comments": 45,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubeflow installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:26:28.507Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

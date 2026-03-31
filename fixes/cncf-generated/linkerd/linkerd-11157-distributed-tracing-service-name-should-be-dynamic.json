@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "linkerd-11157-distributed-tracing-service-name-should-be-dynamic",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "linkerd: Distributed Tracing Service Name should be dynamic",
+    "description": "Distributed Tracing Service Name should be dynamic. Requested by 7+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current linkerd deployment",
+        "description": "Verify your linkerd version and configuration:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nhelm list -n linkerd 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working linkerd installation."
+      },
+      {
+        "title": "Review linkerd configuration",
+        "description": "Inspect the relevant linkerd configuration:\n```bash\nkubectl get all -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get configmap -n linkerd -l app.kubernetes.io/part-of=linkerd\n```\n### What problem are you trying to solve?\n\nAs of today, the service name that the proxy uses to emit traces is hard coded to"
+      },
+      {
+        "title": "Apply the fix for Distributed Tracing Service Name should be dynamic",
+        "description": "I did find a workaround that might be suited for most people.\nIf you're running the opentelemetry collector (which most probably are, because linkerd still uses opencensus), you can configure a custom processor that changes the `service.name` attribute.\nThe linkerd-proxy adds all pod labels as span\n```yaml\ntransform/linkerd-proxy:\n  error_mode: ignore\n  trace_statements:\n    - context: resource\n      statements:\n        - |\n          set(\n            attributes[\"service.name\"],\n            # TODO pick any labels you have/need here:\n            Concat(\n              [\n                attributes[\"app.kubernetes.io/part-of\"],\n                attributes[\"app.kubernetes.io/name\"]\n              ],\n              \"-\"\n            )\n          ) where attributes[\"service.name\"] == \"linkerd-proxy\"\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get events -n linkerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Distributed Tracing Service Name should be dynamic\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I did find a workaround that might be suited for most people.\nIf you're running the opentelemetry collector (which most probably are, because linkerd still uses opencensus), you can configure a custom processor that changes the `service.name` attribute.",
+      "codeSnippets": [
+        "transform/linkerd-proxy:\n  error_mode: ignore\n  trace_statements:\n    - context: resource\n      statements:\n        - |\n          set(\n            attributes[\"service.name\"],\n            # TODO pick any labels you have/need here:\n            Concat(\n              [\n                attributes[\"app.kubernetes.io/part-of\"],\n                attributes[\"app.kubernetes.io/name\"]\n              ],\n              \"-\"\n            )\n          ) where attributes[\"service.name\"] == \"linkerd-proxy\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "linkerd",
+      "graduated",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "linkerd"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node",
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/linkerd/linkerd2/issues/11157",
+      "repo": "https://github.com/linkerd/linkerd2"
+    },
+    "reactions": 7,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with linkerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:02:46.051Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "version": "kc-mission-v1",
+  "name": "linkerd-5394-traffic-stops-when-two-pods-have-the-same-ip-address",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "linkerd: Traffic stops when two pods have the same IP address",
+    "description": "Traffic stops when two pods have the same IP address. This issue affects 9+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify linkerd troubleshoot symptoms",
+        "description": "Check for the issue in your linkerd deployment:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl logs -l app.kubernetes.io/name=linkerd -n linkerd --tail=100 | grep -i error\n```\nLook for error: `output, etc`"
+      },
+      {
+        "title": "Review linkerd configuration",
+        "description": "Inspect the relevant linkerd configuration:\n```bash\nkubectl get all -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get configmap -n linkerd -l app.kubernetes.io/part-of=linkerd\n```\n### What is the issue?\n\nTraffic to a pod stops when the pod has the same IP address as another pod with state `Completed`."
+      },
+      {
+        "title": "Apply the fix for Traffic stops when two pods have the same IP address",
+        "description": "Ignore pods with status.phase=Succeeded when watching IP addresses\n\nWhen a pod terminates successfully, some CNIs will assign its IP address\nto newly created pods. This can lead to duplicate pod IPs in the same\nKubernetes cluster.\n\nFilter out pods which are in a Succeeded phase since they are not\n```yaml\ndefault         example-app-6c4f975874-abc12                                      3/3     Running     0          40m     100.96.43.254    ip-10-0-0-50.region.compute.internal    <none>           <none>\ndefault         example-batch-job-1608003600-xyz98       0/1     Completed   0          31h     100.96.43.254    ip-10-0-0-50.region.compute.internal    <none>           <none>\n```"
+      },
+      {
+        "title": "Confirm Traffic stops when two pods have the same IP is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=linkerd -n linkerd --tail=50 --since=5m\nkubectl get events -n linkerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `output, etc` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Ignore pods with status.phase=Succeeded when watching IP addresses\n\nWhen a pod terminates successfully, some CNIs will assign its IP address\nto newly created pods. This can lead to duplicate pod IPs in the same\nKubernetes cluster.\n\nFilter out pods which are in a Succeeded phase since they are not \nroutable anymore.",
+      "codeSnippets": [
+        "default         example-app-6c4f975874-abc12                                      3/3     Running     0          40m     100.96.43.254    ip-10-0-0-50.region.compute.internal    <none>           <none>\ndefault         example-batch-job-1608003600-xyz98       0/1     Completed   0          31h     100.96.43.254    ip-10-0-0-50.region.compute.internal    <none>           <none>",
+        "example-ingress-7cb9d8f8d4-def34:linkerd-proxy {\"timestamp\":\"[   384.647220s]\",\"level\":\"INFO\",\"fields\":{\"message\":\"Connection closed\",\"error\":\"Service in fail-fast\"},\"target\":\"linkerd2_app_core::serve\",\"span\":{\"peer.addr\":\"100.96.0.146:49428\",\"target.addr\":\"100.96.43.254:8080\",\"name\":\"accept\"},\"spans\":[{\"name\":\"outbound\"},{\"peer.addr\":\"100.96.0.146:49428\",\"target.addr\":\"100.96.43.254:8080\",\"name\":\"accept\"}],\"threadId\":\"ThreadId(1)\"}\nexample-ingress-7cb9d8f8d4-ghi56:linkerd-proxy {\"timestamp\":\"[   219.444015s]\",\"level\":\"WARN\",\"fields\":{\"message\":\"Could not fetch profile\",\"error\":\"status: Unknown, message: \\\"http2 error: protocol error: unexpected internal error encountered\\\", details: [], metadata: MetadataMap { headers: {} }\"},\"target\":\"linkerd2_service_profiles::client\",\"span\":{\"name\":\"outb",
+        "Followed by hundreds of these messages:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "linkerd",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "linkerd"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Namespace",
+      "Serviceaccount",
+      "Clusterrole",
+      "Clusterrolebinding",
+      "Customresourcedefinition",
+      "Mutatingwebhookconfiguration"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/linkerd/linkerd2/issues/5394",
+      "repo": "https://github.com/linkerd/linkerd2",
+      "pr": "https://github.com/linkerd/linkerd2/pull/5412"
+    },
+    "reactions": 9,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with linkerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:02:33.426Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

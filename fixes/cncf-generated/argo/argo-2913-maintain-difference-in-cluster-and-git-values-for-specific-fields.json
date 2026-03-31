@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-2913-maintain-difference-in-cluster-and-git-values-for-specific-fields",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: Maintain difference in cluster and git values for specific fields",
+    "description": "Maintain difference in cluster and git values for specific fields. Requested by 72+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo deployment",
+        "description": "Verify your argo version and configuration:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nhelm list -n argo 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo installation."
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\nIf another controller modifies a field in a resource and that field is required by the resource to be created, then that resource cannot be compatible with GitOps."
+      },
+      {
+        "title": "Apply the fix for Maintain difference in cluster and git values for specific",
+        "description": "Leveraging `ignoreDifferences` may sound a good direction to go but there are some downsides that could make ArgoCD `Application` management a bit more cumbersome. A few things to consider about this design:\n\n- Setting up every field to be ignored in the `Application` is a reactive process as\n```yaml\nspec:\n  ignoreDifferences:\n  - group: apps\n    kind: Deployment\n    jsonPointers:\n    - /spec/replicas\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Maintain difference in cluster and git values for specific\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Leveraging `ignoreDifferences` may sound a good direction to go but there are some downsides that could make ArgoCD `Application` management a bit more cumbersome. A few things to consider about this design:\n\n- Setting up every field to be ignored in the `Application` is a reactive process as different controllers/users will be modifying fields in the same resource.",
+      "codeSnippets": [
+        "spec:\n  ignoreDifferences:\n  - group: apps\n    kind: Deployment\n    jsonPointers:\n    - /spec/replicas",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: nginx\n  labels:\n    app: nginx\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: nginx\n  template:\n    metadata:\n      labels:\n        app: nginx\n    spec:\n      containers:\n      - name: nginx\n        image: nginx:latest\n        ports:\n        - containerPort: 80",
+        "kubectl patch deployments.apps nginx -p '{\"spec\":{\"replicas\":2}}'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/2913",
+      "repo": "https://github.com/argoproj/argo-cd"
+    },
+    "reactions": 72,
+    "comments": 17,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T06:18:01.228Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

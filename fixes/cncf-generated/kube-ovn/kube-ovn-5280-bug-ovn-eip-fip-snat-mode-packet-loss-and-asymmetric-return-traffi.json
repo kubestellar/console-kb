@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-ovn-5280-bug-ovn-eip-fip-snat-mode-packet-loss-and-asymmetric-return-traffi",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-ovn: [BUG] OVN EIP, FIP, SNAT mode. Packet loss and asymmetric return traffic on Hetzner vSwitch",
+    "description": "[BUG] OVN EIP, FIP, SNAT mode. Packet loss and asymmetric return traffic on Hetzner vSwitch. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kube-ovn troubleshoot symptoms",
+        "description": "Check for the issue in your Kube-OVN deployment:\n```bash\nkubectl get pods -n kube-system -l app=kube-ovn\nkubectl logs -l app=ovs -n kube-system --tail=100 | grep -i error\n```\nLook for errors related to packet loss or asymmetric routing in OVN EIP/FIP/SNAT mode."
+      },
+      {
+        "title": "Review kube-ovn configuration",
+        "description": "Inspect the Kube-OVN configuration and OVN resources:\n```bash\nkubectl get pods -n kube-system -l app=kube-ovn\nkubectl get ovn-eip -A\nkubectl get ovn-fip -A\nkubectl get ovn-snat-rule -A\n```\nThis issue manifests as intermittent packet loss and asymmetric return traffic when using Kube-OVN in OVN EIP, FIP, SNAT mode on multi-node clusters, particularly on Hetzner vSwitch infrastructure."
+      },
+      {
+        "title": "Apply the fix for [BUG] OVN EIP, FIP, SNAT mode. Packet loss and asymmetric\u2026",
+        "description": "The root cause involves asymmetric routing in multi-node clusters with distributed gateway enabled. The ICMP request leaves via one node but the reply returns via a different node.\n\nDiagnostic steps:\n```bash\n# Check OVN EIP assignments\nkubectl get oeip -A\n\n# Capture traffic on external interfaces to verify routing symmetry\nkubectl -n kube-system exec -it <ovs-pod> -- tcpdump -i br-external -n icmp\n\n# Verify OVN logical router policies\nkubectl -n kube-system exec -it <ovn-central-pod> -- ovn-nbctl lr-policy-list ovn-cluster\n```\n\nSee the source issue for community discussion: https://github.com/kubeovn/kube-ovn/issues/5280"
+      },
+      {
+        "title": "Confirm [BUG] OVN EIP, FIP, SNAT mode. Packet loss and\u2026 is resolved",
+        "description": "Verify the fix by checking that traffic is no longer asymmetric:\n```bash\nkubectl logs -l app=ovs -n kube-system --tail=50 --since=5m\nkubectl get events -n kube-system --sort-by='.lastTimestamp' | grep -i ovn | tail -10\n\n# Test connectivity from an EIP-enabled pod\nkubectl exec -it <pod> -- ping -c 5 8.8.8.8\n```\nConfirm that packet loss and asymmetric return traffic issues are resolved."
+      }
+    ],
+    "resolution": {
+      "summary": "Based on your detailed description and the information available from the Kube-OVN codebase and changelogs, here are some focused suggestions and observations to help diagnose and narrow down the cause of the packet loss and asymmetric return traffic in your multi-node setup:\n\n---\n\n### Key Observations\n\n- The issue only occurs in a multi-node cluster with distributed gateway enabled, not in a",
+      "codeSnippets": [
+        "2025-05-27 07:52:27.456 [EXT:kube-dc-master-1]     168.119.xx.xx > 213.133.100.98: ICMP echo request, id 63012, seq 1, length 64\n2025-05-27 07:52:28.965 [EXT:kube-dc-worker-1]     213.133.100.98 > 168.119.xx.xx: ICMP echo reply, id 63012, seq 1, length 64",
+        "debug-net-tcpdump-vrdm4 external-tcpdump [EXT:kube-dc-worker-1] 14:23:54.270345 f2:0b:a4:d1:20:01 > f6:32:1b:16:14:26, ethertype 802.1Q (0x8100), length 102: vlan 4011, p 0, ethertype IPv4 (0x0800), (tos 0x0, ttl 62, id 26075, offset 0, flags [none], proto ICMP (1), length 84)\ndebug-net-tcpdump-vrdm4 external-tcpdump [EXT:kube-dc-worker-1]     213.133.100.98 > 168.119.xx.xx: ICMP echo reply, id 14823, seq 1, length 64",
+        "kubectl get oeip | grep f6:32:1b:16:14:26\nshalb-demo-external-def    168.119.xx.xx          f6:32:1b:16:14:26   lrp    snat   true    external-def"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-ovn",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kube-ovn"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubeovn/kube-ovn/issues/5280",
+      "repo": "https://github.com/kubeovn/kube-ovn"
+    },
+    "reactions": 3,
+    "comments": 68,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kube-ovn installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:38:53.933Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

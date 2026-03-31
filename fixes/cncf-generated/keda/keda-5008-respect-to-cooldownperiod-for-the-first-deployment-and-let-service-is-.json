@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keda-5008-respect-to-cooldownperiod-for-the-first-deployment-and-let-service-is-",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keda: Respect to cooldownPeriod for the first deployment and let service is up and and running based on replica number for the first time. ",
+    "description": "Respect to cooldownPeriod for the first deployment and let service is up and and running based on replica number for the first time. . Requested by 7+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current keda deployment",
+        "description": "Verify your keda version and configuration:\n```bash\nkubectl get pods -n keda -l app.kubernetes.io/name=keda\nhelm list -n keda 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working keda installation."
+      },
+      {
+        "title": "Review keda configuration",
+        "description": "Inspect the relevant keda configuration:\n```bash\nkubectl get all -n keda -l app.kubernetes.io/name=keda\nkubectl get configmap -n keda -l app.kubernetes.io/part-of=keda\n```\n### Proposal\n\nHey \nFrom my understanding based on the current documentation, the cooldownPeriod in KEDA only takes effect after a scaling trigger has occurred."
+      },
+      {
+        "title": "Apply the fix for Respect to cooldownPeriod for the first deployment and let…",
+        "description": "… of CooldownPeriod\n\n·\n\nAdd a new field InitialDelayCooldownPeriod The purpose of adding a new field InitialDelayCooldownPeriod is to delay the effective time of the CooldownPeriod, so that when the service is started for the first time, it needs to wait for the time of InitialDelayCooldownPeriod\n```yaml\nspec:\n  advanced:\n    horizontalPodAutoscalerConfig:\n      behavior:\n        scaleDown:\n          policies:\n          - periodSeconds: 300\n            type: Pods\n            value: 1\n          stabilizationWindowSeconds: 1800\n        scaleUp:\n          policies:\n          - periodSeconds: 300\n            type: Percent\n            value: 100\n          stabilizationWindowSeconds: 0\n    restoreToOriginalReplicaCount: true\n  cooldownPeriod: 1800\n  fallback:\n    failureThreshold: 3\n    replicas: 1\n  maxReplicaCount: 10\n  minReplicaCount: 0\n  pollingInterval: 20\n  scaleTargetRef:\n    name: test\n  tr\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n keda -l app.kubernetes.io/name=keda\nkubectl get events -n keda --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Respect to cooldownPeriod for the first deployment and let…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "… of CooldownPeriod\n\n·\n\nAdd a new field InitialDelayCooldownPeriod The purpose of adding a new field InitialDelayCooldownPeriod is to delay the effective time of the CooldownPeriod, so that when the service is started for the first time, it needs to wait for the time of InitialDelayCooldownPeriod to expire before destroying the service.\r\n\nRelates to #",
+      "codeSnippets": [
+        "spec:\n  advanced:\n    horizontalPodAutoscalerConfig:\n      behavior:\n        scaleDown:\n          policies:\n          - periodSeconds: 300\n            type: Pods\n            value: 1\n          stabilizationWindowSeconds: 1800\n        scaleUp:\n          policies:\n          - periodSeconds: 300\n            type: Percent\n            value: 100\n          stabilizationWindowSeconds: 0\n    restoreToOriginalReplicaCount: true\n  cooldownPeriod: 1800\n  fallback:\n    failureThreshold: 3\n    replicas: 1\n  maxReplicaCount: 10\n  minReplicaCount: 0\n  pollingInterval: 20\n  scaleTargetRef:\n    name: test\n  triggers:\n  - authenticationRef:\n      name: test\n    metadata:\n      mode: QueueLength\n      protocol: amqp\n      queueName: test\n      value: \"150\"\n    type: rabbitmq",
+        "kubectl describe ScaledObject -n test\nNormal  KEDAScalersStarted          5s   keda-operator  Started scalers watch\nNormal  ScaledObjectReady           5s   keda-operator  ScaledObject is ready for scaling\nNormal  KEDAScaleTargetDeactivated  5s   keda-operator  Deactivated apps/v1.Deployment test/test from 1 to 0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keda",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "keda"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Statefulset"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/kedacore/keda/issues/5008",
+      "repo": "https://github.com/kedacore/keda",
+      "pr": "https://github.com/kedacore/keda/pull/5478"
+    },
+    "reactions": 7,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with keda installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:27:35.085Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

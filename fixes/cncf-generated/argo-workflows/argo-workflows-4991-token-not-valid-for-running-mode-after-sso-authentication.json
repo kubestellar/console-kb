@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-4991-token-not-valid-for-running-mode-after-sso-authentication",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: `token not valid for running mode` after SSO authentication",
+    "description": "`token not valid for running mode` after SSO authentication. Requested by 28+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nArgo UI comes back to login page with error `{\"code\":16,\"message\":\"token not valid for running mode\u201d}` after completing SSO user authentication."
+      },
+      {
+        "title": "Apply the fix for `token not valid for running mode` after SSO authentication",
+        "description": "Check if Istio is interfering with the SSO token flow. When running Argo Workflows with Istio, the sidecar proxy can intercept traffic to the Kubernetes API, causing token validation failures. Add an annotation to exclude the API server IP range from Istio:\n```yaml\nspec:\n  template:\n    metadata:\n      annotations:\n        traffic.sidecar.istio.io/excludeOutboundIPRanges: \"<K8S_API_SERVER_IP>/32\"\n```\nAlso verify the argo-server is running in SSO mode:\n```bash\nargo version\nkubectl get configmap workflow-controller-configmap -n argo-workflows -o yaml | grep -A 10 sso\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"`token not valid for running mode` after SSO authentication\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "The 'token not valid for running mode' error after SSO authentication is commonly caused by Istio's sidecar proxy intercepting traffic to the Kubernetes API. Add the traffic.sidecar.istio.io/excludeOutboundIPRanges annotation to the argo-server deployment to exclude the API server IP from Istio proxying.",
+      "codeSnippets": [
+        "argo version:\nargo: v2.12.3\n  BuildDate: 2021-01-05T00:49:48Z\n  GitCommit: 93ee530126cc1fc154ada84d5656ca82d491dc7f\n  GitTreeState: clean\n  GitTag: v2.12.3\n  GoVersion: go1.13\n  Compiler: gc\n  Platform: darwin/amd64",
+        "sso: |\n      issuer: https://cloudsso-test.xxx.com\n      clientId:\n        name: argo-server-sso\n        key: clientID\n      clientSecret:\n        name: argo-server-sso\n        key: clientSecret\n      redirectUrl: http://argo-code.xxx.com/workflows/argo\n      scopes:\n       - groups\n       - email\n      rbac:\n        enabled: false",
+        "time=\"2021-02-02T07:34:01.198Z\" level=info msg=\"finished unary call with code Unauthenticated\" error=\"rpc error: code = Unauthenticated desc = token not valid for running mode\" grpc.code=Unauthenticated grpc.method=GetVersion grpc.service=info.InfoService grpc.start_time=\"2021-02-02T07:34:01Z\" grpc.time_ms=0.34 span.kind=server system=grpc\ntime=\"2021-02-02T07:34:01.218Z\" level=info msg=\"finished unary call with code Unauthenticated\" error=\"rpc error: code = Unauthenticated desc = token not valid for running mode\" grpc.code=Unauthenticated grpc.method=ListWorkflowTemplates grpc.service=workflowtemplate.WorkflowTemplateService grpc.start_time=\"2021-02-02T07:34:01Z\" grpc.time_ms=0.065 span.kind=server system=grpc"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Configmap",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/4991",
+      "repo": "https://github.com/argoproj/argo-workflows",
+      "pr": "https://github.com/argoproj/argo-workflows/pull/5676"
+    },
+    "reactions": 28,
+    "comments": 24,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:18:57.031Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

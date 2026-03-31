@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "flowise-3570-bug-recordmanager-does-not-properly-cleanup-vector-store-s-old-valu",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "flowise: [BUG] RecordManager Does Not Properly Cleanup Vector Store's OLD VALUES",
+    "description": "[BUG] RecordManager Does Not Properly Cleanup Vector Store's OLD VALUES. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify flowise troubleshoot symptoms",
+        "description": "Check for the issue in your flowise deployment:\n```bash\nkubectl get pods -n flowise -l app.kubernetes.io/name=flowise\nkubectl logs -l app.kubernetes.io/name=flowise -n flowise --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review flowise configuration",
+        "description": "Inspect the relevant flowise configuration:\n```bash\nkubectl get all -n flowise -l app.kubernetes.io/name=flowise\nkubectl get configmap -n flowise -l app.kubernetes.io/part-of=flowise\n```\nIn Flowise, I've created a new `Document Store` where an `Airtable` Document Loader feeds data into a Postgres Vector Store. We're also using Postgres to store the Record Manager records."
+      },
+      {
+        "title": "Apply the fix for [BUG] RecordManager Does Not Properly Cleanup Vector…",
+        "description": "Okay, from this commit, I think I see why it was disabled:\nhttps://github.com/FlowiseAI/Flowise/commit/a2a475ba7a1186ceec850cebe135426d2d822561#diff-4a1a4686f399cfa5448e01ad9b44f53e26ff79e5438d8748ae77771f25ac4c7eR2\n\nThis comment explains why in v2.2.5:\n```\nTemporary disabled due to increasing open\n```yaml\nflowise-data=> \\d mechanisms_vec_v1\n                 Table \"public.mechanisms_vec_v1\"\n   Column    |  Type  | Collation | Nullable |      Default\n-------------+--------+-----------+----------+--------------------\n id          | uuid   |           | not null | uuid_generate_v4()\n pageContent | text   |           |          |\n metadata    | jsonb  |           |          |\n embedding   | vector |           |          |\nIndexes:\n    \"mechanisms_vec_v1_pkey\" PRIMARY KEY, btree (id)\n\nflowise-data=> \\d mechanisms_rm_v1\n                     Table \"public.mechanisms_rm_v1\"\n   Column   |       Type     \n```"
+      },
+      {
+        "title": "Confirm [BUG] RecordManager Does Not Properly Cleanup… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=flowise -n flowise --tail=50 --since=5m\nkubectl get events -n flowise --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Okay, from this commit, I think I see why it was disabled:\nhttps://github.com/FlowiseAI/Flowise/commit/a2a475ba7a1186ceec850cebe135426d2d822561#diff-4a1a4686f399cfa5448e01ad9b44f53e26ff79e5438d8748ae77771f25ac4c7eR2\n\nThis comment explains why in v2.2.5:\n```\nTemporary disabled due to increasing open connections without releasing them\nUse TypeORM instead\n```\n\nSo while the workaround to use",
+      "codeSnippets": [
+        "flowise-data=> \\d mechanisms_vec_v1\n                 Table \"public.mechanisms_vec_v1\"\n   Column    |  Type  | Collation | Nullable |      Default\n-------------+--------+-----------+----------+--------------------\n id          | uuid   |           | not null | uuid_generate_v4()\n pageContent | text   |           |          |\n metadata    | jsonb  |           |          |\n embedding   | vector |           |          |\nIndexes:\n    \"mechanisms_vec_v1_pkey\" PRIMARY KEY, btree (id)\n\nflowise-data=> \\d mechanisms_rm_v1\n                     Table \"public.mechanisms_rm_v1\"\n   Column   |       Type       | Collation | Nullable |      Default\n------------+------------------+-----------+----------+-------------------\n uuid       | uuid             |           | not null | gen_random_uuid()\n key       ",
+        "Instead, we can change it to:",
+        "### Implementation Notes for Maintainers:\n1. Dependencies added:\n   - `ioredis` for Redis operations\n   - `redlock` for distributed locking\n   - `xxhash-wasm` and `murmurhash3js-revisited` for efficient hashing\n\n2. Configuration requirements:\n   - Redis URL must be provided when Bloom filters are enabled\n   - Namespace is derived from vector store configuration\n   - Memory usage scales with expected document count and false positive rate\n\n3. Backward compatibility:\n   - All new features are opt-in via `useBloomFilter` option\n   - Existing functionality remains unchanged when Bloom filters are disabled\n   - No breaking changes to existing API\n\n4. Performance characteristics:\n   - Redis operations are batched to reduce network overhead\n   - Bloom filter parameters auto-adjust based on docume"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "flowise",
+      "community",
+      "ai-app",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "flowise"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/FlowiseAI/Flowise/issues/3570",
+      "repo": "https://github.com/FlowiseAI/Flowise"
+    },
+    "reactions": 2,
+    "comments": 29,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with flowise installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:47:48.420Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

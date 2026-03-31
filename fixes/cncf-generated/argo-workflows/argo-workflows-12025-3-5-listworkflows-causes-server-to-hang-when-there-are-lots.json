@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-12025-3-5-listworkflows-causes-server-to-hang-when-there-are-lots",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: 3.5 ListWorkflows causes server to hang when there are lots of archived workflows",
+    "description": "3.5 ListWorkflows causes server to hang when there are lots of archived workflows. Requested by 45+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nWith over 200,000 rows in the workflow archive table, the ListWorkflows API causes the argo-server to hang because it tries to load all archived workflows into memory at once."
+      },
+      {
+        "title": "Apply the fix for 3.5 ListWorkflows causes server to hang when there are lots\u2026",
+        "description": "This reverts #11761. See https://github.com/argoproj/argo-workflows/issues/12025 for context.\n```yaml\norderBy = ...\nfilters = ...\nlimit = 20\ncursor = 0, 0\nk8sResults = fetchK8s(cursor[0], limit, filters, orderBy)\ndbResults = fetchDB(cursor[1], limit, filters, orderBy)\nresults = mergeResults(k8sResults, dbResults).slice(0, limit)\n\nnewK8sOffset = getLastK8sResult(results)\nnewDBOffset = getLastDbResult(results)\nnewCursor = (newK8sOffset, newDBOffset)\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"3.5 ListWorkflows causes server to hang when there are lots\u2026\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Reverted the problematic commit (#11761) that caused ListWorkflows to load all archived workflows into memory. Implemented a dual-cursor pagination approach that merges Kubernetes and database results with proper offsets.",
+      "codeSnippets": [
+        "orderBy = ...\nfilters = ...\nlimit = 20\ncursor = 0, 0\nk8sResults = fetchK8s(cursor[0], limit, filters, orderBy)\ndbResults = fetchDB(cursor[1], limit, filters, orderBy)\nresults = mergeResults(k8sResults, dbResults).slice(0, limit)\n\nnewK8sOffset = getLastK8sResult(results)\nnewDBOffset = getLastDbResult(results)\nnewCursor = (newK8sOffset, newDBOffset)",
+        "((a, '2023-01-05'), (b, '2023-01-06'), (c, '2023-01-07'))",
+        "((d, '2023-01-01'), (e, '2023-01-02'), (a, '2023-01-05'), (b, '2023-01-06'), (c, '2023-01-07'))"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/12025",
+      "repo": "https://github.com/argoproj/argo-workflows",
+      "pr": "https://github.com/argoproj/argo-workflows/pull/12068"
+    },
+    "reactions": 45,
+    "comments": 123,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:19:34.208Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

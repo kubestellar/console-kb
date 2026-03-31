@@ -3,7 +3,7 @@ import { readdir, readFile, writeFile, stat } from 'fs/promises';
 import { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 
-const SOLUTIONS_DIR = join(process.cwd(), 'solutions');
+const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
 const INDEX_PATH = join(SOLUTIONS_DIR, 'index.json');
 
 async function walkDir(dir) {
@@ -27,7 +27,7 @@ function extractMetadata(content, filePath) {
     const data = filePath.endsWith('.json') ? JSON.parse(content) : parseYaml(content);
     if (!data || (!data.title && !data.mission?.title)) return null;
     
-    // Extract category from path: solutions/<category>/...
+    // Extract category from path: fixes/<category>/...
     const pathParts = relPath.split('/');
     const category = pathParts.length > 1 ? pathParts[1] : 'general';
 

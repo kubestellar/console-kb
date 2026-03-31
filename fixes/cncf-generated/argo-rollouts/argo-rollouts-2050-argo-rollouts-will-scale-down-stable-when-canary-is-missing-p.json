@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-rollouts-2050-argo-rollouts-will-scale-down-stable-when-canary-is-missing-p",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-rollouts: Argo rollouts will scale down stable when canary is missing pods",
+    "description": "Argo rollouts will scale down stable when canary is missing pods. This issue affects 19+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify argo-rollouts troubleshoot symptoms",
+        "description": "Check for the issue in your argo-rollouts deployment:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl logs -l app.kubernetes.io/name=argo-rollouts -n argo-rollouts --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review argo-rollouts configuration",
+        "description": "Inspect the relevant argo-rollouts configuration:\n```bash\nkubectl get all -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get configmap -n argo-rollouts -l app.kubernetes.io/part-of=argo-rollouts\n```\nArgo scaled down the stable RS even while the new replica set is not fully available.  In this case, it scaled from 110 pods down to 0 but didn't update the routing until the new RS was 100% ready.\n\n1."
+      },
+      {
+        "title": "Apply the fix for Argo rollouts will scale down stable when canary is missing…",
+        "description": "This fixes #2050 by ensuring that, if a rollout needs to delay swapping the replicaset hashes, we do not continue reconciling.\n\nIf we were to continue reconciling then we would end up moving the `stable` (which should be the `canary`) to 100% and the `canary` (which should be the `stable`) to 0%. Importantly, if this is at the end of a rollout where the stable set has been spun down then this will cause a traffic outage because the `stable` set will have 0 replicas available.\n\nTo illustrate the\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Confirm Argo rollouts will scale down stable when canary… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=argo-rollouts -n argo-rollouts --tail=50 --since=5m\nkubectl get events -n argo-rollouts --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "This fixes #2050 by ensuring that, if a rollout needs to delay swapping the replicaset hashes, we do not continue reconciling.\n\nIf we were to continue reconciling then we would end up moving the `stable` (which should be the `canary`) to 100% and the `canary` (which should be the `stable`) to 0%.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-rollouts",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-rollouts"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Replicaset"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-rollouts/issues/2050",
+      "repo": "https://github.com/argoproj/argo-rollouts",
+      "pr": "https://github.com/argoproj/argo-rollouts/pull/2187"
+    },
+    "reactions": 19,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-rollouts installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T06:35:04.404Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

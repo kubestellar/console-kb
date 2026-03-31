@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "consul-11363-connect-vault-ca-token-updates-are-not-retained-on-restart",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "consul: Connect Vault CA token updates are not retained on restart",
+    "description": "Connect Vault CA token updates are not retained on restart. This issue affects 9+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify consul troubleshoot symptoms",
+        "description": "Check for the issue in your consul deployment:\n```bash\nkubectl get pods -n consul -l app.kubernetes.io/name=consul\nkubectl logs -l app.kubernetes.io/name=consul -n consul --tail=100 | grep -i error\n```\nLook for error: `\"Failed to initialize secondary CA provider: error configuring provider: Error making API request.`"
+      },
+      {
+        "title": "Review consul configuration",
+        "description": "Inspect the relevant consul configuration:\n```bash\nkubectl get all -n consul -l app.kubernetes.io/name=consul\nkubectl get configmap -n consul -l app.kubernetes.io/part-of=consul\n```\nWhen filing a bug, please include the following headings if possible. Any example text in this template can be deleted."
+      },
+      {
+        "title": "Apply the fix for Connect Vault CA token updates are not retained on restart",
+        "description": "This fixes a bug that was identified, which resulted in subsequent ConnectCA configuration updates in secondary DC's not persisting in the cluster.\n```yaml\nagent:\n\tcheck_monitors = 0\n\tcheck_ttls = 0\n\tchecks = 3\n\tservices = 3\nbuild:\n\tprerelease = \n\trevision = c976ffd2\n\tversion = 1.10.3\nconsul:\n\tacl = enabled\n\tbootstrap = false\n\tknown_datacenters = 3\n\tleader = true\n\tleader_addr = 172.16.18.231:8300\n\tserver = true\nraft:\n\tapplied_index = 3459907\n\tcommit_index = 3459907\n\tfsm_pending = 0\n\tlast_contact = 0\n\tlast_log_index = 3459907\n\tlast_log_term = 31964\n\tlast_snapshot_index = 3459154\n\tlast_snapshot_term = 31964\n\tlatest_configuration = [{Suffrage:Voter ID:0db759ad-0007-2ea4-4d41-62aff64515d5 Address:172.16.18.231:8300} {Suffrage:Voter ID:4de69dad-f717-c\n```"
+      },
+      {
+        "title": "Confirm Connect Vault CA token updates are not retained… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=consul -n consul --tail=50 --since=5m\nkubectl get events -n consul --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `\"Failed to initialize secondary CA provider: error configuring provider: Error making API request.` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "This fixes a bug that was identified, which resulted in subsequent ConnectCA configuration updates in secondary DC's not persisting in the cluster.",
+      "codeSnippets": [
+        "agent:\n\tcheck_monitors = 0\n\tcheck_ttls = 0\n\tchecks = 3\n\tservices = 3\nbuild:\n\tprerelease = \n\trevision = c976ffd2\n\tversion = 1.10.3\nconsul:\n\tacl = enabled\n\tbootstrap = false\n\tknown_datacenters = 3\n\tleader = true\n\tleader_addr = 172.16.18.231:8300\n\tserver = true\nraft:\n\tapplied_index = 3459907\n\tcommit_index = 3459907\n\tfsm_pending = 0\n\tlast_contact = 0\n\tlast_log_index = 3459907\n\tlast_log_term = 31964\n\tlast_snapshot_index = 3459154\n\tlast_snapshot_term = 31964\n\tlatest_configuration = [{Suffrage:Voter ID:0db759ad-0007-2ea4-4d41-62aff64515d5 Address:172.16.18.231:8300} {Suffrage:Voter ID:4de69dad-f717-cb90-5c23-011fe0301004 Address:172.16.19.63:8300} {Suffrage:Voter ID:b846fa4a-7c4b-f797-33bb-31cd99211e35 Address:172.16.18.7:8300}]\n\tlatest_configuration_index = 0\n\tnum_peers = 2\n\tprotocol_version = 3",
+        "2021-10-07T00:53:27.206Z [ERROR] agent.server.connect: CA root replication failed, will retry: routine=\"secondary CA roots watch\" error=\"Failed to initialize secondary CA provider: error configuring provider: Error making API request.\n\nURL: GET https://vault.sandbox.homexlabs.com/v1/auth/token/lookup-self\nCode: 403. Errors:\n\n* permission denied\"",
+        "> consul connect ca get-config > connect_ca.json\n# Edit connect_ca.json with new token\n> consul connect ca set-config -config-file connect_ca.json\nError setting CA configuration: Unexpected response code: 500 (backend not initialized)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "consul",
+      "community",
+      "service-mesh",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "consul"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/hashicorp/consul/issues/11363",
+      "repo": "https://github.com/hashicorp/consul",
+      "pr": "https://github.com/hashicorp/consul/pull/17846"
+    },
+    "reactions": 9,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with consul installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T07:02:17.168Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cert-manager-241-clouddns-use-metadata-server-to-auth-with-clouddns-api",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cert-manager: CloudDNS: use metadata server to auth with CloudDNS API",
+    "description": "CloudDNS: use metadata server to auth with CloudDNS API. Requested by 18+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current cert-manager deployment",
+        "description": "Verify your cert-manager version and configuration:\n```bash\nkubectl get pods -n cert-manager -l app.kubernetes.io/name=cert-manager\nhelm list -n cert-manager 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working cert-manager installation."
+      },
+      {
+        "title": "Review cert-manager configuration",
+        "description": "Inspect the relevant cert-manager configuration:\n```bash\nkubectl get all -n cert-manager -l app.kubernetes.io/name=cert-manager\nkubectl get configmap -n cert-manager -l app.kubernetes.io/part-of=cert-manager\n```\n**Is this a BUG REPORT or FEATURE REQUEST?**:\r\n\n**What happened**:\nWhen creating an Issuer on a GKE cluster, and leaving out the serviceAccountSecretRef it fails to manipulate DNS with built in serviceAccount for the cluster."
+      },
+      {
+        "title": "Apply the fix for CloudDNS: use metadata server to auth with CloudDNS API",
+        "description": "this PR enables gcloud authentication via meta authentication api\n```yaml\n#!/bin/bash\nCLUSTERNAME=\"test-cert-manager\"\nPROJECT=\"yourgcpproject\"\nEMAIL=\"youremail@email.com\"\nYOURGCPDOMAIN=\"example.com\"\n\n# Provision GKE\ngcloud --project=${PROJECT} container clusters create ${CLUSTERNAME} \\\n        --zone=us-west1-b \\\n        --num-nodes 1 \\\n        --cluster-version 1.8.5-gke.0 \\\n        --scopes \"https://www.googleapis.com/auth/ndev.clouddns.readwrite\"\n\n# Init Helm\nkubectl create serviceaccount --namespace kube-system tiller\nkubectl create clusterrolebinding tiller-cluster-rule \\\n        --clusterrole=cluster-admin \\\n        --serviceaccount=kube-system:tiller\nhelm ini\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n cert-manager -l app.kubernetes.io/name=cert-manager\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"CloudDNS: use metadata server to auth with CloudDNS API\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "this PR enables gcloud authentication via meta authentication api",
+      "codeSnippets": [
+        "#!/bin/bash\nCLUSTERNAME=\"test-cert-manager\"\nPROJECT=\"yourgcpproject\"\nEMAIL=\"youremail@email.com\"\nYOURGCPDOMAIN=\"example.com\"\n\n# Provision GKE\ngcloud --project=${PROJECT} container clusters create ${CLUSTERNAME} \\\n        --zone=us-west1-b \\\n        --num-nodes 1 \\\n        --cluster-version 1.8.5-gke.0 \\\n        --scopes \"https://www.googleapis.com/auth/ndev.clouddns.readwrite\"\n\n# Init Helm\nkubectl create serviceaccount --namespace kube-system tiller\nkubectl create clusterrolebinding tiller-cluster-rule \\\n        --clusterrole=cluster-admin \\\n        --serviceaccount=kube-system:tiller\nhelm init --service-account tiller\n\n# Install Cert-Manager\nhelm install --name cert-manager --namespace kube-system contrib/charts/cert-manager\n\n# Init Let's Encrypt as issuer\nkubectl apply -f - <<EOF\napiVers",
+        "Events:\n  Type     Reason                   Age                From                     Message\n  ----     ------                   ----               ----                     -------\n  Warning  ErrorCheckCertificate    13s (x7 over 14s)  cert-manager-controller  Error checking existing TLS certificate: secret \"app-ssl-secret\" not found\n  Normal   PrepareCertificate       13s (x6 over 14s)  cert-manager-controller  Preparing certificate with issuer\n  Normal   PresentChallenge         13s (x6 over 13s)  cert-manager-controller  Presenting dns-01 challenge for domain test-name.example.com\n  Warning  ErrorPrepareCertificate  13s (x6 over 13s)  cert-manager-controller  Error preparing issuer for certificate: error presenting acme authorization for domain \"test-name.example.com\": error getting ",
+        "Client Version: version.Info{Major:\"1\", Minor:\"8\", GitVersion:\"v1.8.4\", GitCommit:\"9befc2b8928a9426501d3bf62f72849d5cbcd5a3\", GitTreeState:\"clean\", BuildDate:\"2017-11-20T05:28:34Z\", GoVersion:\"go1.8.3\", Compiler:\"gc\", Platform:\"darwin/amd64\"}\nServer Version: version.Info{Major:\"1\", Minor:\"8+\", GitVersion:\"v1.8.5-gke.0\", GitCommit:\"2c2a807131fa8708abc92f3513fe167126c8cce5\", GitTreeState:\"clean\", BuildDate:\"2017-12-19T20:05:45Z\", GoVersion:\"go1.8.3b4\", Compiler:\"gc\", Platform:\"linux/amd64\"}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cert-manager",
+      "graduated",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "cert-manager"
+    ],
+    "targetResourceKinds": [
+      "Namespace",
+      "Serviceaccount",
+      "Clusterrole"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cert-manager/cert-manager/issues/241",
+      "repo": "https://github.com/cert-manager/cert-manager",
+      "pr": "https://github.com/cert-manager/cert-manager/pull/664"
+    },
+    "reactions": 18,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cert-manager installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-17T06:25:15.836Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

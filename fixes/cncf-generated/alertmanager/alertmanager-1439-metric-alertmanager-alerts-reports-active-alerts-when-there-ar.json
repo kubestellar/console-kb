@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "alertmanager-1439-metric-alertmanager-alerts-reports-active-alerts-when-there-ar",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "alertmanager: Metric alertmanager_alerts reports \"active\" alerts when there are none",
+    "description": "Metric alertmanager_alerts reports \"active\" alerts when there are none. Requested by 15+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current alertmanager deployment",
+        "description": "Verify your alertmanager version and configuration:\n```bash\nkubectl get pods -n alertmanager -l app.kubernetes.io/name=alertmanager\nhelm list -n alertmanager 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working alertmanager installation."
+      },
+      {
+        "title": "Review alertmanager configuration",
+        "description": "Inspect the relevant alertmanager configuration:\n```bash\nkubectl get all -n alertmanager -l app.kubernetes.io/name=alertmanager\nkubectl get configmap -n alertmanager -l app.kubernetes.io/part-of=alertmanager\n```\n**What did you do?**\nQuery multiple Prometheus instances for `alertmanager_alerts` to get the active alert count for each one."
+      },
+      {
+        "title": "Apply the fix for Metric alertmanager_alerts reports \"active\" alerts when…",
+        "description": "I've seen this discrepancy before too. IIRC the reason is that the metrics are computed based on the in-memory store of alerts which include the resolved ones. Those are deleted only every 30 minutes (by default). That being said, I agree that it would be nice if the numbers include only firing\n```yaml\nalertmanager_alerts{state=\"active\"}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n alertmanager -l app.kubernetes.io/name=alertmanager\nkubectl get events -n alertmanager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Metric alertmanager_alerts reports \"active\" alerts when…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I've seen this discrepancy before too. IIRC the reason is that the metrics are computed based on the in-memory store of alerts which include the resolved ones. Those are deleted only every 30 minutes (by default). That being said, I agree that it would be nice if the numbers include only firing alerts.\n\nFWIW `suppressed` is the sum of inhibited and silenced alerts.",
+      "codeSnippets": [
+        "alertmanager_alerts{state=\"active\"}",
+        "alertmanager_alerts{instance=\"alertmanager:80\",job=\"alertmanager\",state=\"active\"} 0",
+        "alertmanager_alerts{instance=\"alertmanager:80\",job=\"alertmanager\",state=\"active\"} 3\nalertmanager_alerts{instance=\"alertmanager:80\",job=\"alertmanager\",state=\"suppressed\"} 1"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "alertmanager",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "alertmanager"
+    ],
+    "targetResourceKinds": [
+      "Job"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/alertmanager/issues/1439",
+      "repo": "https://github.com/prometheus/alertmanager"
+    },
+    "reactions": 15,
+    "comments": 6,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with alertmanager installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-24T06:30:15.105Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

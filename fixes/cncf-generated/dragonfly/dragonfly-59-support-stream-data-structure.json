@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "dragonfly-59-support-stream-data-structure",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "dragonfly: Support Stream data structure",
+    "description": "Support Stream data structure. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current dragonfly deployment",
+        "description": "Verify your dragonfly version and configuration:\n```bash\nkubectl get pods -n dragonfly -l app.kubernetes.io/name=dragonfly\nhelm list -n dragonfly 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working dragonfly installation."
+      },
+      {
+        "title": "Review dragonfly configuration",
+        "description": "Inspect the relevant dragonfly configuration:\n```bash\nkubectl get all -n dragonfly -l app.kubernetes.io/name=dragonfly\nkubectl get configmap -n dragonfly -l app.kubernetes.io/part-of=dragonfly\n```\nHello, came across Dragonfly on Hacker News. Very cool project – good luck with it!\n\nI am very interested in [Stream data structure](https://redis.io/docs/manual/data-types/streams/) support - think that's the only missing command for me to start"
+      },
+      {
+        "title": "Apply the fix for Support Stream data structure",
+        "description": "1. Correctly parse keys for EVAL command.\n2. Support PUBLISH within lua.\n3. Remove spurious failure in debug-mode with the increased verbosity level.\n```yaml\nredis-cli\nSCRIPT LOAD \"return ARGV[1]\"\nEVALSHA 098e0f0d1448c0a81dafe820f66d460eb09263da 2 s d arg1\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n dragonfly -l app.kubernetes.io/name=dragonfly\nkubectl get events -n dragonfly --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support Stream data structure\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "1. Correctly parse keys for EVAL command.\n2. Support PUBLISH within lua.\n3. Remove spurious failure in debug-mode with the increased verbosity level.",
+      "codeSnippets": [
+        "redis-cli\nSCRIPT LOAD \"return ARGV[1]\"\nEVALSHA 098e0f0d1448c0a81dafe820f66d460eb09263da 2 s d arg1",
+        "git clone https://github.com/centrifugal/centrifuge.git\ncd centrifuge\ngo test -run xxx -benchmem -tags integration -bench BenchmarkRedisPublish_1Ch -benchtime 1s",
+        "127.0.0.1:6379> SCRIPT LOAD \"\\nlocal epoch\\nif redis.call(\\'exists\\', KEYS[2]) ~= 0 then\\n  epoch = redis.call(\\\"hget\\\", KEYS[2], \\\"e\\\")\\nend\\nif epoch == false or epoch == nil then\\n  epoch = ARGV[6]\\n  redis.call(\\\"hset\\\", KEYS[2], \\\"e\\\", epoch)\\nend\\nlocal offset = redis.call(\\\"hincrby\\\", KEYS[2], \\\"s\\\", 1)\\nif ARGV[5] ~= \\'0\\' then\\n\\tredis.call(\\\"expire\\\", KEYS[2], ARGV[5])\\nend\\nredis.call(\\\"xadd\\\", KEYS[1], \\\"MAXLEN\\\", ARGV[2], offset, \\\"d\\\", ARGV[1])\\nredis.call(\\\"expire\\\", KEYS[1], ARGV[3])\\nif ARGV[4] ~= \\'\\' then\\n\\tlocal payload = \\\"__\\\" .. \\\"p1:\\\" .. offset .. \\\":\\\" .. epoch .. \\\"__\\\" .. ARGV[1]\\n\\tredis.call(\\\"publish\\\", ARGV[4], payload)\\nend\\nreturn {offset, epoch}\\n\\t\"\n\"5707131deda7789195310ee90da9fab71faf2e68\""
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "dragonfly",
+      "community",
+      "cache",
+      "feature"
+    ],
+    "cncfProjects": [
+      "dragonfly"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/dragonflydb/dragonfly/issues/59",
+      "repo": "https://github.com/dragonflydb/dragonfly",
+      "pr": "https://github.com/dragonflydb/dragonfly/pull/157"
+    },
+    "reactions": 5,
+    "comments": 18,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with dragonfly installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-16T07:02:45.264Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

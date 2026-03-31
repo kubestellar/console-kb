@@ -1,0 +1,71 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keycloak-20490-saml-idp-initiated-sso-getting-cookie-not-found-error",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keycloak: SAML IDP initiated SSO getting cookie_not_found error",
+    "description": "SAML IDP initiated SSO getting cookie_not_found error. This issue affects 30+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the cookie_not_found error",
+        "description": "Check your Keycloak server logs for the SAML IDP-initiated SSO cookie error:\n```bash\n# Check Keycloak container logs:\ndocker logs keycloak 2>&1 | grep cookie_not_found\n\n# Or for Kubernetes:\nkubectl logs -l app=keycloak -n keycloak | grep cookie_not_found\n```\nLook for log entries like:\n```\nWARN [org.keycloak.events] type=IDENTITY_PROVIDER_LOGIN_ERROR, error=cookie_not_found\n```"
+      },
+      {
+        "title": "Understand the root cause",
+        "description": "The `cookie_not_found` error occurs during SAML IDP-initiated SSO when Keycloak cannot find the expected authentication session cookie. Common causes include:\n\n1. **SameSite cookie restrictions**: Modern browsers enforce `SameSite=Lax` by default, which blocks cookies on cross-origin POST requests (used by SAML IDP-initiated flows)\n2. **Reverse proxy misconfiguration**: The proxy is not forwarding cookies correctly or stripping cookie headers\n3. **Multi-node deployments**: Session affinity (sticky sessions) is not configured, so the SAML response lands on a different node than the one that created the authentication session"
+      },
+      {
+        "title": "Apply the fix",
+        "description": "Try these solutions in order:\n\n**1. Configure SameSite cookie settings:**\nSet the Keycloak SameSite cookie attribute to `None` for cross-origin SAML flows:\n```bash\n/opt/keycloak/bin/kc.sh start \\\n  --spi-sticky-session-encoder-infinispan-should-attach-route=false \\\n  --proxy=edge\n```\n\n**2. Ensure proper reverse proxy configuration:**\nMake sure your reverse proxy forwards the `X-Forwarded-*` headers and preserves cookies:\n```\nproxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\nproxy_set_header X-Forwarded-Proto $scheme;\nproxy_set_header X-Forwarded-Host $host;\nproxy_cookie_path / \"/; SameSite=None; Secure\";\n```\n\n**3. For multi-node deployments:**\nEnable session affinity at the load balancer level, or use the persistent-user-sessions feature (Keycloak 26+)."
+      },
+      {
+        "title": "Verify SAML IDP-initiated SSO works",
+        "description": "After applying the fix:\n1. Initiate a SAML SSO login from your IDP (Okta, Azure AD, OneLogin, etc.)\n2. Check that the login completes without the `cookie_not_found` error\n3. Monitor Keycloak logs to confirm no more `IDENTITY_PROVIDER_LOGIN_ERROR` events:\n```bash\ndocker logs keycloak 2>&1 | grep -c cookie_not_found\n```\nThe count should be 0 for new login attempts."
+      }
+    ],
+    "resolution": {
+      "summary": "The cookie_not_found error in SAML IDP-initiated SSO is typically caused by SameSite cookie restrictions in modern browsers, reverse proxy misconfiguration, or missing session affinity in multi-node deployments. The fix involves configuring SameSite cookie attributes, ensuring proper proxy header forwarding, and enabling session affinity or persistent user sessions.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keycloak",
+      "community",
+      "identity",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "keycloak"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/keycloak/keycloak/issues/20490",
+      "repo": "https://github.com/keycloak/keycloak"
+    },
+    "reactions": 30,
+    "comments": 38,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "docker"
+    ],
+    "description": "A running Keycloak server (via Docker/Podman or Kubernetes with the Keycloak Operator) configured with a SAML Identity Provider."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:48:58.644Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

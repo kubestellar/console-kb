@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kpt-1544-kpt-doesn-t-work-with-symlinks",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kpt: kpt doesn't work with symlinks",
+    "description": "kpt doesn't work with symlinks. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kpt troubleshoot symptoms",
+        "description": "Verify your kpt version:\n```bash\nkpt version\n```\nThis issue affects kpt when working with symlinked directories. The `kpt live apply` command may prune all resources when invoked on a symlink."
+      },
+      {
+        "title": "Review kpt configuration",
+        "description": "Reproduce the symlink issue:\n```bash\n# Create a package directory and a symlink to it\nmkdir -p /tmp/kpt-test/wordpress\nln -s /tmp/kpt-test/wordpress /tmp/kpt-test/wordpress-link\n\n# Apply the package via the real path (works correctly)\nkpt live apply /tmp/kpt-test/wordpress\n\n# Apply via symlink (incorrectly prunes all resources)\nkpt live apply /tmp/kpt-test/wordpress-link\n```\nWhen `kpt live apply` is run on a symlink, it fails to resolve the real path and treats the symlinked directory as empty, causing all previously applied resources to be pruned."
+      },
+      {
+        "title": "Apply the fix for kpt doesn't work with symlinks",
+        "description": "The bug causes `kpt live apply` on a symlinked directory to prune all resources because it cannot resolve the symlink to the real package path.\n\nExpected behavior (real path):\n```\nkpt live apply wordpress\n6 resource(s) applied. 0 created, 6 unchanged, 0 configured, 0 failed\n```\n\nBuggy behavior (symlink):\n```\nkpt live apply wordpress-link\ndeployment.apps/wordpress-mysql pruned\nservice/wordpress pruned\n6 resource(s) pruned, 0 skipped, 0 failed\n```\n\nThe fix resolves symlinks to their real paths before processing packages.\n\nSee the source issue for details: https://github.com/kptdev/kpt/issues/1544"
+      },
+      {
+        "title": "Confirm kpt doesn't work with symlinks is resolved",
+        "description": "Verify the fix by testing with symlinks:\n```bash\n# Apply via real path\nkpt live apply wordpress\n\n# Apply via symlink - should now work correctly\nkpt live apply wordpress-link\n\n# Verify no resources were pruned\nkubectl get deployments,services -l app=wordpress\n```\nConfirm that `kpt live apply` on a symlink behaves identically to the real path."
+      }
+    ],
+    "resolution": {
+      "summary": "Found a serious bug while working on this issue. If we trigger `kpt live apply` on symlink, it is pruning all resources\n\n```\n\u279c  foo git:(main) \u2717 kpt live apply wordpress\ndeployment.apps/wordpress-mysql unchanged\npersistentvolumeclaim/mysql-pv-claim unchanged\npersistentvolumeclaim/wp-pv-claim unchanged\nservice/wordpress unchanged\nservice/wordpress-mysql unchanged\ndeployment.apps/wordpress",
+      "codeSnippets": [
+        "\u279c  foo git:(main) \u2717 kpt live apply wordpress\ndeployment.apps/wordpress-mysql unchanged\npersistentvolumeclaim/mysql-pv-claim unchanged\npersistentvolumeclaim/wp-pv-claim unchanged\nservice/wordpress unchanged\nservice/wordpress-mysql unchanged\ndeployment.apps/wordpress unchanged\n6 resource(s) applied. 0 created, 6 unchanged, 0 configured, 0 failed\n\u279c  foo git:(main) \u2717 kpt live apply wordpress-link\ndeployment.apps/wordpress-mysql pruned\ndeployment.apps/wordpress pruned\nservice/wordpress-mysql pruned\nservice/wordpress pruned\npersistentvolumeclaim/wp-pv-claim pruned\npersistentvolumeclaim/mysql-pv-claim pruned\n6 resource(s) pruned, 0 skipped, 0 failed"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kpt",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kpt"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Persistentvolumeclaim"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kptdev/kpt/issues/1544",
+      "repo": "https://github.com/kptdev/kpt"
+    },
+    "reactions": 2,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "kpt"
+    ],
+    "description": "A running Kubernetes cluster with kpt CLI installed."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:37:48.494Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

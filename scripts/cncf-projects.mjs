@@ -239,7 +239,7 @@ export const CNCF_PROJECTS = [
   { name: "xregistry", repo: "xregistry/server", maturity: "sandbox", category: "app-definition" },
 ]
 
-/** Map category to console-kb solutions/ subdirectory */
+/** Map category to console-kb fixes/ subdirectory */
 export const CATEGORY_TO_DIR = {
   'orchestration': 'troubleshooting',
   'observability': 'observability',

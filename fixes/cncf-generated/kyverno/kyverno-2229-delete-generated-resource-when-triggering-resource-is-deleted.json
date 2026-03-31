@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-2229-delete-generated-resource-when-triggering-resource-is-deleted",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: Delete generated resource when triggering resource is deleted",
+    "description": "Delete generated resource when triggering resource is deleted. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kyverno deployment",
+        "description": "Verify your kyverno version and configuration:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nhelm list -n kyverno 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kyverno installation."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\n**Is your feature request related to a problem? Please describe.**\nA triggering resource and its generated resource very often share an linked life cycle where one follows the other."
+      },
+      {
+        "title": "Apply the fix for Delete generated resource when triggering resource is",
+        "description": "## Related issue\r\n\n## Milestone of this PR\n `/milestone 1.5.0`.\n\n## Proposed Changes\nWhen `synchronize` is `true` - when the triggred resource is deleted the `generateRequest` get updated. On updation of the \n`generateRequests` the cleanup controller will enqueue the `generateRequests` for\n```yaml\nc.grInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{\n\t\tAddFunc:    c.addGR,\n\t\tUpdateFunc: c.updateGR,\n\t\tDeleteFunc: c.deleteGR,\n})\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Delete generated resource when triggering resource is\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "## Related issue\r\n\n## Milestone of this PR\n `/milestone 1.5.0`.\n\n## Proposed Changes\nWhen `synchronize` is `true` - when the triggred resource is deleted the `generateRequest` get updated. On updation of the \n`generateRequests` the cleanup controller will enqueue the `generateRequests` for deletion.",
+      "codeSnippets": [
+        "c.grInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{\n\t\tAddFunc:    c.addGR,\n\t\tUpdateFunc: c.updateGR,\n\t\tDeleteFunc: c.deleteGR,\n})",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: lbtest\nspec:\n  selector:\n    app: lbtest\n  type: LoadBalancer\n  ports:\n  - port: 80\n    targetPort: 8080\n    protocol: TCP",
+        "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: generate-prednat-gnp-for-lb-svc\n  annotations:\n    policies.kyverno.io/title: Pre DNAT Global Network Policy for LoadBalancer Service\n    policies.kyverno.io/category: Network Security\n    policies.kyverno.io/subject: GlobalNetworkPolicy\n    policies.kyverno.io/description: >-\n      By default, Ingress communication to the External IP of a LoadBalancer type\n      service is denied, this policy will generate a Calico Global Network Policy\n      to allow communication to the assigned LoadBalancer IP and ports specified\n      in the Service resource. \nspec:\n  background: true\n  validationFailureAction: audit\n  rules:\n  - name: lb-prednat-gnp\n    match:\n      resources:\n        kinds:\n        - Service\n    preconditions:\n      all"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Configmap"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/2229",
+      "repo": "https://github.com/kyverno/kyverno",
+      "pr": "https://github.com/kyverno/kyverno/pull/2429"
+    },
+    "reactions": 12,
+    "comments": 20,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T02:37:59.641Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

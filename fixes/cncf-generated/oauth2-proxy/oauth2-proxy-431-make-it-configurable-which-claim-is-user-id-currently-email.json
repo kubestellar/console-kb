@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "oauth2-proxy-431-make-it-configurable-which-claim-is-user-id-currently-email",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "oauth2-proxy: Make it configurable which claim is user id (currently = email)",
+    "description": "Make it configurable which claim is user id (currently = email). Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current oauth2-proxy deployment",
+        "description": "Verify your oauth2-proxy version and configuration:\n```bash\nkubectl get pods -n oauth2-proxy -l app.kubernetes.io/name=oauth2-proxy\nhelm list -n oauth2-proxy 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working oauth2-proxy installation."
+      },
+      {
+        "title": "Review oauth2-proxy configuration",
+        "description": "Inspect the relevant oauth2-proxy configuration:\n```bash\nkubectl get all -n oauth2-proxy -l app.kubernetes.io/name=oauth2-proxy\nkubectl get configmap -n oauth2-proxy -l app.kubernetes.io/part-of=oauth2-proxy\n```\nAccording to https://github.com/pusher/oauth2_proxy/blob/master/providers/oidc.go#L208 an id token must contain an email. But some of our tokens don't have (the users use their phone number instead), which makes the proxy unusable for us."
+      },
+      {
+        "title": "Configure the --user-id-claim flag",
+        "description": "Update your oauth2-proxy deployment to use the `--user-id-claim` flag, which allows you to specify which OIDC token claim should be used as the user identifier instead of the default `email` claim.\n\nFor a Kubernetes Deployment, edit the container args:\n```bash\nkubectl edit deployment oauth2-proxy -n oauth2-proxy\n```\nAdd the flag to the args section:\n```yaml\ncontainers:\n  - name: oauth2-proxy\n    args:\n      - --user-id-claim=sub\n      # Or use any custom claim, e.g.:\n      # - --user-id-claim=preferred_username\n      # - --user-id-claim=phone_number\n```\nThis is useful when your identity provider does not include an email claim in the ID token (e.g., users authenticate with phone numbers)."
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Restart the oauth2-proxy pods and verify the new claim is being used:\n```bash\nkubectl rollout restart deployment oauth2-proxy -n oauth2-proxy\nkubectl rollout status deployment oauth2-proxy -n oauth2-proxy\nkubectl logs -l app.kubernetes.io/name=oauth2-proxy -n oauth2-proxy --tail=20\n```\nAuthenticate through the proxy and confirm that the `X-Forwarded-User` header now contains the value from your configured claim instead of the email."
+      }
+    ],
+    "resolution": {
+      "summary": "Added the --user-id-claim configuration flag that allows specifying which OIDC token claim to use as the user identifier. Previously hardcoded to 'email', users can now set it to 'sub', 'preferred_username', 'phone_number', or any custom claim. Internally, SessionState.Email was renamed to UserID with backward-compatible session decoding.",
+      "codeSnippets": [
+        "# Use the 'sub' claim as user ID instead of email\noauth2-proxy --user-id-claim=sub --provider=oidc --oidc-issuer-url=https://issuer.example.com"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "oauth2-proxy",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "oauth2-proxy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/oauth2-proxy/oauth2-proxy/issues/431",
+      "repo": "https://github.com/oauth2-proxy/oauth2-proxy",
+      "pr": "https://github.com/oauth2-proxy/oauth2-proxy/pull/448"
+    },
+    "reactions": 5,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with oauth2-proxy installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:39:54.411Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

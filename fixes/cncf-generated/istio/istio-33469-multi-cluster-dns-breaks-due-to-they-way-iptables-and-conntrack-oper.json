@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "istio-33469-multi-cluster-dns-breaks-due-to-they-way-iptables-and-conntrack-oper",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "istio: Multi cluster DNS breaks due to they way iptables and conntrack operates",
+    "description": "Multi cluster DNS breaks due to they way iptables and conntrack operates. Requested by 18+ users.",
+    "type": "bug",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current istio deployment",
+        "description": "Verify your istio version and configuration:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nhelm list -n istio 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working istio installation."
+      },
+      {
+        "title": "Review istio configuration",
+        "description": "Inspect the relevant istio configuration:\n```bash\nkubectl get all -n istio -l app.kubernetes.io/name=istio\nkubectl get configmap -n istio -l app.kubernetes.io/part-of=istio\n```\n(**NOTE**: This is used to report product bugs:\n  To report a security vulnerability, please visit <https://istio.io/about/security-vulnerabilities>\n  To ask questions about how to use Istio, please visit <https://discuss.istio.io>)\n\n**Bug"
+      },
+      {
+        "title": "Apply the fix for Multi cluster DNS breaks due to they way iptables and…",
+        "description": "iptables redirection is essentially \"cached\" by conntrack. This works ok\nfor TCP, but for UDP this means we are not routing on a per-packet basis\nlike we require for the DNS proxy. See\nhttps://serverfault.com/questions/741104/iptables-redirect-works-only-for-first-packet/741108#741108.\n\nThis means\n```yaml\nudp      17 83 src=100.96.126.31 dst=169.254.20.10 sport=51692 dport=53 src=169.254.20.10 dst=100.96.126.31 sport=53 dport=51692 [ASSURED] mark=0 use=1\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n istio -l app.kubernetes.io/name=istio\nkubectl get events -n istio --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Multi cluster DNS breaks due to they way iptables and…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "iptables redirection is essentially \"cached\" by conntrack. This works ok\nfor TCP, but for UDP this means we are not routing on a per-packet basis\nlike we require for the DNS proxy. See\nhttps://serverfault.com/questions/741104/iptables-redirect-works-only-for-first-packet/741108#741108.",
+      "codeSnippets": [
+        "udp      17 83 src=100.96.126.31 dst=169.254.20.10 sport=51692 dport=53 src=169.254.20.10 dst=100.96.126.31 sport=53 dport=51692 [ASSURED] mark=0 use=1",
+        "sysctl -w net.netfilter.nf_conntrack_udp_timeout=1\nsysctl -w net.netfilter.nf_conntrack_udp_timeout_stream=1",
+        "istioctl version --remote\nclient version: 1.9.1\ncontrol plane version: 1.9.5\ndata plane version: 1.9.5 (191 proxies)\n\nkubectl version --short\nClient Version: v1.19.7\nServer Version: v1.19.10"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "istio",
+      "graduated",
+      "networking",
+      "bug"
+    ],
+    "cncfProjects": [
+      "istio"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "bug"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/istio/istio/issues/33469",
+      "repo": "https://github.com/istio/istio",
+      "pr": "https://github.com/istio/istio/pull/33572"
+    },
+    "reactions": 18,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with istio installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-14T06:19:12.685Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

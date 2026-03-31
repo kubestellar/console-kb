@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "k8up-910-failed-backup-stated-as-succeeded",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "k8up: Failed backup stated as succeeded",
+    "description": "Failed backup stated as succeeded. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify k8up troubleshoot symptoms",
+        "description": "Check for the issue in your k8up deployment:\n```bash\nkubectl get pods -n k8up -l app.kubernetes.io/name=k8up\nkubectl logs -l app.kubernetes.io/name=k8up -n k8up --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review k8up configuration",
+        "description": "Inspect the relevant k8up configuration:\n```bash\nkubectl get all -n k8up -l app.kubernetes.io/name=k8up\nkubectl get configmap -n k8up -l app.kubernetes.io/part-of=k8up\n```\nBackups are stated as `Succeeded` even if the backup commands failed. This is just an example, the reason _why_ the backup failed has already been fixed. However, it is problematic to describe a defective backup as successful."
+      },
+      {
+        "title": "Apply the fix for Failed backup stated as succeeded",
+        "description": "```\n---\napiVersion: k8up.io/v1\nkind: PreBackupPod\nmetadata:\n  name: mysqldump\nspec:\n  #backupCommand: sh -c 'mysqldump -u$USER -p$PW -h $DB_HOST --all-databases'\n  backupCommand: 'sh -c \"printf whatup && exit 1\"'\n  pod:\n    spec:\n      containers:\n        - env:\n            - name: MARIADB_USER\n   \n```yaml\n\u276f kubectl get backups.k8up.io -n authelia-public \nNAME                    SCHEDULE REF   COMPLETION   PREBACKUP   AGE\npostgres                               Succeeded    Finished    12h\npostgres-backup-qbq6q   postgres       Succeeded    Finished    12h\n```"
+      },
+      {
+        "title": "Confirm Failed backup stated as succeeded is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=k8up -n k8up --tail=50 --since=5m\nkubectl get events -n k8up --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "```\n---\napiVersion: k8up.io/v1\nkind: PreBackupPod\nmetadata:\n  name: mysqldump\nspec:\n  #backupCommand: sh -c 'mysqldump -u$USER -p$PW -h $DB_HOST --all-databases'\n  backupCommand: 'sh -c \"printf whatup && exit 1\"'\n  pod:\n    spec:\n      containers:\n        - env:\n            - name: MARIADB_USER\n              value: root\n            - name: DB_HOST\n              value:",
+      "codeSnippets": [
+        "\u276f kubectl get backups.k8up.io -n authelia-public \nNAME                    SCHEDULE REF   COMPLETION   PREBACKUP   AGE\npostgres                               Succeeded    Finished    12h\npostgres-backup-qbq6q   postgres       Succeeded    Finished    12h"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "k8up",
+      "sandbox",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "k8up"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/k8up-io/k8up/issues/910",
+      "repo": "https://github.com/k8up-io/k8up"
+    },
+    "reactions": 3,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with k8up installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:38:58.948Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

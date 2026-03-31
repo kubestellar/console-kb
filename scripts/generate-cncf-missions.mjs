@@ -38,7 +38,7 @@ const FORCE_RESCAN = process.env.FORCE_RESCAN === 'true'
 const ENABLED_SOURCES = process.env.ENABLED_SOURCES
   ? process.env.ENABLED_SOURCES.split(',').map(s => s.trim()).filter(Boolean)
   : null // null = use config file
-const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-generated')
+const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-generated')
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
@@ -1175,7 +1175,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
   const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
   const missionType = detectMissionType(issue)
   const difficulty = estimateDifficulty(issue)
-  const filePath = `solutions/cncf-generated/${project.name}/${slug}.json`
+  const filePath = `fixes/cncf-generated/${project.name}/${slug}.json`
 
   if (DRY_RUN) {
     console.log(`    [DRY RUN] Would create PR for: ${project.name}: ${truncateAtWordBoundary(issue.title, 60)}`)
@@ -1339,7 +1339,7 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
   return {
     version: 'kc-mission-v1',
     name: slug,
-    missionClass: 'solution',
+    missionClass: 'fixer',
     author: 'KubeStellar Bot',
     authorGithub: 'kubestellar',
     mission: {

@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "coredns-3860-coredns-pods-panic-with-no-probe-failures",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "coredns: CoreDNS pods panic with no probe failures",
+    "description": "CoreDNS pods panic with no probe failures. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify coredns troubleshoot symptoms",
+        "description": "Check for the issue in your coredns deployment:\n```bash\nkubectl get pods -n coredns -l app.kubernetes.io/name=coredns\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review coredns configuration",
+        "description": "Inspect the relevant coredns configuration:\n```bash\nkubectl get all -n coredns -l app.kubernetes.io/name=coredns\nkubectl get configmap -n coredns -l app.kubernetes.io/part-of=coredns\n```\n**What happened**:\n\nRecently, we have seen CoreDNS pods panic with no probe failures.  The pod logs show a panic and error yet there are no liveness nor readiness probe failures."
+      },
+      {
+        "title": "Apply the fix for CoreDNS pods panic with no probe failures",
+        "description": "On the surface, it looks like a bug upstream in k8s.io/client-go.\n\n```\nW0416 1848.103956       1 reflector.go:326] pkg/mod/k8s.io/client-go.17.2/tools/cache/reflector.go watch of *v1.Endpoints ended with: too old resource version: 3565458375 (3565460029)\n```\n\nI'm guessing from the message above,\n```yaml\nlivenessProbe:\n      failureThreshold: 5\n      httpGet:\n        path: /health\n        port: 8080\n        scheme: HTTP\n      initialDelaySeconds: 60\n      periodSeconds: 10\n      successThreshold: 1\n      timeoutSeconds: 5\n```"
+      },
+      {
+        "title": "Upgrade coredns to include the fix",
+        "description": "If the fix is included in a newer release, upgrade coredns:\n```bash\nhelm repo update\nhelm upgrade coredns coredns/coredns --namespace coredns\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n coredns\nhelm list -n coredns\n```"
+      },
+      {
+        "title": "Confirm CoreDNS pods panic with no probe failures is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=50 --since=5m\nkubectl get events -n coredns --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "On the surface, it looks like a bug upstream in k8s.io/client-go.\n\n```\nW0416 1848.103956       1 reflector.go:326] pkg/mod/k8s.io/client-go.17.2/tools/cache/reflector.go watch of *v1.Endpoints ended with: too old resource version: 3565458375 (3565460029)\n```\n\nI'm guessing from the message above, that the watch dies, and is not restarted.",
+      "codeSnippets": [
+        "livenessProbe:\n      failureThreshold: 5\n      httpGet:\n        path: /health\n        port: 8080\n        scheme: HTTP\n      initialDelaySeconds: 60\n      periodSeconds: 10\n      successThreshold: 1\n      timeoutSeconds: 5",
+        "readinessProbe:\n      failureThreshold: 3\n      httpGet:\n        path: /ready\n        port: 8181\n        scheme: HTTP\n      periodSeconds: 10\n      successThreshold: 1\n      timeoutSeconds: 1",
+        ".:53 {\n        errors\n        health {\n            lameduck 10s\n        }\n        ready\n        kubernetes cluster.local in-addr.arpa ip6.arpa {\n            pods insecure\n            fallthrough in-addr.arpa ip6.arpa\n            ttl 30\n        }\n        prometheus :9153\n        forward . /etc/resolv.conf\n        cache 30\n        loop\n        reload\n        loadbalance\n    }"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "coredns",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "coredns"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Service"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/coredns/coredns/issues/3860",
+      "repo": "https://github.com/coredns/coredns"
+    },
+    "reactions": 1,
+    "comments": 34,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with coredns installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-21T06:15:52.875Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

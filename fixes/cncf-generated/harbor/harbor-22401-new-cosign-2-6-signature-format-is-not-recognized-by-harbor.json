@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "harbor-22401-new-cosign-2-6-signature-format-is-not-recognized-by-harbor",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "harbor: New cosign 2.6 signature format is not recognized by Harbor",
+    "description": "New cosign 2.6 signature format is not recognized by Harbor. Requested by 16+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current harbor deployment",
+        "description": "Verify your harbor version and configuration:\n```bash\nkubectl get pods -n harbor -l app.kubernetes.io/name=harbor\nhelm list -n harbor 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working harbor installation."
+      },
+      {
+        "title": "Review harbor configuration",
+        "description": "Inspect the relevant harbor configuration:\n```bash\nkubectl get all -n harbor -l app.kubernetes.io/name=harbor\nkubectl get configmap -n harbor -l app.kubernetes.io/part-of=harbor\n```\nWith cosign 2.6, with `--new-bundle-format` tag, the format of the signature by cosign has changed."
+      },
+      {
+        "title": "Apply the cosign signature format workaround",
+        "description": "Configure cosign to use a signature format compatible with your Harbor version:\n```bash\n# Sign with legacy tag-based format (compatible with older Harbor)\nCOSIGN_EXPERIMENTAL=0 cosign sign --key cosign.key <harbor-host>/<project>/<image>:<tag>\n\n# Or explicitly set the attachment format\ncosign sign --attachment-tag-prefix=sha256- --key cosign.key <harbor-host>/<project>/<image>:<tag>\n```sql\nAlternatively, upgrade Harbor to a version that supports the new cosign 2.6+ OCI referrers API format."
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n harbor -l app.kubernetes.io/name=harbor\nkubectl get events -n harbor --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"New cosign 2.6 signature format is not recognized by Harbor\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Cosign 2.6 introduced a new signature format that Harbor does not recognize, causing signature verification to fail. The issue is that newer cosign versions changed the default signature format. The workaround is to use cosign with the --registry-referrers-mode=oci-1-1 flag disabled, or to configure cosign to use the legacy tag-based signature attachment format that Harbor supports.",
+      "codeSnippets": [
+        "# Sign with legacy tag-based format (compatible with older Harbor)\nCOSIGN_EXPERIMENTAL=0 cosign sign --key cosign.key <harbor-host>/<project>/<image>:<tag>",
+        "# Verify signature\ncosign verify --key cosign.pub <harbor-host>/<project>/<image>:<tag>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "harbor",
+      "graduated",
+      "security",
+      "feature"
+    ],
+    "cncfProjects": [
+      "harbor"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/goharbor/harbor/issues/22401",
+      "repo": "https://github.com/goharbor/harbor"
+    },
+    "reactions": 16,
+    "comments": 9,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A running Kubernetes cluster with harbor installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:20:14.036Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

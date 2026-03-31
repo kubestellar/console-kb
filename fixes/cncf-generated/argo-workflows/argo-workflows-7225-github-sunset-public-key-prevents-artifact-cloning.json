@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-7225-github-sunset-public-key-prevents-artifact-cloning",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: Github Sunset public key prevents artifact cloning",
+    "description": "Github Sunset public key prevents artifact cloning. Requested by 48+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\nAs of November 16, 2021 we are no longer able to clone github repositories as artifiacts without setting `insecureIgnoreHostKey: true` It appears that the go tests pass on master at least."
+      },
+      {
+        "title": "Apply the fix for Github Sunset public key prevents artifact cloning",
+        "description": "Update the known_hosts for GitHub's new SSH keys in your git artifact configuration. After GitHub rotated their SSH host keys, workflows using git artifacts with `knownHosts` fail with a key mismatch error. Either update the known hosts or set `insecureIgnoreHostKey: true` as a workaround.\n```bash\n# Error seen in executor logs:\n# artifact git-repo failed to load: ssh: handshake failed: knownhosts: key mismatch\nargo logs @latest | grep -i 'key mismatch'\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Github Sunset public key prevents artifact cloning\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Update the SSH known_hosts entries in your git artifact Secret to include GitHub's new SSH host keys. Alternatively, set insecureIgnoreHostKey: true as a temporary workaround.",
+      "codeSnippets": [
+        "time=\"2021-11-16T18:20:27.183Z\" level=error msg=\"executor error: artifact git-repo failed to load: ssh: handshake failed: knownhosts: key mismatch\"\ntime=\"2021-11-16T18:20:27.183Z\" level=info msg=\"Alloc=4485 TotalAlloc=9777 Sys=74833 NumGC=4 Goroutines=3\"\ntime=\"2021-11-16T18:20:27.183Z\" level=fatal msg=\"artifact git-repo failed to load: ssh: handshake failed: knownhosts: key mismatch\"",
+        "\u279c  argo-workflows git:(e5dc961b7) \u2717 make test | grep \"FAIL\"\n--- FAIL: TestGitArtifactDriverLoad_SSL (0.01s)\n    --- FAIL: TestGitArtifactDriverLoad_SSL/Insecure (0.00s)\n    --- FAIL: TestGitArtifactDriverLoad_SSL/Secure (0.00s)\n    --- FAIL: TestGitArtifactDriverLoad_SSL/Insecure#01 (0.00s)\n    --- FAIL: TestGitArtifactDriverLoad_SSL/Secure#01 (0.00s)\nFAIL\nFAIL\tgithub.com/argoproj/argo-workflows/v3/workflow/artifacts/git\t11.484s\nFAIL\nmake: *** [test] Error 1"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/7225",
+      "repo": "https://github.com/argoproj/argo-workflows"
+    },
+    "reactions": 48,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "argo"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-12T06:19:22.794Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

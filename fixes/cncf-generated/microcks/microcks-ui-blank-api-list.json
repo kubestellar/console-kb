@@ -1,0 +1,38 @@
+{
+  "version": "kc-mission-v1",
+  "name": "microcks-ui-blank-api-list",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Microcks: Fix Blank API/Services List in UI",
+    "description": "Resolves the issue where the Microcks UI shows a blank page when listing APIs and Services, even though imports succeed. This is typically caused by MongoDB connection issues, Keycloak SSL requirement warnings, or ingress path misconfiguration.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check Microcks pod logs for errors",
+        "description": "Look for SSL warnings or MongoDB errors in the Microcks app logs:\n```bash\nkubectl logs -n microcks -l app=microcks --tail=100 | grep -i 'WARN\\|ERROR\\|SSL\\|mongo'\n```\nThe most common cause is a Keycloak SSL warning: `SSL is required to authenticate. Remote address X.X.X.X is secure: false`. This blocks API listing requests silently."
+      },
+      {
+        "title": "Check MongoDB connectivity",
+        "description": "Verify MongoDB is running and Microcks can connect to it:\n```bash\n# Check MongoDB pod\nkubectl get pods -n microcks -l app=mongodb\n\n# Check MongoDB logs for connection issues\nkubectl logs -n microcks -l app=mongodb --tail=30\n\n# Verify Microcks can reach MongoDB\nkubectl exec -n microcks deployment/microcks -- env | grep MONGO\n```\nIf MongoDB is using persistent storage and the PVC is unbound, the pod will be stuck in `Pending`."
+      },
+      {
+        "title": "Fix Keycloak SSL requirement (most common cause)",
+        "description": "If the logs show the SSL warning, disable the SSL requirement on the microcks realm:\n```bash\nkubectl port-forward svc/microcks-keycloak -n microcks 9090:8080 &\nsleep 2\n\nKC_TOKEN=$(curl -s -X POST http://localhost:9090/realms/master/protocol/openid-connect/token \\\n  -d 'username=admin&password=admin&grant_type=password&client_id=admin-cli' | jq -r '.access_token')\n\ncurl -s -X PUT http://localhost:9090/admin/realms/microcks \\\n  -H \"Authorization: Bearer $KC_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"sslRequired\": \"NONE\"}'\n```\nThis allows internal HTTP requests between Microcks and Keycloak without TLS."
+      },
+      {
+        "title": "Verify the API list loads",
+        "description": "Restart Microcks and check the UI:\n```bash\nkubectl rollout restart deployment/microcks -n microcks\nkubectl wait --for=condition=ready pod -l app=microcks -n microcks --timeout=120s\n```\nRefresh the browser. The API/Services list should now display imported specs."
+      }
+    ],
+    "resolution": {
+      "summary": "The blank API list is resolved by fixing the Keycloak SSL requirement mismatch or MongoDB connectivity. The UI silently fails to load API data when backend authentication requests are rejected.",
+      "codeSnippets": [
+        "kubectl logs -n microcks -l app=microcks --tail=100 | grep -i 'WARN|ERROR|SSL|mongo'",
+        "kubectl rollout restart deployment/microcks -n microcks"
+      ]
+    }
+  }
+}

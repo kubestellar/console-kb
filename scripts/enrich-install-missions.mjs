@@ -25,7 +25,7 @@ const CONCURRENCY = parseInt(process.env.CONCURRENCY || '3', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
   : null
-const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'cncf-install')
+const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'

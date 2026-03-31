@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rook-7746-ceph-mons-are-allowing-insecure-global-id-reclaim",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "rook: ceph: Mons are allowing insecure global_id reclaim",
+    "description": "ceph: Mons are allowing insecure global_id reclaim. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify rook troubleshoot symptoms",
+        "description": "Check for the issue in your rook deployment:\n```bash\nkubectl get pods -n rook -l app.kubernetes.io/name=rook\nkubectl logs -l app.kubernetes.io/name=rook -n rook --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review rook configuration",
+        "description": "Inspect the relevant rook configuration:\n```bash\nkubectl get all -n rook -l app.kubernetes.io/name=rook\nkubectl get configmap -n rook -l app.kubernetes.io/part-of=rook\n```\nBug Report\n\n**Current Behaviour:**\nceph status return \"HEALTH_WARN\" \nwith reason: mons are allowing insecure global_id reclaim\n\nceph status return \"HEALTH_OK\" \n\nUpgraded Ceph from 1.4 -> 1.5 -> 1.6.1\nAll OK."
+      },
+      {
+        "title": "Apply the fix for ceph: Mons are allowing insecure global_id reclaim",
+        "description": "I can confirm this is happening in all clusters, whether a clean install or upgraded cluster, running at least versions: v14.2.20, v15.2.11 or v16.2.1. \n\nAccording to the [CVE](https://docs.ceph.com/en/latest/security/CVE-2021-20288/) also previously mentioned, there is a security issue where\n```yaml\nNEW_CEPH_IMAGE='ceph/ceph:v15.2.11-20210419'\nCLUSTER_NAME=\"$ROOK_CLUSTER_NAMESPACE\"  # change if your cluster name is not the Rook namespace\nkubectl -n $ROOK_CLUSTER_NAMESPACE patch CephCluster $CLUSTER_NAME --type=merge -p \"{\\\"spec\\\": {\\\"cephVersion\\\": {\\\"image\\\": \\\"$NEW_CEPH_IMAGE\\\"}}}\"\n```"
+      },
+      {
+        "title": "Upgrade rook to include the fix",
+        "description": "If the fix is included in a newer release, upgrade rook:\n```bash\nhelm repo update\nhelm upgrade rook rook/rook --namespace rook\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n rook\nhelm list -n rook\n```"
+      },
+      {
+        "title": "Confirm ceph: Mons are allowing insecure global_id reclaim is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=rook -n rook --tail=50 --since=5m\nkubectl get events -n rook --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "I can confirm this is happening in all clusters, whether a clean install or upgraded cluster, running at least versions: v14.2.20, v15.2.11 or v16.2.1. \n\nAccording to the [CVE](https://docs.ceph.com/en/latest/security/CVE-2021-20288/) also previously mentioned, there is a security issue where clients need to be upgraded to the releases mentioned. Once all the clients are updated (e.g.",
+      "codeSnippets": [
+        "NEW_CEPH_IMAGE='ceph/ceph:v15.2.11-20210419'\nCLUSTER_NAME=\"$ROOK_CLUSTER_NAMESPACE\"  # change if your cluster name is not the Rook namespace\nkubectl -n $ROOK_CLUSTER_NAMESPACE patch CephCluster $CLUSTER_NAME --type=merge -p \"{\\\"spec\\\": {\\\"cephVersion\\\": {\\\"image\\\": \\\"$NEW_CEPH_IMAGE\\\"}}}\"",
+        "cluster:\n    id:     3bd7a445-c9b4-4524-b298-b96d25e09251\n    health: HEALTH_WARN\n            mons are allowing insecure global_id reclaim\n\n  services:\n    mon: 3 daemons, quorum e,h,j (age 56m)\n    mgr: a(active, since 55m)\n    osd: 3 osds: 3 up (since 106m), 3 in (since 2w)\n\n  data:\n    pools:   2 pools, 33 pgs\n    objects: 4.51k objects, 15 GiB\n    usage:   47 GiB used, 853 GiB / 900 GiB avail\n    pgs:     33 active+clean\n\n  io:\n    client:   69 KiB/s wr, 0 op/s rd, 5 op/s wr",
+        "health: HEALTH_WARN\n            client is using insecure global_id reclaim\n            mon is allowing insecure global_id reclaim"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "rook",
+      "graduated",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "rook"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Serviceaccount"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/rook/rook/issues/7746",
+      "repo": "https://github.com/rook/rook"
+    },
+    "reactions": 11,
+    "comments": 45,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with rook installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-27T06:34:13.265Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

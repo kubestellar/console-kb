@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubevirt-6462-dhcp-gateway-option-severely-broken-since-0-43",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubevirt: DHCP Gateway Option severely broken since 0.43",
+    "description": "DHCP Gateway Option severely broken since 0.43. This issue affects 10+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kubevirt troubleshoot symptoms",
+        "description": "Check for the issue in your kubevirt deployment:\n```bash\nkubectl get pods -n kubevirt -l app.kubernetes.io/name=kubevirt\nkubectl logs -l app.kubernetes.io/name=kubevirt -n kubevirt --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kubevirt configuration",
+        "description": "Inspect the relevant kubevirt configuration:\n```bash\nkubectl get all -n kubevirt -l app.kubernetes.io/name=kubevirt\nkubectl get configmap -n kubevirt -l app.kubernetes.io/part-of=kubevirt\n```\n**What happened**:\n\nIn one of the commits in this range https://github.com/kubevirt/kubevirt/compare/v0.43.0...v0.43.1-rc.1 the gateway IP address that ends up at the DHCP server was converted from a 4-byte IPv4 representation to a 16-byte IPv4-mapped IPv6 representation, breaking DHCP gateway option handling."
+      },
+      {
+        "title": "Apply the fix for DHCP Gateway Option severely broken since 0.43",
+        "description": "This PR fixes https://github.com/kubevirt/kubevirt/issues/6462, the behavior and need for the PR is extensively detailed there. The `.IPv4()` on the gateway IP can safely be done in `server.go` as it is the last place it is touched before handed over to the DHCP library.\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Confirm DHCP Gateway Option severely broken since 0.43 is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kubevirt -n kubevirt --tail=50 --since=5m\nkubectl get events -n kubevirt --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR fixes https://github.com/kubevirt/kubevirt/issues/6462, the behavior and need for the PR is extensively detailed there. The `.IPv4()` on the gateway IP can safely be done in `server.go` as it is the last place it is touched before handed over to the DHCP library.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubevirt",
+      "incubating",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kubevirt"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "VirtualMachineInstance"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kubevirt/kubevirt/issues/6462",
+      "repo": "https://github.com/kubevirt/kubevirt",
+      "pr": "https://github.com/kubevirt/kubevirt/pull/6465"
+    },
+    "reactions": 10,
+    "comments": 2,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "virtctl",
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubevirt installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:27:13.553Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

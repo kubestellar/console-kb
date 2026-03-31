@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "tikv-8589-async-commit-does-not-ensure-linearizability",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "tikv: Async commit does not ensure linearizability",
+    "description": "Async commit does not ensure linearizability. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify tikv troubleshoot symptoms",
+        "description": "Check for the issue in your tikv deployment:\n```bash\nkubectl get pods -n tikv -l app.kubernetes.io/name=tikv\nkubectl logs -l app.kubernetes.io/name=tikv -n tikv --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review tikv configuration",
+        "description": "Inspect the relevant tikv configuration:\n```bash\nkubectl get all -n tikv -l app.kubernetes.io/name=tikv\nkubectl get configmap -n tikv -l app.kubernetes.io/part-of=tikv\n```\n### Read in the same session\n\nRead with max u64 immediately after an async commit transaction. Because the lock in the previous transaction may be not committed yet, and locks can be ignored if we read with max u64."
+      },
+      {
+        "title": "Apply the fix for Async commit does not ensure linearizability",
+        "description": "> > \n> > A more concrete example:\n> > ```\n> > 1. An external client starts two sessions A and B.\n> > \n> > 2. Session A starts T1, start_ts = 1.\n> > \n> > 3. Session B starts T2, start_ts = 2.\n> > \n> > 4. Client starts session C, it starts a transaction T3, start_ts = 80.\n> > \n> > 5. Session A prewrites k1=1.\n> > \n> > 6. Session A commits T1 with commit_ts = 100.\n> > \n> > 7. Session B prewrites k2=1 using async commit, min_commit_ts = 51.\n> > \n> > 8. Session B commits T2 with commit_ts = 51.\n> >\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Confirm Async commit does not ensure linearizability is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=tikv -n tikv --tail=50 --since=5m\nkubectl get events -n tikv --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "> > \n> > A more concrete example:\n> > ```\n> > 1. An external client starts two sessions A and B.\n> > \n> > 2. Session A starts T1, start_ts = 1.\n> > \n> > 3. Session B starts T2, start_ts = 2.\n> > \n> > 4. Client starts session C, it starts a transaction T3, start_ts = 80.\n> > \n> > 5. Session A prewrites k1=1.\n> > \n> > 6. Session A commits T1 with commit_ts = 100.\n> > \n> > 7.\n\nSee the source issue and linked PR for the complete implementation details.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "tikv",
+      "graduated",
+      "storage",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "tikv"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/tikv/tikv/issues/8589",
+      "repo": "https://github.com/tikv/tikv"
+    },
+    "reactions": 3,
+    "comments": 31,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "tikv-ctl",
+      "tiup"
+    ],
+    "description": "A running TiKV cluster (standalone or deployed on Kubernetes via TiDB Operator). TiUP and tikv-ctl are the primary CLI tools for managing TiKV."
+  },
+  "security": {
+    "scannedAt": "2026-03-13T06:19:20.377Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

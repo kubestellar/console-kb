@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-8790-amazon-s3-mismatch-when-reading-http-header-from-gcs",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: Amazon S3: Mismatch when reading HTTP header from GCS",
+    "description": "Amazon S3: Mismatch when reading HTTP header from GCS. Requested by 8+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current fluent-bit deployment",
+        "description": "Verify your fluent-bit version and configuration:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nhelm list -n fluent-bit 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working fluent-bit installation."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nWhile configuring our FluentBit instance, I reached a situation when the Ama"
+      },
+      {
+        "title": "Apply the fix for Amazon S3: Mismatch when reading HTTP header from GCS",
+        "description": "Apply the configuration change to resolve the issue:\n```yaml\nfluent-bit[1343]: [2024/05/03 03:23:21] [debug] [upstream] KA connection #28 to storage.googleapis.com:443 is connected\nfluent-bit[1343]: [2024/05/03 03:23:21] [debug] [http_client] not using http_proxy for header\nfluent-bit[1343]: [2024/05/03 03:23:21] [debug] [aws_credentials] Requesting credentials from the env provider..\n---\nHere FluentBit blocks for 4 minutes...\n---\nfluent-bit[1343]: [2024/05/03 03:27:21] [error] [http_client] broken connection to storage.googleapis.com:443 ?\nfluent-bit[1343]: [2024/05/03 03:27:21] [debug] [upstream] KA connection #28 to storage.googleapis.com:443 is now \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Amazon S3: Mismatch when reading HTTP header from GCS\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "See the source issue for the community-verified solution: https://github.com/fluent/fluent-bit/issues/8790",
+      "codeSnippets": [
+        "fluent-bit[1343]: [2024/05/03 03:23:21] [debug] [upstream] KA connection #28 to storage.googleapis.com:443 is connected\nfluent-bit[1343]: [2024/05/03 03:23:21] [debug] [http_client] not using http_proxy for header\nfluent-bit[1343]: [2024/05/03 03:23:21] [debug] [aws_credentials] Requesting credentials from the env provider..\n---\nHere FluentBit blocks for 4 minutes...\n---\nfluent-bit[1343]: [2024/05/03 03:27:21] [error] [http_client] broken connection to storage.googleapis.com:443 ?\nfluent-bit[1343]: [2024/05/03 03:27:21] [debug] [upstream] KA connection #28 to storage.googleapis.com:443 is now available\nfluent-bit[1343]: [2024/05/03 03:27:21] [debug] [output:s3:s3-bids] PutObject http status=200\nfluent-bit[1343]: [2024/05/03 03:27:21] [ info] [output:s3:s3-bids] Successfully uploaded object",
+        "HTTP/1.1 200 OK\nETag: \"f75bc68bd2645e669b5208da00ea3e02\"\nx-goog-generation: 1714721454001939\nx-goog-metageneration: 1\nx-goog-hash: crc32c=HBNrRA==\nx-goog-hash: md5=91vGi9JkXmabUgjaAOo+Ag==\nx-amz-checksum-crc32c: HBNrRA==\nx-goog-stored-content-length: 1973\nx-goog-stored-content-encoding: gzip\nVary: Origin\nX-GUploader-UploadID: ABPtcPrl0G_stANkY8LXdqEaWL9nGpZjkCYHNFAyBZYlpvHDqJ0gfRAEkKsEM79BWkfhnoMC56g\nContent-Length: 0\nDate: Fri, 03 May 2024 07:30:54 GMT\nServer: UploadServer\nContent-Type: text/html; charset=UTF-8\nAlt-Svc: h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "[SERVICE]\n    flush        5\n    grace        30\n    daemon       Off\n    log_level    debug\n    parsers_file /path/to/parsers.conf\n\n[INPUT]\n    Name   tail\n    Parser test\n    Path   /path/to/test.log\n\n[OUTPUT]\n    Name            s3\n    Alias           s3-bids\n    Match           *\n    bucket          my-bucket\n    compression     gzip\n    upload_timeout  1m\n    store_dir       /tmp/fluentbit/log\n    use_put_object  On\n    retry_limit     3\n    total_file_size 250M\n    content_type    application/json\n    region          auto\n    storage_class   STANDARD\n    endpoint        https://storage.googleapis.com\n    s3_key_format   /source=test/year=%Y/month=%m/day=%d/test-log-%H-$UUID.json.gz"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/8790",
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "reactions": 8,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-28T06:29:35.803Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

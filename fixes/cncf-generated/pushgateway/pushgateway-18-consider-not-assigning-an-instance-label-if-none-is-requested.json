@@ -1,0 +1,73 @@
+{
+  "version": "kc-mission-v1",
+  "name": "pushgateway-18-consider-not-assigning-an-instance-label-if-none-is-requested",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "pushgateway: Consider not assigning an instance label if none is requested",
+    "description": "Consider not assigning an instance label if none is requested. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current pushgateway deployment",
+        "description": "Verify your pushgateway version and configuration:\n```bash\nkubectl get pods -n pushgateway -l app.kubernetes.io/name=pushgateway\nhelm list -n pushgateway 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working pushgateway installation."
+      },
+      {
+        "title": "Review pushgateway configuration",
+        "description": "Inspect the relevant pushgateway configuration:\n```bash\nkubectl get all -n pushgateway -l app.kubernetes.io/name=pushgateway\nkubectl get configmap -n pushgateway -l app.kubernetes.io/part-of=pushgateway\n```\nCurrently, we add the ip number:\nhttps://github.com/prometheus/pushgateway/blob/master/handler/push.go#L55\n\nCf. https://github.com/prometheus/prometheus/issues/490"
+      },
+      {
+        "title": "Apply the fix for Consider not assigning an instance label if none is…",
+        "description": "Sending to a pushgateway on localhost, without specifying an instance field, caused pushgateway to fill in `instance=\"[\"`. This is because the IP address is `[::1]`, whereas the code assumes an IPv4 address. Using the standard `net.SplitHostPort` is the right thing, and it produces the right results (namely, `instance=\"::1\"`).\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n pushgateway -l app.kubernetes.io/name=pushgateway\nkubectl get events -n pushgateway --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Consider not assigning an instance label if none is…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Sending to a pushgateway on localhost, without specifying an instance field, caused pushgateway to fill in `instance=\"[\"`. This is because the IP address is `[::1]`, whereas the code assumes an IPv4 address. Using the standard `net.SplitHostPort` is the right thing, and it produces the right results (namely, `instance=\"::1\"`).",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "pushgateway",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "pushgateway"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/pushgateway/issues/18",
+      "repo": "https://github.com/prometheus/pushgateway",
+      "pr": "https://github.com/prometheus/pushgateway/pull/22"
+    },
+    "reactions": 0,
+    "comments": 28,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with pushgateway installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-25T06:31:11.398Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

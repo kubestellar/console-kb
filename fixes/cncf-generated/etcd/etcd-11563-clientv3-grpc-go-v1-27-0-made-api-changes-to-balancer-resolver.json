@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-11563-clientv3-grpc-go-v1-27-0-made-api-changes-to-balancer-resolver",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "etcd: clientv3: grpc-go (v1.27.0) made API changes to balancer / resolver.",
+    "description": "clientv3: grpc-go (v1.27.0) made API changes to balancer / resolver.. Users encounter: \"occurred while pulling etcd / clientv3. The steps to reproduce it are as follows:\".",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify etcd feature symptoms",
+        "description": "Check for the issue in your etcd deployment:\n```bash\nkubectl get pods -n cert-manager -l app=etcd\nkubectl logs -l app.kubernetes.io/name=etcd -n cert-manager --tail=100 | grep -i error\n```\nLook for error: `occurred while pulling etcd / clientv3. The steps to reproduce it are as follows:`"
+      },
+      {
+        "title": "Check current resource configuration",
+        "description": "Inspect the relevant etcd resources:\n```bash\nkubectl get resource -A\nkubectl describe resource <name> -n <namespace>\n```\nAfter the release of grpc-go v1.27.0, an error occurred while pulling etcd / clientv3. The steps to reproduce it are as follows:\n\n1. go.mod:\n\n```\ngo 1.13\n\nrequire (\n\tgithub.com/coreos/etcd v3.3.18+inc"
+      },
+      {
+        "title": "Apply the fix for clientv3: grpc-go (v1.27.0) made API changes to balancer / r",
+        "description": "clientv3: Fix grpc-go (v1.27.0) incompatible modification of balancer/resolver API.\n\nModify the API changed by balancer / resolver to ensure consistency with grpc-go (v1.27.0), otherwise clientv3 will not be able to be pulled by go mod, which will affect the direct use of users.\n\nReferences:\n1. [bal\n```yaml\ngo 1.13\r\n\r\nrequire (\r\n\tgithub.com/coreos/etcd v3.3.18+incompatible // indirect\r\n\tgithub.com/coreos/go-systemd v0.0.0-00010101000000-000000000000 // indirect\r\n\tgithub.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect\r\n\tgithub.com/gogo/protobuf v1.3.1 // indirect\r\n\tgithub.com/google/uuid v1.1.1 // indirect\r\n\tgo.etcd.io/etcd v3.3.18+incompatible // indirect\r\n\tgo.uber.org/zap v1.13.0 // indirect\r\n\tgoogle.golang.org/grpc v1.27.0 // indirect\r\n)\r\n\r\nreplace github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0\n```"
+      },
+      {
+        "title": "Confirm clientv3: grpc-go (v1.27.0) made API changes to ba is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=etcd -n cert-manager --tail=50 --since=5m\nkubectl get events -n cert-manager --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `occurred while pulling etcd / clientv3. The steps to reproduce it are as follows:` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is: clientv3: Fix grpc-go (v1.27.0) incompatible modification of balancer/resolver API.\n\nModify the API changed by balancer / resolver to ensure consistency with grpc-go (v1.27.0), otherwise clientv3 will not be able to be pulled by go mod, which will affect the direct use of users.\n\nReferences:\n1. [balancer/resolver: remove temporary backward-compatibility type aliases](https://github.com/grpc/grpc-g. This fixes the issue because it addresses the underlying problem that was causing the failure.",
+      "codeSnippets": [
+        "go 1.13\r\n\r\nrequire (\r\n\tgithub.com/coreos/etcd v3.3.18+incompatible // indirect\r\n\tgithub.com/coreos/go-systemd v0.0.0-00010101000000-000000000000 // indirect\r\n\tgithub.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect\r\n\tgithub.com/gogo/protobuf v1.3.1 // indirect\r\n\tgithub.com/google/uuid v1.1.1 // indirect\r\n\tgo.etcd.io/etcd v3.3.18+incompatible // indirect\r\n\tgo.uber.org/zap v1.13.0 // indirect\r\n\tgoogle.golang.org/grpc v1.27.0 // indirect\r\n)\r\n\r\nreplace github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0",
+        "$ go get go.etcd.io/etcd/clientv3\r\n# github.com/coreos/etcd/clientv3/balancer/resolver/endpoint\r\n../../go/pkg/mod/github.com/coreos/etcd@v3.3.18+incompatible/clientv3/balancer/resolver/endpoint/endpoint.go:114:78: undefined: resolver.BuildOption\r\n../../go/pkg/mod/github.com/coreos/etcd@v3.3.18+incompatible/clientv3/balancer/resolver/endpoint/endpoint.go:182:31: undefined: resolver.ResolveNowOption\r\n# github.com/coreos/etcd/clientv3/balancer/picker\r\n../../go/pkg/mod/github.com/coreos/etcd@v3.3.18+incompatible/clientv3/balancer/picker/err.go:37:44: undefined: balancer.PickOptions\r\n../../go/pkg/mod/github.com/coreos/etcd@v3.3.18+incompatible/clientv3/balancer/picker/roundrobin_balanced.go:55:54: undefined: balancer.PickOptions",
+        "require google.golang.org/grpc v1.26.0\r\nreplace github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "graduated",
+      "orchestration",
+      "feature"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/etcd-io/etcd/issues/11563",
+      "repo": "https://github.com/etcd-io/etcd",
+      "pr": "https://github.com/etcd-io/etcd/pull/11564"
+    },
+    "reactions": 55,
+    "comments": 55,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with etcd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-10T05:31:55.902Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

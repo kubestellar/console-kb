@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluentd-2200-td-agent-v3-2-1-does-not-close-log-files-on-rotation",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluentd: td-agent v3.2.1 does not close log files on rotation",
+    "description": "td-agent v3.2.1 does not close log files on rotation. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify fluentd troubleshoot symptoms",
+        "description": "Check for the issue in your fluentd deployment:\n```bash\nkubectl get pods -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl logs -l app.kubernetes.io/name=fluentd -n fluentd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review fluentd configuration",
+        "description": "Inspect the relevant fluentd configuration:\n```bash\nkubectl get all -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl get configmap -n fluentd -l app.kubernetes.io/part-of=fluentd\n```\nCheck [CONTRIBUTING guideline](https://github.com/fluent/fluentd/blob/master/CONTRIBUTING.md) first and here is the list to help us investigate the problem."
+      },
+      {
+        "title": "Apply the fix for td-agent v3.2.1 does not close log files on rotation",
+        "description": "* Enable to set interval of restarting workers\n  See #3749 and #3768\n* Fix a bug that fluentd doesn't release its own log file even after\n  rotated by external tools\n  Fix #2200 and #2426\nFix a bug that fluentd doesn't release its own log file even after rotated by external tools\n```yaml\n/var/log/td-agent/td-agent.log {\n  daily\n  rotate 30\n  compress\n  delaycompress\n  notifempty\n  create 640 td-agent td-agent\n  sharedscripts\n  postrotate\n    pid=/var/run/td-agent/td-agent.pid\n    if [ -s \"$pid\" ]\n    then\n      kill -USR1 \"$(cat $pid)\"\n    fi\n  endscript\n}\n```"
+      },
+      {
+        "title": "Confirm td-agent v3.2.1 does not close log files on… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=fluentd -n fluentd --tail=50 --since=5m\nkubectl get events -n fluentd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "* Enable to set interval of restarting workers\n  See #3749 and #3768\n* Fix a bug that fluentd doesn't release its own log file even after\n  rotated by external tools\n  Fix #2200 and #2426\nFix a bug that fluentd doesn't release its own log file even after rotated by external tools",
+      "codeSnippets": [
+        "/var/log/td-agent/td-agent.log {\n  daily\n  rotate 30\n  compress\n  delaycompress\n  notifempty\n  create 640 td-agent td-agent\n  sharedscripts\n  postrotate\n    pid=/var/run/td-agent/td-agent.pid\n    if [ -s \"$pid\" ]\n    then\n      kill -USR1 \"$(cat $pid)\"\n    fi\n  endscript\n}",
+        "$ cat /var/run/td-agent/td-agent.pid\n387",
+        "fluentd 387 td-agent    7w      REG             253,62  5296042    526173 /var/log/td-agent/td-agent.log.1\nfluentd 387 td-agent    9w      REG             253,62     4381    528081 /var/log/td-agent/td-agent.log\nruby    392 td-agent    7w      REG             253,62     4381    528081 /var/log/td-agent/td-agent.log"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluentd",
+      "graduated",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "fluentd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluentd/issues/2200",
+      "repo": "https://github.com/fluent/fluentd",
+      "pr": "https://github.com/fluent/fluentd/pull/3782"
+    },
+    "reactions": 6,
+    "comments": 2,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluentd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-26T06:32:20.099Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

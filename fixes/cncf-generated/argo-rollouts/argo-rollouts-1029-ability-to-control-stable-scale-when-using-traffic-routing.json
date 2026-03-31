@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-rollouts-1029-ability-to-control-stable-scale-when-using-traffic-routing",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-rollouts: Ability to control stable scale when using traffic routing",
+    "description": "Ability to control stable scale when using traffic routing. Requested by 35+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-rollouts deployment",
+        "description": "Verify your argo-rollouts version and configuration:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nhelm list -n argo-rollouts 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-rollouts installation."
+      },
+      {
+        "title": "Review argo-rollouts configuration",
+        "description": "Inspect the relevant argo-rollouts configuration:\n```bash\nkubectl get all -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get configmap -n argo-rollouts -l app.kubernetes.io/part-of=argo-rollouts\n```\nWhen using traffic routing with canary, the stable stack is never scaled down, until the rollout is fully promoted. This means that we are double the number of total replicas in the environment eventually (when the traffic weight reaches 100)."
+      },
+      {
+        "title": "Apply the fix for Ability to control stable scale when using traffic routing",
+        "description": "Checklist:\n```yaml\nspec:\n  strategy:\n    canary:\n      dynamicStableScale: true\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts\nkubectl get events -n argo-rollouts --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Ability to control stable scale when using traffic routing\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "See the fix PR for the community-verified solution: https://github.com/argoproj/argo-rollouts/pull/1382",
+      "codeSnippets": [
+        "spec:\n  strategy:\n    canary:\n      dynamicStableScale: true",
+        "spec:\n  strategy:\n    canary:\n      stableScale: Full | Dynamic  # Names are TBD (Full == existing behavior of leaving stable scaled to 100%, Dynamic == inverse of canary weight)",
+        "So the updated sequence of events during abort using dynamic scaling is\n\n0. Before the abort, at the pause step, we started at:\n`stable: 1/1, canary: 3/3, desiredWeight: 75, actualWeight: 75`\n\n1. Upon abort, we immediately scale up stable to 100%. The desired weight will become 0, but actual weight remains untouched initially:\n`stable: 1/4, canary: 3/3, desiredWeight: 0, actualWeight: 75`\n\n2. As the stable pods become available, we adjust traffic weight according to stable pod availability. Let's say 2/4 stable pods are available. The actual weight would be set to 50.\n`stable: 2/4, canary: 3/3, desiredWeight: 0, actualWeight: 50`\n\n3. Now that actual weight decreased to 50, the canary scale is reduced to 2\n`stable: 2/4, canary: 2/2, desiredWeight: 0, actualWeight: 50`\n\n4. when 3/4 stable po"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-rollouts",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo-rollouts"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Ingress",
+      "Replicaset"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-rollouts/issues/1029",
+      "repo": "https://github.com/argoproj/argo-rollouts",
+      "pr": "https://github.com/argoproj/argo-rollouts/pull/1382"
+    },
+    "reactions": 35,
+    "comments": 25,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-rollouts installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-15T06:23:11.037Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluentd-4396-out-forward-stuck-establishing-connection",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluentd: Out forward stuck establishing connection",
+    "description": "Out forward stuck establishing connection. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current fluentd deployment",
+        "description": "Verify your fluentd version and configuration:\n```bash\nkubectl get pods -n fluentd -l app.kubernetes.io/name=fluentd\nhelm list -n fluentd 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working fluentd installation."
+      },
+      {
+        "title": "Review fluentd configuration",
+        "description": "Inspect the relevant fluentd configuration:\n```bash\nkubectl get all -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl get configmap -n fluentd -l app.kubernetes.io/part-of=fluentd\n```\n### Describe the bug\n\nI encountered a critical issue with Fluentd where it gets stuck in an infinite loop while establishing connections between out_forward and in_forward servers."
+      },
+      {
+        "title": "Apply the fix for Out forward stuck establishing connection",
+        "description": "Adds timeout mechanism to `establish_connection` method to prevent infinite loop when handshake protocol gets stuck. In unstable network environments with proxy components, if connection drops during handshake after TLS establishment, Fluentd gets stuck in infinite loop causing logs to stop being\n```yaml\nIt appears that when attempting to distribute events, Node 1 receives events via UDP and then shares them with other nodes using the forwarder plugin. However, after approximately 10 seconds, fluentd enters a stale mode where it no longer accepts new incoming events and only forwards heartbeats. And I haven't seen any error logs stating the above behaviour.\n\nAfter checking the network calls with strace we are suspecting this\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n fluentd -l app.kubernetes.io/name=fluentd\nkubectl get events -n fluentd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Out forward stuck establishing connection\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Adds timeout mechanism to `establish_connection` method to prevent infinite loop when handshake protocol gets stuck. In unstable network environments with proxy components, if connection drops during handshake after TLS establishment, Fluentd gets stuck in infinite loop causing logs to stop being flushed.",
+      "codeSnippets": [
+        "It appears that when attempting to distribute events, Node 1 receives events via UDP and then shares them with other nodes using the forwarder plugin. However, after approximately 10 seconds, fluentd enters a stale mode where it no longer accepts new incoming events and only forwards heartbeats. And I haven't seen any error logs stating the above behaviour.\n\nAfter checking the network calls with strace we are suspecting this",
+        "My current workaround probably doesn't address the actual issue (why `read_nonblock` infinitely returns retriable error), but is good enough to prevent infinite loop:"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluentd",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "fluentd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluentd/issues/4396",
+      "repo": "https://github.com/fluent/fluentd",
+      "pr": "https://github.com/fluent/fluentd/pull/5104"
+    },
+    "reactions": 5,
+    "comments": 9,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluentd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-26T06:32:27.934Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

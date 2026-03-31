@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-5456-function-certificate-signed-by-unknown-authority-crossplane",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: Function: certificate signed by unknown authority \"Crossplane\"",
+    "description": "Function: certificate signed by unknown authority \"Crossplane\". This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify crossplane troubleshoot symptoms",
+        "description": "Check for the issue in your crossplane deployment:\n```bash\nkubectl get pods -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=100 | grep -i error\n```\nLook for error: `code = Unavailable desc = last connection error: connection error: desc = \"transport: authentication handshake failed: t`"
+      },
+      {
+        "title": "Review crossplane configuration",
+        "description": "Inspect the relevant crossplane configuration:\n```bash\nkubectl get all -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl get configmap -n crossplane -l app.kubernetes.io/part-of=crossplane\n```\n### What happened?\n\nWe are experiencing an intermittent problem with crossplane and the registration of the patch-and-transform function. We are constantly spinning down and spinning up clusters and we're now seeing this relatively regularly."
+      },
+      {
+        "title": "Apply the fix for Function: certificate signed by unknown authority…",
+        "description": "### Description of your changes\n\nUsing Create or Update directly instead of CreateOrUpdate avoids a race by failing with a conflict if the underlying Secret changed between the call to Get and the call to Create/Update.\n\nThe CreateOrUpdate helper re-fetches the resource before mutating it. The\n```yaml\nkubectl delete  secret -n upbound-system crossplane-root-ca\nkubectl delete  secret -n upbound-system -o name | grep -v crossplane-root-ca | xargs kubectl delete -n upbound-system\nkubectl get pod -n upbound-system -o name | xargs kubectl delete -n upbound-system\n```"
+      },
+      {
+        "title": "Confirm Function: certificate signed by unknown authority… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=50 --since=5m\nkubectl get events -n crossplane --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `code = Unavailable desc = last connection error: connection error: desc = \"transport: authentication handshake failed: t` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "### Description of your changes\n\nUsing Create or Update directly instead of CreateOrUpdate avoids a race by failing with a conflict if the underlying Secret changed between the call to Get and the call to Create/Update.\n\nThe CreateOrUpdate helper re-fetches the resource before mutating it.",
+      "codeSnippets": [
+        "kubectl delete  secret -n upbound-system crossplane-root-ca\nkubectl delete  secret -n upbound-system -o name | grep -v crossplane-root-ca | xargs kubectl delete -n upbound-system\nkubectl get pod -n upbound-system -o name | xargs kubectl delete -n upbound-system",
+        "50s                        Warning   ComposeResources                  REDACTED/redacted                                               cannot compose resources: cannot run Composition pipeline step \"k8s_provider_config\": cannot run Function \"crossplane-contrib-function-go-templating\": rpc error: code = DeadlineExceeded desc = latest balancer error: last connection error: connection error: desc = \"transport: authentication handshake failed: tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"crypto/rsa: verification error\\\" while trying to verify candidate authority certificate \\\"Crossplane\\\")\"",
+        "{\"level\":\"info\",\"ts\":\"2025-01-14T11:51:17Z\",\"logger\":\"crossplane\",\"msg\":\"Beta feature enabled\",\"flag\":\"EnableBetaCompositionWebhookSchemaValidation\"}\n{\"level\":\"info\",\"ts\":\"2025-01-14T11:51:17Z\",\"logger\":\"crossplane\",\"msg\":\"Alpha feature enabled\",\"flag\":\"EnableAlphaUsages\"}\n{\"level\":\"info\",\"ts\":\"2025-01-14T11:51:17Z\",\"logger\":\"crossplane\",\"msg\":\"Beta feature enabled\",\"flag\":\"EnableBetaDeploymentRuntimeConfigs\"}\n2025/01/14 11:51:19 http: TLS handshake error from 172.30.255.129:41964: EOF\nWarning: ControllerConfig.pkg.crossplane.io/v1alpha1 is deprecated. Use DeploymentRuntimeConfig from pkg.crossplane.io/v1beta1 instead.\n2025/01/14 11:51:28 http: TLS handshake error from 172.30.200.174:36792: EOF"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/issues/5456",
+      "repo": "https://github.com/crossplane/crossplane",
+      "pr": "https://github.com/crossplane/crossplane/pull/5892"
+    },
+    "reactions": 11,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-22T06:21:59.308Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

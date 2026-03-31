@@ -109,7 +109,7 @@ async function main() {
   }
 
   out.push(']', '')
-  out.push('/** Map category to console-kb solutions/ subdirectory */')
+  out.push('/** Map category to console-kb fixes/ subdirectory */')
   out.push('export const CATEGORY_TO_DIR = {')
   out.push("  'orchestration': 'troubleshooting',")
   out.push("  'observability': 'observability',")

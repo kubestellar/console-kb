@@ -109,7 +109,7 @@ Missions are regenerated weekly to stay current with new releases.
 
 ---
 
-_This issue was auto-generated as part of CNCF-wide outreach. The ${displayName} install mission is maintained in [\`solutions/cncf-install/install-${slug}.json\`](https://github.com/${KB_REPO}/blob/master/solutions/cncf-install/install-${slug}.json)._
+_This issue was auto-generated as part of CNCF-wide outreach. The ${displayName} install mission is maintained in [\`fixes/cncf-install/install-${slug}.json\`](https://github.com/${KB_REPO}/blob/master/fixes/cncf-install/install-${slug}.json)._
 
 _Labels: \`ai-mission\`, \`community\`, \`installation\`_
 `
@@ -122,7 +122,7 @@ function generateIssueLabels() {
 // ── Main ──────────────────────────────────────────────────────────────
 
 // Check which projects have missions
-const solutionsDir = join(__dirname, '..', 'solutions', 'cncf-install')
+const fixesDir = join(__dirname, '..', 'fixes', 'cncf-install')
 let projects = CNCF_PROJECTS.filter(p => p.name !== 'kubestellar')
 
 if (projectFilter) {
@@ -136,7 +136,7 @@ if (projectFilter) {
 // Only generate outreach for projects that have missions
 const projectsWithMissions = projects.filter(p => {
   const slug = slugify(p.name)
-  const missionPath = join(solutionsDir, `install-${slug}.json`)
+  const missionPath = join(fixesDir, `install-${slug}.json`)
   return existsSync(missionPath)
 })
 
