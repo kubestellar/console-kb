@@ -6,47 +6,53 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure MetalLB (Bare-metal Load Balancer)",
-    "description": "MetalLB is a load-balancer implementation for bare metal Kubernetes clusters, utilizing standard routing protocols. It is ideal for environments where cloud-native load balancers are not available, providing a way to expose services externally. Key trade-offs include the need for manual configuration of IP address pools and reliance on the underlying network infrastructure.",
+    "description": "MetalLB is a load-balancer implementation for bare metal Kubernetes clusters, utilizing standard routing protocols. It is particularly useful in environments where cloud-native load balancers are not available. Key trade-offs include the need for manual configuration of IP address ranges and potential complexity in network setup.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Add MetalLB Helm Repository",
-        "description": "This step adds the official MetalLB Helm repository to your Helm configuration, allowing you to install MetalLB using Helm.\n\n```bash\n\nhelm repo add metallb https://metallb.github.io/metallb\n\nhelm repo update\n\n```\n\n> This command adds the MetalLB repository.\n> Updates the local Helm chart repository cache.",
+        "title": "Add the MetalLB Helm repository",
+        "description": "This step adds the official MetalLB Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add metallb https://metallb.universe.tf\n\nhelm repo update\n\n```\n\n> This command adds the MetalLB repository.\n> Updates your local Helm chart repository cache.",
         "commands": [
-          "helm repo add metallb https://metallb.github.io/metallb",
+          "helm repo add metallb https://metallb.universe.tf",
           "helm repo update"
         ]
       },
       {
-        "title": "Install MetalLB",
-        "description": "This step installs MetalLB in the 'metallb-system' namespace using the specified version.\n\n```bash\n\nkubectl create namespace metallb-system\n\nhelm install metallb metallb/metallb --namespace metallb-system --version 0.15.3\n\n```\n\n> Creates a namespace for MetalLB.\n> Installs MetalLB with the specified version.",
+        "title": "Install MetalLB Custom Resource Definitions (CRDs)",
+        "description": "This step installs the necessary CRDs for MetalLB to function properly.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/namespace.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/metallb.yaml\n\n```\n\n> Creates the MetalLB namespace.\n> Installs the MetalLB components.",
         "commands": [
-          "kubectl create namespace metallb-system",
-          "helm install metallb metallb/metallb --namespace metallb-system --version 0.15.3"
+          "kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/namespace.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/metallb.yaml"
         ]
       },
       {
-        "title": "Configure MetalLB",
-        "description": "This step creates an IPAddressPool and L2Advertisement to define the IP address pool that MetalLB will use to allocate external IPs.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: metallb.io/v1beta1\nkind: IPAddressPool\nmetadata:\n  name: default-pool\n  namespace: metallb-system\nspec:\n  addresses:\n    - 192.168.1.240-192.168.1.250\n---\napiVersion: metallb.io/v1beta1\nkind: L2Advertisement\nmetadata:\n  name: default\n  namespace: metallb-system\nEOF\n\n```\n\n> Replace the IP range with your own network's range.",
+        "title": "Install MetalLB using Helm",
+        "description": "This step installs the MetalLB operator using Helm, specifying the namespace and version.\n\n```bash\n\nhelm install metallb metallb/metallb --namespace metallb-system --create-namespace --version 0.15.3\n\n```\n\n> Installs MetalLB in the metallb-system namespace.",
         "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: metallb.io/v1beta1\nkind: IPAddressPool\nmetadata:\n  name: default-pool\n  namespace: metallb-system\nspec:\n  addresses:\n    - 192.168.1.240-192.168.1.250\n---\napiVersion: metallb.io/v1beta1\nkind: L2Advertisement\nmetadata:\n  name: default\n  namespace: metallb-system\nEOF"
+          "helm install metallb metallb/metallb --namespace metallb-system --create-namespace --version 0.15.3"
         ]
       },
       {
-        "title": "Verify MetalLB Installation",
-        "description": "This step checks if the MetalLB pods are running and ready in the metallb-system namespace.\n\n```bash\n\nkubectl get pods -n metallb-system\n\nkubectl get svc -n metallb-system\n\n```\n\n> You should see MetalLB controller and speaker pods running.\n> Verify that the MetalLB service is up and running.",
+        "title": "Create a MetalLB ConfigMap",
+        "description": "This step creates a ConfigMap to configure MetalLB with a pool of IP addresses for load balancing.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    address-pools:\n    - name: default\n      protocol: layer2\n      addresses:\n      - 192.168.1.200-192.168.1.250\nEOF\n\n```\n\n> Replace the IP range with your own network's range.",
         "commands": [
-          "kubectl get pods -n metallb-system",
-          "kubectl get svc -n metallb-system"
+          "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    address-pools:\n    - name: default\n      protocol: layer2\n      addresses:\n      - 192.168.1.200-192.168.1.250\nEOF"
+        ]
+      },
+      {
+        "title": "Verify MetalLB installation",
+        "description": "This step checks if the MetalLB pods are running and ready.\n\n```bash\n\nkubectl get pods -n metallb-system\n\n```\n\n> You should see MetalLB pods in a Running state.",
+        "commands": [
+          "kubectl get pods -n metallb-system"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall MetalLB",
-        "description": "This step removes MetalLB from your cluster. Be aware that any services using MetalLB for external access will lose their external IPs, leading to potential data loss.\n\n```bash\n\nhelm uninstall metallb --namespace metallb-system\n\nkubectl delete namespace metallb-system\n\n```\n\n> Uninstalls the MetalLB Helm release.\n> Deletes the MetalLB namespace and all associated resources.",
+        "description": "This step removes MetalLB and its associated resources. Be cautious as this may lead to data loss if services depend on MetalLB.\n\n```bash\n\nhelm uninstall metallb --namespace metallb-system\n\nkubectl delete namespace metallb-system\n\n```\n\n> Uninstalls the MetalLB Helm release.\n> Deletes the MetalLB namespace and all resources within it.",
         "commands": [
           "helm uninstall metallb --namespace metallb-system",
           "kubectl delete namespace metallb-system"
@@ -56,9 +62,9 @@
     "upgrade": [
       {
         "title": "Upgrade MetalLB",
-        "description": "Before upgrading, ensure you backup your configuration. This step will upgrade MetalLB to the latest version while ensuring the service remains available.\n\n```bash\n\nkubectl get ipaddresspools,l2advertisements -n metallb-system -o yaml > metallb-config-backup.yaml\n\nhelm upgrade metallb metallb/metallb --namespace metallb-system --version 0.15.3\n\nkubectl get pods -n metallb-system\n\n```\n\n> Backup the current MetalLB configuration.\n> Upgrades MetalLB to the specified version.\n> Verify that the MetalLB pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you back up your configurations. This step upgrades MetalLB to the latest version.\n\n```bash\n\nkubectl get configmap config -n metallb-system -o yaml > metallb-config-backup.yaml\n\nhelm upgrade metallb metallb/metallb --namespace metallb-system --version 0.15.3\n\nkubectl get pods -n metallb-system\n\n```\n\n> Backup the current MetalLB configuration.\n> Upgrades MetalLB to the specified version.\n> Verify that the MetalLB pods are running after the upgrade.",
         "commands": [
-          "kubectl get ipaddresspools,l2advertisements -n metallb-system -o yaml > metallb-config-backup.yaml",
+          "kubectl get configmap config -n metallb-system -o yaml > metallb-config-backup.yaml",
           "helm upgrade metallb metallb/metallb --namespace metallb-system --version 0.15.3",
           "kubectl get pods -n metallb-system"
         ]
@@ -67,39 +73,39 @@
     "troubleshooting": [
       {
         "title": "Error: 'Failed to allocate IP address'",
-        "description": "**Cause:** This may occur if the configured IP address range is exhausted or misconfigured.\n\n**Fix:**\nCheck the ConfigMap for the address pool configuration and ensure there are available IPs."
+        "description": "**Cause:** This may occur if the specified IP range is exhausted or incorrectly configured.\n\n**Fix:**\nCheck the ConfigMap for correct IP range configuration and ensure there are available IPs."
       },
       {
         "title": "MetalLB pods are in 'CrashLoopBackOff' state",
-        "description": "**Cause:** This can happen due to misconfiguration or missing dependencies.\n\n**Fix:**\nCheck the logs of the MetalLB pods using 'kubectl logs <pod-name> -n metallb-system' for more details."
+        "description": "**Cause:** This can happen due to misconfiguration in the ConfigMap or missing dependencies.\n\n**Fix:**\nReview the logs of the MetalLB pods using 'kubectl logs <pod-name> -n metallb-system' to identify the issue."
       },
       {
-        "title": "Services are not getting external IPs",
-        "description": "**Cause:** This may indicate that MetalLB is not properly configured or the service type is incorrect.\n\n**Fix:**\nEnsure the service type is set to 'LoadBalancer' and that MetalLB is configured correctly."
+        "title": "Load balancer service is not getting an external IP",
+        "description": "**Cause:** This may be due to MetalLB not being able to communicate with the network properly.\n\n**Fix:**\nEnsure that MetalLB is correctly configured and that your network allows for the specified IP range."
       },
       {
-        "title": "MetalLB controller pod is not running",
-        "description": "**Cause:** The controller may fail to start due to resource constraints or configuration issues.\n\n**Fix:**\nCheck the resource limits and ensure the configuration is valid."
+        "title": "Error: 'No available IP addresses'",
+        "description": "**Cause:** This indicates that the IP address pool is either empty or not configured correctly.\n\n**Fix:**\nCheck the ConfigMap for the address pool configuration and ensure the addresses are within the correct subnet."
       }
     ],
     "versionNotes": [
       {
         "version": "v0.15",
-        "changes": "Added support for BGP peering, improved layer2 configuration options.",
-        "deprecations": "None.",
-        "migrationSteps": "No specific migration steps required from v0.14."
+        "changes": "Added support for BGP peering, improved layer 2 mode stability.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required when upgrading from v0.14."
       }
     ],
     "resolution": {
-      "summary": "You should see the MetalLB pods running with the status 'Running' and the services should have external IPs assigned when queried with 'kubectl get svc'.",
+      "summary": "You should see the MetalLB pods running with the command 'kubectl get pods -n metallb-system' showing all pods in the Running state.",
       "codeSnippets": [
-        "helm repo add metallb https://metallb.github.io/metallb",
+        "helm repo add metallb https://metallb.universe.tf",
         "helm repo update",
-        "kubectl create namespace metallb-system",
-        "helm install metallb metallb/metallb --namespace metallb-system --version 0.15.3",
-        "kubectl apply -f - <<EOF\napiVersion: metallb.io/v1beta1\nkind: IPAddressPool\nmetadata:\n  name: default-pool\n  namespace: metallb-system\nspec:\n  addresses:\n    - 192.168.1.240-192.168.1.250\n---\napiVersion: metallb.io/v1beta1\nkind: L2Advertisement\nmetadata:\n  name: default\n  namespace: metallb-system\nEOF",
-        "kubectl get pods -n metallb-system",
-        "kubectl get svc -n metallb-system"
+        "kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/namespace.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/manifests/metallb.yaml",
+        "helm install metallb metallb/metallb --namespace metallb-system --create-namespace --version 0.15.3",
+        "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  namespace: metallb-system\n  name: config\ndata:\n  config: |\n    address-pools:\n    - name: default\n      protocol: layer2\n      addresses:\n      - 192.168.1.200-192.168.1.250\nEOF",
+        "kubectl get pods -n metallb-system"
       ]
     }
   },
@@ -157,10 +163,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a running Kubernetes cluster with the required tools installed."
+    "description": "Ensure you have a Kubernetes cluster running version 1.25 or higher and the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:12:32.412Z",
+    "scannedAt": "2026-03-31T18:20:46.118Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
