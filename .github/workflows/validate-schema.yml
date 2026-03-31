@@ -24,16 +24,15 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: cd scripts && npm install --no-audit
-      - name: Find files to validate
+      - name: Find changed files (PR only)
         id: changed
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' | tr '\n' ' ')
-          else
-            # For push, schedule, and workflow_dispatch: validate all mission files
-            FILES=$(find fixes -type f \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) ! -name 'index.json' | tr '\n' ' ')
-          fi
+          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' | tr '\n' ' ')
           echo "files=$FILES" >> $GITHUB_OUTPUT
-      - name: Validate schema
-        if: steps.changed.outputs.files != ''
+      - name: Validate schema (PR — changed files only)
+        if: github.event_name == 'pull_request' && steps.changed.outputs.files != ''
         run: node scripts/validate-schema.mjs ${{ steps.changed.outputs.files }}
+      - name: Validate schema (push/schedule/dispatch — all files)
+        if: github.event_name != 'pull_request'
+        run: node scripts/validate-schema.mjs --all

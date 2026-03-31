@@ -28,22 +28,21 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: cd scripts && npm install --no-audit
-      - name: Find mission files to scan
+      - name: Find changed files (PR only)
         id: changed
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' | tr '\n' ' ')
-          else
-            # For push, schedule, and workflow_dispatch: scan all mission files
-            FILES=$(find fixes -type f \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) ! -name 'index.json' | tr '\n' ' ')
-          fi
+          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' | tr '\n' ' ')
           echo "files=$FILES" >> $GITHUB_OUTPUT
           echo "count=$(echo $FILES | wc -w | tr -d ' ')" >> $GITHUB_OUTPUT
-      - name: Scan missions
-        if: steps.changed.outputs.count != '0'
+      - name: Scan missions (PR — changed files only)
+        if: github.event_name == 'pull_request' && steps.changed.outputs.count != '0'
         run: node scripts/scan-pr.mjs ${{ steps.changed.outputs.files }}
+      - name: Scan missions (push/schedule/dispatch — all files)
+        if: github.event_name != 'pull_request'
+        run: node scripts/scan-pr.mjs --all
       - name: Post results
-        if: always() && steps.changed.outputs.count != '0' && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |

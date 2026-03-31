@@ -1,9 +1,45 @@
 #!/usr/bin/env node
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 import yaml from 'js-yaml';
 import { validateMissionExport } from './scanner.mjs';
 
-const files = process.argv.slice(2);
+/** Valid mission file extensions */
+const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
+
+/** Files to skip when discovering all missions */
+const SKIP_FILENAMES = new Set(['index.json']);
+
+/**
+ * Recursively discovers all mission files under the given directory.
+ * Returns an array of relative file paths.
+ */
+function discoverMissionFiles(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...discoverMissionFiles(fullPath));
+    } else if (entry.isFile()) {
+      const ext = entry.name.substring(entry.name.lastIndexOf('.'));
+      if (MISSION_EXTENSIONS.has(ext) && !SKIP_FILENAMES.has(entry.name)) {
+        results.push(fullPath);
+      }
+    }
+  }
+  return results;
+}
+
+const args = process.argv.slice(2);
+
+let files;
+if (args.includes('--all')) {
+  // Discover all mission files under fixes/ (used for push/schedule/dispatch)
+  files = discoverMissionFiles('fixes');
+  console.log(`Discovered ${files.length} mission files to validate.\n`);
+} else {
+  files = args;
+}
 
 if (files.length === 0) {
   console.log('No files to validate.');
