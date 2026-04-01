@@ -38,7 +38,7 @@ const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
 const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
-const SOLUTIONS_DIR = join(process.cwd(), 'solutions', 'platform-install')
+const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 
 /** Missions older than this are considered stale and will be regenerated */
 const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
