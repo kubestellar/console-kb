@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cloud-custodian-842-access-key-groupings",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cloud-custodian: Access Key Groupings",
+    "description": "Access Key Groupings. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current cloud-custodian deployment",
+        "description": "Verify your cloud-custodian version and configuration:\n```bash\nkubectl get pods -n cloud-custodian -l app.kubernetes.io/name=cloud-custodian\nhelm list -n cloud-custodian 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working cloud-custodian installation."
+      },
+      {
+        "title": "Review cloud-custodian configuration",
+        "description": "Inspect the relevant cloud-custodian configuration:\n```bash\nkubectl get all -n cloud-custodian -l app.kubernetes.io/name=cloud-custodian\nkubectl get configmap -n cloud-custodian -l app.kubernetes.io/part-of=cloud-custodian\n```\nIf an IAM account has never been used the \"access_keys.last_used_date\" will be absent.  I want to disable access keys that have never been used AND the last rotated key is greater than 60 days."
+      },
+      {
+        "title": "Apply the fix for Access Key Groupings",
+        "description": "parse is not needed as k['CreateDate'] is already a datetime object.\n\nAdjusting the policy in https://github.com/capitalone/cloud-custodian/issues/842 and setting the `action` phase to the following solves this issue.\n\n```\n    actions:\n      - type: remove-keys\n        disable: true\n        age:\n```yaml\nname: iam_accounts-disable-never_used\n    description: |\n       Disable IAM accounts that have never been used in the last 60 days\n    resource: iam-user\n    filters:\n      - type: credential\n        key: access_keys.active\n        value: true\n      - type: credential\n        key: access_keys.last_used_date\n        value: absent\n      - type: credential\n        key: access_keys.last_rotated\n        value_type: age\n        value: 60\n        op: gte\n    actions:\n      - type: remove-keys\n        age: 60\n        disable: true\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n cloud-custodian -l app.kubernetes.io/name=cloud-custodian\nkubectl get events -n cloud-custodian --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Access Key Groupings\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "parse is not needed as k['CreateDate'] is already a datetime object.\n\nAdjusting the policy in https://github.com/capitalone/cloud-custodian/issues/842 and setting the `action` phase to the following solves this issue.\n\n```\n    actions:\n      - type: remove-keys\n        disable: true\n        age: 90\n```",
+      "codeSnippets": [
+        "name: iam_accounts-disable-never_used\n    description: |\n       Disable IAM accounts that have never been used in the last 60 days\n    resource: iam-user\n    filters:\n      - type: credential\n        key: access_keys.active\n        value: true\n      - type: credential\n        key: access_keys.last_used_date\n        value: absent\n      - type: credential\n        key: access_keys.last_rotated\n        value_type: age\n        value: 60\n        op: gte\n    actions:\n      - type: remove-keys\n        age: 60\n        disable: true",
+        "[\n  {\n    \"UserName\": \"read-s3\",\n    \"c7n:credential-report\": {\n      \"password_next_rotation\": null,\n      \"password_enabled\": false,\n      \"access_keys\": [\n        {\n          \"active\": true,\n          \"last_rotated\": \"2016-12-23T15:55:44+00:00\",\n          \"last_used_date\": null,\n          \"last_used_service\": null,\n          \"last_used_region\": null\n        },\n        {\n          \"active\": true,\n          \"last_rotated\": \"2016-09-26T18:39:07+00:00\",\n          \"last_used_region\": null,\n          \"last_used_date\": \"2017-01-09T23:21:00+00:00\",\n          \"last_used_service\": \"s3\"\n        }\n      ],\n      \"user_creation_time\": \"2016-09-26T18:39:07+00:00\",\n      \"mfa_active\": false,\n      \"arn\": \"arn:aws:iam::xxxxxxx:user/read-s3\",\n      \"password_last_used\": null,\n      \"password_last_change",
+        "actions:\n      - type: remove-keys\n        disable: true\n        age: 90"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cloud-custodian",
+      "incubating",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "cloud-custodian"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/cloud-custodian/cloud-custodian/issues/842",
+      "repo": "https://github.com/cloud-custodian/cloud-custodian",
+      "pr": "https://github.com/cloud-custodian/cloud-custodian/pull/1489"
+    },
+    "reactions": 5,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cloud-custodian installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-01T06:39:06.211Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
