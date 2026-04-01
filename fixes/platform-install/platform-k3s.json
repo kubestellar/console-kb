@@ -6,63 +6,71 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure K3s (Lightweight Kubernetes)",
-    "description": "K3s is a lightweight, fully conformant Kubernetes distribution designed for resource-constrained environments. It is ideal for edge computing, IoT, and development scenarios where simplicity and low overhead are paramount. Key trade-offs include reduced complexity and resource usage at the potential cost of some advanced Kubernetes features.",
+    "description": "K3s is a lightweight Kubernetes distribution designed for resource-constrained environments. It is ideal for edge computing, IoT, and development scenarios where a full Kubernetes installation is not feasible. K3s simplifies the installation process by bundling all necessary components into a single binary, making it easy to deploy and manage.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Install the K3s binary",
-        "description": "This step installs the K3s binary on your machine, which is the core component of the K3s distribution.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -\n\n```\n\n> This command fetches and installs the latest K3s version.",
+        "title": "Install K3s Binary",
+        "description": "This step installs the K3s binary on your system, which is required to run the K3s cluster.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -\n\n```\n\n> This command downloads and installs the latest K3s version.",
         "commands": [
           "curl -sfL https://get.k3s.io | sh -"
         ]
       },
       {
-        "title": "Verify K3s installation",
-        "description": "Check that K3s is installed and running correctly by verifying the service status.\n\n```bash\n\nsystemctl status k3s\n\n```\n\n> This command checks the status of the K3s service.",
+        "title": "Verify K3s Installation",
+        "description": "After installation, verify that K3s is running correctly by checking the status of the service.\n\n```bash\n\nsystemctl status k3s\n\n```\n\n> This command checks the status of the K3s service.",
         "commands": [
           "systemctl status k3s"
         ]
       },
       {
-        "title": "Set up kubeconfig",
-        "description": "This step configures your kubeconfig file to allow kubectl to interact with your K3s cluster.\n\n```bash\n\nexport KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n\nchmod 600 /etc/rancher/k3s/k3s.yaml\n\n```\n\n> This sets the KUBECONFIG environment variable to point to the K3s kubeconfig.\n> This ensures that the kubeconfig file has the correct permissions.",
+        "title": "Set Up Kubeconfig",
+        "description": "Configure your kubeconfig file to interact with the K3s cluster using kubectl.\n\n```bash\n\nexport KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n\nchmod 600 /etc/rancher/k3s/k3s.yaml\n\n```\n\n> This sets the KUBECONFIG environment variable to the K3s kubeconfig file.\n> This ensures that the kubeconfig file has the correct permissions.",
         "commands": [
           "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
           "chmod 600 /etc/rancher/k3s/k3s.yaml"
         ]
       },
       {
-        "title": "Verify nodes in the cluster",
-        "description": "Ensure that the K3s node is registered and ready in the cluster.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes in the K3s cluster.",
+        "title": "Verify Cluster Nodes",
+        "description": "Check that the K3s cluster nodes are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes in the K3s cluster.",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
-        "title": "Post-installation configuration",
-        "description": "Set up additional features like metrics server and RBAC for enhanced functionality.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml\n\n```\n\n> This installs the metrics server for resource monitoring.",
+        "title": "Post-Install Configuration",
+        "description": "Optionally, you can set up monitoring and autoscaling for your K3s cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/k3s-io/k3s/master/manifests/metrics-server.yaml\n\n```\n\n> This installs the metrics server for resource monitoring.",
         "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml"
+          "kubectl apply -f https://raw.githubusercontent.com/k3s-io/k3s/master/manifests/metrics-server.yaml"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall K3s",
-        "description": "This step removes K3s and all associated resources. Be aware that this will delete all workloads and data stored in the cluster.\n\n```bash\n\n/usr/local/bin/k3s-uninstall.sh\n\n```\n\n> This script uninstalls K3s and cleans up the system.",
+        "description": "This step removes K3s and all associated resources. Be aware that this will delete all workloads and data in the cluster.\n\n```bash\n\n/usr/local/bin/k3s-uninstall.sh\n\n```",
         "commands": [
           "/usr/local/bin/k3s-uninstall.sh"
+        ]
+      },
+      {
+        "title": "Clean Up Orphaned Resources",
+        "description": "After uninstalling K3s, check for any orphaned resources such as load balancers or persistent volumes.\n\n```bash\n\nkubectl get services --all-namespaces\n\nkubectl get pvc --all-namespaces\n\n```\n\n> Check for any remaining services.\n> Check for any remaining persistent volume claims.",
+        "commands": [
+          "kubectl get services --all-namespaces",
+          "kubectl get pvc --all-namespaces"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade K3s",
-        "description": "Before upgrading, ensure you backup your current cluster state. This step performs the upgrade and verifies the installation.\n\n```bash\n\nkubectl get all --all-namespaces > k3s-backup-$(date +%F).yaml\n\ncurl -sfL https://get.k3s.io | sh -\n\nkubectl get nodes\n\n```\n\n> Backup all resources in the cluster.\n> This command fetches and installs the latest version of K3s.\n> Verify that all nodes are in a ready state after the upgrade.",
+        "description": "Before upgrading, back up your cluster data. Then, perform the upgrade and verify the installation.\n\n```bash\n\nkubectl get all --all-namespaces > backup-$(date +%F).yaml\n\ncurl -sfL https://get.k3s.io | sh -\n\nkubectl get nodes\n\n```\n\n> Backup all resources in the cluster.\n> This command upgrades K3s to the latest version.\n> Verify that all nodes are in a Ready state after the upgrade.",
         "commands": [
-          "kubectl get all --all-namespaces > k3s-backup-$(date +%F).yaml",
+          "kubectl get all --all-namespaces > backup-$(date +%F).yaml",
           "curl -sfL https://get.k3s.io | sh -",
           "kubectl get nodes"
         ]
@@ -71,38 +79,38 @@
     "troubleshooting": [
       {
         "title": "Error: 'k3s is not running'",
-        "description": "**Cause:** The K3s service may not have started correctly.\n\n**Fix:**\nCheck the service logs with 'journalctl -u k3s' to diagnose the issue."
+        "description": "**Cause:** The K3s service may not have started correctly.\n\n**Fix:**\nCheck the K3s logs with 'journalctl -u k3s' for errors."
       },
       {
-        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** The kubeconfig file may not be set up correctly or permissions may be incorrect.\n\n**Fix:**\nEnsure KUBECONFIG is set correctly and permissions are set with 'chmod 600 /etc/rancher/k3s/k3s.yaml'."
+        "title": "kubectl get nodes returns no nodes",
+        "description": "**Cause:** K3s may not be installed or running.\n\n**Fix:**\nEnsure K3s is installed and running with 'systemctl status k3s'."
       },
       {
-        "title": "Error: 'no nodes available in cluster'",
-        "description": "**Cause:** The K3s node may not be ready or properly registered.\n\n**Fix:**\nCheck node status with 'kubectl get nodes' and ensure the K3s service is running."
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** Kubeconfig may not be set correctly.\n\n**Fix:**\nEnsure KUBECONFIG is set to the correct path: 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml'."
       },
       {
-        "title": "Error: 'Failed to start K3s'",
-        "description": "**Cause:** Insufficient resources or conflicting services may prevent K3s from starting.\n\n**Fix:**\nCheck system resources and logs for conflicts using 'journalctl -u k3s'."
+        "title": "Pods are stuck in 'Pending' state",
+        "description": "**Cause:** Insufficient resources available in the cluster.\n\n**Fix:**\nCheck node resources with 'kubectl describe nodes' and adjust resource requests."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for new Kubernetes features and improved the metrics server integration.",
-        "deprecations": "Deprecation of certain flags related to legacy storage drivers.",
-        "migrationSteps": "If upgrading from v1.30, ensure to review the new storage configurations."
+        "changes": "Added support for new CNI plugins, improved metrics server integration.",
+        "deprecations": "Deprecated support for older storage backends.",
+        "migrationSteps": "If upgrading from v1.30, ensure that your storage classes are compatible with the new version."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'kubectl get nodes' showing your node(s) in a 'Ready' state.",
+      "summary": "You should see output from 'kubectl get nodes' showing all nodes in a 'Ready' state.",
       "codeSnippets": [
         "curl -sfL https://get.k3s.io | sh -",
         "systemctl status k3s",
         "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
         "chmod 600 /etc/rancher/k3s/k3s.yaml",
         "kubectl get nodes",
-        "kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml"
+        "kubectl apply -f https://raw.githubusercontent.com/k3s-io/k3s/master/manifests/metrics-server.yaml"
       ]
     }
   },
@@ -141,7 +149,7 @@
       "cli"
     ],
     "containerImages": [
-      "rancher/k3s:v1.31.0"
+      "rancher/k3s:v1.35.3+k3s1"
     ],
     "sourceUrls": {
       "docs": "https://docs.k3s.io/",
@@ -157,10 +165,10 @@
     ],
     "cloudCLI": "none",
     "resources": "Minimum 1 vCPU, 512MB RAM per node",
-    "description": "Ensure your system meets the minimum requirements for running K3s."
+    "description": "Ensure you have a compatible system with sufficient resources."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:14:10.764Z",
+    "scannedAt": "2026-04-01T18:19:16.985Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

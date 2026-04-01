@@ -6,111 +6,104 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Rancher / RKE2",
-    "description": "Rancher is a complete container management platform that simplifies the deployment and management of Kubernetes clusters. It is ideal for organizations looking to manage multiple Kubernetes clusters across different environments. Key trade-offs include the need for sufficient hardware resources and the complexity of managing multiple clusters.",
+    "description": "Rancher is an open-source container management platform that simplifies the deployment and management of Kubernetes clusters across various environments. It is ideal for organizations looking to streamline their container orchestration and management processes. Key trade-offs include the need for sufficient resources and potential complexity in multi-cluster management.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
     "steps": [
       {
         "title": "Install the Rancher CLI",
-        "description": "This step installs the Rancher CLI, which is necessary for managing Rancher from the command line.\n\n```bash\n\ncurl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz\n\ntar -xzf rancher-darwin-amd64-v2.13.3.tar.gz\n\nsudo mv rancher /usr/local/bin/\n\n```\n\n> Download the Rancher CLI for macOS.\n> Extract the downloaded tarball.\n> Move the CLI to a directory in your PATH.",
+        "description": "This step installs the Rancher CLI, which is necessary for managing Rancher from the command line.\n\n```bash\n\ncurl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-darwin-amd64.tar.gz\n\ncurl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-linux-amd64.tar.gz\n\ntar -xzf rancher-*.tar.gz && sudo mv rancher-* /usr/local/bin/rancher\n\n```\n\n> For macOS users\n> For Linux users\n> Extract and move the CLI to a directory in your PATH",
         "commands": [
-          "curl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz",
-          "tar -xzf rancher-darwin-amd64-v2.13.3.tar.gz",
-          "sudo mv rancher /usr/local/bin/"
+          "curl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-darwin-amd64.tar.gz",
+          "curl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-linux-amd64.tar.gz",
+          "tar -xzf rancher-*.tar.gz && sudo mv rancher-* /usr/local/bin/rancher"
         ]
       },
       {
         "title": "Create a Kubernetes cluster",
-        "description": "This step creates a new Kubernetes cluster using RKE2 with the specified version and node count.\n\n```bash\n\ncurl -sfL https://get.rke2.io | sh -\n\nsudo systemctl enable rke2-server\n\nsudo systemctl start rke2-server\n\n```\n\n> Install RKE2 on the master node.\n> Enable the RKE2 server to start on boot.\n> Start the RKE2 server.",
+        "description": "This command creates a new Kubernetes cluster using RKE2 with the specified version and node count.\n\n```bash\n\ncurl -sfL https://get.rke2.io | sh -\n\nsudo systemctl enable rke2-server.service && sudo systemctl start rke2-server.service\n\nexport KUBECONFIG=/etc/rancher/rke2/rke2.yaml\n\n```\n\n> Install RKE2 on the server\n> Start the RKE2 server\n> Set the kubeconfig for RKE2",
         "commands": [
           "curl -sfL https://get.rke2.io | sh -",
-          "sudo systemctl enable rke2-server",
-          "sudo systemctl start rke2-server"
+          "sudo systemctl enable rke2-server.service && sudo systemctl start rke2-server.service",
+          "export KUBECONFIG=/etc/rancher/rke2/rke2.yaml"
         ]
       },
       {
-        "title": "Set up kubeconfig",
-        "description": "This step configures kubeconfig to access the newly created Kubernetes cluster.\n\n```bash\n\nsudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config\n\nsudo chown $(id -u):$(id -g) ~/.kube/config\n\n```\n\n> Copy the RKE2 kubeconfig to your home directory.\n> Change ownership of the kubeconfig file.",
-        "commands": [
-          "sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config",
-          "sudo chown $(id -u):$(id -g) ~/.kube/config"
-        ]
-      },
-      {
-        "title": "Verify cluster nodes",
-        "description": "This step verifies that the nodes in the cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes in the cluster to ensure they are ready.",
+        "title": "Verify the cluster nodes",
+        "description": "This command checks the status of the nodes in the Kubernetes cluster to ensure they are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> Verify that all nodes are in 'Ready' status",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
         "title": "Post-install configuration",
-        "description": "This step sets up monitoring and autoscaling for the cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-monitoring.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-autoscaler.yaml\n\n```\n\n> Install Rancher monitoring.\n> Install Rancher autoscaler.",
+        "description": "This step configures additional features such as monitoring and RBAC for enhanced security.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher-monitoring.yaml\n\nkubectl create clusterrolebinding rancher-admin --clusterrole=cluster-admin --user=$(whoami)\n\n```\n\n> Install monitoring\n> Grant admin access to the current user",
         "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-monitoring.yaml",
-          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher-autoscaler.yaml"
+          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher-monitoring.yaml",
+          "kubectl create clusterrolebinding rancher-admin --clusterrole=cluster-admin --user=$(whoami)"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall Rancher",
-        "description": "This step removes Rancher and all associated resources. Be aware that this will lead to data loss.\n\n```bash\n\nkubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml\n\nsudo systemctl stop rke2-server\n\n```\n\n> Delete the Rancher deployment.\n> Stop the RKE2 server.",
+        "description": "This step removes Rancher and all associated resources. Data loss may occur, and orphaned resources may remain.\n\n```bash\n\nkubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher.yaml\n\nsudo systemctl stop rke2-server.service && sudo systemctl disable rke2-server.service\n\n```\n\n> Remove Rancher deployment\n> Stop and disable the RKE2 server",
         "commands": [
-          "kubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml",
-          "sudo systemctl stop rke2-server"
+          "kubectl delete -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher.yaml",
+          "sudo systemctl stop rke2-server.service && sudo systemctl disable rke2-server.service"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Rancher",
-        "description": "Before upgrading, ensure you back up your data and verify the current state of the cluster.\n\n```bash\n\nkubectl get all --all-namespaces > backup-$(date +%F).yaml\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml\n\nkubectl get pods -n cattle-system\n\n```\n\n> Backup current resources.\n> Apply the new Rancher manifest.\n> Verify that all Rancher pods are running.",
+        "description": "Before upgrading, back up your data, drain nodes if necessary, perform the upgrade, and verify the installation.\n\n```bash\n\nkubectl get all --all-namespaces > backup.yaml\n\nkubectl drain <node-name> --ignore-daemonsets\n\nkubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher.yaml\n\nkubectl get pods -n cattle-system\n\n```\n\n> Backup current resources\n> Drain the node before upgrading\n> Apply the new Rancher manifest\n> Verify that all Rancher pods are running",
         "commands": [
-          "kubectl get all --all-namespaces > backup-$(date +%F).yaml",
-          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.13.3/manifests/rancher.yaml",
+          "kubectl get all --all-namespaces > backup.yaml",
+          "kubectl drain <node-name> --ignore-daemonsets",
+          "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher.yaml",
           "kubectl get pods -n cattle-system"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused'",
-        "description": "**Cause:** The RKE2 server is not running or has failed to start.\n\n**Fix:**\nCheck the RKE2 server logs with 'sudo journalctl -u rke2-server -f' and restart the service if necessary."
+        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
+        "description": "**Cause:** This indicates a problem with the kubeconfig or the server certificate.\n\n**Fix:**\nEnsure the KUBECONFIG is set correctly and the server certificate is valid."
       },
       {
-        "title": "Error: 'No resources found in default namespace'",
-        "description": "**Cause:** The Kubernetes cluster may not have any resources deployed.\n\n**Fix:**\nDeploy a sample application to verify the cluster is functioning."
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** This may occur if the image repository is unreachable or credentials are incorrect.\n\n**Fix:**\nCheck the image repository URL and ensure proper credentials are configured."
       },
       {
-        "title": "Error: 'kubectl: command not found'",
-        "description": "**Cause:** kubectl is not installed or not in the PATH.\n\n**Fix:**\nInstall kubectl using 'curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/local/bin/'"
+        "title": "Node status shows 'NotReady'",
+        "description": "**Cause:** This can happen due to network issues or insufficient resources on the node.\n\n**Fix:**\nCheck the node's resource usage and network connectivity."
       },
       {
-        "title": "Error: 'Failed to connect to the API server'",
-        "description": "**Cause:** The kubeconfig file may not be set up correctly.\n\n**Fix:**\nEnsure the kubeconfig file is correctly copied and owned by the user with 'ls -l ~/.kube/config'."
+        "title": "Error: 'Failed to create resource'",
+        "description": "**Cause:** This may indicate insufficient permissions or misconfigured RBAC.\n\n**Fix:**\nReview RBAC settings and ensure the user has the necessary permissions."
       }
     ],
     "versionNotes": [
       {
-        "version": "v2.13.3",
-        "changes": "Added support for Kubernetes v1.30, improved RBAC configurations, and enhanced monitoring capabilities.",
-        "deprecations": "Deprecated legacy API versions for certain resources.",
-        "migrationSteps": "If upgrading from v2.12.x, ensure to migrate any custom resource definitions to the new API versions."
+        "version": "v2.14.0",
+        "changes": "Added support for Kubernetes 1.30, improved Helm chart management.",
+        "deprecations": "Deprecated support for Kubernetes versions below 1.27.",
+        "migrationSteps": "If upgrading from v2.13.x, ensure to update your Helm charts to the latest version."
       }
     ],
     "resolution": {
-      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
+      "summary": "You should see output from 'kubectl get nodes' showing all nodes in 'Ready' status.",
       "codeSnippets": [
-        "curl -LO https://github.com/rancher/cli/releases/download/v2.13.3/rancher-darwin-amd64-v2.13.3.tar.gz",
-        "tar -xzf rancher-darwin-amd64-v2.13.3.tar.gz",
-        "sudo mv rancher /usr/local/bin/",
+        "curl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-darwin-amd64.tar.gz",
+        "curl -LO https://github.com/rancher/cli/releases/download/v2.14.0/rancher-linux-amd64.tar.gz",
+        "tar -xzf rancher-*.tar.gz && sudo mv rancher-* /usr/local/bin/rancher",
         "curl -sfL https://get.rke2.io | sh -",
-        "sudo systemctl enable rke2-server",
-        "sudo systemctl start rke2-server",
-        "sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config",
-        "sudo chown $(id -u):$(id -g) ~/.kube/config"
+        "sudo systemctl enable rke2-server.service && sudo systemctl start rke2-server.service",
+        "export KUBECONFIG=/etc/rancher/rke2/rke2.yaml",
+        "kubectl get nodes",
+        "kubectl apply -f https://raw.githubusercontent.com/rancher/rancher/v2.14.0/manifests/rancher-monitoring.yaml"
       ]
     }
   },
@@ -149,10 +142,11 @@
     ],
     "installMethods": [
       "cli",
+      "helm",
       "kubectl"
     ],
     "containerImages": [
-      "rancher/rancher:v2.13.3"
+      "rancher/rancher:v2.14.0"
     ],
     "sourceUrls": {
       "docs": "https://ranchermanager.docs.rancher.com/",
@@ -164,14 +158,14 @@
     "kubernetes": ">=1.27",
     "tools": [
       "kubectl",
-      "curl"
+      "helm 3.x"
     ],
     "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have the necessary tools and resources before starting the installation."
+    "description": "Ensure your environment meets the hardware and software requirements for Rancher."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:13:19.294Z",
+    "scannedAt": "2026-04-01T18:18:24.771Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

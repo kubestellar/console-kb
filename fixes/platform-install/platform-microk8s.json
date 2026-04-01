@@ -6,53 +6,54 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure MicroK8s",
-    "description": "MicroK8s is a lightweight, single-package Kubernetes distribution designed for developers and edge computing. It simplifies Kubernetes installation and management, making it ideal for local development and CI/CD environments. Key trade-offs include limited scalability compared to full Kubernetes distributions and reliance on the Snap package manager.",
+    "description": "MicroK8s is a lightweight, single-package Kubernetes distribution designed for simplicity and speed, ideal for development environments, IoT, and edge computing. It provides a fully conformant Kubernetes experience with minimal overhead, making it perfect for local development or CI/CD pipelines. However, it is primarily suited for single-node deployments and may not be ideal for large-scale production environments.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Install MicroK8s",
-        "description": "This step installs MicroK8s using Snap, which is the recommended method for installation.\n\n```bash\n\nsudo snap install microk8s --classic\n\n```\n\n> This installs the latest stable version of MicroK8s.",
+        "description": "This step installs MicroK8s using Snap, which is the recommended method for installation.\n\n```bash\n\nsudo snap install microk8s --classic\n\n```\n\n> Installs the latest version of MicroK8s.",
         "commands": [
           "sudo snap install microk8s --classic"
         ]
       },
       {
         "title": "Add User to MicroK8s Group",
-        "description": "This step allows your user to run MicroK8s commands without sudo by adding it to the microk8s group.\n\n```bash\n\nsudo usermod -a -G microk8s $USER\n\n```\n\n> Replace $USER with your username if not using the current user.",
+        "description": "This step allows your user to run MicroK8s commands without sudo by adding it to the microk8s group.\n\n```bash\n\nsudo usermod -a -G microk8s $USER\n\nnewgrp microk8s\n\n```\n\n> Replace $USER with your username if needed.\n> Refresh group membership in the current session.",
         "commands": [
-          "sudo usermod -a -G microk8s $USER"
+          "sudo usermod -a -G microk8s $USER",
+          "newgrp microk8s"
         ]
       },
       {
-        "title": "Verify MicroK8s Installation",
-        "description": "This step checks if MicroK8s is running correctly and lists the nodes in the cluster.\n\n```bash\n\nmicrok8s status --wait-ready\n\nmicrok8s kubectl get nodes\n\n```\n\n> Waits until MicroK8s is fully initialized.\n> Verifies that the node is ready.",
+        "title": "Enable Essential Add-ons",
+        "description": "This step enables essential add-ons like DNS and the Kubernetes dashboard for better functionality.\n\n```bash\n\nsudo microk8s enable dns\n\nsudo microk8s enable dashboard\n\n```\n\n> Enables DNS for service discovery.\n> Enables the Kubernetes dashboard for UI access.",
         "commands": [
-          "microk8s status --wait-ready",
+          "sudo microk8s enable dns",
+          "sudo microk8s enable dashboard"
+        ]
+      },
+      {
+        "title": "Verify Installation",
+        "description": "This step checks the status of the MicroK8s installation and verifies that the nodes are up and running.\n\n```bash\n\nmicrok8s status\n\nmicrok8s kubectl get nodes\n\n```\n\n> Displays the status of MicroK8s and enabled add-ons.\n> Lists the nodes in the cluster.",
+        "commands": [
+          "microk8s status",
           "microk8s kubectl get nodes"
-        ]
-      },
-      {
-        "title": "Enable Add-ons",
-        "description": "This step enables essential add-ons like DNS and the Kubernetes dashboard for better functionality.\n\n```bash\n\nmicrok8s enable dns\n\nmicrok8s enable dashboard\n\n```\n\n> Enables the DNS add-on for service discovery.\n> Enables the Kubernetes dashboard for UI access.",
-        "commands": [
-          "microk8s enable dns",
-          "microk8s enable dashboard"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall MicroK8s",
-        "description": "This step removes MicroK8s from your system. Be aware that this will delete all Kubernetes resources and configurations.\n\n```bash\n\nsudo snap remove microk8s\n\n```\n\n> This command will remove MicroK8s and all associated data.",
+        "description": "This step removes MicroK8s from your system. Be aware that all Kubernetes resources will be lost.\n\n```bash\n\nsudo snap remove microk8s\n\n```\n\n> This command will remove MicroK8s and all associated data.",
         "commands": [
           "sudo snap remove microk8s"
         ]
       },
       {
         "title": "Remove User from MicroK8s Group",
-        "description": "This step removes your user from the microk8s group to clean up permissions.\n\n```bash\n\nsudo gpasswd -d $USER microk8s\n\n```\n\n> Replace $USER with your username if not using the current user.",
+        "description": "This step removes your user from the microk8s group to prevent access to MicroK8s commands.\n\n```bash\n\nsudo gpasswd -d $USER microk8s\n\n```\n\n> Replace $USER with your username if needed.",
         "commands": [
           "sudo gpasswd -d $USER microk8s"
         ]
@@ -61,7 +62,7 @@
     "upgrade": [
       {
         "title": "Upgrade MicroK8s",
-        "description": "Before upgrading, ensure you back up your configurations and resources. This step upgrades MicroK8s to the latest version.\n\n```bash\n\nmicrok8s stop\n\nsudo snap refresh microk8s\n\nmicrok8s start\n\nmicrok8s kubectl get nodes\n\n```\n\n> Stops MicroK8s to prepare for the upgrade.\n> Upgrades MicroK8s to the latest version.\n> Starts MicroK8s after the upgrade.\n> Verifies that the nodes are ready after the upgrade.",
+        "description": "Before upgrading, ensure you have a backup of your resources. This step performs the upgrade and verifies the installation.\n\n```bash\n\nmicrok8s stop\n\nsudo snap refresh microk8s\n\nmicrok8s start\n\nmicrok8s kubectl get nodes\n\n```\n\n> Stops MicroK8s to prepare for the upgrade.\n> Upgrades MicroK8s to the latest version.\n> Starts MicroK8s after the upgrade.\n> Verifies that the nodes are running after the upgrade.",
         "commands": [
           "microk8s stop",
           "sudo snap refresh microk8s",
@@ -73,38 +74,39 @@
     "troubleshooting": [
       {
         "title": "Error: 'microk8s: command not found'",
-        "description": "**Cause:** MicroK8s is not installed or the Snap package is not in your PATH.\n\n**Fix:**\nInstall MicroK8s using 'sudo snap install microk8s --classic'."
+        "description": "**Cause:** MicroK8s is not installed or the snap path is not set.\n\n**Fix:**\nInstall MicroK8s using 'sudo snap install microk8s --classic'."
       },
       {
-        "title": "Error: 'Unable to connect to the server: dial tcp 127.0.0.1:8080: connect: connection refused'",
-        "description": "**Cause:** MicroK8s is not running or has not been initialized.\n\n**Fix:**\nRun 'microk8s status --wait-ready' to ensure it is ready."
+        "title": "Error: 'Kubernetes cluster is not running'",
+        "description": "**Cause:** MicroK8s is not started or has crashed.\n\n**Fix:**\nRun 'microk8s start' to start the cluster."
       },
       {
         "title": "Error: 'kubectl: command not found'",
-        "description": "**Cause:** kubectl is not installed or not linked to MicroK8s.\n\n**Fix:**\nUse 'microk8s kubectl' instead or link it with 'sudo microk8s kubectl config view --raw > $HOME/.kube/config'."
+        "description": "**Cause:** The kubectl command is not recognized.\n\n**Fix:**\nUse 'microk8s kubectl' instead of 'kubectl'."
       },
       {
-        "title": "Error: 'Failed to enable addon: dns'",
-        "description": "**Cause:** The DNS add-on may not be compatible with the current version of MicroK8s.\n\n**Fix:**\nCheck the status of MicroK8s and ensure it is running, then try 'microk8s enable dns' again."
+        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
+        "description": "**Cause:** The kubeconfig file is not set up correctly.\n\n**Fix:**\nRun 'sudo microk8s kubectl config view --raw > $HOME/.kube/config' to set up kubeconfig."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for Kubernetes 1.31 features, improved add-on management.",
-        "deprecations": "No specific deprecations noted.",
-        "migrationSteps": "No specific migration steps required for upgrading from 1.30."
+        "changes": "Updated to Kubernetes v1.31, added support for new APIs and features.",
+        "deprecations": "Deprecated certain legacy APIs that are no longer supported.",
+        "migrationSteps": "If upgrading from v1.30, ensure to check for deprecated APIs in your manifests."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'microk8s kubectl get nodes' showing your node in a 'Ready' state.",
+      "summary": "You should see output from 'microk8s kubectl get nodes' showing your node(s) in a 'Ready' state.",
       "codeSnippets": [
         "sudo snap install microk8s --classic",
         "sudo usermod -a -G microk8s $USER",
-        "microk8s status --wait-ready",
-        "microk8s kubectl get nodes",
-        "microk8s enable dns",
-        "microk8s enable dashboard"
+        "newgrp microk8s",
+        "sudo microk8s enable dns",
+        "sudo microk8s enable dashboard",
+        "microk8s status",
+        "microk8s kubectl get nodes"
       ]
     }
   },
@@ -149,7 +151,7 @@
       "docs": "https://microk8s.io/docs",
       "repo": "https://github.com/canonical/microk8s"
     },
-    "qualityScore": 94
+    "qualityScore": 97
   },
   "prerequisites": {
     "kubernetes": ">=1.29",
@@ -158,10 +160,10 @@
     ],
     "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure your system meets the minimum resource requirements and has Snap installed."
+    "description": "Ensure you have a compatible Linux distribution with Snap installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:15:09.205Z",
+    "scannedAt": "2026-04-01T18:20:00.842Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
