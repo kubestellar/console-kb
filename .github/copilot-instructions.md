@@ -5,8 +5,8 @@
 This is a knowledge-base repository containing **kc-mission-v1** troubleshooting mission files as JSON.
 
 ```
-solutions/
-  cncf-generated/<project-name>/<slug>.json   # Auto-generated missions
+fixes/
+  cncf-generated/<project-name>/<slug>.json   # Auto-generated fixer missions
   cncf-install/<slug>.json                     # Install missions
   llm-d/<slug>.json                            # LLM-D missions
   platform-install/<slug>.json                 # Platform install missions
@@ -44,7 +44,7 @@ Every file must be valid `kc-mission-v1`:
 {
   "version": "kc-mission-v1",
   "name": "slug-name",
-  "missionClass": "solution",
+  "missionClass": "fixer",
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
