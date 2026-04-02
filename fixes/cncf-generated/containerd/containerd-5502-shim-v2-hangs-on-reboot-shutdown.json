@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "containerd-5502-shim-v2-hangs-on-reboot-shutdown",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "containerd: shim v2 hangs on reboot/shutdown",
+    "description": "shim v2 hangs on reboot/shutdown. This issue affects 22+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify containerd troubleshoot symptoms",
+        "description": "Check for the issue in your containerd deployment:\n```bash\nkubectl get pods -n containerd -l app.kubernetes.io/name=containerd\nkubectl logs -l app.kubernetes.io/name=containerd -n containerd --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review containerd configuration",
+        "description": "Inspect the relevant containerd configuration:\n```bash\nkubectl get all -n containerd -l app.kubernetes.io/name=containerd\nkubectl get configmap -n containerd -l app.kubernetes.io/part-of=containerd\n```\n**Description**\n\nContainerd is shipping with `KillMode=process` in systemd unit, so that shims won't be killed if containerd stops."
+      },
+      {
+        "title": "Apply the fix for shim v2 hangs on reboot/shutdown",
+        "description": "This causes sigint/sigterm to trigger a shutdown of the shim.\nIt is needed because otherwise the v2 shim hangs system shutdown.\n```yaml\n[  OK  ] Reached target Shutdown.\n[  OK  ] Reached target Final Step.\n[  OK  ] Finished Reboot.\n[  OK  ] Reached target Reboot.\n[  214.337805] systemd-shutdown[1]: Waiting for process: containerd-shim\n```"
+      },
+      {
+        "title": "Confirm shim v2 hangs on reboot/shutdown is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=containerd -n containerd --tail=50 --since=5m\nkubectl get events -n containerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "This causes sigint/sigterm to trigger a shutdown of the shim.\nIt is needed because otherwise the v2 shim hangs system shutdown.",
+      "codeSnippets": [
+        "[  OK  ] Reached target Shutdown.\n[  OK  ] Reached target Final Step.\n[  OK  ] Finished Reboot.\n[  OK  ] Reached target Reboot.\n[  214.337805] systemd-shutdown[1]: Waiting for process: containerd-shim",
+        "$ containerd --version\ncontainerd containerd.io 1.4.4 05f951a3781f4f2c1911b05e61c160e9c30eaa8e",
+        "#! /usr/bin/env sh\ndocker ps --format '{{.ID}}' | xargs docker kill"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/containerd/containerd/issues/5502",
+      "repo": "https://github.com/containerd/containerd",
+      "pr": "https://github.com/containerd/containerd/pull/5828"
+    },
+    "reactions": 22,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with containerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-02T06:30:42.127Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
