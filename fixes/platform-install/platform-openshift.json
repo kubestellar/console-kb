@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Red Hat OpenShift Container Platform (OCP)",
-    "description": "Red Hat OpenShift Container Platform (OCP) is a comprehensive enterprise Kubernetes platform that provides developers and IT operations teams with a powerful platform for building, deploying, and managing containerized applications. It is ideal for organizations looking for a robust solution with integrated developer tools and enterprise-grade security. Key trade-offs include the complexity of installation and management compared to simpler Kubernetes distributions.",
+    "description": "Red Hat OpenShift Container Platform (OCP) is a powerful Kubernetes distribution that provides a developer-friendly platform for building, deploying, and managing containerized applications. It includes advanced features like integrated CI/CD, monitoring, and security, making it suitable for enterprise environments. However, it requires a subscription for full support and may have a steeper learning curve compared to other distributions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
@@ -22,104 +22,118 @@
       },
       {
         "title": "Create an OpenShift cluster",
-        "description": "This step creates a new OpenShift cluster with the specified version, node count, and region.\n\n```bash\n\nopenshift-install create cluster --dir=./cluster --log-level=info\n\n```\n\n> Replace './cluster' with your desired directory for installation.",
+        "description": "This step creates a new OpenShift cluster using the OpenShift installer.\n\n```bash\n\nopenshift-install create cluster --dir=cluster --log-level=info\n\n```\n\n> Replace 'cluster' with your desired directory name.",
         "commands": [
-          "openshift-install create cluster --dir=./cluster --log-level=info"
+          "openshift-install create cluster --dir=cluster --log-level=info"
         ]
       },
       {
         "title": "Set up kubeconfig",
-        "description": "This step configures your kubeconfig file to interact with the newly created OpenShift cluster.\n\n```bash\n\nexport KUBECONFIG=$(pwd)/cluster/auth/kubeconfig\n\n```\n\n> Set the KUBECONFIG environment variable to point to your cluster's kubeconfig.",
+        "description": "This step configures your kubeconfig file to access the OpenShift cluster.\n\n```bash\n\nexport KUBECONFIG=$(pwd)/cluster/auth/kubeconfig\n\n```\n\n> Set the KUBECONFIG environment variable to point to your cluster's kubeconfig.",
         "commands": [
           "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig"
         ]
       },
       {
         "title": "Verify cluster nodes",
-        "description": "This step checks the status of the nodes in your OpenShift cluster to ensure they are running correctly.\n\n```bash\n\noc get nodes\n\n```\n\n> You should see the nodes listed with a 'Ready' status.",
+        "description": "This step checks the status of the nodes in your OpenShift cluster to ensure they are ready.\n\n```bash\n\noc get nodes\n\n```\n\n> This command lists all nodes and their statuses.",
         "commands": [
           "oc get nodes"
         ]
       },
       {
         "title": "Post-installation configuration",
-        "description": "This step includes setting up monitoring, autoscaling, and RBAC for your OpenShift cluster.\n\n```bash\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml\n\noc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)\n\n```\n\n> Apply the monitoring configuration.\n> Create a cluster role binding for the current user.",
+        "description": "This step configures additional features like autoscaling and monitoring.\n\n```bash\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler.yaml\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/monitoring.yaml\n\n```\n\n> Apply the cluster autoscaler configuration.\n> Apply the monitoring configuration.",
         "commands": [
-          "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml",
-          "oc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)"
+          "oc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler.yaml",
+          "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/monitoring.yaml"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Remove the OpenShift cluster",
-        "description": "This step will remove the OpenShift cluster and all associated resources, which may lead to data loss.\n\n```bash\n\nopenshift-install destroy cluster --dir=./cluster --log-level=info\n\n```\n\n> Ensure you have backups of any important data before proceeding.",
+        "title": "Uninstall OpenShift cluster",
+        "description": "This step removes the OpenShift cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nopenshift-install destroy cluster --dir=cluster --log-level=info\n\n```\n\n> Ensure you have backups of any important data before proceeding.",
         "commands": [
-          "openshift-install destroy cluster --dir=./cluster --log-level=info"
+          "openshift-install destroy cluster --dir=cluster --log-level=info"
         ]
       },
       {
-        "title": "Clean up orphaned resources",
-        "description": "This step removes any orphaned resources such as load balancers and persistent volumes.\n\n```bash\n\naws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}\n\n```\n\n> Replace with your cloud provider's commands if not using AWS.",
+        "title": "Remove orphaned resources",
+        "description": "This step cleans up any orphaned resources that may remain after cluster deletion.\n\n```bash\n\naws ec2 describe-instances --filters 'Name=tag:Name,Values=openshift-*' --query 'Reservations[*].Instances[*].InstanceId' --output text | xargs aws ec2 terminate-instances\n\n```\n\n> Replace with your cloud provider's commands to clean up resources.",
         "commands": [
-          "aws ec2 describe-load-balancers --query 'LoadBalancers[*].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}"
+          "aws ec2 describe-instances --filters 'Name=tag:Name,Values=openshift-*' --query 'Reservations[*].Instances[*].InstanceId' --output text | xargs aws ec2 terminate-instances"
         ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade the OpenShift cluster",
-        "description": "Before upgrading, ensure you have a backup of your cluster and its resources.\n\n```bash\n\noc adm upgrade --to-image=<new-image>\n\noc get nodes\n\n```\n\n> Replace <new-image> with the desired version image.\n> Verify that all nodes are upgraded and in 'Ready' state.",
+        "title": "Backup cluster data",
+        "description": "Before upgrading, ensure that you backup your cluster data.\n\n```bash\n\noc adm must-gather --image=quay.io/openshift-release-dev/ocp-v4.0-art-dev:latest\n\n```\n\n> This command gathers cluster data for backup.",
         "commands": [
-          "oc adm upgrade --to-image=<new-image>",
-          "oc get nodes"
+          "oc adm must-gather --image=quay.io/openshift-release-dev/ocp-v4.0-art-dev:latest"
         ]
       },
       {
-        "title": "Post-upgrade verification",
-        "description": "After the upgrade, verify that all components are functioning as expected.\n\n```bash\n\noc get pods --all-namespaces\n\n```\n\n> Check that all pods are running without issues.",
+        "title": "Cordon and drain nodes",
+        "description": "Prepare the nodes for upgrade by cordoning and draining them.\n\n```bash\n\noc adm cordon <node-name>\n\noc adm drain <node-name> --ignore-daemonsets\n\n```\n\n> Replace <node-name> with the actual node name.\n> This command drains the node, ignoring daemonsets.",
         "commands": [
-          "oc get pods --all-namespaces"
+          "oc adm cordon <node-name>",
+          "oc adm drain <node-name> --ignore-daemonsets"
+        ]
+      },
+      {
+        "title": "Upgrade OpenShift cluster",
+        "description": "This step performs the actual upgrade of the OpenShift cluster.\n\n```bash\n\nopenshift-install upgrade cluster --dir=cluster --log-level=info\n\n```\n\n> Ensure you are in the correct directory.",
+        "commands": [
+          "openshift-install upgrade cluster --dir=cluster --log-level=info"
+        ]
+      },
+      {
+        "title": "Verify upgrade",
+        "description": "Check the status of the nodes after the upgrade to ensure they are ready.\n\n```bash\n\noc get nodes\n\n```\n\n> This command lists all nodes and their statuses after the upgrade.",
+        "commands": [
+          "oc get nodes"
         ]
       }
     ],
     "troubleshooting": [
       {
         "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** This usually indicates an issue with the kubeconfig file or the cluster's API server certificate.\n\n**Fix:**\nEnsure your KUBECONFIG is set correctly and the cluster is running."
+        "description": "**Cause:** This error indicates that the kubeconfig file is not pointing to the correct cluster or the certificate is invalid.\n\n**Fix:**\nEnsure that the KUBECONFIG environment variable is set correctly and the cluster is running."
       },
       {
         "title": "Error: 'no nodes available in cluster'",
-        "description": "**Cause:** This indicates that the cluster nodes are not in a 'Ready' state.\n\n**Fix:**\nRun 'oc get nodes' to check the status and troubleshoot any issues."
+        "description": "**Cause:** This indicates that the nodes are not in a ready state.\n\n**Fix:**\nCheck the status of the nodes using 'oc get nodes' and troubleshoot any issues."
       },
       {
-        "title": "Error: 'Failed to pull image'",
-        "description": "**Cause:** This can occur if the image is not available in the specified registry.\n\n**Fix:**\nVerify the image name and ensure it is accessible from the cluster."
+        "title": "Error: 'failed to pull image'",
+        "description": "**Cause:** This error occurs when the image cannot be found or there are authentication issues.\n\n**Fix:**\nVerify the image name and check if the image registry requires authentication."
       },
       {
         "title": "Error: 'Insufficient CPU or memory'",
-        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the pods.\n\n**Fix:**\nScale up the cluster or adjust resource requests for your workloads."
+        "description": "**Cause:** This indicates that the cluster does not have enough resources to schedule the pods.\n\n**Fix:**\nScale up the cluster by adding more nodes or increasing the resources of existing nodes."
       }
     ],
     "versionNotes": [
       {
         "version": "4.17",
-        "changes": "Introduced support for Kubernetes 1.30, enhanced security features, and improved developer experience tools.",
-        "deprecations": "Deprecated legacy authentication methods and certain APIs.",
-        "migrationSteps": "Review the deprecation notices and update your configurations accordingly."
+        "changes": "Added support for Kubernetes 1.30, enhanced security features, and improved monitoring capabilities.",
+        "deprecations": "Deprecated support for older Kubernetes versions below 1.27.",
+        "migrationSteps": "If upgrading from 4.16, ensure that all custom resources are compatible with the new version."
       }
     ],
     "resolution": {
-      "summary": "You should see output similar to 'NAME STATUS ROLES AGE VERSION' with all nodes in 'Ready' state when running 'oc get nodes'.",
+      "summary": "You should see the output of 'oc get nodes' showing all nodes in 'Ready' status.",
       "codeSnippets": [
         "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.17.0.tar.gz",
         "tar -xzf openshift-client-linux-4.17.0.tar.gz",
         "sudo mv oc kubectl /usr/local/bin/",
-        "openshift-install create cluster --dir=./cluster --log-level=info",
+        "openshift-install create cluster --dir=cluster --log-level=info",
         "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig",
         "oc get nodes",
-        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/release-4.17/deploy/cluster-monitoring-config.yaml",
-        "oc create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(whoami)"
+        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler.yaml",
+        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/monitoring.yaml"
       ]
     }
   },
@@ -161,26 +175,26 @@
       "cli"
     ],
     "containerImages": [
-      "registry.redhat.io/openshift4/ose-operator:v4.17"
+      "quay.io/openshift-release-dev/ocp-v4.17:latest"
     ],
     "sourceUrls": {
       "docs": "https://docs.openshift.com/container-platform/latest/",
       "repo": "https://github.com/openshift/origin"
     },
-    "qualityScore": 99
+    "qualityScore": 91
   },
   "prerequisites": {
     "kubernetes": ">=1.27",
     "tools": [
       "kubectl",
-      "oc"
+      "openshift-install"
     ],
     "cloudCLI": "oc >= 4.14",
     "resources": "Minimum 4 vCPU, 16GB RAM per node",
     "description": "Ensure you have the required tools and resources before starting the installation."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:12:49.275Z",
+    "scannedAt": "2026-04-02T00:10:16.315Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
