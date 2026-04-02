@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-1766-docker-engine-swarm-api-service-discovery",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: Docker engine swarm api service discovery",
+    "description": "Docker engine swarm api service discovery. Requested by 39+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current prometheus deployment",
+        "description": "Verify your prometheus version and configuration:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nhelm list -n prometheus 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working prometheus installation."
+      },
+      {
+        "title": "Review prometheus configuration",
+        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\nIn docker 1.12, the docker engine will ship with swarm mode built in. This means that it is now possible to stand up a swarm cluster using a bunch of nodes with just docker installed."
+      },
+      {
+        "title": "Apply the fix for Docker engine swarm api service discovery",
+        "description": "I'm closing the issue as unfortunately, we are currently not accepting new integrations.  [ContainerSolutions/prometheus-swarm-discovery](https://github.com/ContainerSolutions/prometheus-swarm-discovery) is listed in the Prometheus\n```yaml\n- job_name: 'cadvisor'\n    dns_sd_configs:\n    - names:\n      - 'tasks.cadvisor'\n      type: 'A'\n      port: 8080\n\n  - job_name: 'node-exporter'\n    dns_sd_configs:\n    - names:\n      - 'tasks.node-exporter'\n      type: 'A'\n      port: 9100\n```"
+      },
+      {
+        "title": "Upgrade prometheus to include the fix",
+        "description": "If the fix is included in a newer release, upgrade prometheus:\n```bash\nhelm repo update\nhelm upgrade prometheus prometheus/prometheus --namespace prometheus\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n prometheus\nhelm list -n prometheus\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Docker engine swarm api service discovery\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I'm closing the issue as unfortunately, we are currently not accepting new integrations.  [ContainerSolutions/prometheus-swarm-discovery](https://github.com/ContainerSolutions/prometheus-swarm-discovery) is listed in the Prometheus [documentation](https://prometheus.io/docs/operating/integrations/#file-service-discovery) to integrate Docker Swarm with the file service discovery.",
+      "codeSnippets": [
+        "- job_name: 'cadvisor'\n    dns_sd_configs:\n    - names:\n      - 'tasks.cadvisor'\n      type: 'A'\n      port: 8080\n\n  - job_name: 'node-exporter'\n    dns_sd_configs:\n    - names:\n      - 'tasks.node-exporter'\n      type: 'A'\n      port: 9100",
+        "docker \\\n  service create --name node-exporter \\\n  --mode global \\\n  --network monitoring \\\n  --label com.docker.stack.namespace=monitoring \\\n  --container-label com.docker.stack.namespace=monitoring \\\n  --mount type=bind,source=/proc,target=/host/proc \\\n  --mount type=bind,source=/sys,target=/host/sys \\\n  --mount type=bind,source=/,target=/rootfs \\\n  --mount type=bind,source=/etc/hostname,target=/etc/host_hostname \\\n  -e HOST_HOSTNAME=/etc/host_hostname \\\n  basi/node-exporter:v0.1.1 \\\n  -collector.procfs /host/proc \\\n  -collector.sysfs /host/sys \\\n  -collector.filesystem.ignored-mount-points \"^/(sys|proc|dev|host|etc)($|/)\" \\\n  --collector.textfile.directory /etc/node-exporter/ \\\n  --collectors.enabled=\"conntrack,diskstats,entropy,filefd,filesystem,loadavg,mdadm,meminfo,netdev,netstat,sta",
+        "docker \\\n  service create \\\n  --mode global \\\n  --name docker-exporter \\\n  --network monitoring \\\n  --publish 4999 \\\n  basi/socat:v0.1.0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/issues/1766",
+      "repo": "https://github.com/prometheus/prometheus"
+    },
+    "reactions": 39,
+    "comments": 52,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-02T06:33:11.191Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
