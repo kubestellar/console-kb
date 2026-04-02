@@ -6,32 +6,31 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure kubeadm (Kubernetes bootstrapper)",
-    "description": "Kubeadm is a tool designed to simplify the process of creating and managing Kubernetes clusters. It provides best-practice 'fast paths' for setting up a secure and minimal viable cluster. While it is user-friendly, it requires familiarity with Kubernetes concepts and may not cover all advanced configurations.",
+    "description": "Kubeadm is a tool designed to simplify the process of creating and managing Kubernetes clusters. It provides a straightforward way to bootstrap a Kubernetes control plane and join worker nodes, making it ideal for users who prefer a hands-on approach to cluster management. However, it requires a good understanding of Kubernetes concepts and may not be as user-friendly as managed solutions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
     "steps": [
       {
         "title": "Install Kubeadm",
-        "description": "This step installs the kubeadm binary on your system, which is necessary for bootstrapping the Kubernetes cluster.\n\n```bash\n\nsudo mkdir -p /etc/apt/keyrings\n\ncurl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg\n\necho 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list\n\nsudo apt-get update\n\nsudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00\n\n```\n\n> Create the keyrings directory for apt.\n> Download and install the Kubernetes signing key.\n> Add the Kubernetes APT repository with signed-by verification.\n> Update the package list to include Kubernetes packages.\n> Install specific versions of kubeadm, kubelet, and kubectl.",
+        "description": "This step installs the kubeadm binary on your system, which is necessary for bootstrapping the Kubernetes cluster.\n\n```bash\n\ncurl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -\n\necho 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list\n\nsudo apt-get update\n\nsudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00\n\n```\n\n> Add Google Cloud public key for package verification.\n> Add Kubernetes APT repository.\n> Update the package list.\n> Install specific versions of kubelet, kubeadm, and kubectl.",
         "commands": [
-          "sudo mkdir -p /etc/apt/keyrings",
-          "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg",
-          "echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
+          "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+          "echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
           "sudo apt-get update",
-          "sudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00"
+          "sudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00"
         ]
       },
       {
         "title": "Initialize the Kubernetes Control Plane",
-        "description": "This step initializes the control plane node of the Kubernetes cluster.\n\n```bash\n\nsudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16\n\n```\n\n> Initialize the cluster with Flannel pod network.",
+        "description": "This command bootstraps the control plane for your Kubernetes cluster.\n\n```bash\n\nsudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=192.168.0.0/16\n\n```\n\n> Initialize the cluster with a specific Kubernetes version and pod network CIDR.",
         "commands": [
-          "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16"
+          "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=192.168.0.0/16"
         ]
       },
       {
-        "title": "Set Up Kubeconfig",
-        "description": "This step configures kubectl to use the newly created cluster.\n\n```bash\n\nmkdir -p $HOME/.kube\n\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\n\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n\n```\n\n> Create the kube directory in the home folder.\n> Copy the admin config to the kube directory.\n> Change ownership of the config file.",
+        "title": "Set Up Kubeconfig for the Regular User",
+        "description": "This step configures kubeconfig for the non-root user to manage the cluster.\n\n```bash\n\nmkdir -p $HOME/.kube\n\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\n\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n\n```\n\n> Create the .kube directory.\n> Copy the admin kubeconfig to the user's home directory.\n> Change ownership of the kubeconfig file.",
         "commands": [
           "mkdir -p $HOME/.kube",
           "sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config",
@@ -40,14 +39,14 @@
       },
       {
         "title": "Install a Pod Network Add-on",
-        "description": "This step installs a network add-on to allow communication between pods.\n\n```bash\n\nkubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml\n\n```\n\n> Install Flannel as the network add-on.",
+        "description": "This step installs a network add-on to enable communication between pods.\n\n```bash\n\nkubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml\n\n```\n\n> Install Calico as the network add-on.",
         "commands": [
-          "kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml"
+          "kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml"
         ]
       },
       {
-        "title": "Verify Cluster Nodes",
-        "description": "This step checks the status of the nodes in the cluster to ensure they are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes and their statuses.",
+        "title": "Verify the Cluster Nodes",
+        "description": "This command checks the status of the nodes in the cluster to ensure they are ready.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> List all nodes and their statuses.",
         "commands": [
           "kubectl get nodes"
         ]
@@ -55,20 +54,20 @@
     ],
     "uninstall": [
       {
-        "title": "Reset Kubeadm Configuration",
-        "description": "This step removes the Kubernetes cluster and all associated configurations. Data loss may occur, and orphaned resources may remain.\n\n```bash\n\nsudo kubeadm reset\n\nrm $HOME/.kube/config\n\n```\n\n> Reset the kubeadm configuration.\n> Remove kubeconfig directory.",
+        "title": "Reset the Kubernetes Cluster",
+        "description": "This command will revert any changes made by kubeadm init or kubeadm join. Warning: This will remove all cluster data.\n\n```bash\n\nsudo kubeadm reset\n\nsudo rm -rf /etc/cni/net.d\n\n```\n\n> Reset the cluster.\n> Remove CNI configurations.",
         "commands": [
           "sudo kubeadm reset",
-          "rm $HOME/.kube/config"
+          "sudo rm -rf /etc/cni/net.d"
         ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Kubernetes Cluster",
-        "description": "Backup the current cluster state, drain the node, upgrade the cluster, and verify the upgrade.\n\n```bash\n\nkubectl get nodes -o wide\n\nkubectl drain <node-name> --ignore-daemonsets\n\nsudo kubeadm upgrade plan\n\nsudo kubeadm upgrade apply v1.31.0\n\nkubectl uncordon <node-name>\n\nkubectl get nodes\n\n```\n\n> Check the current node status before upgrade.\n> Drain the node to prepare for upgrade.\n> Check available upgrades.\n> Apply the upgrade to the cluster.\n> Uncordon the node after upgrade.\n> Verify that all nodes are ready after upgrade.",
+        "title": "Upgrade the Kubernetes Cluster",
+        "description": "Backup the current configuration, drain the node, upgrade the cluster, and verify the upgrade.\n\n```bash\n\nkubectl get nodes\n\nkubectl drain <node-name> --ignore-daemonsets\n\nsudo kubeadm upgrade plan\n\nsudo kubeadm upgrade apply v1.31.0\n\nkubectl uncordon <node-name>\n\nkubectl get nodes\n\n```\n\n> Check the current node status before upgrading.\n> Drain the node to prepare for upgrade.\n> Check available upgrades.\n> Upgrade the cluster to the specified version.\n> Uncordon the node after upgrade.\n> Verify the nodes are ready after the upgrade.",
         "commands": [
-          "kubectl get nodes -o wide",
+          "kubectl get nodes",
           "kubectl drain <node-name> --ignore-daemonsets",
           "sudo kubeadm upgrade plan",
           "sudo kubeadm upgrade apply v1.31.0",
@@ -79,39 +78,38 @@
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'kubelet not running'",
-        "description": "**Cause:** Kubelet service may not be started or is failing.\n\n**Fix:**\nRun 'sudo systemctl start kubelet' to start the kubelet service."
+        "title": "Error: 'kubelet.service: Failed to start kubelet.service: Unit kubelet.service not found.'",
+        "description": "**Cause:** Kubelet is not installed or not properly configured.\n\n**Fix:**\nReinstall kubelet using 'sudo apt-get install -y kubelet=1.31.0-00'."
       },
       {
-        "title": "Error: 'kubeadm init failed'",
-        "description": "**Cause:** Insufficient resources or incompatible OS configuration.\n\n**Fix:**\nEnsure minimum 2 vCPU and 4GB RAM per node, and check OS compatibility."
+        "title": "Error: 'Unable to connect to the server: dial tcp 127.0.0.1:8080: connect: connection refused'",
+        "description": "**Cause:** Kubelet is not running or kubeconfig is misconfigured.\n\n**Fix:**\nCheck kubelet status with 'systemctl status kubelet' and ensure kubeconfig is correctly set."
       },
       {
-        "title": "Error: 'Failed to pull image'",
-        "description": "**Cause:** Network issues or incorrect image name.\n\n**Fix:**\nCheck network connectivity and verify the image name in the configuration."
+        "title": "Error: 'kubeadm init failed: error while running 'kubelet': exit status 1'",
+        "description": "**Cause:** Kubelet may not be installed or there are conflicting configurations.\n\n**Fix:**\nEnsure kubelet is installed and check for conflicting configurations in /etc/kubernetes."
       },
       {
-        "title": "Error: 'node not ready'",
-        "description": "**Cause:** Pod network add-on may not be installed or configured correctly.\n\n**Fix:**\nEnsure that the pod network add-on is installed and running correctly."
+        "title": "Error: 'pod network not ready: cni config not found'",
+        "description": "**Cause:** The network add-on has not been installed.\n\n**Fix:**\nInstall a network add-on using 'kubectl apply -f <network-addon-yaml>'."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for new features like 'kubelet config file', improved upgrade process.",
-        "deprecations": "Deprecated 'kubeadm alpha' commands.",
-        "migrationSteps": "If upgrading from v1.30, ensure to review the new kubelet configuration options."
+        "changes": "Added support for new features like PodSecurity admission controller and improved kubelet configuration options.",
+        "deprecations": "Deprecated the --pod-network-cidr flag in favor of more flexible network configurations.",
+        "migrationSteps": "If upgrading from v1.30, ensure to review the new network configuration options."
       }
     ],
     "resolution": {
       "summary": "You should see the output of 'kubectl get nodes' showing all nodes in 'Ready' status.",
       "codeSnippets": [
-        "sudo mkdir -p /etc/apt/keyrings",
-        "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg",
-        "echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
+        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+        "echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | sudo tee /etc/apt/sources.list.d/kubernetes.list",
         "sudo apt-get update",
-        "sudo apt-get install -y kubeadm=1.31.0-00 kubelet=1.31.0-00 kubectl=1.31.0-00",
-        "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=10.244.0.0/16",
+        "sudo apt-get install -y kubelet=1.31.0-00 kubeadm=1.31.0-00 kubectl=1.31.0-00",
+        "sudo kubeadm init --kubernetes-version=v1.31.0 --pod-network-cidr=192.168.0.0/16",
         "mkdir -p $HOME/.kube",
         "sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config",
         "sudo chown $(id -u):$(id -g) $HOME/.kube/config"
@@ -154,17 +152,16 @@
       "cli"
     ],
     "containerImages": [
-      "registry.k8s.io/kube-apiserver:v1.31.0",
-      "registry.k8s.io/kube-controller-manager:v1.31.0",
-      "registry.k8s.io/kube-scheduler:v1.31.0",
-      "registry.k8s.io/kube-proxy:v1.31.0",
-      "registry.k8s.io/pause:3.6"
+      "k8s.gcr.io/kube-apiserver:v1.31.0",
+      "k8s.gcr.io/kube-controller-manager:v1.31.0",
+      "k8s.gcr.io/kube-scheduler:v1.31.0",
+      "k8s.gcr.io/kube-proxy:v1.31.0"
     ],
     "sourceUrls": {
       "docs": "https://kubernetes.io/docs/reference/setup-tools/kubeadm/",
       "repo": "https://github.com/kubernetes/kubeadm"
     },
-    "qualityScore": 94
+    "qualityScore": 99
   },
   "prerequisites": {
     "kubernetes": ">=1.25",
@@ -174,10 +171,10 @@
     ],
     "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure your system meets the minimum resource requirements and has the necessary tools installed."
+    "description": "Ensure your system meets the minimum requirements for running Kubernetes."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:15:39.710Z",
+    "scannedAt": "2026-04-02T18:17:24.595Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

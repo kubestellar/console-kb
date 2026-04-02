@@ -6,97 +6,98 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Linode Kubernetes Engine (LKE)",
-    "description": "Linode Kubernetes Engine (LKE) is a managed Kubernetes service that simplifies the deployment and management of Kubernetes clusters on Linode's infrastructure. It is ideal for users looking for a hassle-free way to run Kubernetes without managing the underlying hardware. Key trade-offs include limited customization compared to self-managed clusters and potential costs associated with cloud resources.",
+    "description": "This mission guides you through the installation of the Linode Kubernetes Engine (LKE), a managed Kubernetes service that simplifies cluster management on Linode's infrastructure. It is ideal for users looking for a hassle-free Kubernetes experience with built-in cloud integrations. Key trade-offs include reliance on Linode's infrastructure and potential costs associated with cloud resources.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Install the Linode CLI",
-        "description": "This step installs the Linode CLI, which is necessary for managing your Linode resources from the command line.\n\n```bash\n\ncurl -s https://api.github.com/repos/linode/linode-cli/releases/latest | grep 'browser_download_url' | grep 'linux' | cut -d '\"' -f 4 | xargs curl -O\n\ntar -xzf linode-cli-* && sudo mv linode-cli /usr/local/bin/\n\nlinode-cli configure\n\n```\n\n> Download the latest Linode CLI for Linux.\n> Extract and move the CLI to your PATH.\n> Configure the CLI with your Linode API token.",
+        "description": "The Linode CLI is required to interact with Linode's API for creating and managing Kubernetes clusters.\n\n```bash\n\ncurl -sL https://github.com/linode/linode-cli/releases/download/v2.0.0/linode-cli-2.0.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin\n\nchmod +x /usr/local/bin/linode-cli\n\n```\n\n> This command downloads and installs the Linode CLI.\n> Make the Linode CLI executable.",
         "commands": [
-          "curl -s https://api.github.com/repos/linode/linode-cli/releases/latest | grep 'browser_download_url' | grep 'linux' | cut -d '\"' -f 4 | xargs curl -O",
-          "tar -xzf linode-cli-* && sudo mv linode-cli /usr/local/bin/",
-          "linode-cli configure"
+          "curl -sL https://github.com/linode/linode-cli/releases/download/v2.0.0/linode-cli-2.0.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin",
+          "chmod +x /usr/local/bin/linode-cli"
         ]
       },
       {
         "title": "Create a Kubernetes Cluster",
-        "description": "This step creates a new Kubernetes cluster on Linode with the specified version and node count.\n\n```bash\n\nlinode-cli k8s cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3\n\n```\n\n> Replace 'my-k8s-cluster' with your desired cluster name.",
+        "description": "This step creates a new Kubernetes cluster on Linode with the specified version and node count.\n\n```bash\n\nlinode-cli lke cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3\n\n```\n\n> Replace 'my-k8s-cluster' with your desired cluster name.",
         "commands": [
-          "linode-cli k8s cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3"
+          "linode-cli lke cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3"
         ]
       },
       {
         "title": "Set Up Kubeconfig",
-        "description": "This step configures your kubeconfig file to connect to your new Kubernetes cluster.\n\n```bash\n\nlinode-cli k8s kubeconfig-view my-k8s-cluster > ~/.kube/config\n\n```\n\n> Ensure you replace 'my-k8s-cluster' with your actual cluster name.",
+        "description": "Configuring kubeconfig allows you to interact with your newly created Kubernetes cluster using kubectl.\n\n```bash\n\nlinode-cli lke kubeconfig-view my-k8s-cluster --format yaml > ~/.kube/config\n\n```\n\n> This command retrieves the kubeconfig for your cluster and saves it.",
         "commands": [
-          "linode-cli k8s kubeconfig-view my-k8s-cluster > ~/.kube/config"
+          "linode-cli lke kubeconfig-view my-k8s-cluster --format yaml > ~/.kube/config"
         ]
       },
       {
         "title": "Verify Cluster Nodes",
-        "description": "This step checks the status of the nodes in your Kubernetes cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see all nodes in the 'Ready' state.",
+        "description": "This step checks the status of the nodes in your Kubernetes cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the list of nodes with their statuses.",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "This step sets up autoscaling and monitoring for your cluster.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/linode/linode-cloud-controller-manager/v0.9.4/deploy/ccm-linode-template.yaml\n\n```\n\n> This applies the necessary configurations for the Linode Cloud Controller Manager.",
+        "description": "Set up autoscaling and monitoring for your cluster to ensure optimal performance.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/linode/examples/cluster-autoscaler.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml\n\n```\n\n> This command installs the cluster autoscaler for Linode.\n> This command installs the metrics server for monitoring.",
         "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/linode/linode-cloud-controller-manager/v0.9.4/deploy/ccm-linode-template.yaml"
+          "kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/linode/examples/cluster-autoscaler.yaml",
+          "kubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Delete the Kubernetes Cluster",
-        "description": "This step removes the Kubernetes cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nlinode-cli k8s cluster-delete my-k8s-cluster\n\n```\n\n> Replace 'my-k8s-cluster' with your actual cluster name.",
+        "description": "This step removes the Kubernetes cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nlinode-cli lke cluster-delete my-k8s-cluster\n\n```\n\n> Replace 'my-k8s-cluster' with your actual cluster name.",
         "commands": [
-          "linode-cli k8s cluster-delete my-k8s-cluster"
+          "linode-cli lke cluster-delete my-k8s-cluster"
         ]
       },
       {
-        "title": "Remove the Linode CLI",
-        "description": "This step removes the Linode CLI from your system.\n\n```bash\n\nsudo rm /usr/local/bin/linode-cli\n\n```\n\n> This command deletes the Linode CLI binary.",
+        "title": "Remove Kubeconfig",
+        "description": "This step removes the kubeconfig file from your local machine.\n\n```bash\n\nrm ~/.kube/config\n\n```\n\n> This command deletes the kubeconfig file.",
         "commands": [
-          "sudo rm /usr/local/bin/linode-cli"
+          "rm ~/.kube/config"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade the Kubernetes Cluster",
-        "description": "Before upgrading, ensure you back up your data and configurations. Then, upgrade the cluster and verify the upgrade.\n\n```bash\n\nlinode-cli k8s cluster-update my-k8s-cluster --k8s-version 1.30\n\nkubectl get nodes\n\n```\n\n> Replace 'my-k8s-cluster' with your actual cluster name.\n> Verify that all nodes are in the 'Ready' state after the upgrade.",
+        "description": "Before upgrading, ensure you back up your data and check the current node status.\n\n```bash\n\nkubectl get nodes\n\nlinode-cli lke cluster-update my-k8s-cluster --k8s-version 1.30\n\nkubectl get nodes\n\n```\n\n> Check the status of your nodes before proceeding.\n> Replace 'my-k8s-cluster' with your actual cluster name.\n> Verify that the nodes are updated successfully.",
         "commands": [
-          "linode-cli k8s cluster-update my-k8s-cluster --k8s-version 1.30",
+          "kubectl get nodes",
+          "linode-cli lke cluster-update my-k8s-cluster --k8s-version 1.30",
           "kubectl get nodes"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** This indicates an issue with the kubeconfig file or the cluster's API server certificate.\n\n**Fix:**\nRegenerate the kubeconfig file using 'linode-cli k8s kubeconfig-view my-k8s-cluster > ~/.kube/config'."
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** This error indicates that kubeconfig is not set up correctly or the cluster is not reachable.\n\n**Fix:**\nEnsure your kubeconfig is correctly configured and the cluster is running."
       },
       {
-        "title": "Error: 'No resources found in default namespace'",
-        "description": "**Cause:** This indicates that there are no resources deployed in the default namespace.\n\n**Fix:**\nDeploy resources using 'kubectl apply -f <your-resource-file.yaml>'."
+        "title": "Error: 'Insufficient nodes available'",
+        "description": "**Cause:** This indicates that the cluster does not have enough nodes to schedule the pods.\n\n**Fix:**\nIncrease the node count using 'linode-cli lke cluster-update my-k8s-cluster --node-count <new-count>'."
       },
       {
-        "title": "Error: 'Insufficient CPU resources'",
-        "description": "**Cause:** This indicates that the cluster does not have enough resources allocated to meet the demands of the workloads.\n\n**Fix:**\nIncrease the node count or upgrade the node types to larger instances."
+        "title": "Error: 'Unauthorized'",
+        "description": "**Cause:** This indicates that the Linode API token is invalid or lacks permissions.\n\n**Fix:**\nRegenerate your Linode API token and ensure it has the necessary permissions."
       },
       {
-        "title": "Error: 'Failed to create service: Error creating load balancer'",
-        "description": "**Cause:** This indicates an issue with the Linode Cloud Controller Manager or the Linode API.\n\n**Fix:**\nCheck the Linode API status and ensure the Cloud Controller Manager is correctly configured."
+        "title": "Error: 'Cluster not found'",
+        "description": "**Cause:** This indicates that the specified cluster name does not exist.\n\n**Fix:**\nDouble-check the cluster name and ensure it matches the one created."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.30",
-        "changes": "Added support for new Linode regions and improved integration with Linode's API.",
+        "changes": "Added support for new features in Kubernetes 1.30, including improved scheduling and resource management.",
         "deprecations": "No specific deprecations noted.",
         "migrationSteps": "No specific migration steps required for this version."
       }
@@ -104,13 +105,13 @@
     "resolution": {
       "summary": "You should see a list of nodes with their statuses as 'Ready' when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "curl -s https://api.github.com/repos/linode/linode-cli/releases/latest | grep 'browser_download_url' | grep 'linux' | cut -d '\"' -f 4 | xargs curl -O",
-        "tar -xzf linode-cli-* && sudo mv linode-cli /usr/local/bin/",
-        "linode-cli configure",
-        "linode-cli k8s cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3",
-        "linode-cli k8s kubeconfig-view my-k8s-cluster > ~/.kube/config",
+        "curl -sL https://github.com/linode/linode-cli/releases/download/v2.0.0/linode-cli-2.0.0-linux-amd64.tar.gz | tar xz -C /usr/local/bin",
+        "chmod +x /usr/local/bin/linode-cli",
+        "linode-cli lke cluster-create --label my-k8s-cluster --region us-east --k8s-version 1.30 --node-count 3",
+        "linode-cli lke kubeconfig-view my-k8s-cluster --format yaml > ~/.kube/config",
         "kubectl get nodes",
-        "kubectl apply -f https://raw.githubusercontent.com/linode/linode-cloud-controller-manager/v0.9.4/deploy/ccm-linode-template.yaml"
+        "kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/linode/examples/cluster-autoscaler.yaml",
+        "kubectl apply -f https://raw.githubusercontent.com/kubernetes/metrics-server/master/deploy/1.8+/metrics-server-deployment.yaml"
       ]
     }
   },
@@ -148,7 +149,7 @@
       "cli"
     ],
     "containerImages": [
-      "linode/linode-cloud-controller-manager:v0.9.4"
+      "linode/linode-cloud-controller-manager:v0.9.5"
     ],
     "sourceUrls": {
       "docs": "https://www.linode.com/docs/products/compute/kubernetes/",
@@ -157,7 +158,7 @@
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.22",
+    "kubernetes": ">=1.28",
     "tools": [
       "kubectl",
       "linode-cli"
@@ -167,7 +168,7 @@
     "description": "Ensure you have the Linode CLI installed and configured with your API token."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:11:19.773Z",
+    "scannedAt": "2026-04-02T18:14:19.984Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

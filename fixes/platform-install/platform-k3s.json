@@ -6,64 +6,71 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure K3s (Lightweight Kubernetes)",
-    "description": "K3s is a lightweight, fully conformant Kubernetes distribution designed for resource-constrained environments. It is ideal for edge computing, IoT, and development scenarios where simplicity and low overhead are paramount. Key trade-offs include reduced complexity and resource usage at the potential cost of some advanced Kubernetes features.",
+    "description": "K3s is a lightweight Kubernetes distribution designed for resource-constrained environments, making it ideal for edge computing, IoT, and development scenarios. It simplifies the installation process by packaging Kubernetes as a single binary, but may lack some advanced features found in full Kubernetes distributions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Install the K3s binary",
-        "description": "This step installs the K3s binary on your machine, which is the core component of the K3s distribution.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -\n\n```\n\n> This command fetches and installs the latest K3s version.",
+        "title": "Install K3s",
+        "description": "This command installs K3s as a single binary on your server, setting up a lightweight Kubernetes cluster.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -s - --k3s-version v1.31.0+k3s1\n\n```\n\n> Installs K3s version 1.31.0 with the default options.",
         "commands": [
-          "curl -sfL https://get.k3s.io | sh -"
+          "curl -sfL https://get.k3s.io | sh -s - --k3s-version v1.31.0+k3s1"
         ]
       },
       {
-        "title": "Verify K3s installation",
-        "description": "Check that K3s is installed and running correctly by verifying the service status.\n\n```bash\n\nsystemctl status k3s\n\n```\n\n> This command checks the status of the K3s service.",
+        "title": "Verify K3s Installation",
+        "description": "Check the status of the K3s service to ensure it is running correctly.\n\n```bash\n\nsystemctl status k3s\n\n```\n\n> This command shows the status of the K3s service.",
         "commands": [
           "systemctl status k3s"
         ]
       },
       {
-        "title": "Set up kubeconfig",
-        "description": "This step configures your kubeconfig file to allow kubectl to interact with your K3s cluster.\n\n```bash\n\nexport KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n\nchmod 600 /etc/rancher/k3s/k3s.yaml\n\n```\n\n> This sets the KUBECONFIG environment variable to point to the K3s kubeconfig.\n> This ensures that the kubeconfig file has the correct permissions.",
+        "title": "Set Up Kubeconfig",
+        "description": "Copy the Kubeconfig file to your home directory for easy access to the cluster.\n\n```bash\n\nsudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config\n\nsudo chown $(id -u):$(id -g) ~/.kube/config\n\n```\n\n> This allows you to use kubectl commands without specifying the config file.\n> Ensure the Kubeconfig file is owned by your user.",
         "commands": [
-          "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-          "chmod 600 /etc/rancher/k3s/k3s.yaml"
+          "sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config",
+          "sudo chown $(id -u):$(id -g) ~/.kube/config"
         ]
       },
       {
-        "title": "Verify nodes in the cluster",
-        "description": "Ensure that the K3s node is registered and ready in the cluster.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes in the K3s cluster.",
+        "title": "Verify Nodes",
+        "description": "Check that the nodes in your K3s cluster are up and running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> This command lists all nodes in the cluster and their statuses.",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
-        "title": "Post-installation configuration",
-        "description": "Set up additional features like metrics server and RBAC for enhanced functionality.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml\n\n```\n\n> This installs the metrics server for resource monitoring.",
+        "title": "Post-Install Configuration",
+        "description": "Set up additional features like metrics server and RBAC for enhanced functionality.\n\n```bash\n\nkubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml\n\n```\n\n> Installs the metrics server for resource monitoring.",
         "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml"
+          "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall K3s",
-        "description": "This step removes K3s and all associated resources. Be aware that this will delete all workloads and data stored in the cluster.\n\n```bash\n\n/usr/local/bin/k3s-uninstall.sh\n\n```\n\n> This script uninstalls K3s and cleans up the system.",
+        "description": "This command removes K3s and all associated resources. Be aware that this will delete all workloads and data stored in the cluster.\n\n```bash\n\nsudo /usr/local/bin/k3s-uninstall.sh\n\n```\n\n> This script removes K3s and cleans up the system.",
         "commands": [
-          "/usr/local/bin/k3s-uninstall.sh"
+          "sudo /usr/local/bin/k3s-uninstall.sh"
+        ]
+      },
+      {
+        "title": "Clean Up Orphaned Resources",
+        "description": "After uninstalling, check for any orphaned resources that may need manual deletion.\n\n```bash\n\nkubectl get all --all-namespaces\n\n```\n\n> List all resources to identify any remaining items.",
+        "commands": [
+          "kubectl get all --all-namespaces"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade K3s",
-        "description": "Before upgrading, ensure you backup your current cluster state. This step performs the upgrade and verifies the installation.\n\n```bash\n\nkubectl get all --all-namespaces > k3s-backup-$(date +%F).yaml\n\ncurl -sfL https://get.k3s.io | sh -\n\nkubectl get nodes\n\n```\n\n> Backup all resources in the cluster.\n> This command fetches and installs the latest version of K3s.\n> Verify that all nodes are in a ready state after the upgrade.",
+        "description": "Before upgrading, ensure you back up your current configuration and workloads. After the upgrade, verify that all components are functioning correctly.\n\n```bash\n\nkubectl get all --all-namespaces -o yaml > k3s-backup.yaml\n\ncurl -sfL https://get.k3s.io | sh -s - --k3s-version v1.31.0+k3s1\n\nkubectl get nodes\n\n```\n\n> Backup current configurations.\n> Upgrade K3s to the specified version.\n> Verify that all nodes are in a Ready state after the upgrade.",
         "commands": [
-          "kubectl get all --all-namespaces > k3s-backup-$(date +%F).yaml",
-          "curl -sfL https://get.k3s.io | sh -",
+          "kubectl get all --all-namespaces -o yaml > k3s-backup.yaml",
+          "curl -sfL https://get.k3s.io | sh -s - --k3s-version v1.31.0+k3s1",
           "kubectl get nodes"
         ]
       }
@@ -71,38 +78,38 @@
     "troubleshooting": [
       {
         "title": "Error: 'k3s is not running'",
-        "description": "**Cause:** The K3s service may not have started correctly.\n\n**Fix:**\nCheck the service logs with 'journalctl -u k3s' to diagnose the issue."
+        "description": "**Cause:** K3s service may not have started correctly.\n\n**Fix:**\nCheck the service status with 'systemctl status k3s' and review logs with 'journalctl -u k3s'."
       },
       {
         "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** The kubeconfig file may not be set up correctly or permissions may be incorrect.\n\n**Fix:**\nEnsure KUBECONFIG is set correctly and permissions are set with 'chmod 600 /etc/rancher/k3s/k3s.yaml'."
+        "description": "**Cause:** Kubeconfig may not be set up correctly or permissions may be incorrect.\n\n**Fix:**\nEnsure the Kubeconfig file is copied correctly and owned by the user with 'sudo chown $(id -u):$(id -g) ~/.kube/config'."
       },
       {
-        "title": "Error: 'no nodes available in cluster'",
-        "description": "**Cause:** The K3s node may not be ready or properly registered.\n\n**Fix:**\nCheck node status with 'kubectl get nodes' and ensure the K3s service is running."
+        "title": "Error: 'Failed to pull image'",
+        "description": "**Cause:** The container image may not be available or the node may lack internet access.\n\n**Fix:**\nCheck the image name and ensure the node has internet access."
       },
       {
-        "title": "Error: 'Failed to start K3s'",
-        "description": "**Cause:** Insufficient resources or conflicting services may prevent K3s from starting.\n\n**Fix:**\nCheck system resources and logs for conflicts using 'journalctl -u k3s'."
+        "title": "Error: 'Node not ready'",
+        "description": "**Cause:** The node may not have sufficient resources or may be misconfigured.\n\n**Fix:**\nCheck node resource allocation and logs for kubelet with 'journalctl -u k3s-agent'."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for new Kubernetes features and improved the metrics server integration.",
-        "deprecations": "Deprecation of certain flags related to legacy storage drivers.",
-        "migrationSteps": "If upgrading from v1.30, ensure to review the new storage configurations."
+        "changes": "Added support for new CNI plugins, improved metrics server integration.",
+        "deprecations": "Deprecated support for certain legacy storage backends.",
+        "migrationSteps": "If upgrading from v1.30, ensure to migrate any legacy storage configurations."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'kubectl get nodes' showing your node(s) in a 'Ready' state.",
+      "summary": "You should see a list of nodes with their statuses as 'Ready' when running 'kubectl get nodes'.",
       "codeSnippets": [
-        "curl -sfL https://get.k3s.io | sh -",
+        "curl -sfL https://get.k3s.io | sh -s - --k3s-version v1.31.0+k3s1",
         "systemctl status k3s",
-        "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-        "chmod 600 /etc/rancher/k3s/k3s.yaml",
+        "sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config",
+        "sudo chown $(id -u):$(id -g) ~/.kube/config",
         "kubectl get nodes",
-        "kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/metrics-server/v0.5.0/deploy/1.16+/metrics-server-deployment.yaml"
+        "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
       ]
     }
   },
@@ -132,7 +139,7 @@
       "Deployment",
       "Service"
     ],
-    "difficulty": "beginner",
+    "difficulty": "intermediate",
     "issueTypes": [
       "installation",
       "configuration"
@@ -141,13 +148,13 @@
       "cli"
     ],
     "containerImages": [
-      "rancher/k3s:v1.31.0"
+      "rancher/k3s:v1.31.0+k3s1"
     ],
     "sourceUrls": {
       "docs": "https://docs.k3s.io/",
       "repo": "https://github.com/k3s-io/k3s"
     },
-    "qualityScore": 96
+    "qualityScore": 100
   },
   "prerequisites": {
     "kubernetes": ">=1.25",
@@ -157,10 +164,10 @@
     ],
     "cloudCLI": "none",
     "resources": "Minimum 1 vCPU, 512MB RAM per node",
-    "description": "Ensure your system meets the minimum requirements for running K3s."
+    "description": "Ensure your system meets the minimum resource requirements and has the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-03T13:14:10.764Z",
+    "scannedAt": "2026-04-02T18:16:21.892Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
