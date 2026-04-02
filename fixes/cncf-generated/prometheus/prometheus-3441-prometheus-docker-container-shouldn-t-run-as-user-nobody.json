@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-3441-prometheus-docker-container-shouldn-t-run-as-user-nobody",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: Prometheus docker container shouldn't run as user nobody",
+    "description": "Prometheus docker container shouldn't run as user nobody. Requested by 53+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current prometheus deployment",
+        "description": "Verify your prometheus version and configuration:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nhelm list -n prometheus 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working prometheus installation."
+      },
+      {
+        "title": "Review prometheus configuration",
+        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\nWith the update to 2.0, the Docker container was modified so that Prometheus runs as the user \"nobody\" (UID/GID 99/99) (#2859). While it's good that Prometheus is no longer running as root, it's not the best idea either to run as \"nobody\"."
+      },
+      {
+        "title": "Apply the fix for Prometheus docker container shouldn't run as user nobody",
+        "description": "Unfortunately the solution outlined by [ohritz](https://github.com/ohritz) [on Jul 2, 2023](https://github.com/prometheus/prometheus/issues/3441#issuecomment-1616114258):\n\nWon't work here – that is OpenShift specific, whereas the Prometheus image needs to work under Docker, standard Kubernetes and\n```yaml\n$ docker run --user 1234:5678 --rm -ti busybox\n/ $ id\nuid=1234 gid=5678\n/ $\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Prometheus docker container shouldn't run as user nobody\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Unfortunately the solution outlined by [ohritz](https://github.com/ohritz) [on Jul 2, 2023](https://github.com/prometheus/prometheus/issues/3441#issuecomment-1616114258):\n\nWon't work here – that is OpenShift specific, whereas the Prometheus image needs to work under Docker, standard Kubernetes and anything else that can run OCI containers.",
+      "codeSnippets": [
+        "$ docker run --user 1234:5678 --rm -ti busybox\n/ $ id\nuid=1234 gid=5678\n/ $",
+        "$ docker run -it --rm --entrypoint sh prom/prometheus:v2.0.0\n\n/prometheus $ id\nuid=65534(nobody) gid=65534(nogroup)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/issues/3441",
+      "repo": "https://github.com/prometheus/prometheus"
+    },
+    "reactions": 53,
+    "comments": 25,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-02T06:32:53.653Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
