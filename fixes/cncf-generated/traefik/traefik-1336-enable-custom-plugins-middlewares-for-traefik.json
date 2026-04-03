@@ -11,25 +11,28 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Check current traefik deployment",
-        "description": "Verify your traefik version and configuration:\n```bash\nkubectl get pods -n traefik -l app.kubernetes.io/name=traefik\nhelm list -n traefik 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working traefik installation."
+        "title": "Upgrade to Traefik v2.3 or later",
+        "description": "Ensure you are running Traefik v2.3+, which introduced the Yaegi-based plugin system:\n```bash\ntraefik version\n```\nIf using Helm:\n```bash\nhelm upgrade traefik traefik/traefik --set image.tag=v2.10\n```"
       },
       {
-        "title": "Review traefik configuration",
-        "description": "Inspect the relevant traefik configuration:\n```bash\nkubectl get all -n traefik -l app.kubernetes.io/name=traefik\nkubectl get configmap -n traefik -l app.kubernetes.io/part-of=traefik\n```\nAfter seeing the [Go1.8 new plugin feature](https://golang.org/pkg/plugin/) I though that this could help a lot o people to add specific functionalities to Traefik."
+        "title": "Browse the Traefik Plugin Catalog",
+        "description": "Visit the Traefik Plugin Catalog at https://plugins.traefik.io to find community and official plugins. Each plugin page shows installation instructions and configuration options."
       },
       {
-        "title": "Apply the fix for enable custom plugins/middlewares for Traefik",
-        "description": "It's not that simple, trust me, we tried everything with go plugins. That's exactly what we started in https://github.com/containous/traefik/pull/1865. But at the end of the day, there were too many restrictions and really, you had to be lucky to make it work 😂 \nUsing multiple binaries [has also been explored](https://github.com/containous/traefik/pull/2362), but we found in our tests that there were too much overhead in performances. In middleware plugins, you cannot afford inter-process\n\nSee the source issue for community-verified solutions."
+        "title": "Install a plugin via static configuration",
+        "description": "Add the plugin to your Traefik static configuration (traefik.yml):\n```yaml\nexperimental:\n  plugins:\n    my-plugin:\n      moduleName: github.com/traefik/plugindemo\n      version: v0.2.1\n```\nTraefik downloads and loads the plugin at startup using the Yaegi Go interpreter."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n traefik -l app.kubernetes.io/name=traefik\nkubectl get events -n traefik --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"enable custom plugins/middlewares for Traefik\" is functioning correctly."
+        "title": "Use the plugin as middleware",
+        "description": "Reference the installed plugin as middleware in your dynamic configuration:\n```yaml\nhttp:\n  middlewares:\n    my-plugin-middleware:\n      plugin:\n        my-plugin:\n          headers:\n            X-Custom: \"value\"\n  routers:\n    my-router:\n      rule: \"Host(`example.com`)\"\n      middlewares:\n        - my-plugin-middleware\n      service: my-service\n```\nRestart Traefik and verify the middleware is active."
       }
     ],
     "resolution": {
-      "summary": "It's not that simple, trust me, we tried everything with go plugins. That's exactly what we started in https://github.com/containous/traefik/pull/1865.",
-      "codeSnippets": []
+      "summary": "Traefik implemented a plugin system using Yaegi (an interpreted Go runtime) instead of compiled Go plugins. Starting with Traefik v2.3, users can install community plugins from the Traefik Plugin Catalog (https://plugins.traefik.io). Plugins are loaded at runtime without recompilation.",
+      "codeSnippets": [
+        "# traefik.yml - Install a plugin from the catalog\nexperimental:\n  plugins:\n    my-plugin:\n      moduleName: github.com/traefik/plugindemo\n      version: v0.2.1",
+        "# Use the plugin as middleware in a route\nhttp:\n  middlewares:\n    my-plugin-middleware:\n      plugin:\n        my-plugin:\n          headers:\n            X-Custom: \"value\"\n  routers:\n    my-router:\n      rule: \"Host(`example.com`)\"\n      middlewares:\n        - my-plugin-middleware\n      service: my-service"
+      ]
     }
   },
   "metadata": {
