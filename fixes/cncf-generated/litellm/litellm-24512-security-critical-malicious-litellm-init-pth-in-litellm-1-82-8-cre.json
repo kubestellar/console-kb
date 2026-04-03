@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "litellm-24512-security-critical-malicious-litellm-init-pth-in-litellm-1-82-8-cre",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "litellm: [Security]: CRITICAL: Malicious litellm_init.pth in litellm 1.82.8 — credential stealer",
+    "description": "[Security]: CRITICAL: Malicious litellm_init.pth in litellm 1.82.8 — credential stealer. This issue affects 1108+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify litellm troubleshoot symptoms",
+        "description": "Check for the issue in your litellm deployment:\n```bash\nkubectl get pods -n litellm -l app.kubernetes.io/name=litellm\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review litellm configuration",
+        "description": "Inspect the relevant litellm configuration:\n```bash\nkubectl get all -n litellm -l app.kubernetes.io/name=litellm\nkubectl get configmap -n litellm -l app.kubernetes.io/part-of=litellm\n```\nThe `litellm==1.82.8` wheel package on PyPI contains a malicious `.pth` file (`litellm_init.pth`, 34,628 bytes) that **automatically executes a credential-stealing script every time the Python interpreter starts** — no `import litellm` required."
+      },
+      {
+        "title": "Apply the fix for [Security]: CRITICAL: Malicious litellm_init.pth in litellm…",
+        "description": "Apply the configuration change to resolve the issue:\n```yaml\nlitellm_init.pth,sha256=ceNa7wMJnNHy1kRnNCcwJaFjWX3pORLfMh7xGL8TUjg,34628\n```"
+      },
+      {
+        "title": "Confirm [Security]: CRITICAL: Malicious litellm_init.pth… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=50 --since=5m\nkubectl get events -n litellm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "See the source issue for the community-verified solution: https://github.com/BerriAI/litellm/issues/24512",
+      "codeSnippets": [
+        "litellm_init.pth,sha256=ceNa7wMJnNHy1kRnNCcwJaFjWX3pORLfMh7xGL8TUjg,34628",
+        "pip download litellm==1.82.8 --no-deps -d /tmp/check\npython3 -c \"\nimport zipfile, os\nwhl = '/tmp/check/' + [f for f in os.listdir('/tmp/check') if f.endswith('.whl')][0]\nwith zipfile.ZipFile(whl) as z:\n    pth = [n for n in z.namelist() if n.endswith('.pth')]\n    print('PTH files:', pth)\n    for p in pth:\n        print(z.read(p)[:300])\n\"",
+        "## Malicious Behavior (full analysis)\n\nThe payload is **double base64-encoded**. When decoded, it performs the following:\n\n### Stage 1: Information Collection\n\nThe script collects sensitive data from the host system:\n\n- **System info**: `hostname`, `whoami`, `uname -a`, `ip addr`, `ip route`\n- **Environment variables**: `printenv` (captures all API keys, secrets, tokens)\n- **SSH keys**: `~/.ssh/id_rsa`, `~/.ssh/id_ed25519`, `~/.ssh/id_ecdsa`, `~/.ssh/id_dsa`, `~/.ssh/authorized_keys`, `~/.ssh/known_hosts`, `~/.ssh/config`\n- **Git credentials**: `~/.gitconfig`, `~/.git-credentials`\n- **AWS credentials**: `~/.aws/credentials`, `~/.aws/config`, IMDS token + security credentials\n- **Kubernetes secrets**: `~/.kube/config`, `/etc/kubernetes/admin.conf`, `/etc/kubernetes/kubelet.conf`, `/etc/kube"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "litellm",
+      "community",
+      "llm-gateway",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "litellm"
+    ],
+    "targetResourceKinds": [
+      "Service",
+      "Secret"
+    ],
+    "difficulty": "expert",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/BerriAI/litellm/issues/24512",
+      "repo": "https://github.com/BerriAI/litellm"
+    },
+    "reactions": 1108,
+    "comments": 213,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with litellm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-03T06:51:11.258Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
