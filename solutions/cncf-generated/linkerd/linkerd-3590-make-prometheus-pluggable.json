@@ -11,25 +11,27 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Check current linkerd deployment",
-        "description": "Verify your linkerd version and configuration:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nhelm list -n linkerd 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working linkerd installation."
+        "title": "Verify Linkerd version supports pluggable Prometheus",
+        "description": "Ensure you are running Linkerd 2.10 or later, which supports an external Prometheus:\n```bash\nlinkerd version\n```\nIf running an older version, upgrade Linkerd following the official upgrade guide."
       },
       {
-        "title": "Review linkerd configuration",
-        "description": "Inspect the relevant linkerd configuration:\n```bash\nkubectl get all -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get configmap -n linkerd -l app.kubernetes.io/part-of=linkerd\n```\n## Feature Request\n\nThe prometheus instance that comes with Linkerd is nice but for large clusters this can become a bottleneck."
+        "title": "Set up your external Prometheus instance",
+        "description": "Deploy or configure an external Prometheus that will scrape Linkerd metrics. Ensure it is configured to scrape the Linkerd proxy metrics endpoints. Add the following scrape config:\n```yaml\n- job_name: 'linkerd'\n  kubernetes_sd_configs:\n  - role: pod\n  relabel_configs:\n  - source_labels: [__meta_kubernetes_pod_container_name]\n    action: keep\n    regex: linkerd-proxy\n  - source_labels: [__meta_kubernetes_pod_container_port_name]\n    action: keep\n    regex: linkerd-admin\n```"
       },
       {
-        "title": "Apply the fix for Make Prometheus Pluggable",
-        "description": "For a bit more context, here are some docs around integration `linkerd-prometheus` metrics with other tools:\nhttps://linkerd.io/2/tasks/exporting-metrics/\n\nThe `linkerd-prometheus` config lives here:\nhttps://github.com/linkerd/linkerd2/blob/65d5778b9393cd41c001b5023cf02a0d7626d03c/charts/linkerd2/templates/prometheus.yaml\n\nAll that said, I'd echo 's [recommendation](https://github.com/linkerd/linkerd2/issues/3406#issuecomment-529642159) to leave `linkerd-prometheus` as-is.\n\nSee the source issue for community-verified solutions."
+        "title": "Install Linkerd Viz with external Prometheus",
+        "description": "Install the Linkerd Viz extension pointing to your external Prometheus. This disables the built-in Prometheus:\n```bash\nlinkerd viz install --set prometheusUrl=http://your-prometheus:9090 | kubectl apply -f -\n```\nAlternatively, via Helm:\n```bash\nhelm install linkerd-viz linkerd/linkerd-viz \\\n  --set prometheusUrl=http://your-prometheus:9090\n```"
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n linkerd -l app.kubernetes.io/name=linkerd\nkubectl get events -n linkerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Make Prometheus Pluggable\" is functioning correctly."
+        "title": "Verify metrics flow through external Prometheus",
+        "description": "Confirm that Linkerd dashboards work with the external Prometheus:\n```bash\nlinkerd viz dashboard &\nlinkerd viz stat deploy -n default\n```\nVerify that metrics appear in your external Prometheus by querying for `request_total` or `response_latency_ms_bucket` metrics with the `linkerd` job label."
       }
     ],
     "resolution": {
-      "summary": "For a bit more context, here are some docs around integration `linkerd-prometheus` metrics with other tools:\nhttps://linkerd.io/2/tasks/exporting-metrics/\n\nThe `linkerd-prometheus` config lives here:\nhttps://github.com/linkerd/linkerd2/blob/65d5778b9393cd41c001b5023cf02a0d7626d03c/charts/linkerd2/templates/prometheus.yaml\n\nAll that said, I'd echo 's",
-      "codeSnippets": []
+      "summary": "Starting with Linkerd 2.10, the built-in Prometheus instance is optional. Users can configure Linkerd to send metrics to an external Prometheus by setting `prometheusUrl` in the Linkerd Viz extension. Install without built-in Prometheus: `linkerd viz install --set prometheusUrl=http://your-prometheus:9090 | kubectl apply -f -`.",
+      "codeSnippets": [
+        "linkerd viz install --set prometheusUrl=http://your-prometheus:9090 | kubectl apply -f -"
+      ]
     }
   },
   "metadata": {
