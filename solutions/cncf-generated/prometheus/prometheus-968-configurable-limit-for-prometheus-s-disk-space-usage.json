@@ -11,25 +11,28 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Check current prometheus deployment",
-        "description": "Verify your prometheus version and configuration:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nhelm list -n prometheus 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working prometheus installation."
+        "title": "Check current Prometheus version and storage configuration",
+        "description": "Verify you are running Prometheus 2.x or later, which supports size-based retention:\n```bash\nprometheus --version\n# Or in Kubernetes:\nkubectl exec -n prometheus deploy/prometheus-server -- prometheus --version\n```\nCheck current storage flags:\n```bash\nps aux | grep prometheus | grep storage\n```"
       },
       {
-        "title": "Review prometheus configuration",
-        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\nPrometheus needs a startup flag or HTTP endpoint to trigger an immediate maintenance sweep to delete old files from local storage."
+        "title": "Configure size-based retention with --storage.tsdb.retention.size",
+        "description": "Add the `--storage.tsdb.retention.size` flag to limit disk usage. This can be combined with time-based retention:\n```bash\nprometheus \\\n  --storage.tsdb.retention.size=50GB \\\n  --storage.tsdb.retention.time=30d \\\n  --storage.tsdb.path=/var/lib/prometheus/data\n```\nSupported units: B, KB, MB, GB, TB, PB. When the limit is exceeded, Prometheus removes the oldest data blocks first."
       },
       {
-        "title": "Apply the fix for Configurable limit for Prometheus's disk space usage",
-        "description": "Thinking about this, I'm not sure if catering for the \"disk completely full\" case makes a lot of sense. Experience tells us that the storage is often in very sorry state if Prometheus runs into a disk-full scenario. You probably cannot shut down cleanly in that state, and the crash recovery will need its own share of disk, so an immediate deletion of time series will only help in the cases where you have just enough disk space for crash recovery but not enough to wait for normal purging...\n\nI\n\nSee the source issue for community-verified solutions."
+        "title": "Apply in Kubernetes via Helm or manifest",
+        "description": "If running in Kubernetes with the prometheus-community Helm chart:\n```bash\nhelm upgrade prometheus prometheus-community/prometheus \\\n  --set server.retention=30d \\\n  --set server.retentionSize=50GB\n```\nOr add the flags directly to the container args in your Deployment manifest."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Configurable limit for Prometheus's disk space usage\" is functioning correctly."
+        "title": "Verify retention is working",
+        "description": "Check that Prometheus is respecting the size limit:\n```bash\n# Check current TSDB stats via the API\ncurl -s http://localhost:9090/api/v1/status/tsdb | python3 -m json.tool\n# Check disk usage\ndu -sh /var/lib/prometheus/data\n```\nMonitor the `prometheus_tsdb_size_retentions_total` metric to confirm size-based deletions are occurring when needed."
       }
     ],
     "resolution": {
-      "summary": "Thinking about this, I'm not sure if catering for the \"disk completely full\" case makes a lot of sense. Experience tells us that the storage is often in very sorry state if Prometheus runs into a disk-full scenario.",
-      "codeSnippets": []
+      "summary": "Prometheus added the `--storage.tsdb.retention.size` flag (available since Prometheus 2.x) to limit disk space usage. When the configured size is exceeded, Prometheus removes the oldest data blocks. Use in combination with `--storage.tsdb.retention.time` for both time and size-based retention.",
+      "codeSnippets": [
+        "# Limit Prometheus disk usage to 50GB and retain data for 30 days\nprometheus \\\n  --storage.tsdb.retention.size=50GB \\\n  --storage.tsdb.retention.time=30d \\\n  --storage.tsdb.path=/var/lib/prometheus/data",
+        "# Kubernetes Deployment example\ncontainers:\n- name: prometheus\n  image: prom/prometheus:v2.45.0\n  args:\n    - '--config.file=/etc/prometheus/prometheus.yml'\n    - '--storage.tsdb.retention.size=50GB'\n    - '--storage.tsdb.retention.time=30d'\n    - '--storage.tsdb.path=/prometheus'"
+      ]
     }
   },
   "metadata": {
