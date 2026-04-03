@@ -11,25 +11,28 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Identify prometheus analyze symptoms",
-        "description": "Check for the issue in your prometheus deployment:\n```bash\nkubectl get pods -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl logs -l app.kubernetes.io/name=prometheus -n prometheus --tail=100 | grep -i error\n```\nLook for errors related to: Add option to log slow queries and recording rules"
+        "title": "Upgrade to Prometheus 2.16 or later",
+        "description": "Query logging requires Prometheus 2.16+. Check your version:\n```bash\nprometheus --version\n```\nUpgrade if needed via your package manager or Helm chart."
       },
       {
-        "title": "Review prometheus configuration",
-        "description": "Inspect the relevant prometheus configuration:\n```bash\nkubectl get all -n prometheus -l app.kubernetes.io/name=prometheus\nkubectl get configmap -n prometheus -l app.kubernetes.io/part-of=prometheus\n```\nHaving something like [PostgreSQL's log_min_duration_statement](http://www.postgresql.org/docs/current/static/runtime-config-logging.html) would be useful to debug performance problems."
+        "title": "Enable query logging",
+        "description": "Add the query logging feature flag and log file path to your Prometheus startup arguments:\n```bash\nprometheus \\\n  --enable-feature=query-log \\\n  --query.log-file=/var/log/prometheus/queries.log \\\n  --config.file=/etc/prometheus/prometheus.yml\n```\nAll PromQL queries (including recording rules) will be logged to the specified file."
       },
       {
-        "title": "Apply the fix for Add option to log slow queries and recording rules",
-        "description": "2 change sets:\n- Remove the global map of contexts from the common/route library, to match https://github.com/prometheus/common/pull/79\n- Add some basic opentracing hooks into the HTTP handlers and query path.  Not a huge amount, just enough to show what you can do.\n\nThis has beed mooted as a solution to #1315.\n\nSee the fix PR for details: linked PR"
+        "title": "Configure query concurrency limits",
+        "description": "To prevent slow queries from causing overload, set a concurrency limit:\n```bash\nprometheus \\\n  --query.max-concurrency=20 \\\n  --query.timeout=2m\n```\nThe `--query.max-concurrency` flag limits how many queries can run simultaneously. The `--query.timeout` flag sets a maximum duration for any single query."
       },
       {
-        "title": "Confirm Add option to log slow queries and recording rules is resolved",
-        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=prometheus -n prometheus --tail=50 --since=5m\nkubectl get events -n prometheus --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+        "title": "Analyze the query log for slow queries",
+        "description": "Review the query log file to identify slow queries:\n```bash\n# Find queries that took longer than 1 second\ncat /var/log/prometheus/queries.log | python3 -c \"\nimport sys, json\nfor line in sys.stdin:\n    entry = json.loads(line)\n    duration = entry.get('stats', {}).get('timings', {}).get('evalTotalTime', 0)\n    if duration > 1.0:\n        print(f'{duration:.3f}s - {entry[\"params\"][\"query\"]}')\n\"\n```\nOptimize or rewrite queries with high `evalTotalTime` values."
       }
     ],
     "resolution": {
-      "summary": "2 change sets:\n- Remove the global map of contexts from the common/route library, to match https://github.com/prometheus/common/pull/79\n- Add some basic opentracing hooks into the HTTP handlers and query path.  Not a huge amount, just enough to show what you can do.\n\nThis has beed mooted as a solution to #1315.",
-      "codeSnippets": []
+      "summary": "Prometheus 2.16+ added query logging via the `--enable-feature=query-log` flag. When enabled, all queries are logged to a file specified by `--query.log-file`. This enables identifying slow queries. Additionally, the `--query.max-concurrency` flag limits concurrent queries to prevent overload.",
+      "codeSnippets": [
+        "# Enable query logging in Prometheus 2.16+\nprometheus \\\n  --enable-feature=query-log \\\n  --query.log-file=/var/log/prometheus/queries.log \\\n  --query.max-concurrency=20",
+        "# Example query log entry\n{\n  \"params\": {\n    \"query\": \"rate(http_requests_total[5m])\",\n    \"start\": \"2024-01-01T00:00:00Z\",\n    \"end\": \"2024-01-01T01:00:00Z\",\n    \"step\": 15\n  },\n  \"stats\": {\n    \"timings\": {\n      \"evalTotalTime\": 0.523,\n      \"innerEvalTime\": 0.412\n    }\n  }\n}"
+      ]
     }
   },
   "metadata": {
@@ -50,8 +53,7 @@
     "maturity": "graduated",
     "sourceUrls": {
       "issue": "https://github.com/prometheus/prometheus/issues/1315",
-      "repo": "https://github.com/prometheus/prometheus",
-      "pr": "https://github.com/prometheus/prometheus/pull/2554"
+      "repo": "https://github.com/prometheus/prometheus"
     },
     "reactions": 41,
     "comments": 86,
