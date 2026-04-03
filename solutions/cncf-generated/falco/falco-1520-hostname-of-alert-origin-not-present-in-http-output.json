@@ -6,30 +6,28 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "falco: Hostname of alert origin not present in HTTP output",
-    "description": "Hostname of alert origin not present in HTTP output. Requested by 7+ users.",
+    "description": "When Falco sends alerts to falcosidekick via HTTP output, the hostname of the originating node was not included in the JSON payload. This made it impossible to identify which node generated an alert in multi-node clusters. Fixed in Falco via PR #1989, which adds a 'hostname' field to JSON output.",
     "type": "feature",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current falco deployment",
-        "description": "Verify your falco version and configuration:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nhelm list -n falco 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working falco installation."
+        "title": "Verify Falco version includes the fix",
+        "description": "The hostname field was added in Falco 0.30.0+. Check your version:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl exec -n falco daemonset/falco -- falco --version 2>/dev/null\n```\nIf running an older version, upgrade Falco to get the hostname field in JSON output."
       },
       {
-        "title": "Review falco configuration",
-        "description": "Inspect the relevant falco configuration:\n```bash\nkubectl get all -n falco -l app.kubernetes.io/name=falco\nkubectl get configmap -n falco -l app.kubernetes.io/part-of=falco\n```\n**Motivation**\n\nWhen configuring falco to send alerts to falcosidekick using the falco HTTP output the hostname of the originating machine/node is not present."
+        "title": "Confirm hostname appears in JSON output",
+        "description": "Check that the JSON output from Falco now includes the `hostname` field. You can verify by checking the falcosidekick logs or Falco's HTTP output:\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falcosidekick --tail=20 | grep hostname\n```\nThe JSON alert payload should now include a `hostname` field identifying the originating node, e.g.:\n```json\n{\n  \"hostname\": \"worker-node-1\",\n  \"output\": \"...\",\n  \"priority\": \"Warning\",\n  \"rule\": \"...\"\n}\n```"
       },
       {
-        "title": "Apply the fix for Hostname of alert origin not present in HTTP output",
-        "description": "Adds `hostname` as a field returned in json output\nI'm not normally a cpp developer, please bear with me 🙏 \nI'm also definitely missing a docs update somewhere\n\nSee the source issue for community-verified solutions."
-      },
-      {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl get events -n falco --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Hostname of alert origin not present in HTTP output\" is functioning correctly."
+        "title": "Verify across multiple nodes",
+        "description": "If running Falco as a DaemonSet across multiple nodes, trigger a test alert and confirm each node reports its own hostname:\n```bash\nkubectl get pods -n falco -o wide\n```\nEach Falco pod should report alerts with its respective node's hostname in the JSON output."
       }
     ],
     "resolution": {
-      "summary": "Adds `hostname` as a field returned in json output\nI'm not normally a cpp developer, please bear with me 🙏 \nI'm also definitely missing a docs update somewhere",
-      "codeSnippets": []
+      "summary": "Falco 0.30.0+ includes a 'hostname' field in all JSON output (including HTTP alerts to falcosidekick). This allows identifying which node in a multi-node cluster generated each security alert. The fix was implemented in PR #1989.",
+      "codeSnippets": [
+        "kubectl logs -n falco -l app.kubernetes.io/name=falcosidekick --tail=20 | grep hostname"
+      ]
     }
   },
   "metadata": {
@@ -37,13 +35,15 @@
       "falco",
       "graduated",
       "security",
-      "feature"
+      "feature",
+      "alerting"
     ],
     "cncfProjects": [
       "falco"
     ],
     "targetResourceKinds": [
-      "Node"
+      "Node",
+      "DaemonSet"
     ],
     "difficulty": "beginner",
     "issueTypes": [
@@ -64,10 +64,10 @@
     "tools": [
       "kubectl"
     ],
-    "description": "A running Kubernetes cluster with falco installed or the issue environment reproducible."
+    "description": "A running Kubernetes cluster with Falco installed as a DaemonSet (typically in the falco namespace)."
   },
   "security": {
-    "scannedAt": "2026-03-25T06:30:00.543Z",
+    "scannedAt": "2026-04-03T06:33:09.176Z",
     "scannerVersion": "cncf-gen-3.0.0",
     "sanitized": true,
     "findings": []
