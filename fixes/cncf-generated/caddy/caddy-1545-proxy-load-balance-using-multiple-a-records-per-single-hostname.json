@@ -11,26 +11,26 @@
     "status": "completed",
     "steps": [
       {
-        "title": "Check current caddy setup",
-        "description": "Verify your caddy version and configuration:\n```bash\ncaddy version\n```\nThis feature requires a working caddy installation."
+        "title": "Install or upgrade to Caddy v2",
+        "description": "Ensure you are running Caddy v2, which includes native reverse proxy load balancing:\n```bash\ncaddy version\n```\nIf running Caddy v1, upgrade to v2 following the official migration guide."
       },
       {
-        "title": "Review caddy configuration",
-        "description": "Review the relevant caddy configuration:\n### 1. What version of Caddy are you running (`caddy -version`)?\n```\nCaddy 0.9.5\n```\n\n### 2."
+        "title": "Configure reverse_proxy with DNS-based upstreams",
+        "description": "In your Caddyfile, configure `reverse_proxy` to point to a hostname that resolves to multiple A records. Caddy will automatically resolve and load balance across all addresses:\n```\nreverse_proxy backend-service:8080 {\n    lb_policy round_robin\n}\n```\nSupported load balancing policies include `round_robin`, `least_conn`, `random`, `first`, `ip_hash`, `uri_hash`, and `header`."
       },
       {
-        "title": "Apply the fix for proxy: Load Balance using multiple A records per single…",
-        "description": "That's a mistake probably on my part :)\n\nIn this use case, the upstream target is changing rapidly. scaling up and down, or containers are replaced quickly with a new one (with a new IP). And service discovery is available using the internal dns server.\n\nUsing this DNS way, we would avoid\n```yaml\nIt'd return 502 until any host added to upstream via API.\n\nAPI Interface:\n```"
+        "title": "Configure dynamic upstreams (optional)",
+        "description": "For environments with rapidly changing backends (e.g., Kubernetes), use dynamic upstreams with SRV records or the A record module:\n```\nreverse_proxy {\n    dynamic a backend-service 8080\n    lb_policy round_robin\n}\n```\nThis re-resolves DNS on each request, ensuring new backends are discovered automatically."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected.\nConfirm the feature described in \"proxy: Load Balance using multiple A records per single…\" is functioning correctly."
+        "title": "Verify load balancing",
+        "description": "Test that requests are distributed across all resolved addresses:\n```bash\nfor i in $(seq 1 10); do curl -s http://localhost/health; done\n```\nCheck Caddy logs to confirm requests are being routed to different backend IPs."
       }
     ],
     "resolution": {
-      "summary": "That's a mistake probably on my part :)\n\nIn this use case, the upstream target is changing rapidly. scaling up and down, or containers are replaced quickly with a new one (with a new IP). And service discovery is available using the internal dns server.\n\nUsing this DNS way, we would avoid generating web server configuration using a template file, and restarting/reloading it on each change etc.",
+      "summary": "Caddy v2's reverse_proxy directive natively supports DNS-based load balancing. When an upstream hostname resolves to multiple A records, Caddy automatically distributes requests across all resolved addresses. Configure with: `reverse_proxy hostname:port { lb_policy round_robin }`. Caddy v2 also supports dynamic upstreams via SRV records and the `dynamic` upstream module.",
       "codeSnippets": [
-        "It'd return 502 until any host added to upstream via API.\n\nAPI Interface:"
+        "reverse_proxy backend:8080 {\n    lb_policy round_robin\n}"
       ]
     }
   },
