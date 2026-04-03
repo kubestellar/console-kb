@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "prometheus-1315-add-option-to-log-slow-queries-and-recording-rules",
+  "missionClass": "solution",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "prometheus: Add option to log slow queries and recording rules",
+    "description": "Add option to log slow queries and recording rules. This issue affects 41+ users.",
+    "type": "analyze",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Upgrade to Prometheus 2.16 or later",
+        "description": "Query logging requires Prometheus 2.16+. Check your version:\n```bash\nprometheus --version\n```\nUpgrade if needed via your package manager or Helm chart."
+      },
+      {
+        "title": "Enable query logging",
+        "description": "Add the query logging feature flag and log file path to your Prometheus startup arguments:\n```bash\nprometheus \\\n  --enable-feature=query-log \\\n  --query.log-file=/var/log/prometheus/queries.log \\\n  --config.file=/etc/prometheus/prometheus.yml\n```\nAll PromQL queries (including recording rules) will be logged to the specified file."
+      },
+      {
+        "title": "Configure query concurrency limits",
+        "description": "To prevent slow queries from causing overload, set a concurrency limit:\n```bash\nprometheus \\\n  --query.max-concurrency=20 \\\n  --query.timeout=2m\n```\nThe `--query.max-concurrency` flag limits how many queries can run simultaneously. The `--query.timeout` flag sets a maximum duration for any single query."
+      },
+      {
+        "title": "Analyze the query log for slow queries",
+        "description": "Review the query log file to identify slow queries:\n```bash\n# Find queries that took longer than 1 second\ncat /var/log/prometheus/queries.log | python3 -c \"\nimport sys, json\nfor line in sys.stdin:\n    entry = json.loads(line)\n    duration = entry.get('stats', {}).get('timings', {}).get('evalTotalTime', 0)\n    if duration > 1.0:\n        print(f'{duration:.3f}s - {entry[\"params\"][\"query\"]}')\n\"\n```\nOptimize or rewrite queries with high `evalTotalTime` values."
+      }
+    ],
+    "resolution": {
+      "summary": "Prometheus 2.16+ added query logging via the `--enable-feature=query-log` flag. When enabled, all queries are logged to a file specified by `--query.log-file`. This enables identifying slow queries. Additionally, the `--query.max-concurrency` flag limits concurrent queries to prevent overload.",
+      "codeSnippets": [
+        "# Enable query logging in Prometheus 2.16+\nprometheus \\\n  --enable-feature=query-log \\\n  --query.log-file=/var/log/prometheus/queries.log \\\n  --query.max-concurrency=20",
+        "# Example query log entry\n{\n  \"params\": {\n    \"query\": \"rate(http_requests_total[5m])\",\n    \"start\": \"2024-01-01T00:00:00Z\",\n    \"end\": \"2024-01-01T01:00:00Z\",\n    \"step\": 15\n  },\n  \"stats\": {\n    \"timings\": {\n      \"evalTotalTime\": 0.523,\n      \"innerEvalTime\": 0.412\n    }\n  }\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "prometheus",
+      "graduated",
+      "observability",
+      "analyze"
+    ],
+    "cncfProjects": [
+      "prometheus"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "analyze"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/prometheus/prometheus/issues/1315",
+      "repo": "https://github.com/prometheus/prometheus"
+    },
+    "reactions": 41,
+    "comments": 86,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with prometheus installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-03-11T01:24:30.848Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
