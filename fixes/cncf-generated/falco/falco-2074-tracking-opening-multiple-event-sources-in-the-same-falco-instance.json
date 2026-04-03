@@ -6,30 +6,28 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "falco: [Tracking] Opening multiple event sources in the same Falco instance",
-    "description": "[Tracking] Opening multiple event sources in the same Falco instance. Requested by 10+ users.",
+    "description": "Support running multiple event sources (syscall, k8s_audit, plugins) in parallel within a single Falco instance. Previously Falco could only open one event source at a time, requiring multiple Falco instances for different sources. Fixed in Falco 0.33.0 via a multi-threaded architecture redesign (PR #2182).",
     "type": "feature",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current falco deployment",
-        "description": "Verify your falco version and configuration:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nhelm list -n falco 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working falco installation."
+        "title": "Verify Falco version supports multiple sources",
+        "description": "Multi-source support was added in Falco 0.33.0. Check your version:\n\nUpgrade to Falco 0.33.0+ if running an older version."
       },
       {
-        "title": "Review falco configuration",
-        "description": "Inspect the relevant falco configuration:\n```bash\nkubectl get all -n falco -l app.kubernetes.io/name=falco\nkubectl get configmap -n falco -l app.kubernetes.io/part-of=falco\n```\n# Motivation\n\nThe plugin system allows Falco to open new kinds of event sources that go beyond the historical syscall use case."
+        "title": "Configure multiple event sources",
+        "description": "Enable multiple sources in your Falco configuration (falco.yaml):\n\nThis configures Falco to use the modern BPF engine for syscalls while simultaneously processing K8s audit events via the plugin."
       },
       {
-        "title": "Apply the fix for [Tracking] Opening multiple event sources in the same Falco…",
-        "description": "I'm gonna share the thought process that led me to the proposed solution documented in the issue description.  has been involved in the early discussion of this topic.\n\nSince the end goal is to run multiple sources at the same time, many execution models have been hypothesized, but each of them has been discarded in favor of the proposed solution. I'm gonna proceed and document briefly their design and cost/benefits tradeoffs.\n\n- **(H1)** Single-threaded model, with multiple event sources\n\nSee the source issue for community-verified solutions."
-      },
-      {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl get events -n falco --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Tracking] Opening multiple event sources in the same Falco…\" is functioning correctly."
+        "title": "Verify multiple sources are active",
+        "description": "Check Falco logs to confirm multiple sources are running in parallel:\n\nYou should see log entries for each active source (e.g., \"syscall\" and \"k8s_audit\") running concurrently."
       }
     ],
     "resolution": {
-      "summary": "I'm gonna share the thought process that led me to the proposed solution documented in the issue description.  has been involved in the early discussion of this topic.\n\nSince the end goal is to run multiple sources at the same time, many execution models have been hypothesized, but each of them has been discarded in favor of the proposed solution.",
-      "codeSnippets": []
+      "summary": "Falco 0.33.0+ supports running multiple event sources in parallel within a single instance using a multi-threaded architecture. Each source runs in its own thread with independent rule processing. This was implemented in PR #2182, which redesigned the event processing engine to support concurrent event sources.",
+      "codeSnippets": [
+        "falco --option engine.kind=modern_bpf -o \"plugins[].name=k8saudit\" -o \"plugins[].library_path=/usr/share/falco/plugins/libk8saudit.so\""
+      ]
     }
   },
   "metadata": {
@@ -50,7 +48,8 @@
     "maturity": "graduated",
     "sourceUrls": {
       "issue": "https://github.com/falcosecurity/falco/issues/2074",
-      "repo": "https://github.com/falcosecurity/falco"
+      "repo": "https://github.com/falcosecurity/falco",
+      "pr": "https://github.com/falcosecurity/falco/pull/2182"
     },
     "reactions": 10,
     "comments": 19,
