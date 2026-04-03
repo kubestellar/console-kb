@@ -19,16 +19,16 @@
         "description": "Inspect the relevant knative-eventing configuration:\n```bash\nkubectl get all -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nkubectl get configmap -n knative-eventing -l app.kubernetes.io/part-of=knative-eventing\n```\n**Problem**\ncurrently apiserversource can only watch resources within the namespace in which it was created."
       },
       {
-        "title": "Apply the fix for ApiServerSource should be able to watch resources in other…",
-        "description": "Partially fixes #4481 \nFixes points 1. and 2. from https://github.com/knative/eventing/issues/6145#issuecomment-1039506502\nThe automated reporting of broken traces would be done in a separate PR.\n- register Zipkin exporter using trace config from the config-tracing config map in Knative Eventing namespace\n- adds trace instrumentation to these components: wathola-sender, wathola-forwarder, wathola-receiver\n- if config-tracing enables tracing and there's a backend storage (Zipkin or Jaeger) it\n\nSee the source issue for community-verified solutions."
+        "title": "Configure ApiServerSource with namespaceSelector",
+        "description": "Create or update your ApiServerSource to watch resources across namespaces using the `namespaceSelector` field:\n```yaml\napiVersion: sources.knative.dev/v1\nkind: ApiServerSource\nmetadata:\n  name: my-apiserversource\n  namespace: default\nspec:\n  serviceAccountName: my-sa\n  mode: Resource\n  resources:\n    - apiVersion: v1\n      kind: Event\n  namespaceSelector:\n    matchLabels:\n      watch-events: \"true\"\n  sink:\n    ref:\n      apiVersion: serving.knative.dev/v1\n      kind: Service\n      name: event-display\n```\nThe `namespaceSelector` field accepts standard Kubernetes label selectors, allowing the ApiServerSource to watch resources in all namespaces matching the specified labels."
       },
       {
         "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nkubectl get events -n knative-eventing --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"ApiServerSource should be able to watch resources in other…\" is functioning correctly."
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n knative-eventing -l app.kubernetes.io/name=knative-eventing\nkubectl get events -n knative-eventing --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"ApiServerSource should be able to watch resources in other\u2026\" is functioning correctly."
       }
     ],
     "resolution": {
-      "summary": "Partially fixes #4481 \nFixes points 1. and 2. from https://github.com/knative/eventing/issues/6145#issuecomment-1039506502\nThe automated reporting of broken traces would be done in a separate PR.",
+      "summary": "ApiServerSource now supports watching resources across namespaces via the `namespaceSelector` field in the spec. This allows a single ApiServerSource to watch resources in namespaces matching label selectors, eliminating the need for one ApiServerSource per namespace.",
       "codeSnippets": []
     }
   },
@@ -52,8 +52,7 @@
     "maturity": "graduated",
     "sourceUrls": {
       "issue": "https://github.com/knative/eventing/issues/4481",
-      "repo": "https://github.com/knative/eventing",
-      "pr": "https://github.com/knative/eventing/pull/6219"
+      "repo": "https://github.com/knative/eventing"
     },
     "reactions": 2,
     "comments": 19,
