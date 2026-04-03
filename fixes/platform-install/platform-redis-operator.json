@@ -6,106 +6,106 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Redis Operator (Spotahome / OT-CONTAINER-KIT)",
-    "description": "The Redis Operator by OT-CONTAINER-KIT simplifies the deployment and management of Redis instances on Kubernetes, supporting standalone, cluster, and sentinel modes. It is ideal for users looking for a production-ready solution with built-in monitoring and best practices. Key trade-offs include the need for Kubernetes expertise and potential resource overhead.",
+    "description": "The Redis Operator by OT-CONTAINER-KIT simplifies the deployment and management of Redis instances on Kubernetes, supporting standalone, cluster, and replication modes. It provides built-in monitoring and adheres to best practices for security and performance. This operator is ideal for teams looking to manage Redis workloads efficiently in a Kubernetes environment.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
         "title": "Add the Helm repository",
-        "description": "This step adds the official Redis Operator Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add redis-operator https://ot-container-kit.github.io/redis-operator\n\nhelm repo update\n\n```\n\n> This adds the Redis Operator Helm repository.\n> Updates the local Helm chart repository cache.",
+        "description": "This step adds the official Redis Operator Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add redis-operator https://ot-container-kit.github.io/redis-operator\n\nhelm repo update\n\n```\n\n> This adds the repository for the Redis Operator.\n> Updates your local Helm chart repository cache.",
         "commands": [
           "helm repo add redis-operator https://ot-container-kit.github.io/redis-operator",
           "helm repo update"
         ]
       },
       {
-        "title": "Install the Custom Resource Definitions (CRDs)",
-        "description": "CRDs are necessary for the operator to manage Redis resources effectively.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisclusters_crd.yaml\n\nkubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisfailovers_crd.yaml\n\n```\n\n> Installs the RedisCluster CRD.\n> Installs the RedisFailover CRD.",
-        "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisclusters_crd.yaml",
-          "kubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisfailovers_crd.yaml"
-        ]
-      },
-      {
         "title": "Install the Redis Operator",
-        "description": "This command installs the Redis Operator in the specified namespace.\n\n```bash\n\nhelm install redis-operator redis-operator/redis-operator --namespace redis --create-namespace --version 0.24.0\n\n```\n\n> Installs the Redis Operator in the 'redis' namespace.",
+        "description": "This command installs the Redis Operator in the 'redis-operator' namespace, creating the namespace if it does not exist.\n\n```bash\n\nkubectl create namespace redis-operator\n\nhelm install redis-operator redis-operator/redis-operator --namespace redis-operator --version 0.19.0\n\n```\n\n> Creates the namespace for the Redis Operator.\n> Installs the Redis Operator with the specified version.",
         "commands": [
-          "helm install redis-operator redis-operator/redis-operator --namespace redis --create-namespace --version 0.24.0"
+          "kubectl create namespace redis-operator",
+          "helm install redis-operator redis-operator/redis-operator --namespace redis-operator --version 0.19.0"
         ]
       },
       {
-        "title": "Create a Redis Cluster",
-        "description": "This step creates a Redis cluster using a sample configuration.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: redis.opstree.dev/v1\nkind: RedisCluster\nmetadata:\n  name: my-redis-cluster\n  namespace: redis\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF\n\n```\n\n> Creates a Redis cluster named 'my-redis-cluster' with 3 replicas.",
+        "title": "Verify the installation",
+        "description": "This command checks if the Redis Operator pods are running successfully.\n\n```bash\n\nkubectl get pods -n redis-operator\n\n```\n\n> Lists all pods in the redis-operator namespace to verify the installation.",
         "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: redis.opstree.dev/v1\nkind: RedisCluster\nmetadata:\n  name: my-redis-cluster\n  namespace: redis\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF"
+          "kubectl get pods -n redis-operator"
+        ]
+      },
+      {
+        "title": "Create a Redis Cluster Custom Resource",
+        "description": "This step creates a sample Redis cluster using a Custom Resource (CR) definition.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: redis.opstree.dev/v1\nkind: Redis\nmetadata:\n  name: my-redis\n  namespace: redis-operator\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF\n\n```\n\n> Creates a Redis cluster with 3 replicas.",
+        "commands": [
+          "cat <<EOF | kubectl apply -f -\napiVersion: redis.opstree.dev/v1\nkind: Redis\nmetadata:\n  name: my-redis\n  namespace: redis-operator\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF"
         ]
       },
       {
         "title": "Verify the Redis Cluster",
-        "description": "This command checks the status of the Redis cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get redisclusters -n redis\n\n```\n\n> Lists all Redis clusters in the 'redis' namespace.",
+        "description": "This command checks if the Redis cluster is up and running.\n\n```bash\n\nkubectl get redis -n redis-operator\n\n```\n\n> Lists all Redis instances in the redis-operator namespace.",
         "commands": [
-          "kubectl get redisclusters -n redis"
+          "kubectl get redis -n redis-operator"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the Redis Operator",
-        "description": "This step removes the Redis Operator and all associated resources. Data loss may occur if persistent volumes are not managed properly.\n\n```bash\n\nhelm uninstall redis-operator --namespace redis\n\nkubectl delete namespace redis\n\n```\n\n> Uninstalls the Redis Operator from the 'redis' namespace.\n> Deletes the 'redis' namespace and all resources within it.",
+        "description": "This step removes the Redis Operator and all associated resources. Be cautious as this may lead to data loss if persistent volumes are not managed properly.\n\n```bash\n\nhelm uninstall redis-operator --namespace redis-operator\n\nkubectl delete namespace redis-operator\n\n```\n\n> Uninstalls the Redis Operator.\n> Deletes the namespace and all resources within it.",
         "commands": [
-          "helm uninstall redis-operator --namespace redis",
-          "kubectl delete namespace redis"
+          "helm uninstall redis-operator --namespace redis-operator",
+          "kubectl delete namespace redis-operator"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade the Redis Operator",
-        "description": "Before upgrading, ensure to back up your Redis data. This step includes draining the operator, upgrading, and verifying the installation.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade redis-operator redis-operator/redis-operator --namespace redis --version 0.24.0\n\nkubectl get pods -n redis\n\n```\n\n> Drains the node where the operator is running.\n> Upgrades the Redis Operator to the specified version.\n> Verifies that all pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you backup your Redis data. This step will upgrade the Redis Operator to the latest version.\n\n```bash\n\nkubectl get redis -n redis-operator -o yaml > redis-backup.yaml\n\nhelm upgrade redis-operator redis-operator/redis-operator --namespace redis-operator --version 0.19.0\n\nkubectl get pods -n redis-operator\n\n```\n\n> Backup existing Redis configurations.\n> Upgrades the Redis Operator to the specified version.\n> Verifies that the upgraded pods are running.",
         "commands": [
-          "kubectl drain <node-name> --ignore-daemonsets",
-          "helm upgrade redis-operator redis-operator/redis-operator --namespace redis --version 0.24.0",
-          "kubectl get pods -n redis"
+          "kubectl get redis -n redis-operator -o yaml > redis-backup.yaml",
+          "helm upgrade redis-operator redis-operator/redis-operator --namespace redis-operator --version 0.19.0",
+          "kubectl get pods -n redis-operator"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create RedisCluster'",
-        "description": "**Cause:** The RedisCluster CRD may not be installed correctly.\n\n**Fix:**\nReapply the CRD using the command: kubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisclusters_crd.yaml"
+        "title": "Error: 'Failed to create Redis instance'",
+        "description": "**Cause:** This may occur due to insufficient permissions or misconfigured RBAC.\n\n**Fix:**\nEnsure that the service account used by the operator has the necessary permissions."
       },
       {
-        "title": "Error: 'Redis pod is CrashLoopBackOff'",
-        "description": "**Cause:** The Redis pod may be failing due to misconfiguration or resource limits.\n\n**Fix:**\nCheck the pod logs with kubectl logs <pod-name> -n redis and adjust the configuration or resource requests."
+        "title": "Error: 'Redis instance not ready'",
+        "description": "**Cause:** This can happen if the Redis pods are not starting due to resource constraints.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n redis-operator' for more details."
       },
       {
-        "title": "Error: 'No resources found in redis namespace'",
-        "description": "**Cause:** The Redis Operator may not be installed or the namespace may be incorrect.\n\n**Fix:**\nEnsure the operator is installed with helm list --namespace redis and check the namespace."
+        "title": "Error: 'Failed to connect to Redis'",
+        "description": "**Cause:** This may indicate network issues or that the Redis service is not exposed correctly.\n\n**Fix:**\nVerify the service configuration and ensure the Redis pods are running."
       },
       {
-        "title": "Error: 'RedisCluster is not ready'",
-        "description": "**Cause:** The Redis cluster may be initializing or facing issues.\n\n**Fix:**\nRun kubectl describe rediscluster my-redis-cluster -n redis to check the status and events."
+        "title": "Error: 'Redis cluster is not healthy'",
+        "description": "**Cause:** This can occur if one or more Redis nodes are down.\n\n**Fix:**\nCheck the status of the Redis nodes and restart any that are not running."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.24.0",
+        "version": "v0.19",
         "changes": "Added support for Redis 7.0, improved monitoring capabilities with redis-exporter.",
-        "deprecations": "No specific deprecations noted.",
-        "migrationSteps": "If upgrading from v0.18 or v0.19, ensure to review the new Redis configuration options."
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see output similar to: 'NAME              READY   STATUS    RESTARTS   AGE\nmy-redis-cluster   3/3     Running   0          5m'. This indicates that the Redis cluster is running successfully.",
+      "summary": "You should see the Redis instance listed with 'kubectl get redis -n redis-operator', showing its status as 'Ready'.",
       "codeSnippets": [
         "helm repo add redis-operator https://ot-container-kit.github.io/redis-operator",
         "helm repo update",
-        "kubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisclusters_crd.yaml",
-        "kubectl apply -f https://raw.githubusercontent.com/OT-CONTAINER-KIT/redis-operator/v0.24.0/deploy/crds/redis.opstree.dev_redisfailovers_crd.yaml",
-        "helm install redis-operator redis-operator/redis-operator --namespace redis --create-namespace --version 0.24.0",
-        "kubectl apply -f - <<EOF\napiVersion: redis.opstree.dev/v1\nkind: RedisCluster\nmetadata:\n  name: my-redis-cluster\n  namespace: redis\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF",
-        "kubectl get redisclusters -n redis"
+        "kubectl create namespace redis-operator",
+        "helm install redis-operator redis-operator/redis-operator --namespace redis-operator --version 0.19.0",
+        "kubectl get pods -n redis-operator",
+        "cat <<EOF | kubectl apply -f -\napiVersion: redis.opstree.dev/v1\nkind: Redis\nmetadata:\n  name: my-redis\n  namespace: redis-operator\nspec:\n  size: 3\n  redis:\n    image: redis:7.0.0\nEOF",
+        "kubectl get redis -n redis-operator"
       ]
     }
   },
@@ -121,16 +121,13 @@
     "platformType": "operator",
     "platformProvider": "OT-CONTAINER-KIT",
     "platformVersions": [
-      "v0.24.0"
+      "v0.18",
+      "v0.19"
     ],
     "supportedK8sVersions": [
       "1.25",
       "1.26",
-      "1.27",
-      "1.28",
-      "1.29",
-      "1.30",
-      "1.31"
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -147,8 +144,7 @@
       "helm"
     ],
     "containerImages": [
-      "quay.io/opstree/redis-operator:v0.24.0",
-      "redis:7.0.0"
+      "quay.io/opstree/redis-operator:v0.19.0"
     ],
     "sourceUrls": {
       "docs": "https://ot-redis-operator.netlify.app/",
@@ -166,7 +162,7 @@
     "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:09:43.408Z",
+    "scannedAt": "2026-04-03T12:07:40.125Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
