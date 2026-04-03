@@ -5,31 +5,30 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "pushgateway: If parameters include '/' ,It will response code 400",
-    "description": "If parameters include '/' ,It will response code 400. Community-reported issue.",
+    "title": "pushgateway: Label values containing '/' return HTTP 400",
+    "description": "When pushing metrics to the Pushgateway with label values containing '/', the request returns HTTP 400. This is caused by Go's URL parser unescaping %2F before the router sees the path, making it impossible to distinguish path separators from literal slashes in label values. Resolved in Pushgateway v1.0+ with base64-encoded label value support.",
     "type": "troubleshoot",
     "status": "completed",
     "steps": [
       {
-        "title": "Identify pushgateway troubleshoot symptoms",
-        "description": "Check for the issue in your pushgateway deployment:\n```bash\nkubectl get pods -n pushgateway -l app.kubernetes.io/name=pushgateway\nkubectl logs -l app.kubernetes.io/name=pushgateway -n pushgateway --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+        "title": "Understand the root cause",
+        "description": "The Pushgateway uses URL path segments to identify job and label values (e.g., `/metrics/job/myjob/instance/myinstance`). When a label value contains `/`, it gets URL-encoded as `%2F`, but Go's `net/http` unescapes it before routing \u2014 so the router interprets it as a path separator.\n\nThis is a fundamental limitation of Go's HTTP libraries, not a Pushgateway bug."
       },
       {
-        "title": "Review pushgateway configuration",
-        "description": "Inspect the relevant pushgateway configuration:\n```bash\nkubectl get all -n pushgateway -l app.kubernetes.io/name=pushgateway\nkubectl get configmap -n pushgateway -l app.kubernetes.io/part-of=pushgateway\n```\nIf tags parameters include '/'  ,It will response code 400.The '/' is deal with URLEncoder. How to do?"
+        "title": "Upgrade to Pushgateway v1.0+ for base64 support",
+        "description": "Starting with v1.0.0, the Pushgateway supports base64-encoded label values as a workaround. Prefix the value with `@base64` and provide the base64-encoded value:\n```bash\n# Encode the label value containing '/'\necho -n 'path/with/slashes' | base64\n# Output: cGF0aC93aXRoL3NsYXNoZXM=\n\n# Push using base64-encoded value\ncurl -s --data-binary 'some_metric 42' \\\n  'http://localhost:9091/metrics/job/myjob/instance@base64/cGF0aC93aXRoL3NsYXNoZXM='\n```"
       },
       {
-        "title": "Apply the fix for If parameters include '/' ,It will response code 400",
-        "description": "URI path parameters wouldn't follow the RESTful style.\n\nThe problem with the `%2F` escaping is that it might be legit but the Go tooling around URI parsing doesn't care. At the time the router sees the path, it's already unescaped. So we either need to circumvent the Go libraries, or we have to find another solution.\n\nSee the source issue for community-verified solutions."
-      },
-      {
-        "title": "Confirm If parameters include '/' ,It will response code… is resolved",
-        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=pushgateway -n pushgateway --tail=50 --since=5m\nkubectl get events -n pushgateway --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+        "title": "Verify the workaround",
+        "description": "Confirm that the metric was pushed correctly with the decoded label value:\n```bash\ncurl -s http://localhost:9091/metrics | grep some_metric\n```\nYou should see the metric with the original label value `path/with/slashes` (decoded from base64)."
       }
     ],
     "resolution": {
-      "summary": "URI path parameters wouldn't follow the RESTful style.\n\nThe problem with the `%2F` escaping is that it might be legit but the Go tooling around URI parsing doesn't care. At the time the router sees the path, it's already unescaped. So we either need to circumvent the Go libraries, or we have to find another solution.",
-      "codeSnippets": []
+      "summary": "Pushgateway v1.0+ supports base64-encoded label values to work around Go's URL parser unescaping %2F. Prefix the label name with @base64 and provide the base64-encoded value in the URL path. This allows label values containing '/' and other special characters.",
+      "codeSnippets": [
+        "echo -n 'value/with/slashes' | base64",
+        "curl -s --data-binary 'some_metric 42' 'http://localhost:9091/metrics/job/myjob/label@base64/<base64-value>'"
+      ]
     }
   },
   "metadata": {
@@ -37,12 +36,16 @@
       "pushgateway",
       "graduated",
       "observability",
-      "troubleshoot"
+      "troubleshoot",
+      "url-encoding"
     ],
     "cncfProjects": [
       "pushgateway"
     ],
-    "targetResourceKinds": [],
+    "targetResourceKinds": [
+      "Deployment",
+      "Service"
+    ],
     "difficulty": "intermediate",
     "issueTypes": [
       "troubleshoot"
@@ -59,12 +62,13 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
-    "description": "A running Kubernetes cluster with pushgateway installed or the issue environment reproducible."
+    "description": "A running Prometheus Pushgateway v1.0+ deployment (typically in a monitoring namespace)."
   },
   "security": {
-    "scannedAt": "2026-03-26T06:32:49.279Z",
+    "scannedAt": "2026-04-03T06:34:01.590Z",
     "scannerVersion": "cncf-gen-3.0.0",
     "sanitized": true,
     "findings": []
