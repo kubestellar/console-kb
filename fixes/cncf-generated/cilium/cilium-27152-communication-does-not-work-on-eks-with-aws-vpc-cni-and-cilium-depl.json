@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cilium-27152-communication-does-not-work-on-eks-with-aws-vpc-cni-and-cilium-depl",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cilium: Communication does not work on EKS with AWS VPC CNI and Cilium deployed in chaining mode for the pods running on the same node when SecuirtyGroups For Pods is activated and applied to one of the communicating pods",
+    "description": "Communication does not work on EKS with AWS VPC CNI and Cilium deployed in chaining mode for the pods running on the same node when SecuirtyGroups For Pods is activated and applied to one of the communicating pods. This issue affects 28+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify cilium troubleshoot symptoms",
+        "description": "Check for the issue in your cilium deployment:\n```bash\nkubectl get pods -n cilium -l app.kubernetes.io/name=cilium\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review cilium configuration",
+        "description": "Inspect the relevant cilium configuration:\n```bash\nkubectl get all -n cilium -l app.kubernetes.io/name=cilium\nkubectl get configmap -n cilium -l app.kubernetes.io/part-of=cilium\n```\n#### Scenario:\n- Pods are running on the same EKS worker node.\n- Client application  is running as K8s pod with Security Group For Pods  (SGFP) attached based on the SecurityGroupPolicy definition."
+      },
+      {
+        "title": "Apply the fix for Communication does not work on EKS with AWS VPC CNI and…",
+        "description": "AWS uses VLAN interfaces for SG routing, and intentionally avoids upserting a route\nso that traffic flows through the VPC and SG rules can be evaluated. Cilium will\nupsert the route when an endpoint is created, and this causes traffic to be dropped\ndue to assymetric routing.\n\nThis exposes a wider\n```yaml\n# for init  containers\nDISABLE_TCP_EARLY_DEMUX=true\n\n#for main container\nENABLE_POD_ENI = true\nPOD_SECURITY_GROUP_ENFORCING_MODE=standard\nAWS_VPC_K8S_CNI_EXTERNALSNAT=true\nENABLE_PREFIX_DELEGATION=false\n```"
+      },
+      {
+        "title": "Confirm Communication does not work on EKS with AWS VPC… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=cilium -n cilium --tail=50 --since=5m\nkubectl get events -n cilium --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "AWS uses VLAN interfaces for SG routing, and intentionally avoids upserting a route\nso that traffic flows through the VPC and SG rules can be evaluated. Cilium will\nupsert the route when an endpoint is created, and this causes traffic to be dropped\ndue to assymetric routing.",
+      "codeSnippets": [
+        "# for init  containers\nDISABLE_TCP_EARLY_DEMUX=true\n\n#for main container\nENABLE_POD_ENI = true\nPOD_SECURITY_GROUP_ENFORCING_MODE=standard\nAWS_VPC_K8S_CNI_EXTERNALSNAT=true\nENABLE_PREFIX_DELEGATION=false",
+        "cni:\n  chainingMode: aws-cni\n  exclusive: false\n\nenableIPv4Masquerade: false\ntunnel: disabled\n\t\t\nendpointRoutes:\n  enabled: true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cilium",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "cilium"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Ingress"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/cilium/cilium/issues/27152",
+      "repo": "https://github.com/cilium/cilium",
+      "pr": "https://github.com/cilium/cilium/pull/29111"
+    },
+    "reactions": 28,
+    "comments": 3,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cilium installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-01T06:38:52.629Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
