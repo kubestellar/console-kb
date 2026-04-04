@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Velero (Backup & Restore Operator)",
-    "description": "Velero is a backup and restore operator for Kubernetes that allows you to back up your cluster resources and persistent volumes, as well as migrate them between clusters. It is particularly useful for disaster recovery and data migration scenarios. Key trade-offs include the need for proper configuration of cloud storage backends and potential complexities in restoring large datasets.",
+    "description": "Velero is a backup and restore operator for Kubernetes that allows you to back up your cluster resources and persistent volumes, migrate resources between clusters, and replicate production environments for testing. It is particularly useful for disaster recovery and data migration scenarios. Key trade-offs include the need for proper configuration of storage backends and potential complexity in managing backups and restores.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
@@ -20,27 +20,20 @@
       },
       {
         "title": "Install Velero CRDs",
-        "description": "This step installs the Custom Resource Definitions (CRDs) required for Velero to function.\n\n```bash\n\nkubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml\n\n```\n\n> This installs the necessary CRDs for Velero.",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required for Velero to function properly.\n\n```bash\n\nkubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml\n\n```\n\n> This installs the necessary CRDs for Velero.",
         "commands": [
           "kubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml"
         ]
       },
       {
         "title": "Install Velero using Helm",
-        "description": "This step installs Velero in the specified namespace with the required configuration.\n\n```bash\n\nhelm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2\n\n```\n\n> Replace 'my-velero-bucket' with your actual S3 bucket name.",
+        "description": "This step installs Velero in the specified namespace with the necessary configuration.\n\n```bash\n\nhelm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2\n\n```\n\n> Replace 'my-velero-bucket' with your actual S3 bucket name.",
         "commands": [
-          "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2"
+          "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2"
         ]
       },
       {
-        "title": "Create a Backup",
-        "description": "This step creates a backup of your Kubernetes resources and persistent volumes.\n\n```bash\n\nvelero backup create my-backup --include-namespaces my-namespace\n\n```\n\n> Replace 'my-namespace' with the namespace you want to back up.",
-        "commands": [
-          "velero backup create my-backup --include-namespaces my-namespace"
-        ]
-      },
-      {
-        "title": "Verify Velero Installation",
+        "title": "Verify Velero installation",
         "description": "This step checks if Velero is installed and running correctly.\n\n```bash\n\nkubectl get pods -n velero\n\n```\n\n> You should see the Velero server pod running.",
         "commands": [
           "kubectl get pods -n velero"
@@ -50,7 +43,7 @@
     "uninstall": [
       {
         "title": "Uninstall Velero",
-        "description": "This step removes Velero and its associated resources. Be aware that this will delete all backups and data associated with Velero.\n\n```bash\n\nhelm uninstall velero --namespace velero\n\nkubectl delete namespace velero\n\n```\n\n> This will remove the Velero release.\n> This will delete the Velero namespace and all resources within it.",
+        "description": "This step removes Velero and its associated resources. Be aware that this will delete all backups and data associated with Velero.\n\n```bash\n\nhelm uninstall velero --namespace velero\n\nkubectl delete namespace velero\n\n```\n\n> This command will remove the Velero release.\n> This command will delete the Velero namespace and all its resources.",
         "commands": [
           "helm uninstall velero --namespace velero",
           "kubectl delete namespace velero"
@@ -60,9 +53,9 @@
     "upgrade": [
       {
         "title": "Upgrade Velero",
-        "description": "This step includes backing up existing data, upgrading Velero, and verifying the upgrade.\n\n```bash\n\nvelero backup create pre-upgrade-backup --include-namespaces my-namespace\n\nhelm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0\n\nkubectl get pods -n velero\n\n```\n\n> Create a backup before upgrading.\n> Upgrade to the specified version.\n> Verify that the Velero pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you have a backup of your current Velero configuration. This step upgrades Velero to the latest version.\n\n```bash\n\nkubectl get backups.velero.io --all-namespaces\n\nhelm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0\n\nkubectl get pods -n velero\n\n```\n\n> List all backups to ensure you have a record before upgrading.\n> This command upgrades Velero to version 1.18.0.\n> Verify that the Velero pods are running after the upgrade.",
         "commands": [
-          "velero backup create pre-upgrade-backup --include-namespaces my-namespace",
+          "kubectl get backups.velero.io --all-namespaces",
           "helm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0",
           "kubectl get pods -n velero"
         ]
@@ -70,37 +63,36 @@
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create backup: unable to create backup storage location'",
-        "description": "**Cause:** This error indicates that Velero cannot access the specified backup storage location.\n\n**Fix:**\nCheck your S3 bucket permissions and ensure that the bucket exists."
+        "title": "Error: 'Failed to create backup: no valid backup storage location found'",
+        "description": "**Cause:** This indicates that Velero cannot find a valid backup storage location.\n\n**Fix:**\nEnsure that the backup storage location is correctly configured in the Velero installation."
       },
       {
-        "title": "Error: 'velero server is not running'",
-        "description": "**Cause:** The Velero server pod may not be running due to configuration issues.\n\n**Fix:**\nRun 'kubectl logs deployment/velero -n velero' to check the logs for errors."
+        "title": "Error: 'The server could not find the requested resource'",
+        "description": "**Cause:** This may occur if the CRDs are not installed correctly.\n\n**Fix:**\nReapply the CRDs using the command: kubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml"
       },
       {
-        "title": "Error: 'Backup failed: unable to find persistent volume'",
-        "description": "**Cause:** This indicates that the specified persistent volume is not available or has been deleted.\n\n**Fix:**\nVerify the existence of the persistent volume and ensure it is correctly configured."
+        "title": "Error: 'Backup failed: unable to access the S3 bucket'",
+        "description": "**Cause:** This indicates a misconfiguration in the S3 bucket settings or permissions.\n\n**Fix:**\nCheck the S3 bucket permissions and ensure that the IAM role used by Velero has access to the bucket."
       },
       {
-        "title": "Error: 'Failed to restore backup: resource already exists'",
-        "description": "**Cause:** This error occurs when attempting to restore resources that already exist in the target namespace.\n\n**Fix:**\nUse the '--overwrite' flag when restoring to replace existing resources."
+        "title": "Error: 'Volume snapshot location not found'",
+        "description": "**Cause:** This indicates that the specified volume snapshot location is not configured.\n\n**Fix:**\nEnsure that the volume snapshot location is correctly set in the Velero configuration."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.18.0",
-        "changes": "Added support for Kubernetes 1.35, improved AWS S3 integration, and enhanced logging features.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.25.",
-        "migrationSteps": "If upgrading from v1.17 or earlier, ensure that your backup storage location is correctly configured."
+        "changes": "Added support for additional cloud providers, improved backup performance, and enhanced logging capabilities.",
+        "deprecations": "Deprecated the old backup storage location configuration format.",
+        "migrationSteps": "If upgrading from v1.17, ensure to update your backup storage location configuration to the new format."
       }
     ],
     "resolution": {
-      "summary": "You should see the Velero server pod running with a status of 'Running' when executing 'kubectl get pods -n velero'.",
+      "summary": "You should see the Velero server pod running with a status of 'Running' when executing: kubectl get pods -n velero.",
       "codeSnippets": [
         "helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts",
         "kubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml",
-        "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2",
-        "velero backup create my-backup --include-namespaces my-namespace",
+        "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2",
         "kubectl get pods -n velero"
       ]
     }
@@ -117,7 +109,7 @@
     "platformType": "operator",
     "platformProvider": "VMware",
     "platformVersions": [
-      "v1.18.0"
+      "v1.18"
     ],
     "supportedK8sVersions": [
       "1.25",
@@ -158,10 +150,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the required tools installed."
+    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:11:33.967Z",
+    "scannedAt": "2026-04-04T06:18:34.243Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

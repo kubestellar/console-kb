@@ -6,51 +6,47 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Strimzi Kafka Operator",
-    "description": "Strimzi Kafka Operator allows you to run Apache Kafka on Kubernetes or OpenShift. It simplifies the deployment and management of Kafka clusters, making it suitable for production environments. Key trade-offs include the need for Kubernetes expertise and potential complexity in configuration.",
+    "description": "Strimzi Kafka Operator allows you to run Apache Kafka clusters on Kubernetes and OpenShift. It simplifies the deployment and management of Kafka, providing a robust solution for streaming data applications. Key trade-offs include the need for Kubernetes expertise and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Add Strimzi Helm Repository",
-        "description": "This step adds the Strimzi Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add strimzi https://strimzi.io/charts\n\n```\n\n> This is the official Helm chart repository for Strimzi.",
+        "title": "Add the Strimzi Helm repository",
+        "description": "This step adds the official Strimzi Helm chart repository to your Helm configuration, allowing you to install the Strimzi Kafka Operator.\n\n```bash\n\nhelm repo add strimzi https://strimzi.io/charts/\n\nhelm repo update\n\n```\n\n> This command adds the Strimzi repository.\n> Updates the local Helm chart repository cache.",
         "commands": [
-          "helm repo add strimzi https://strimzi.io/charts"
+          "helm repo add strimzi https://strimzi.io/charts/",
+          "helm repo update"
         ]
       },
       {
-        "title": "Install Custom Resource Definitions (CRDs)",
-        "description": "CRDs are required for the Strimzi Kafka Operator to function correctly. This step installs them.\n\n```bash\n\nkubectl apply -f https://strimzi.io/install/latest/strimzi-cluster-operator.yaml\n\n```\n\n> This installs the necessary CRDs for Strimzi.",
+        "title": "Install the Strimzi Kafka Operator",
+        "description": "This step installs the Strimzi Kafka Operator in the 'kafka' namespace using Helm.\n\n```bash\n\nkubectl create namespace kafka\n\nhelm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0\n\n```\n\n> Creates a namespace for the Kafka resources.\n> Installs the Strimzi Kafka Operator.",
         "commands": [
-          "kubectl apply -f https://strimzi.io/install/latest/strimzi-cluster-operator.yaml"
+          "kubectl create namespace kafka",
+          "helm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0"
         ]
       },
       {
-        "title": "Install Strimzi Kafka Operator",
-        "description": "This step installs the Strimzi Kafka Operator using Helm in the specified namespace.\n\n```bash\n\nhelm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --create-namespace --version 0.44.0\n\n```\n\n> Replace 0.44.0 with the desired version.",
+        "title": "Create a Kafka Cluster Custom Resource",
+        "description": "This step creates a Kafka cluster by applying a Custom Resource (CR) definition to your Kubernetes cluster.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      plain:\n        port: 9092\n        authentication:\n          type: tls\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF\n\n```\n\n> Creates a Kafka cluster named 'my-cluster'.",
         "commands": [
-          "helm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --create-namespace --version 0.44.0"
+          "cat <<EOF | kubectl apply -f -\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      plain:\n        port: 9092\n        authentication:\n          type: tls\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF"
         ]
       },
       {
-        "title": "Create Kafka Cluster Custom Resource",
-        "description": "This step creates a Kafka cluster using a Custom Resource definition.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      - name: plain\n        port: 9092\n        type: internal\n        tls: false\n      - name: tls\n        port: 9093\n        type: internal\n        tls: true\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF\n\n```\n\n> This creates a Kafka cluster named 'my-cluster'.",
+        "title": "Verify the Kafka Cluster",
+        "description": "This step checks if the Kafka cluster is running and ready.\n\n```bash\n\nkubectl get kafka -n kafka\n\nkubectl describe kafka my-cluster -n kafka\n\n```\n\n> Lists Kafka clusters in the 'kafka' namespace.\n> Describes the Kafka cluster to check its status.",
         "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      - name: plain\n        port: 9092\n        type: internal\n        tls: false\n      - name: tls\n        port: 9093\n        type: internal\n        tls: true\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF"
-        ]
-      },
-      {
-        "title": "Verify Kafka Cluster",
-        "description": "This step checks the status of the Kafka cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get kafka -n kafka\n\n```\n\n> You should see 'my-cluster' with a status of 'Ready'.",
-        "commands": [
-          "kubectl get kafka -n kafka"
+          "kubectl get kafka -n kafka",
+          "kubectl describe kafka my-cluster -n kafka"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall Strimzi Kafka Operator",
-        "description": "This step removes the Strimzi Kafka Operator and all associated resources. Be aware that this will delete your Kafka cluster and all data.\n\n```bash\n\nhelm uninstall strimzi --namespace kafka\n\nkubectl delete namespace kafka\n\n```\n\n> This command removes the Strimzi Kafka Operator.\n> This command deletes the namespace and all resources within it.",
+        "title": "Uninstall the Strimzi Kafka Operator",
+        "description": "This step removes the Strimzi Kafka Operator and its associated resources. Be aware that this will delete the Kafka cluster and all associated data.\n\n```bash\n\nhelm uninstall strimzi --namespace kafka\n\nkubectl delete namespace kafka\n\n```\n\n> Uninstalls the Strimzi Kafka Operator.\n> Deletes the Kafka namespace and all resources within it.",
         "commands": [
           "helm uninstall strimzi --namespace kafka",
           "kubectl delete namespace kafka"
@@ -59,10 +55,10 @@
     ],
     "upgrade": [
       {
-        "title": "Upgrade Strimzi Kafka Operator",
-        "description": "Before upgrading, ensure you backup your Kafka data. This step upgrades the Strimzi Kafka Operator to a newer version.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\nhelm upgrade strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0\n\nkubectl get kafka -n kafka\n\n```\n\n> Replace <node-name> with the name of the node to drain.\n> Replace 0.44.0 with the desired version.\n> Verify that the Kafka cluster is still running.",
+        "title": "Upgrade the Strimzi Kafka Operator",
+        "description": "Before upgrading, ensure you backup your Kafka data. This step upgrades the Strimzi Kafka Operator to a new version.\n\n```bash\n\nkubectl get kafka -n kafka -o yaml > kafka-backup.yaml\n\nhelm upgrade strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0\n\nkubectl get kafka -n kafka\n\n```\n\n> Backs up the current Kafka configuration.\n> Upgrades the Strimzi Kafka Operator.\n> Verifies the Kafka cluster is still running after the upgrade.",
         "commands": [
-          "kubectl drain <node-name> --ignore-daemonsets",
+          "kubectl get kafka -n kafka -o yaml > kafka-backup.yaml",
           "helm upgrade strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0",
           "kubectl get kafka -n kafka"
         ]
@@ -71,37 +67,39 @@
     "troubleshooting": [
       {
         "title": "Error: 'Kafka cluster is not ready'",
-        "description": "**Cause:** The Kafka cluster may not have enough resources allocated or may be misconfigured.\n\n**Fix:**\nCheck the resource limits and configurations in your Kafka Custom Resource."
+        "description": "**Cause:** The Kafka cluster may not have enough resources allocated or may be misconfigured.\n\n**Fix:**\nCheck the resource allocation and configuration in the Kafka Custom Resource."
       },
       {
         "title": "Error: 'Failed to connect to Zookeeper'",
-        "description": "**Cause:** Zookeeper may not be running or is unreachable.\n\n**Fix:**\nVerify the Zookeeper pods are running with 'kubectl get pods -n kafka'."
+        "description": "**Cause:** Zookeeper may not be running or is unreachable due to network policies.\n\n**Fix:**\nEnsure Zookeeper pods are running and check network policies."
       },
       {
-        "title": "Error: 'No such host'",
-        "description": "**Cause:** The Kafka service may not be properly exposed.\n\n**Fix:**\nCheck the service configuration and ensure it is correctly set up."
+        "title": "Error: 'Insufficient storage for Kafka'",
+        "description": "**Cause:** The storage class may not be available or configured correctly.\n\n**Fix:**\nVerify the storage class configuration and ensure it is available."
       },
       {
-        "title": "Error: 'Insufficient storage'",
-        "description": "**Cause:** The storage class may not have enough capacity.\n\n**Fix:**\nCheck the storage class and ensure it has sufficient resources."
+        "title": "Error: 'TLS handshake failed'",
+        "description": "**Cause:** TLS configuration may be incorrect or certificates may not be valid.\n\n**Fix:**\nCheck the TLS configuration in the Kafka Custom Resource."
       }
     ],
     "versionNotes": [
       {
-        "version": "0.44.0",
+        "version": "0.44",
         "changes": "Added support for Kafka 3.4.0, improved metrics collection.",
-        "deprecations": "Deprecated the 'kafka.spec.storage.type' field for certain configurations.",
-        "migrationSteps": "If upgrading from 0.43.0, ensure to update your Kafka Custom Resource to match the new storage configurations."
+        "deprecations": "Deprecated the use of 'spec.kafka.storage.type: ephemeral' in favor of persistent storage.",
+        "migrationSteps": "If upgrading from 0.43, ensure to migrate to persistent storage for Kafka."
       }
     ],
     "resolution": {
-      "summary": "You should see the Kafka cluster listed with 'kubectl get kafka -n kafka' and its status should be 'Ready'.",
+      "summary": "You should see the Kafka cluster listed with the status 'Ready' when running 'kubectl get kafka -n kafka'.",
       "codeSnippets": [
-        "helm repo add strimzi https://strimzi.io/charts",
-        "kubectl apply -f https://strimzi.io/install/latest/strimzi-cluster-operator.yaml",
-        "helm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --create-namespace --version 0.44.0",
-        "kubectl apply -f - <<EOF\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      - name: plain\n        port: 9092\n        type: internal\n        tls: false\n      - name: tls\n        port: 9093\n        type: internal\n        tls: true\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF",
-        "kubectl get kafka -n kafka"
+        "helm repo add strimzi https://strimzi.io/charts/",
+        "helm repo update",
+        "kubectl create namespace kafka",
+        "helm install strimzi strimzi/strimzi-kafka-operator --namespace kafka --version 0.44.0",
+        "cat <<EOF | kubectl apply -f -\napiVersion: kafka.strimzi.io/v1beta2\nkind: Kafka\nmetadata:\n  name: my-cluster\n  namespace: kafka\nspec:\n  kafka:\n    replicas: 3\n    listeners:\n      plain:\n        port: 9092\n        authentication:\n          type: tls\n    storage:\n      type: ephemeral\n  zookeeper:\n    replicas: 3\n    storage:\n      type: ephemeral\nEOF",
+        "kubectl get kafka -n kafka",
+        "kubectl describe kafka my-cluster -n kafka"
       ]
     }
   },
@@ -160,7 +158,15 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary resources."
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+  },
+  "security": {
+    "scannedAt": "2026-04-04T06:16:56.077Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}on": "Ensure you have a Kubernetes cluster running with the necessary resources."
   },
   "security": {
     "scannedAt": "2026-03-17T12:09:19.419Z",
