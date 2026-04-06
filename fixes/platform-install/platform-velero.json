@@ -6,53 +6,52 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Velero (Backup & Restore Operator)",
-    "description": "Velero is a backup and restore operator for Kubernetes that allows you to back up your cluster resources and persistent volumes, as well as migrate them between clusters. It is particularly useful for disaster recovery and data migration scenarios. Key trade-offs include the need for proper configuration of cloud storage backends and potential complexities in restoring large datasets.",
+    "description": "Velero is a backup and restore operator for Kubernetes that allows you to back up cluster resources and persistent volumes, facilitating migration and disaster recovery. It is particularly useful for managing backups in production environments and can be run on various cloud platforms or on-premises. Key trade-offs include the need for proper configuration of storage backends and potential complexity in managing backup schedules.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
         "title": "Add the Velero Helm repository",
-        "description": "This step adds the official Velero Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts\n\n```\n\n> This is the official repository for Velero.",
+        "description": "This step adds the official Velero Helm chart repository to your local Helm configuration.\n\n```bash\n\nhelm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts\n\n```\n\n> This repository contains the Velero Helm charts.",
         "commands": [
           "helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts"
         ]
       },
       {
-        "title": "Install Velero CRDs",
-        "description": "This step installs the Custom Resource Definitions (CRDs) required for Velero to function.\n\n```bash\n\nkubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml\n\n```\n\n> This installs the necessary CRDs for Velero.",
+        "title": "Install Velero with Helm",
+        "description": "This command installs Velero in the specified namespace with the necessary configuration for your cloud provider.\n\n```bash\n\nhelm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2\n\n```\n\n> Replace 'my-velero-bucket' with your actual S3 bucket name.",
         "commands": [
-          "kubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml"
+          "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2"
         ]
       },
       {
-        "title": "Install Velero using Helm",
-        "description": "This step installs Velero in the specified namespace with the required configuration.\n\n```bash\n\nhelm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2\n\n```\n\n> Replace 'my-velero-bucket' with your actual S3 bucket name.",
-        "commands": [
-          "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2"
-        ]
-      },
-      {
-        "title": "Create a Backup",
-        "description": "This step creates a backup of your Kubernetes resources and persistent volumes.\n\n```bash\n\nvelero backup create my-backup --include-namespaces my-namespace\n\n```\n\n> Replace 'my-namespace' with the namespace you want to back up.",
-        "commands": [
-          "velero backup create my-backup --include-namespaces my-namespace"
-        ]
-      },
-      {
-        "title": "Verify Velero Installation",
-        "description": "This step checks if Velero is installed and running correctly.\n\n```bash\n\nkubectl get pods -n velero\n\n```\n\n> You should see the Velero server pod running.",
+        "title": "Verify Velero installation",
+        "description": "This command checks if the Velero deployment is running correctly in the specified namespace.\n\n```bash\n\nkubectl get pods -n velero\n\n```\n\n> You should see the Velero server pod running.",
         "commands": [
           "kubectl get pods -n velero"
+        ]
+      },
+      {
+        "title": "Create a backup",
+        "description": "This command creates a backup of your Kubernetes resources and persistent volumes.\n\n```bash\n\nvelero backup create my-backup --include-namespaces my-namespace\n\n```\n\n> Replace 'my-namespace' with the namespace you want to back up.",
+        "commands": [
+          "velero backup create my-backup --include-namespaces my-namespace"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall Velero",
-        "description": "This step removes Velero and its associated resources. Be aware that this will delete all backups and data associated with Velero.\n\n```bash\n\nhelm uninstall velero --namespace velero\n\nkubectl delete namespace velero\n\n```\n\n> This will remove the Velero release.\n> This will delete the Velero namespace and all resources within it.",
+        "description": "This command removes Velero from your cluster. Be aware that this will delete all backups and associated resources.\n\n```bash\n\nhelm uninstall velero --namespace velero\n\n```\n\n> This will remove the Velero deployment and all related resources.",
         "commands": [
-          "helm uninstall velero --namespace velero",
+          "helm uninstall velero --namespace velero"
+        ]
+      },
+      {
+        "title": "Delete the Velero namespace",
+        "description": "This command deletes the Velero namespace, which may contain orphaned resources.\n\n```bash\n\nkubectl delete namespace velero\n\n```\n\n> This will remove the namespace and all resources within it.",
+        "commands": [
           "kubectl delete namespace velero"
         ]
       }
@@ -60,9 +59,9 @@
     "upgrade": [
       {
         "title": "Upgrade Velero",
-        "description": "This step includes backing up existing data, upgrading Velero, and verifying the upgrade.\n\n```bash\n\nvelero backup create pre-upgrade-backup --include-namespaces my-namespace\n\nhelm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0\n\nkubectl get pods -n velero\n\n```\n\n> Create a backup before upgrading.\n> Upgrade to the specified version.\n> Verify that the Velero pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you have a backup of your current Velero configuration and backups. This step will upgrade Velero to the latest version.\n\n```bash\n\nvelero backup get\n\nhelm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0\n\nkubectl get pods -n velero\n\n```\n\n> Check existing backups before proceeding.\n> This command upgrades Velero to the specified version.\n> Verify that the Velero pods are running after the upgrade.",
         "commands": [
-          "velero backup create pre-upgrade-backup --include-namespaces my-namespace",
+          "velero backup get",
           "helm upgrade velero vmware-tanzu/velero --namespace velero --version 1.18.0",
           "kubectl get pods -n velero"
         ]
@@ -70,38 +69,37 @@
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create backup: unable to create backup storage location'",
-        "description": "**Cause:** This error indicates that Velero cannot access the specified backup storage location.\n\n**Fix:**\nCheck your S3 bucket permissions and ensure that the bucket exists."
+        "title": "Error: 'Failed to create backup: the server could not find the requested resource'",
+        "description": "**Cause:** This may occur if the specified namespace does not exist or if there are issues with the Velero configuration.\n\n**Fix:**\nEnsure the namespace exists and check the Velero configuration for correctness."
       },
       {
-        "title": "Error: 'velero server is not running'",
-        "description": "**Cause:** The Velero server pod may not be running due to configuration issues.\n\n**Fix:**\nRun 'kubectl logs deployment/velero -n velero' to check the logs for errors."
+        "title": "Error: 'Backup storage location not found'",
+        "description": "**Cause:** This indicates that the specified backup storage location is not configured correctly.\n\n**Fix:**\nVerify the backup storage location configuration in the Velero installation command."
       },
       {
-        "title": "Error: 'Backup failed: unable to find persistent volume'",
-        "description": "**Cause:** This indicates that the specified persistent volume is not available or has been deleted.\n\n**Fix:**\nVerify the existence of the persistent volume and ensure it is correctly configured."
+        "title": "Error: 'Failed to restore backup: no matching resources found'",
+        "description": "**Cause:** This can happen if the resources in the backup do not match the current cluster state.\n\n**Fix:**\nCheck the backup contents using 'velero backup describe my-backup' and ensure the resources exist."
       },
       {
-        "title": "Error: 'Failed to restore backup: resource already exists'",
-        "description": "**Cause:** This error occurs when attempting to restore resources that already exist in the target namespace.\n\n**Fix:**\nUse the '--overwrite' flag when restoring to replace existing resources."
+        "title": "Error: 'Unable to connect to the server: dial tcp ...'",
+        "description": "**Cause:** This indicates a connectivity issue with the Kubernetes API server.\n\n**Fix:**\nCheck your kubeconfig and ensure that your Kubernetes cluster is running."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.18.0",
-        "changes": "Added support for Kubernetes 1.35, improved AWS S3 integration, and enhanced logging features.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.25.",
-        "migrationSteps": "If upgrading from v1.17 or earlier, ensure that your backup storage location is correctly configured."
+        "changes": "Added support for additional cloud providers, improved backup performance, and enhanced CLI commands.",
+        "deprecations": "Deprecated the old backup and restore APIs in favor of new versions.",
+        "migrationSteps": "If upgrading from v1.17, ensure to review the new configuration options for cloud providers."
       }
     ],
     "resolution": {
       "summary": "You should see the Velero server pod running with a status of 'Running' when executing 'kubectl get pods -n velero'.",
       "codeSnippets": [
         "helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts",
-        "kubectl apply -f https://github.com/vmware-tanzu/velero/releases/download/v1.18.0/velero-crds.yaml",
-        "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.region=us-west-2",
-        "velero backup create my-backup --include-namespaces my-namespace",
-        "kubectl get pods -n velero"
+        "helm install velero vmware-tanzu/velero --namespace velero --create-namespace --version 1.18.0 --set configuration.provider=aws --set configuration.backupStorageLocation.name=aws --set configuration.backupStorageLocation.bucket=my-velero-bucket --set configuration.backupStorageLocation.config.region=us-west-2 --set configuration.volumeSnapshotLocation.name=aws --set configuration.volumeSnapshotLocation.config.region=us-west-2",
+        "kubectl get pods -n velero",
+        "velero backup create my-backup --include-namespaces my-namespace"
       ]
     }
   },
@@ -161,7 +159,7 @@
     "description": "Ensure you have a Kubernetes cluster running with the required tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:11:33.967Z",
+    "scannedAt": "2026-04-06T18:16:19.605Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
