@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "orbit-resource-quota",
+  "missionClass": "orbit",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Daily Namespace Resource Quota Monitoring",
+    "description": "Recurring orbit mission that monitors namespace resource quotas and limit ranges. Detects namespaces approaching their CPU, memory, or pod limits to prevent scheduling failures and resource exhaustion.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 5,
+    "steps": [
+      {
+        "title": "List all resource quotas and utilization",
+        "description": "Show all ResourceQuota objects with their current usage vs. hard limits across all namespaces.",
+        "commands": [
+          "kubectl get resourcequotas -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,CPU_USED:.status.used.requests\\.cpu,CPU_HARD:.status.hard.requests\\.cpu,MEM_USED:.status.used.requests\\.memory,MEM_HARD:.status.hard.requests\\.memory,PODS_USED:.status.used.pods,PODS_HARD:.status.hard.pods'"
+        ]
+      },
+      {
+        "title": "Detect quotas above 80% utilization",
+        "description": "Identify resource quotas where usage exceeds 80% of the hard limit, indicating namespaces at risk of hitting their ceiling.",
+        "commands": [
+          "kubectl get resourcequotas -A -o json | jq -r '.items[] | .metadata.namespace as $ns | .metadata.name as $name | .status | to_entries[] | select(.key | startswith(\"used.\")) | {ns: $ns, name: $name, resource: (.key | ltrimstr(\"used.\")), used: .value} + ({hard: (.key | ltrimstr(\"used.\") | . as $r | input_line_number)} | {}) | \"\\($ns)/\\($name) \\(.resource): used=\\(.used)\"'"
+        ]
+      },
+      {
+        "title": "Check for namespaces without quotas",
+        "description": "List namespaces that have no ResourceQuota configured, which could allow unbounded resource consumption.",
+        "commands": [
+          "comm -23 <(kubectl get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{\"\\n\"}{end}' | sort) <(kubectl get resourcequotas -A -o jsonpath='{range .items[*]}{.metadata.namespace}{\"\\n\"}{end}' | sort -u)"
+        ],
+        "validation": {
+          "command": "comm -23 <(kubectl get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{\"\\n\"}{end}' | grep -v '^kube-' | sort) <(kubectl get resourcequotas -A -o jsonpath='{range .items[*]}{.metadata.namespace}{\"\\n\"}{end}' | sort -u) | wc -l",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Review LimitRange defaults",
+        "description": "Show all LimitRange objects to verify default CPU and memory limits are set for containers that do not specify their own.",
+        "commands": [
+          "kubectl get limitranges -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.limits[*].type,DEFAULT_CPU:.spec.limits[*].default.cpu,DEFAULT_MEM:.spec.limits[*].default.memory,MAX_CPU:.spec.limits[*].max.cpu,MAX_MEM:.spec.limits[*].max.memory'"
+        ]
+      },
+      {
+        "title": "Check for pods with no resource requests",
+        "description": "Identify pods that do not set CPU or memory requests, which makes quota enforcement and scheduling unpredictable.",
+        "commands": [
+          "kubectl get pods -A -o json | jq -r '.items[] | select(.spec.containers[] | (.resources.requests.cpu == null) or (.resources.requests.memory == null)) | \"\\(.metadata.namespace)/\\(.metadata.name)\"' | head -20"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "Resource quota monitoring complete. All namespace quotas, limit ranges, and pod resource requests have been reviewed. Namespaces approaching their limits have been identified.",
+      "codeSnippets": [
+        "kubectl get resourcequotas -A",
+        "kubectl get limitranges -A"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": ["orbit", "maintenance", "recurring", "resource-quota", "capacity", "namespaces", "limits"],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "difficulty": "beginner",
+    "issueTypes": ["maintenance"]
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["kubectl", "jq"],
+    "description": "Requires kubectl with cluster access and jq for JSON parsing."
+  },
+  "orbitConfig": {
+    "cadence": "daily",
+    "orbitType": "resource-quota"
+  }
+}

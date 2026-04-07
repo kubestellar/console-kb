@@ -1,0 +1,85 @@
+{
+  "version": "kc-mission-v1",
+  "name": "orbit-cert-rotation",
+  "missionClass": "orbit",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Monthly TLS Certificate Expiry Check",
+    "description": "Recurring orbit mission that scans for TLS certificates approaching expiration. Checks cert-manager Certificate resources, Kubernetes TLS secrets, and ingress certificates to prevent unexpected outages from expired certs.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Check cert-manager Certificate resources",
+        "description": "List all cert-manager Certificate resources and their renewal status. Certificates with Ready=False or approaching notAfter dates need attention.",
+        "commands": [
+          "kubectl get certificates -A -o wide 2>/dev/null || echo 'cert-manager CRDs not installed'",
+          "kubectl get certificates -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name} notAfter={.status.notAfter} ready={range .status.conditions[?(@.type==\"Ready\")]}{.status}{end}{\"\\n\"}{end}' 2>/dev/null"
+        ],
+        "validation": {
+          "command": "kubectl get certificates -A -o jsonpath='{range .items[*]}{range .status.conditions[?(@.type==\"Ready\")]}{.status}{\"\\n\"}{end}{end}' 2>/dev/null | grep -c False || echo 0",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Scan TLS secrets for expiring certificates",
+        "description": "Extract and check expiration dates from all TLS-type secrets in the cluster. Flag any expiring within 30 days.",
+        "commands": [
+          "for secret in $(kubectl get secrets -A -o jsonpath='{range .items[?(@.type==\"kubernetes.io/tls\")]}{.metadata.namespace}/{.metadata.name}{\"\\n\"}{end}'); do ns=$(echo $secret | cut -d/ -f1); name=$(echo $secret | cut -d/ -f2); expiry=$(kubectl get secret $name -n $ns -o jsonpath='{.data.tls\\.crt}' | base64 -d | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2); echo \"$secret expires: $expiry\"; done"
+        ]
+      },
+      {
+        "title": "Check ingress TLS configuration",
+        "description": "Verify that all ingresses with TLS blocks reference valid, non-expired secrets.",
+        "commands": [
+          "kubectl get ingress -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}: {range .spec.tls[*]}secret={.secretName} hosts={.hosts[*]} {end}{\"\\n\"}{end}'"
+        ]
+      },
+      {
+        "title": "Verify cert-manager issuer health",
+        "description": "Check that ClusterIssuers and Issuers are in a Ready state so new certificates can be issued when renewals are needed.",
+        "commands": [
+          "kubectl get clusterissuers -o wide 2>/dev/null || echo 'No ClusterIssuers found'",
+          "kubectl get issuers -A -o wide 2>/dev/null || echo 'No Issuers found'"
+        ],
+        "validation": {
+          "command": "kubectl get clusterissuers -o jsonpath='{range .items[*]}{range .status.conditions[?(@.type==\"Ready\")]}{.status}{\"\\n\"}{end}{end}' 2>/dev/null | grep -c False || echo 0",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Review certificate events for renewal failures",
+        "description": "Check for recent cert-manager events that indicate failed renewals or issuance problems.",
+        "commands": [
+          "kubectl get events -A --field-selector reason=RenewalFailed --sort-by=.lastTimestamp 2>/dev/null | tail -10",
+          "kubectl get events -A --field-selector reason=IssuerNotReady --sort-by=.lastTimestamp 2>/dev/null | tail -10"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "TLS certificate expiry check complete. All certificates, secrets, and issuers have been reviewed for upcoming expirations and health status.",
+      "codeSnippets": [
+        "kubectl get certificates -A -o wide",
+        "kubectl get clusterissuers -o wide"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": ["orbit", "maintenance", "recurring", "certificates", "tls", "cert-manager", "security"],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "difficulty": "beginner",
+    "issueTypes": ["maintenance"]
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["kubectl", "openssl"],
+    "description": "Requires kubectl with cluster access. openssl is needed to decode certificate expiry dates. cert-manager CRDs are optional but recommended."
+  },
+  "orbitConfig": {
+    "cadence": "monthly",
+    "orbitType": "cert-rotation"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "orbit-version-drift",
+  "missionClass": "orbit",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Weekly Helm & Image Version Drift Detection",
+    "description": "Recurring orbit mission that detects version drift across Helm releases and container images. Identifies outdated Helm charts, pinned-but-stale image tags, and inconsistent versions across namespaces to keep your cluster current.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "title": "List all Helm releases and their chart versions",
+        "description": "Enumerate every Helm release in the cluster along with its chart version, app version, and status to establish a baseline.",
+        "commands": [
+          "helm list -A -o json | jq -r '.[] | \"\\(.namespace)/\\(.name) chart=\\(.chart) appVersion=\\(.app_version) status=\\(.status)\"'"
+        ],
+        "validation": {
+          "command": "helm list -A --failed -o json | jq 'length'",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Detect Helm releases with pending or failed status",
+        "description": "Find releases that are not in a 'deployed' state, which may indicate failed upgrades or stuck rollbacks.",
+        "commands": [
+          "helm list -A --pending -o json | jq -r '.[] | \"PENDING: \\(.namespace)/\\(.name) chart=\\(.chart)\"'",
+          "helm list -A --failed -o json | jq -r '.[] | \"FAILED: \\(.namespace)/\\(.name) chart=\\(.chart) updated=\\(.updated)\"'"
+        ]
+      },
+      {
+        "title": "Check for outdated container images",
+        "description": "List all unique container images in the cluster and flag any using mutable tags like 'latest' or missing a tag entirely.",
+        "commands": [
+          "kubectl get pods -A -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}{end}' | sort -u | grep -E ':latest$|^[^:]+$' || echo 'No mutable-tag images found'"
+        ],
+        "validation": {
+          "command": "kubectl get pods -A -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}{end}' | sort -u | grep -cE ':latest$|^[^:]+$' || echo 0",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Detect image version inconsistencies across namespaces",
+        "description": "Find cases where the same base image is running different versions in different namespaces, indicating drift.",
+        "commands": [
+          "kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace} {range .spec.containers[*]}{.image}{\"\\n\"}{end}{end}' | awk -F'[/: ]' '{base=$(NF-1); tag=$NF; key=base} {versions[key]=versions[key]\" \"$1\"=\"tag} END {for(k in versions) print k\": \"versions[k]}' | sort"
+        ]
+      },
+      {
+        "title": "Summarize Helm chart age",
+        "description": "Show how long ago each Helm release was last updated to identify releases that may need attention.",
+        "commands": [
+          "helm list -A -o json | jq -r '.[] | \"\\(.namespace)/\\(.name) updated=\\(.updated)\"' | sort -t= -k2"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "Version drift check complete. All Helm releases and container images have been reviewed for staleness, mutable tags, and cross-namespace inconsistencies.",
+      "codeSnippets": [
+        "helm list -A",
+        "kubectl get pods -A -o jsonpath='{..image}' | tr ' ' '\\n' | sort -u"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": ["orbit", "maintenance", "recurring", "version-drift", "helm", "images", "upgrades"],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "difficulty": "beginner",
+    "issueTypes": ["maintenance"]
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["kubectl", "helm", "jq"],
+    "description": "Requires kubectl and helm CLI with cluster access. jq is needed for JSON parsing."
+  },
+  "orbitConfig": {
+    "cadence": "weekly",
+    "orbitType": "version-drift"
+  }
+}

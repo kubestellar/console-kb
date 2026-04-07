@@ -1,0 +1,91 @@
+{
+  "version": "kc-mission-v1",
+  "name": "orbit-health-check",
+  "missionClass": "orbit",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Weekly Pod & Service Health Check",
+    "description": "Recurring orbit mission that verifies pod and service health across all namespaces. Detects crash-looping containers, pending pods, and services with no healthy endpoints. Run weekly to catch issues before they affect users.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "title": "Check for non-running pods",
+        "description": "List all pods that are not in a Running or Succeeded state. These may be crash-looping, pending, or stuck in an error state.",
+        "commands": [
+          "kubectl get pods -A --field-selector status.phase!=Running,status.phase!=Succeeded --no-headers"
+        ],
+        "validation": {
+          "command": "kubectl get pods -A --field-selector status.phase!=Running,status.phase!=Succeeded --no-headers | wc -l",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Detect containers with high restart counts",
+        "description": "Identify pods with containers that have restarted more than 5 times, indicating potential crash-loop or OOM issues.",
+        "commands": [
+          "kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name} restarts={range .status.containerStatuses[*]}{.restartCount} {end}{\"\\n\"}{end}' | awk '{for(i=2;i<=NF;i++) if($i+0 > 5) print $0}'"
+        ],
+        "validation": {
+          "command": "kubectl get pods -A -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.restartCount}{\"\\n\"}{end}{end}' | awk '$1 > 5' | wc -l",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Check for services with no endpoints",
+        "description": "Find services that have no backing endpoints, which means traffic sent to these services will fail.",
+        "commands": [
+          "kubectl get endpoints -A -o json | jq -r '.items[] | select((.subsets // []) | length == 0) | \"\\(.metadata.namespace)/\\(.metadata.name)\"'"
+        ],
+        "validation": {
+          "command": "kubectl get endpoints -A -o json | jq '[.items[] | select((.subsets // []) | length == 0)] | length'",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Verify node readiness",
+        "description": "Ensure all nodes in the cluster are in Ready condition and not under resource pressure.",
+        "commands": [
+          "kubectl get nodes -o wide",
+          "kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {range .status.conditions[*]}{.type}={.status} {end}{\"\\n\"}{end}'"
+        ],
+        "validation": {
+          "command": "kubectl get nodes --no-headers | grep -v ' Ready' | wc -l",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Check recent warning events",
+        "description": "Review warning-level events from the last hour that may indicate emerging problems.",
+        "commands": [
+          "kubectl get events -A --field-selector type=Warning --sort-by=.lastTimestamp | tail -20"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "Pod and service health check complete. All non-running pods, high-restart containers, and endpoint-less services have been identified.",
+      "codeSnippets": [
+        "kubectl get pods -A --field-selector status.phase!=Running",
+        "kubectl get events -A --field-selector type=Warning"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": ["orbit", "maintenance", "recurring", "health-check", "pods", "services"],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "difficulty": "beginner",
+    "issueTypes": ["maintenance"]
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["kubectl", "jq"],
+    "description": "Requires kubectl with cluster access and jq for JSON parsing."
+  },
+  "orbitConfig": {
+    "cadence": "weekly",
+    "orbitType": "health-check"
+  }
+}

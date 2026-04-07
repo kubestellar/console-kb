@@ -1,0 +1,86 @@
+{
+  "version": "kc-mission-v1",
+  "name": "orbit-backup-verification",
+  "missionClass": "orbit",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Weekly Backup Job Verification",
+    "description": "Recurring orbit mission that verifies backup CronJobs are running successfully. Checks Velero backups, CronJob completion status, and PersistentVolume snapshot health to ensure disaster recovery readiness.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "title": "Check CronJob health and recent completions",
+        "description": "List all CronJobs and verify they have completed successfully in their expected schedule window.",
+        "commands": [
+          "kubectl get cronjobs -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPENDED:.spec.suspend,ACTIVE:.status.active,LAST_SCHEDULE:.status.lastScheduleTime,LAST_SUCCESS:.status.lastSuccessfulTime'"
+        ],
+        "validation": {
+          "command": "kubectl get cronjobs -A -o json | jq '[.items[] | select(.spec.suspend != true) | select(.status.lastSuccessfulTime == null)] | length'",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Detect failed or stuck Jobs from CronJobs",
+        "description": "Find Jobs created by CronJobs that have failed or are running beyond their expected duration.",
+        "commands": [
+          "kubectl get jobs -A -o json | jq -r '.items[] | select(.status.failed > 0) | \"FAILED: \\(.metadata.namespace)/\\(.metadata.name) failures=\\(.status.failed)\"'",
+          "kubectl get jobs -A -o json | jq -r '.items[] | select(.status.active > 0) | select(.status.startTime) | \"RUNNING: \\(.metadata.namespace)/\\(.metadata.name) since=\\(.status.startTime)\"'"
+        ]
+      },
+      {
+        "title": "Verify Velero backup status",
+        "description": "Check Velero backup schedules and recent backup completion status. Skip if Velero is not installed.",
+        "commands": [
+          "kubectl get backupschedules.velero.io -A 2>/dev/null || echo 'Velero not installed — skipping'",
+          "kubectl get backups.velero.io -A --sort-by=.metadata.creationTimestamp 2>/dev/null | tail -10 || echo 'No Velero backups found'"
+        ],
+        "validation": {
+          "command": "kubectl get backups.velero.io -A -o json 2>/dev/null | jq '[.items[-5:] | .[] | select(.status.phase != \"Completed\")] | length' 2>/dev/null || echo 0",
+          "expected": "0"
+        }
+      },
+      {
+        "title": "Check VolumeSnapshot health",
+        "description": "Verify PersistentVolume snapshots are in a ready state and not accumulating errors.",
+        "commands": [
+          "kubectl get volumesnapshots -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.readyToUse,SIZE:.status.restoreSize,AGE:.metadata.creationTimestamp' 2>/dev/null || echo 'VolumeSnapshot CRDs not installed'",
+          "kubectl get volumesnapshots -A -o json 2>/dev/null | jq -r '.items[] | select(.status.readyToUse != true) | \"NOT READY: \\(.metadata.namespace)/\\(.metadata.name)\"' 2>/dev/null"
+        ]
+      },
+      {
+        "title": "Review backup-related events and errors",
+        "description": "Check for recent events related to backup failures, volume snapshot errors, or CronJob problems.",
+        "commands": [
+          "kubectl get events -A --field-selector reason=BackoffLimitExceeded --sort-by=.lastTimestamp 2>/dev/null | tail -10",
+          "kubectl get events -A --field-selector reason=FailedCreate --sort-by=.lastTimestamp 2>/dev/null | tail -10"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "Backup verification complete. All CronJobs, Velero backups, and VolumeSnapshots have been checked for health and successful completion.",
+      "codeSnippets": [
+        "kubectl get cronjobs -A",
+        "kubectl get backups.velero.io -A"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": ["orbit", "maintenance", "recurring", "backup", "disaster-recovery", "velero", "cronjobs"],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "difficulty": "beginner",
+    "issueTypes": ["maintenance"]
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": ["kubectl", "jq"],
+    "description": "Requires kubectl with cluster access and jq for JSON parsing. Velero and VolumeSnapshot CRDs are optional but checked if present."
+  },
+  "orbitConfig": {
+    "cadence": "weekly",
+    "orbitType": "backup-verification"
+  }
+}
