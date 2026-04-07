@@ -5,82 +5,217 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "Install and Configure Kcp on Kubernetes",
-    "description": "kcp is a Kubernetes-like control plane designed for managing multiple isolated clusters, known as workspaces. It enables API service providers to centrally offer APIs and facilitates easy API consumption for users within their workspaces. Installing kcp allows you to leverage its capabilities for multi-tenant applications and services.",
+    "title": "Install and Configure Kcp on Kubernetes (Operator-Based)",
+    "description": "kcp is a Kubernetes-like control plane designed for managing multiple isolated clusters, known as workspaces. The kcp-operator is the recommended way to deploy kcp in production: it offers more features than plain Helm charts and can actively reconcile missing or changed resources on its own. This mission installs kcp using the operator-based method, including cert-manager for TLS, etcd-druid for etcd management, and the kcp-operator for deploying RootShard, FrontProxy, and admin access.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the kcp Helm repository",
-        "description": "Add the official kcp Helm repository to your Helm configuration:\n```bash\nhelm repo add kcp https://kcp-dev.github.io/helm-charts\nhelm repo update\n```"
+        "title": "Install cert-manager",
+        "description": "Install cert-manager to handle TLS certificate lifecycle management for kcp components:\n```bash\nhelm repo add jetstack https://charts.jetstack.io\nhelm repo update\nhelm upgrade --install --namespace cert-manager --create-namespace --version v1.18.2 --set crds.enabled=true --atomic cert-manager jetstack/cert-manager\n```",
+        "commands": [
+          "helm repo add jetstack https://charts.jetstack.io",
+          "helm repo update",
+          "helm upgrade --install --namespace cert-manager --create-namespace --version v1.18.2 --set crds.enabled=true --atomic cert-manager jetstack/cert-manager"
+        ],
+        "validation": {
+          "command": "kubectl get pods --namespace cert-manager",
+          "expected": "Running"
+        },
+        "rollback": [
+          "helm uninstall cert-manager --namespace cert-manager",
+          "kubectl delete namespace cert-manager"
+        ]
       },
       {
-        "title": "Install kcp using Helm",
-        "description": "Install kcp in a new namespace called 'kcp-system':\n```bash\nhelm install kcp kcp/kcp --namespace kcp-system --create-namespace --version v0.30.0\n```"
+        "title": "Install etcd-druid operator",
+        "description": "Install the etcd-druid operator from the Gardener OCI registry to manage etcd clusters for kcp:\n```bash\nhelm install etcd-druid oci://europe-docker.pkg.dev/gardener-project/releases/charts/gardener/etcd-druid --namespace etcd-druid --create-namespace --version v0.33.0\n```",
+        "commands": [
+          "helm install etcd-druid oci://europe-docker.pkg.dev/gardener-project/releases/charts/gardener/etcd-druid --namespace etcd-druid --create-namespace --version v0.33.0"
+        ],
+        "validation": {
+          "command": "kubectl get pods --namespace etcd-druid",
+          "expected": "Running"
+        },
+        "rollback": [
+          "helm uninstall etcd-druid --namespace etcd-druid",
+          "kubectl delete namespace etcd-druid"
+        ]
       },
       {
-        "title": "Verify the installation",
-        "description": "Check that the kcp pods are running:\n```bash\nkubectl get pods --namespace kcp-system\n```"
+        "title": "Install kcp-operator",
+        "description": "Add the kcp Helm repository and install the kcp-operator:\n```bash\nhelm repo add kcp https://kcp-dev.github.io/helm-charts\nhelm repo update\nhelm upgrade --install --create-namespace --namespace kcp-operator kcp-operator kcp/kcp-operator\n```",
+        "commands": [
+          "helm repo add kcp https://kcp-dev.github.io/helm-charts",
+          "helm repo update",
+          "helm upgrade --install --create-namespace --namespace kcp-operator kcp-operator kcp/kcp-operator"
+        ],
+        "validation": {
+          "command": "kubectl get pods --namespace kcp-operator",
+          "expected": "Running"
+        },
+        "rollback": [
+          "helm uninstall kcp-operator --namespace kcp-operator",
+          "kubectl delete namespace kcp-operator"
+        ]
       },
       {
-        "title": "Set up RBAC for kcp",
-        "description": "Create a ClusterRole and ClusterRoleBinding for kcp:\n```bash\nkubectl create clusterrole kcp-admin --verb=* --resource=* \n\nkubectl create clusterrolebinding kcp-admin-binding --clusterrole=kcp-admin --serviceaccount=kcp-system:kcp\n```"
+        "title": "Create certificate issuer",
+        "description": "Create a self-signed certificate issuer for kcp TLS certificates:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata:\n  name: selfsigned\n  namespace: kcp-system\nspec:\n  selfSigned: {}\nEOF\n```",
+        "commands": [
+          "kubectl create namespace kcp-system",
+          "kubectl apply -f - <<EOF\napiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata:\n  name: selfsigned\n  namespace: kcp-system\nspec:\n  selfSigned: {}\nEOF"
+        ],
+        "validation": {
+          "command": "kubectl get issuer selfsigned --namespace kcp-system",
+          "expected": "True"
+        },
+        "rollback": [
+          "kubectl delete issuer selfsigned --namespace kcp-system"
+        ]
+      },
+      {
+        "title": "Deploy RootShard",
+        "description": "Deploy the kcp RootShard custom resource with embedded cache. Replace 'kcp.example.com' with your actual hostname:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: operator.kcp.io/v1alpha1\nkind: RootShard\nmetadata:\n  name: root\n  namespace: kcp-system\nspec:\n  external:\n    hostname: kcp.example.com\n    port: 6443\n  certificates:\n    issuerRef:\n      group: cert-manager.io\n      kind: Issuer\n      name: selfsigned\n  cache:\n    embedded:\n      enabled: true\n  etcd:\n    endpoints:\n      - http://etcd.kcp-system.svc.cluster.local:2379\nEOF\n```",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: RootShard\nmetadata:\n  name: root\n  namespace: kcp-system\nspec:\n  external:\n    hostname: kcp.example.com\n    port: 6443\n  certificates:\n    issuerRef:\n      group: cert-manager.io\n      kind: Issuer\n      name: selfsigned\n  cache:\n    embedded:\n      enabled: true\n  etcd:\n    endpoints:\n      - http://etcd.kcp-system.svc.cluster.local:2379\nEOF"
+        ],
+        "validation": {
+          "command": "kubectl get rootshard root --namespace kcp-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'",
+          "expected": "True"
+        },
+        "rollback": [
+          "kubectl delete rootshard root --namespace kcp-system"
+        ]
+      },
+      {
+        "title": "Deploy FrontProxy",
+        "description": "Deploy the kcp FrontProxy custom resource to expose the kcp API:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: operator.kcp.io/v1alpha1\nkind: FrontProxy\nmetadata:\n  name: frontproxy\n  namespace: kcp-system\nspec:\n  rootShard:\n    ref:\n      name: root\n  serviceTemplate:\n    spec:\n      type: LoadBalancer\nEOF\n```",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: FrontProxy\nmetadata:\n  name: frontproxy\n  namespace: kcp-system\nspec:\n  rootShard:\n    ref:\n      name: root\n  serviceTemplate:\n    spec:\n      type: LoadBalancer\nEOF"
+        ],
+        "validation": {
+          "command": "kubectl get frontproxy frontproxy --namespace kcp-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'",
+          "expected": "True"
+        },
+        "rollback": [
+          "kubectl delete frontproxy frontproxy --namespace kcp-system"
+        ]
+      },
+      {
+        "title": "Generate admin kubeconfig",
+        "description": "Create a Kubeconfig custom resource to generate admin credentials, then extract the kubeconfig from the resulting secret:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: operator.kcp.io/v1alpha1\nkind: Kubeconfig\nmetadata:\n  name: kcp-admin\n  namespace: kcp-system\nspec:\n  username: kcp-admin\n  groups:\n    - system:kcp:admin\n  validity: 8766h\n  secretRef:\n    name: admin-kubeconfig\n  target:\n    frontProxyRef:\n      name: frontproxy\nEOF\n\nkubectl get secret admin-kubeconfig --namespace kcp-system -o jsonpath='{.data.kubeconfig}' | base64 -d > kcp-admin.kubeconfig\nexport KUBECONFIG=$(pwd)/kcp-admin.kubeconfig\n```",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: Kubeconfig\nmetadata:\n  name: kcp-admin\n  namespace: kcp-system\nspec:\n  username: kcp-admin\n  groups:\n    - system:kcp:admin\n  validity: 8766h\n  secretRef:\n    name: admin-kubeconfig\n  target:\n    frontProxyRef:\n      name: frontproxy\nEOF",
+          "kubectl get secret admin-kubeconfig --namespace kcp-system -o jsonpath='{.data.kubeconfig}' | base64 -d > kcp-admin.kubeconfig",
+          "export KUBECONFIG=$(pwd)/kcp-admin.kubeconfig"
+        ],
+        "validation": {
+          "command": "kubectl get secret admin-kubeconfig --namespace kcp-system",
+          "expected": "admin-kubeconfig"
+        },
+        "rollback": [
+          "kubectl delete kubeconfig kcp-admin --namespace kcp-system",
+          "kubectl delete secret admin-kubeconfig --namespace kcp-system",
+          "rm -f kcp-admin.kubeconfig"
+        ]
+      },
+      {
+        "title": "Verify kcp is accessible",
+        "description": "Verify the kcp installation by checking the health endpoint and listing shards:\n```bash\ncurl -k https://kcp.example.com:6443/healthz\nKUBECONFIG=kcp-admin.kubeconfig kubectl get shards\nKUBECONFIG=kcp-admin.kubeconfig kubectl ws\n```",
+        "commands": [
+          "curl -k https://kcp.example.com:6443/healthz",
+          "KUBECONFIG=kcp-admin.kubeconfig kubectl get shards",
+          "KUBECONFIG=kcp-admin.kubeconfig kubectl ws"
+        ],
+        "validation": {
+          "command": "KUBECONFIG=kcp-admin.kubeconfig kubectl get shards",
+          "expected": "root"
+        },
+        "rollback": []
       }
     ],
     "resolution": {
-      "summary": "A successful installation of kcp will show the kcp pods running in the 'kcp-system' namespace. You will also have configured resource limits and RBAC for the kcp deployment, ensuring it operates efficiently and securely.",
+      "summary": "A successful operator-based installation of kcp will show the kcp-operator, RootShard, and FrontProxy pods running. The admin kubeconfig extracted from the Kubeconfig CR secret enables access to the kcp API. You can verify by running 'kubectl get shards' which should show the root shard, and 'kubectl ws' to list workspaces.",
       "codeSnippets": [
-        "helm repo add kcp https://kcp-dev.github.io/helm-charts\nhelm repo update",
-        "helm install kcp kcp/kcp --namespace kcp-system --create-namespace --version v0.30.0",
-        "kubectl get pods --namespace kcp-system",
-        "kubectl edit deployment kcp --namespace kcp-system\n# Add the following under spec.containers:\n# resources:\n#   requests:\n#     cpu: \"500m\"\n#     memory: \"512Mi\"\n#   limits:\n#     cpu: \"1\"\n#     memory: \"1Gi\"",
-        "kubectl create clusterrole kcp-admin --verb=* --resource=* \n\nkubectl create clusterrolebinding kcp-admin-binding --clusterrole=kcp-admin --serviceaccount=kcp-system:kcp"
+        "helm repo add jetstack https://charts.jetstack.io\nhelm repo update\nhelm upgrade --install --namespace cert-manager --create-namespace --version v1.18.2 --set crds.enabled=true --atomic cert-manager jetstack/cert-manager",
+        "helm install etcd-druid oci://europe-docker.pkg.dev/gardener-project/releases/charts/gardener/etcd-druid --namespace etcd-druid --create-namespace --version v0.33.0",
+        "helm repo add kcp https://kcp-dev.github.io/helm-charts\nhelm upgrade --install --create-namespace --namespace kcp-operator kcp-operator kcp/kcp-operator",
+        "kubectl apply -f - <<EOF\napiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata:\n  name: selfsigned\n  namespace: kcp-system\nspec:\n  selfSigned: {}\nEOF",
+        "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: RootShard\nmetadata:\n  name: root\n  namespace: kcp-system\nspec:\n  external:\n    hostname: kcp.example.com\n    port: 6443\n  certificates:\n    issuerRef:\n      group: cert-manager.io\n      kind: Issuer\n      name: selfsigned\n  cache:\n    embedded:\n      enabled: true\n  etcd:\n    endpoints:\n      - http://etcd.kcp-system.svc.cluster.local:2379\nEOF",
+        "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: FrontProxy\nmetadata:\n  name: frontproxy\n  namespace: kcp-system\nspec:\n  rootShard:\n    ref:\n      name: root\n  serviceTemplate:\n    spec:\n      type: LoadBalancer\nEOF",
+        "kubectl apply -f - <<EOF\napiVersion: operator.kcp.io/v1alpha1\nkind: Kubeconfig\nmetadata:\n  name: kcp-admin\n  namespace: kcp-system\nspec:\n  username: kcp-admin\n  groups:\n    - system:kcp:admin\n  validity: 8766h\n  secretRef:\n    name: admin-kubeconfig\n  target:\n    frontProxyRef:\n      name: frontproxy\nEOF",
+        "kubectl get secret admin-kubeconfig --namespace kcp-system -o jsonpath='{.data.kubeconfig}' | base64 -d > kcp-admin.kubeconfig\nKUBECONFIG=kcp-admin.kubeconfig kubectl get shards"
       ]
     },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the kcp release from the kcp-system namespace using Helm to remove the deployment and associated resources.\n```bash\nhelm uninstall kcp --namespace kcp-system\n```"
+        "title": "Remove admin kubeconfig and Kubeconfig CR",
+        "description": "Delete the Kubeconfig custom resource and the generated admin kubeconfig file.\n```bash\nkubectl delete kubeconfig kcp-admin --namespace kcp-system\nkubectl delete secret admin-kubeconfig --namespace kcp-system\nrm -f kcp-admin.kubeconfig\n```"
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) that were created during the installation.\n```bash\nkubectl delete crd <crd-name>\nkubectl delete pvc --all --namespace kcp-system\n```"
+        "title": "Remove FrontProxy and RootShard",
+        "description": "Delete the FrontProxy and RootShard custom resources. The kcp-operator will clean up the associated pods and services.\n```bash\nkubectl delete frontproxy frontproxy --namespace kcp-system\nkubectl delete rootshard root --namespace kcp-system\n```"
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the kcp-system namespace and verify that it has been removed successfully.\n```bash\nkubectl delete namespace kcp-system\nkubectl get namespaces\n```"
+        "title": "Remove certificate issuer and namespace",
+        "description": "Delete the self-signed issuer and the kcp-system namespace.\n```bash\nkubectl delete issuer selfsigned --namespace kcp-system\nkubectl delete namespace kcp-system\n```"
+      },
+      {
+        "title": "Uninstall kcp-operator",
+        "description": "Remove the kcp-operator Helm release and its namespace.\n```bash\nhelm uninstall kcp-operator --namespace kcp-operator\nkubectl delete namespace kcp-operator\n```"
+      },
+      {
+        "title": "Uninstall etcd-druid",
+        "description": "Remove the etcd-druid Helm release and its namespace.\n```bash\nhelm uninstall etcd-druid --namespace etcd-druid\nkubectl delete namespace etcd-druid\n```"
+      },
+      {
+        "title": "Uninstall cert-manager (optional)",
+        "description": "Remove cert-manager if it is no longer needed by other workloads.\n```bash\nhelm uninstall cert-manager --namespace cert-manager\nkubectl delete namespace cert-manager\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and resources in the kcp-system namespace.\n```bash\nkubectl get all --namespace kcp-system -o yaml > kcp-backup.yaml\n```"
+        "description": "Before upgrading, back up the current kcp custom resources and configuration.\n```bash\nkubectl get rootshard,frontproxy,kubeconfig --namespace kcp-system -o yaml > kcp-backup.yaml\n```"
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade the kcp release to the latest version.\n```bash\nhelm repo update\nhelm upgrade kcp kcp/kcp --namespace kcp-system --version v0.31.0\n```"
+        "title": "Upgrade kcp-operator",
+        "description": "Update the Helm repository and upgrade the kcp-operator to the latest version. The operator will reconcile the RootShard and FrontProxy resources automatically.\n```bash\nhelm repo update\nhelm upgrade --namespace kcp-operator kcp-operator kcp/kcp-operator\n```"
+      },
+      {
+        "title": "Upgrade etcd-druid (if needed)",
+        "description": "Upgrade etcd-druid to a newer version if required.\n```bash\nhelm upgrade etcd-druid oci://europe-docker.pkg.dev/gardener-project/releases/charts/gardener/etcd-druid --namespace etcd-druid --version <new-version>\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the kcp pods are running the new version after the upgrade.\n```bash\nkubectl get pods --namespace kcp-system\n```"
+        "description": "Check that all kcp pods are running the new version and the shards are healthy.\n```bash\nkubectl get pods --namespace kcp-operator\nkubectl get pods --namespace kcp-system\nKUBECONFIG=kcp-admin.kubeconfig kubectl get shards\n```"
       }
     ],
     "troubleshooting": [
       {
-        "title": "Pods stuck in CrashLoopBackOff",
-        "description": "If kcp pods are in a CrashLoopBackOff state, check the logs for errors that might indicate the cause.\n```bash\nkubectl logs <pod-name> --namespace kcp-system\n```"
+        "title": "RootShard not becoming ready",
+        "description": "If the RootShard is stuck in a non-ready state, check the kcp-operator logs and the RootShard status conditions.\n```bash\nkubectl logs -l app.kubernetes.io/name=kcp-operator --namespace kcp-operator\nkubectl describe rootshard root --namespace kcp-system\n```"
       },
       {
-        "title": "Helm upgrade fails with version conflict",
-        "description": "If you encounter a version conflict during upgrade, ensure that the specified version is available in the Helm repository.\n```bash\nhelm search repo kcp/kcp --versions\n```"
+        "title": "FrontProxy LoadBalancer pending",
+        "description": "If the FrontProxy service is stuck with a pending external IP, ensure your cluster supports LoadBalancer services or switch to NodePort.\n```bash\nkubectl get svc --namespace kcp-system\nkubectl describe frontproxy frontproxy --namespace kcp-system\n```"
       },
       {
-        "title": "RBAC permissions issues",
-        "description": "If you face permission issues, verify that the ClusterRole and ClusterRoleBinding are correctly set up for the kcp service account.\n```bash\nkubectl get clusterrolebindings | grep kcp-admin-binding\n```"
+        "title": "cert-manager issuer not ready",
+        "description": "If the certificate issuer is not becoming ready, check cert-manager logs for errors.\n```bash\nkubectl get issuer --namespace kcp-system\nkubectl logs -l app.kubernetes.io/name=cert-manager --namespace cert-manager\n```"
       },
       {
-        "title": "Namespace not found error",
-        "description": "If you receive a namespace not found error, ensure that the kcp-system namespace exists and is correctly referenced in your commands.\n```bash\nkubectl get namespaces\n```"
+        "title": "etcd connection failures",
+        "description": "If the RootShard reports etcd connection issues, verify the etcd pods are running and the endpoint is correct.\n```bash\nkubectl get pods --namespace kcp-system -l app=etcd-statefulset\nkubectl logs -l app=etcd-statefulset --namespace kcp-system\n```"
+      },
+      {
+        "title": "Admin kubeconfig secret not created",
+        "description": "If the admin-kubeconfig secret is not appearing, check the Kubeconfig CR status and ensure the FrontProxy is ready.\n```bash\nkubectl describe kubeconfig kcp-admin --namespace kcp-system\nkubectl get frontproxy frontproxy --namespace kcp-system\n```"
+      },
+      {
+        "title": "CRDs not installed",
+        "description": "If the operator reports missing CRDs, ensure the kcp-operator Helm chart was installed correctly. You can also apply CRDs manually.\n```bash\nkubectl get crd | grep kcp\nkubectl get crd | grep druid\n```"
       }
     ]
   },
@@ -90,7 +225,8 @@
       "configuration",
       "cncf",
       "app-definition",
-      "sandbox"
+      "sandbox",
+      "operator"
     ],
     "cncfProjects": [
       "kcp"
@@ -99,9 +235,11 @@
       "Deployment",
       "Service",
       "Namespace",
-      "Serviceaccount",
-      "Clusterrole",
-      "Clusterrolebinding"
+      "RootShard",
+      "FrontProxy",
+      "Kubeconfig",
+      "Issuer",
+      "Certificate"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -109,17 +247,21 @@
       "configuration"
     ],
     "installMethods": [
-      "helm"
+      "helm",
+      "operator"
     ],
     "maturity": "sandbox",
     "projectVersion": "v0.30.0",
     "containerImages": [
-      "docker.io/golang:1.24.13"
+      "ghcr.io/kcp-dev/kcp",
+      "ghcr.io/kcp-dev/kcp-operator"
     ],
     "sourceUrls": {
-      "docs": "https://kcp.io",
+      "docs": "https://docs.kcp.io/kcp/v0.30/setup/production/",
       "repo": "https://github.com/kcp-dev/kcp",
-      "helm": "https://kcp-dev.github.io/helm-charts"
+      "helm": "https://kcp-dev.github.io/helm-charts",
+      "operator-docs": "https://docs.kcp.io/kcp-operator/v0.4/",
+      "production-assets": "https://github.com/kcp-dev/kcp/tree/main/contrib/production"
     },
     "qualityScore": 100
   },
@@ -127,12 +269,13 @@
     "kubernetes": ">=1.24",
     "tools": [
       "helm",
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and have Helm and kubectl installed on your local machine."
+    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher with Helm 3 and kubectl installed. The cluster must support LoadBalancer services (or use NodePort as an alternative). cert-manager, etcd-druid, and the kcp-operator will be installed as part of the mission steps."
   },
   "security": {
-    "scannedAt": "2026-03-01T16:15:11.894Z",
+    "scannedAt": "2026-04-07T00:00:00.000Z",
     "scannerVersion": "cncf-install-gen-1.0.0",
     "sanitized": true,
     "findings": []
