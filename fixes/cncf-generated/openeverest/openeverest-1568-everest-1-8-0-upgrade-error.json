@@ -1,0 +1,73 @@
+{
+  "version": "kc-mission-v1",
+  "name": "openeverest-1568-everest-1-8-0-upgrade-error",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "openeverest: Everest 1.8.0 upgrade error — empty namespace may not be set",
+    "description": "Upgrading OpenEverest to 1.8.0 fails with 'an empty namespace may not be set when a resource name is provided' and 'could not retrieve subscription'. This affects both everestctl upgrade and helm upgrade paths.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the upgrade error",
+        "description": "Check the error output when running the upgrade:\n```bash\neverestctl upgrade --dry-run\n```\nIf you see 'an empty namespace may not be set when a resource name is provided', this is a known issue with empty namespace references in the Everest configuration."
+      },
+      {
+        "title": "Check for empty namespace entries",
+        "description": "List all namespaces managed by Everest and check for empty entries:\n```bash\nkubectl get configmap everest-settings -n everest-system -o yaml\nkubectl get namespace -l app.kubernetes.io/managed-by=everest\n```\nLook for any empty or malformed namespace references."
+      },
+      {
+        "title": "Apply the fix",
+        "description": "Clean up any empty namespace references in the Everest configuration before upgrading:\n```bash\nkubectl edit configmap everest-settings -n everest-system\n```\nRemove any empty string entries from the namespace list.\n\nIf the Helm upgrade hangs with 'context canceled' due to a pre-upgrade hook, delete the stuck hook job:\n```bash\nkubectl delete job -l app.kubernetes.io/component=pre-upgrade-hook -n everest-system\n```\n\nThen retry the upgrade:\n```bash\nhelm repo update\nhelm upgrade everest-core percona/everest --namespace everest-system\n```"
+      },
+      {
+        "title": "Confirm the upgrade succeeded",
+        "description": "Verify the upgrade completed successfully:\n```bash\nkubectl get pods -n everest-system\nhelm list -n everest-system\neverestctl version\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "The upgrade fails due to empty namespace references in the Everest configuration. Remove empty namespace entries from the everest-settings configmap, delete any stuck pre-upgrade hook jobs, then retry the upgrade.",
+      "codeSnippets": [
+        "kubectl get configmap everest-settings -n everest-system -o yaml",
+        "kubectl delete job -l app.kubernetes.io/component=pre-upgrade-hook -n everest-system",
+        "helm upgrade everest-core percona/everest --namespace everest-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "openeverest",
+      "troubleshoot",
+      "upgrade",
+      "helm"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Pod",
+      "ConfigMap",
+      "Job"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "sourceUrls": {
+      "issue": "https://github.com/openeverest/openeverest/issues/1568",
+      "repo": "https://github.com/openeverest/openeverest"
+    },
+    "reactions": 0,
+    "comments": 7,
+    "synthesizedBy": "kubestellar-bot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "helm",
+      "everestctl"
+    ],
+    "description": "A Kubernetes cluster with OpenEverest installed, attempting to upgrade to 1.8.0+."
+  }
+}

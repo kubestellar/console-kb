@@ -1,0 +1,72 @@
+{
+  "version": "kc-mission-v1",
+  "name": "openeverest-1665-uninstallation-stuck-with-imagepullbackoff",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "openeverest: Uninstallation stuck with ImagePullBackOff for the bitnami/kubectl image",
+    "description": "Uninstallation is stuck in the 'Deleting database namespace' step because the everest-helm-pre-delete-hook job cannot pull the bitnami/kubectl image.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the stuck uninstallation",
+        "description": "Check for stuck pre-delete hook pods:\n```bash\nkubectl get pods -l job-name -n everest-system | grep pre-delete\nkubectl get jobs -n everest-system | grep pre-delete\n```\nLook for pods in ImagePullBackOff state."
+      },
+      {
+        "title": "Diagnose the image pull failure",
+        "description": "Describe the stuck pod:\n```bash\nkubectl describe pod -l job-name=everest-helm-pre-delete-hook -n everest-system\n```\nCheck events for Docker Hub rate limiting or network issues with the bitnami/kubectl image."
+      },
+      {
+        "title": "Apply the fix",
+        "description": "Delete the stuck pre-delete hook job to allow uninstallation to proceed:\n```bash\nkubectl delete job -l app.kubernetes.io/component=pre-delete-hook -n everest-system\n```\n\nIf the Helm uninstall is still stuck, force it:\n```bash\nhelm uninstall everest-core --namespace everest-system --no-hooks\n```\n\nThen manually clean up remaining resources:\n```bash\nkubectl delete namespace everest-system\n```"
+      },
+      {
+        "title": "Confirm the uninstallation completed",
+        "description": "Verify that all OpenEverest resources have been removed:\n```bash\nkubectl get all -n everest-system\nkubectl get namespace everest-system\nhelm list -n everest-system\n```\nAll commands should return empty or 'not found'."
+      }
+    ],
+    "resolution": {
+      "summary": "The uninstallation hangs because the Helm pre-delete hook job fails to pull the bitnami/kubectl image. Delete the stuck job or use helm uninstall with --no-hooks to bypass the hook, then manually clean up the namespace.",
+      "codeSnippets": [
+        "kubectl delete job -l app.kubernetes.io/component=pre-delete-hook -n everest-system",
+        "helm uninstall everest-core --namespace everest-system --no-hooks",
+        "kubectl delete namespace everest-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "openeverest",
+      "troubleshoot",
+      "uninstall",
+      "imagepull",
+      "helm-hooks"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Pod",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "sourceUrls": {
+      "issue": "https://github.com/openeverest/openeverest/issues/1665",
+      "repo": "https://github.com/openeverest/openeverest"
+    },
+    "reactions": 0,
+    "comments": 1,
+    "synthesizedBy": "kubestellar-bot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A Kubernetes cluster where OpenEverest uninstallation is stuck."
+  }
+}

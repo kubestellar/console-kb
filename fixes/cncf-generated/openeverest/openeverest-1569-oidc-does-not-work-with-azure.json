@@ -1,0 +1,71 @@
+{
+  "version": "kc-mission-v1",
+  "name": "openeverest-1569-oidc-does-not-work-with-azure",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "openeverest: OIDC does not work with Azure AD — internal error after login",
+    "description": "OIDC authentication with Azure AD allows login (user name is shown) but the Everest interface displays an internal error. This affects users configuring Azure AD as their OIDC provider.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the OIDC error",
+        "description": "Check if the Everest UI shows an internal error after OIDC login:\n```bash\nkubectl logs -l app.kubernetes.io/name=everest-server -n everest-system --tail=100 | grep -i oidc\nkubectl logs -l app.kubernetes.io/name=everest-server -n everest-system --tail=100 | grep -i error\n```\nLook for token validation errors or scope-related issues."
+      },
+      {
+        "title": "Review OIDC configuration",
+        "description": "Check the current OIDC settings:\n```bash\nkubectl get configmap everest-settings -n everest-system -o yaml\n```\n\nFor Azure AD, the configuration should look like:\n```\neverestctl settings oidc configure \\\n    --issuer-url=\"https://login.microsoftonline.com/<TENANT_ID>/v2.0\" \\\n    --client-id=\"<APP_CLIENT_ID>\" \\\n    --scopes=\"openid,profile,email\"\n```\n\nNote: Avoid using `<app-id>/.default` scope as it can cause issues with token validation."
+      },
+      {
+        "title": "Verify Azure AD app registration",
+        "description": "In the Azure portal, verify your app registration:\n1. Ensure the app is registered as a SPA (Single Page Application)\n2. Redirect URIs include your Everest URL\n3. Token configuration includes 'email' optional claim\n4. API permissions include: openid, profile, email\n\nCheck that the token contains the expected claims:\n```bash\n# Decode the JWT token to inspect claims\necho '<token>' | cut -d'.' -f2 | base64 -d 2>/dev/null | jq .\n```"
+      },
+      {
+        "title": "Confirm OIDC is working",
+        "description": "After fixing the configuration, verify OIDC login works end-to-end:\n```bash\nkubectl logs -l app.kubernetes.io/name=everest-server -n everest-system --tail=50 --since=5m | grep -i oidc\n```\nConfirm there are no more error messages after login."
+      }
+    ],
+    "resolution": {
+      "summary": "OIDC with Azure AD fails because of scope configuration or missing token claims. Ensure the Azure AD app registration is configured as a SPA with the correct redirect URIs and that the OIDC scopes are set to 'openid,profile,email' without the .default scope.",
+      "codeSnippets": [
+        "everestctl settings oidc configure --issuer-url=\"https://login.microsoftonline.com/<TENANT_ID>/v2.0\" --client-id=\"<APP_CLIENT_ID>\" --scopes=\"openid,profile,email\"",
+        "kubectl logs -l app.kubernetes.io/name=everest-server -n everest-system --tail=100 | grep -i oidc"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "openeverest",
+      "troubleshoot",
+      "oidc",
+      "azure",
+      "authentication"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Pod",
+      "ConfigMap"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "sourceUrls": {
+      "issue": "https://github.com/openeverest/openeverest/issues/1569",
+      "repo": "https://github.com/openeverest/openeverest"
+    },
+    "reactions": 0,
+    "comments": 9,
+    "synthesizedBy": "kubestellar-bot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "everestctl"
+    ],
+    "description": "A Kubernetes cluster with OpenEverest installed and Azure AD configured as OIDC provider."
+  }
+}

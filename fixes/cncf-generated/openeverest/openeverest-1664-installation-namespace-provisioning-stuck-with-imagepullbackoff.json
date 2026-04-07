@@ -1,0 +1,71 @@
+{
+  "version": "kc-mission-v1",
+  "name": "openeverest-1664-installation-namespace-provisioning-stuck-with-imagepullbackoff",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "openeverest: Installation/namespace provisioning stuck with ImagePullBackOff for the bitnami/kubectl image",
+    "description": "Installation or namespace provisioning is stuck in the 'Provisioning database namespace' step because the everest-operators-installer job cannot pull the bitnami/kubectl image due to Docker Hub rate limits or network restrictions.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the stuck installation",
+        "description": "Check for stuck pods in the everest-system namespace:\n```bash\nkubectl get pods -n everest-system\nkubectl get pods -l job-name=everest-operators-installer --all-namespaces\n```\nLook for pods in ImagePullBackOff or ErrImagePull state."
+      },
+      {
+        "title": "Diagnose the image pull failure",
+        "description": "Describe the stuck pod to see the exact image pull error:\n```bash\nkubectl describe pod -l job-name=everest-operators-installer -n everest-system\n```\nLook for events showing rate limiting (429 Too Many Requests) or network timeout errors on the bitnami/kubectl image."
+      },
+      {
+        "title": "Apply the fix",
+        "description": "**Option A: Create an image pull secret for Docker Hub**\n```bash\nkubectl create secret docker-registry dockerhub-creds \\\n  --docker-server=https://index.docker.io/v1/ \\\n  --docker-username=<your-username> \\\n  --docker-password=<your-token> \\\n  -n everest-system\n```\n\n**Option B: Mirror the bitnami/kubectl image to your private registry**\n```bash\ndocker pull bitnami/kubectl:latest\ndocker tag bitnami/kubectl:latest <your-registry>/bitnami/kubectl:latest\ndocker push <your-registry>/bitnami/kubectl:latest\n```\nThen update the job to use your mirrored image.\n\n**Option C: Delete the stuck job and retry**\n```bash\nkubectl delete job everest-operators-installer -n everest-system\n```\nThen re-run the installation."
+      },
+      {
+        "title": "Confirm the issue is resolved",
+        "description": "Verify that the installation proceeds and pods reach Running state:\n```bash\nkubectl get pods -n everest-system\nkubectl get jobs -n everest-system\n```\nConfirm that all pods are Running or Completed."
+      }
+    ],
+    "resolution": {
+      "summary": "The installation hangs because the everest-operators-installer job fails to pull the bitnami/kubectl image from Docker Hub, typically due to rate limits. The fix is to provide Docker Hub credentials via an image pull secret, mirror the image to a private registry, or retry when rate limits reset.",
+      "codeSnippets": [
+        "kubectl get pods -l job-name=everest-operators-installer --all-namespaces",
+        "kubectl describe pod -l job-name=everest-operators-installer -n everest-system",
+        "kubectl delete job everest-operators-installer -n everest-system"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "openeverest",
+      "troubleshoot",
+      "imagepull",
+      "docker-hub",
+      "installation"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Pod",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "sourceUrls": {
+      "issue": "https://github.com/openeverest/openeverest/issues/1664",
+      "repo": "https://github.com/openeverest/openeverest"
+    },
+    "reactions": 0,
+    "comments": 1,
+    "synthesizedBy": "kubestellar-bot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A Kubernetes cluster where OpenEverest installation is stuck at namespace provisioning."
+  }
+}

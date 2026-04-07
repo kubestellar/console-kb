@@ -1,0 +1,67 @@
+{
+  "version": "kc-mission-v1",
+  "name": "openeverest-1909-cannot-create-postgres-cluster-with-clusterip",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "openeverest: Cannot create PostgreSQL cluster with ClusterIP expose type",
+    "description": "Creating a PostgreSQL database cluster via the UI fails with 'Unsupported value: ClusterIP: supported values: internal, external'. The UI incorrectly sends 'ClusterIP' as the proxy expose type instead of the expected 'internal' or 'external' values.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the error",
+        "description": "Check for the error when creating a database cluster:\n```bash\nkubectl get events -n <database-namespace> --sort-by='.lastTimestamp' | grep -i invalid\nkubectl logs -l app.kubernetes.io/name=everest-server -n everest-system --tail=50 | grep -i clusterip\n```\nLook for the validation error: `spec.proxy.expose.type: Unsupported value: \"ClusterIP\"`."
+      },
+      {
+        "title": "Apply the workaround",
+        "description": "Create the database cluster using kubectl with the correct expose type value instead of the UI:\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: everest.percona.com/v1alpha1\nkind: DatabaseCluster\nmetadata:\n  name: <cluster-name>\n  namespace: <namespace>\nspec:\n  engine:\n    type: postgresql\n    version: \"16\"\n    replicas: 1\n    storage:\n      size: 25Gi\n  proxy:\n    type: pgbouncer\n    replicas: 1\n    expose:\n      type: internal\nEOF\n```\n\nUse `internal` for ClusterIP-equivalent behavior (accessible only within the cluster) or `external` for LoadBalancer-equivalent behavior."
+      },
+      {
+        "title": "Verify the database cluster is created",
+        "description": "Check that the database cluster was created successfully:\n```bash\nkubectl get databasecluster -n <namespace>\nkubectl get pods -n <namespace> -l app.kubernetes.io/instance=<cluster-name>\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "The OpenEverest UI sends 'ClusterIP' as the proxy expose type but the API only accepts 'internal' or 'external'. Use kubectl to create the cluster with type 'internal' (equivalent to ClusterIP) as a workaround until the UI is fixed.",
+      "codeSnippets": [
+        "kubectl get databasecluster -A",
+        "kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i invalid"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "openeverest",
+      "troubleshoot",
+      "postgresql",
+      "database",
+      "ui-bug"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "DatabaseCluster",
+      "Pod",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "sourceUrls": {
+      "issue": "https://github.com/openeverest/openeverest/issues/1909",
+      "repo": "https://github.com/openeverest/openeverest"
+    },
+    "reactions": 0,
+    "comments": 2,
+    "synthesizedBy": "kubestellar-bot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A Kubernetes cluster with OpenEverest installed, attempting to create a PostgreSQL database cluster."
+  }
+}
