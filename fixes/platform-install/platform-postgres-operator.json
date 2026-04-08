@@ -6,47 +6,45 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure CloudNativePG (PostgreSQL Operator)",
-    "description": "CloudNativePG is an operator for managing PostgreSQL databases within Kubernetes environments. It automates the entire lifecycle of PostgreSQL clusters, making it ideal for teams looking to integrate database management into their Kubernetes workflows. Key trade-offs include the need for Kubernetes expertise and the reliance on Kubernetes-native features for high availability.",
+    "description": "CloudNativePG is an operator for managing PostgreSQL databases in Kubernetes environments, providing a seamless operational lifecycle from deployment to maintenance. It is ideal for teams looking to integrate PostgreSQL into their Kubernetes workflows with a focus on automation and GitOps practices. Key trade-offs include the need for Kubernetes expertise and the reliance on Kubernetes-native features for high availability.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
         "title": "Add the CloudNativePG Helm repository",
-        "description": "This step adds the official CloudNativePG Helm chart repository to your Helm client, allowing you to install the operator.\n\n```bash\n\nhelm repo add cloudnative-pg https://charts.cloudnative-pg.io\n\nhelm repo update\n\n```\n\n> This adds the repository for CloudNativePG.\n> Updates your local Helm chart repository cache.",
+        "description": "This step adds the official CloudNativePG Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add cloudnative-pg https://charts.cloudnative-pg.io\n\n```\n\n> This repository contains the CloudNativePG Helm charts.",
         "commands": [
-          "helm repo add cloudnative-pg https://charts.cloudnative-pg.io",
-          "helm repo update"
+          "helm repo add cloudnative-pg https://charts.cloudnative-pg.io"
         ]
       },
       {
         "title": "Install the CloudNativePG operator",
-        "description": "This step installs the CloudNativePG operator in the 'cloudnative-pg' namespace using Helm.\n\n```bash\n\nkubectl create namespace cloudnative-pg\n\nhelm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.28.1\n\n```\n\n> Creates a namespace for the operator.\n> Installs the operator with the specified version.",
+        "description": "This command installs the CloudNativePG operator in the 'cloudnative-pg' namespace using the specified version.\n\n```bash\n\nkubectl create namespace cloudnative-pg\n\nhelm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.29.0\n\n```\n\n> Create a namespace for the operator.\n> Install the operator with the specified version.",
         "commands": [
           "kubectl create namespace cloudnative-pg",
-          "helm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.28.1"
+          "helm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.29.0"
         ]
       },
       {
         "title": "Create a PostgreSQL cluster",
-        "description": "This step creates a PostgreSQL cluster using a custom resource definition (CRD).\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  patroni:\n    postgresql:\n      version: \"14\"\nEOF\n\n```\n\n> Creates a PostgreSQL cluster named 'my-postgres'.",
+        "description": "This step creates a PostgreSQL cluster using a custom resource definition (CRD).\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  storage:\n    size: 1Gi\nEOF\n\n```\n\n> This YAML defines a PostgreSQL cluster with 3 instances.",
         "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  patroni:\n    postgresql:\n      version: \"14\"\nEOF"
+          "cat <<EOF | kubectl apply -f -\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  storage:\n    size: 1Gi\nEOF"
         ]
       },
       {
-        "title": "Verify the PostgreSQL cluster",
-        "description": "This step checks the status of the PostgreSQL cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get clusters -n cloudnative-pg\n\nkubectl describe cluster my-postgres -n cloudnative-pg\n\n```\n\n> Lists the PostgreSQL clusters in the 'cloudnative-pg' namespace.\n> Describes the details of the 'my-postgres' cluster.",
+        "title": "Verify the PostgreSQL cluster status",
+        "description": "This command checks the status of the PostgreSQL cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get clusters -n cloudnative-pg\n\n```\n\n> Check the status of the PostgreSQL cluster.",
         "commands": [
-          "kubectl get clusters -n cloudnative-pg",
-          "kubectl describe cluster my-postgres -n cloudnative-pg"
+          "kubectl get clusters -n cloudnative-pg"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the CloudNativePG operator",
-        "description": "This step removes the CloudNativePG operator and its resources. Be aware that this will delete the PostgreSQL clusters and any associated data.\n\n```bash\n\nhelm uninstall cloudnative-pg --namespace cloudnative-pg\n\nkubectl delete namespace cloudnative-pg\n\n```\n\n> Uninstalls the operator.\n> Deletes the namespace and all resources within it.",
+        "description": "This step removes the CloudNativePG operator and its associated resources. Be aware that this will delete the PostgreSQL cluster and all its data.\n\n```bash\n\nhelm uninstall cloudnative-pg --namespace cloudnative-pg\n\nkubectl delete namespace cloudnative-pg\n\n```\n\n> Uninstall the operator.\n> Delete the namespace and all resources within it.",
         "commands": [
           "helm uninstall cloudnative-pg --namespace cloudnative-pg",
           "kubectl delete namespace cloudnative-pg"
@@ -56,10 +54,10 @@
     "upgrade": [
       {
         "title": "Upgrade the CloudNativePG operator",
-        "description": "Before upgrading, ensure you have a backup of your PostgreSQL data. This step upgrades the operator to the latest version.\n\n```bash\n\nkubectl get clusters -n cloudnative-pg -o yaml > backup-clusters.yaml\n\nhelm upgrade cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.28.1\n\nkubectl get clusters -n cloudnative-pg\n\n```\n\n> Backs up the current cluster configurations.\n> Upgrades the operator to the specified version.\n> Verifies that the clusters are still running after the upgrade.",
+        "description": "Before upgrading, back up your PostgreSQL data. This step will upgrade the operator to a newer version.\n\n```bash\n\nkubectl get clusters -n cloudnative-pg -o yaml > backup-cluster.yaml\n\nhelm upgrade cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.29.0\n\nkubectl get clusters -n cloudnative-pg\n\n```\n\n> Backup the current cluster configuration.\n> Upgrade the operator to the specified version.\n> Verify the cluster status after the upgrade.",
         "commands": [
-          "kubectl get clusters -n cloudnative-pg -o yaml > backup-clusters.yaml",
-          "helm upgrade cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.28.1",
+          "kubectl get clusters -n cloudnative-pg -o yaml > backup-cluster.yaml",
+          "helm upgrade cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.29.0",
           "kubectl get clusters -n cloudnative-pg"
         ]
       }
@@ -67,39 +65,37 @@
     "troubleshooting": [
       {
         "title": "Error: 'Failed to create cluster'",
-        "description": "**Cause:** This may occur due to insufficient resources in the Kubernetes cluster.\n\n**Fix:**\nEnsure that your Kubernetes nodes have enough resources (minimum 2 vCPU, 4GB RAM)."
+        "description": "**Cause:** This may occur if the Kubernetes API server is unreachable or if there are insufficient resources.\n\n**Fix:**\nCheck the Kubernetes API server status and ensure there are enough resources available in the cluster."
       },
       {
-        "title": "PostgreSQL cluster is not ready",
-        "description": "**Cause:** The cluster may be in a pending state due to configuration issues.\n\n**Fix:**\nCheck the logs of the operator using 'kubectl logs -l app.kubernetes.io/name=cloudnative-pg -n cloudnative-pg'."
+        "title": "Error: 'PostgreSQL cluster is not ready'",
+        "description": "**Cause:** This can happen if the PostgreSQL pods are not starting due to configuration issues.\n\n**Fix:**\nInspect the pod logs using 'kubectl logs <pod-name> -n cloudnative-pg' to identify the issue."
       },
       {
-        "title": "Error: 'Connection refused'",
-        "description": "**Cause:** This can happen if the PostgreSQL service is not running or is misconfigured.\n\n**Fix:**\nVerify the service status with 'kubectl get svc -n cloudnative-pg' and check the cluster status."
+        "title": "Error: 'Storage class not found'",
+        "description": "**Cause:** This indicates that the specified storage class in the cluster configuration does not exist.\n\n**Fix:**\nEnsure that the storage class is created and available in the cluster."
       },
       {
-        "title": "Failed to apply CRD",
-        "description": "**Cause:** This may occur if the CRD is not installed or is outdated.\n\n**Fix:**\nReinstall the CRD using 'kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/deploy/crds/postgres.cnpg.io_clusters.yaml'."
+        "title": "Error: 'Cannot connect to PostgreSQL'",
+        "description": "**Cause:** This may occur if the PostgreSQL service is not exposed correctly or if network policies are blocking access.\n\n**Fix:**\nCheck the service configuration and network policies to ensure connectivity."
       }
     ],
     "versionNotes": [
       {
-        "version": "v1.28.1",
-        "changes": "Improved support for PostgreSQL 15, added new metrics for monitoring.",
-        "deprecations": "Deprecated support for PostgreSQL 12.",
-        "migrationSteps": "If upgrading from v1.27.x, ensure to review the new metrics configuration."
+        "version": "v1.29.0",
+        "changes": "Added support for PostgreSQL 15, improved backup and restore functionalities.",
+        "deprecations": "Deprecated the use of legacy storage classes.",
+        "migrationSteps": "If upgrading from v1.28.0, ensure that your storage classes are updated to the new format."
       }
     ],
     "resolution": {
-      "summary": "You should see output similar to 'NAME          READY   STATUS    AGE' with your PostgreSQL cluster listed as 'my-postgres' and its status as 'Ready'.",
+      "summary": "You should see the PostgreSQL cluster listed with 'kubectl get clusters -n cloudnative-pg', showing the status as 'Ready'.",
       "codeSnippets": [
         "helm repo add cloudnative-pg https://charts.cloudnative-pg.io",
-        "helm repo update",
         "kubectl create namespace cloudnative-pg",
-        "helm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.28.1",
-        "kubectl apply -f - <<EOF\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  patroni:\n    postgresql:\n      version: \"14\"\nEOF",
-        "kubectl get clusters -n cloudnative-pg",
-        "kubectl describe cluster my-postgres -n cloudnative-pg"
+        "helm install cloudnative-pg cloudnative-pg/cloudnative-pg --namespace cloudnative-pg --version 1.29.0",
+        "cat <<EOF | kubectl apply -f -\napiVersion: postgres.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: my-postgres\n  namespace: cloudnative-pg\nspec:\n  instances: 3\n  storage:\n    size: 1Gi\nEOF",
+        "kubectl get clusters -n cloudnative-pg"
       ]
     }
   },
@@ -115,12 +111,13 @@
     "platformType": "operator",
     "platformProvider": "CloudNativePG",
     "platformVersions": [
-      "v1.28.1"
+      "v1.29.0"
     ],
     "supportedK8sVersions": [
       "1.26",
       "1.27",
-      "1.28"
+      "1.28",
+      "1.29"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -137,13 +134,13 @@
       "helm"
     ],
     "containerImages": [
-      "ghcr.io/cloudnative-pg/cloudnative-pg:v1.28.1"
+      "ghcr.io/cloudnative-pg/cloudnative-pg:v1.29.0"
     ],
     "sourceUrls": {
       "docs": "https://cloudnative-pg.io/documentation/",
       "repo": "https://github.com/cloudnative-pg/cloudnative-pg"
     },
-    "qualityScore": 96
+    "qualityScore": 99
   },
   "prerequisites": {
     "kubernetes": ">=1.26",
@@ -152,10 +149,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
+    "description": "Ensure you have a Kubernetes cluster running with the necessary resources."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:10:29.230Z",
+    "scannedAt": "2026-04-08T18:22:26.621Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

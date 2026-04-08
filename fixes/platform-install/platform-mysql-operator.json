@@ -6,59 +6,59 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure MySQL Operator for Kubernetes (Oracle)",
-    "description": "The MySQL Operator for Kubernetes automates the management of MySQL InnoDB Cluster setups within a Kubernetes environment. It simplifies tasks such as deployment, scaling, and backup, making it ideal for users who want to manage MySQL databases efficiently in a cloud-native way. Key trade-offs include the need for familiarity with Kubernetes and potential complexity in configuration.",
+    "description": "The MySQL Operator for Kubernetes automates the management of MySQL InnoDB Cluster setups within a Kubernetes environment. It simplifies tasks such as deployment, scaling, and backup, making it ideal for teams looking to implement MySQL in a cloud-native way. Key trade-offs include the need for Kubernetes expertise and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Add the MySQL Operator Helm Repository",
-        "description": "This step adds the official MySQL Operator Helm repository to your Helm client, allowing you to install the operator using Helm.\n\n```bash\n\nhelm repo add mysql-operator https://mysql.github.io/mysql-operator/\n\nhelm repo update\n\n```\n\n> This command registers the MySQL Operator repository.\n> Updates the local Helm chart repository cache.",
+        "title": "Add Helm Repository",
+        "description": "This step adds the MySQL Operator Helm repository to your local Helm configuration, allowing you to install the operator using Helm.\n\n```bash\n\nhelm repo add mysql-operator https://mysql.github.io/mysql-operator/\n\nhelm repo update\n\n```\n\n> This command adds the official MySQL Operator Helm repository.\n> Updates the local Helm chart repository cache.",
         "commands": [
           "helm repo add mysql-operator https://mysql.github.io/mysql-operator/",
           "helm repo update"
         ]
       },
       {
-        "title": "Install the MySQL Operator",
-        "description": "This command installs the MySQL Operator in a new namespace called 'mysql-operator'.\n\n```bash\n\nhelm install mysql-operator mysql-operator/mysql-operator --namespace mysql-operator --create-namespace\n\n```\n\n> Installs the MySQL Operator with default settings.",
+        "title": "Install MySQL Operator",
+        "description": "This step installs the MySQL Operator using Helm, creating a namespace for it in the process.\n\n```bash\n\nhelm install mysql-operator mysql-operator/mysql-operator --namespace mysql-operator --create-namespace\n\n```\n\n> This command deploys the MySQL Operator in the 'mysql-operator' namespace.",
         "commands": [
           "helm install mysql-operator mysql-operator/mysql-operator --namespace mysql-operator --create-namespace"
         ]
       },
       {
-        "title": "Verify the Operator Installation",
-        "description": "Check if the MySQL Operator is running correctly by querying the deployment status.\n\n```bash\n\nkubectl get deployment -n mysql-operator mysql-operator\n\n```\n\n> You should see the operator deployment with a READY status.",
+        "title": "Verify Operator Deployment",
+        "description": "This step checks if the MySQL Operator is running correctly by querying the deployment status.\n\n```bash\n\nkubectl get deployment -n mysql-operator mysql-operator\n\n```\n\n> You should see the operator deployment with 1/1 replicas ready.",
         "commands": [
           "kubectl get deployment -n mysql-operator mysql-operator"
         ]
       },
       {
-        "title": "Create a Secret for MySQL Credentials",
-        "description": "This step creates a Kubernetes secret that contains the root user credentials for MySQL, which the operator will use to manage the database.\n\n```bash\n\nkubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword='sakila'\n\n```\n\n> Replace 'sakila' with your desired root password.",
+        "title": "Create MySQL Root User Secret",
+        "description": "This step creates a Kubernetes secret that contains the credentials for the MySQL root user, which is necessary for managing the InnoDB Cluster.\n\n```bash\n\nkubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword: <REDACTED>'\n\n```\n\n> Replace 'sakila' with your desired root password.",
         "commands": [
-          "kubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword='sakila'"
+          "kubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword: <REDACTED>'"
         ]
       },
       {
-        "title": "Define a MySQL InnoDB Cluster",
-        "description": "This YAML configuration defines a MySQL InnoDB Cluster that the operator will manage.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: '8.4'\nEOF\n\n```\n\n> This creates a cluster named 'mycluster' using the previously created secret.",
+        "title": "Define MySQL InnoDB Cluster",
+        "description": "This step defines a MySQL InnoDB Cluster custom resource that references the secret created earlier.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: '8.4'\nEOF\n\n```\n\n> This command creates a new InnoDB Cluster named 'mycluster'.",
         "commands": [
           "kubectl apply -f - <<EOF\napiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: '8.4'\nEOF"
         ]
       },
       {
-        "title": "Verify the InnoDB Cluster",
-        "description": "Check the status of the InnoDB Cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get innodbclusters.mysql.oracle.com mycluster\n\n```\n\n> You should see the cluster status and details.",
+        "title": "Verify InnoDB Cluster",
+        "description": "This step checks if the InnoDB Cluster is created and running properly.\n\n```bash\n\nkubectl get innodbclusters.mysql.oracle.com -n mysql-operator\n\n```\n\n> You should see the InnoDB Cluster 'mycluster' listed.",
         "commands": [
-          "kubectl get innodbclusters.mysql.oracle.com mycluster"
+          "kubectl get innodbclusters.mysql.oracle.com -n mysql-operator"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall the MySQL Operator",
-        "description": "This step removes the MySQL Operator and all associated resources. Be aware that this will delete the MySQL InnoDB Cluster and any data stored within it.\n\n```bash\n\nhelm uninstall mysql-operator --namespace mysql-operator\n\nkubectl delete namespace mysql-operator\n\n```\n\n> This command removes the MySQL Operator deployment.\n> This command deletes the namespace and all resources within it.",
+        "title": "Uninstall MySQL Operator",
+        "description": "This step removes the MySQL Operator and its associated resources. Be aware that this will delete all MySQL clusters managed by the operator, leading to potential data loss.\n\n```bash\n\nhelm uninstall mysql-operator --namespace mysql-operator\n\nkubectl delete namespace mysql-operator\n\n```\n\n> This command uninstalls the MySQL Operator.\n> This command deletes the namespace and all resources within it.",
         "commands": [
           "helm uninstall mysql-operator --namespace mysql-operator",
           "kubectl delete namespace mysql-operator"
@@ -67,10 +67,9 @@
     ],
     "upgrade": [
       {
-        "title": "Upgrade the MySQL Operator",
-        "description": "Before upgrading, ensure you have a backup of your MySQL data. This step will upgrade the MySQL Operator to the latest version.\n\n```bash\n\nkubectl get innodbclusters.mysql.oracle.com -o yaml > mycluster-backup.yaml\n\nhelm upgrade mysql-operator mysql-operator/mysql-operator --namespace mysql-operator\n\nkubectl get deployment -n mysql-operator mysql-operator\n\n```\n\n> Backup the current InnoDB Cluster configuration.\n> This command upgrades the MySQL Operator to the latest version.\n> Verify that the operator is running after the upgrade.",
+        "title": "Upgrade MySQL Operator",
+        "description": "Before upgrading, ensure you have a backup of your MySQL data. This step performs the upgrade and verifies the operator's status afterward.\n\n```bash\n\nhelm upgrade mysql-operator mysql-operator/mysql-operator --namespace mysql-operator\n\nkubectl get deployment -n mysql-operator mysql-operator\n\n```\n\n> This command upgrades the MySQL Operator to the latest version.\n> Verify that the operator is running after the upgrade.",
         "commands": [
-          "kubectl get innodbclusters.mysql.oracle.com -o yaml > mycluster-backup.yaml",
           "helm upgrade mysql-operator mysql-operator/mysql-operator --namespace mysql-operator",
           "kubectl get deployment -n mysql-operator mysql-operator"
         ]
@@ -79,45 +78,45 @@
     "troubleshooting": [
       {
         "title": "Error: 'Failed to create InnoDB Cluster'",
-        "description": "**Cause:** The MySQL Operator may not have sufficient permissions to create resources.\n\n**Fix:**\nEnsure the operator has the necessary RBAC permissions."
+        "description": "**Cause:** This may occur if the secret for MySQL root user is not created or is misconfigured.\n\n**Fix:**\nEnsure the secret 'mypwds' is created correctly with valid credentials."
       },
       {
-        "title": "Error: 'Secret not found'",
-        "description": "**Cause:** The specified secret for MySQL credentials does not exist.\n\n**Fix:**\nCreate the secret using the correct command."
+        "title": "Error: 'mysql-operator not found'",
+        "description": "**Cause:** This indicates that the MySQL Operator has not been installed or the namespace is incorrect.\n\n**Fix:**\nCheck the installation command and ensure the 'mysql-operator' namespace exists."
       },
       {
-        "title": "Error: 'MySQL server is not responding'",
-        "description": "**Cause:** The MySQL pods may not be running or are in a crash loop.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name>' for more details."
+        "title": "Error: 'Insufficient permissions'",
+        "description": "**Cause:** The operator may not have the necessary RBAC permissions to perform actions.\n\n**Fix:**\nReview the ClusterRole and ensure it has the required permissions for the resources it manages."
       },
       {
         "title": "Error: 'InnoDB Cluster is not ready'",
-        "description": "**Cause:** The cluster may not have completed its initialization.\n\n**Fix:**\nWait a few moments and check the status again with 'kubectl get innodbclusters.mysql.oracle.com'."
+        "description": "**Cause:** This may happen if the MySQL pods are not running or are in a crash loop.\n\n**Fix:**\nCheck the logs of the MySQL pods for errors and ensure they are running correctly."
       }
     ],
     "versionNotes": [
       {
         "version": "8.4",
         "changes": "Introduced support for MySQL 8.4 features and enhancements.",
-        "deprecations": "None.",
+        "deprecations": "No specific deprecations noted.",
         "migrationSteps": "No specific migration steps required for this version."
       },
       {
         "version": "9.0",
-        "changes": "Added support for new MySQL 9.0 features including improved performance and security enhancements.",
-        "deprecations": "Deprecated support for MySQL 5.x versions.",
-        "migrationSteps": "Ensure your MySQL instances are upgraded to at least version 8.4 before migrating."
+        "changes": "Added support for new MySQL 9.0 features, including improved performance and new configuration options.",
+        "deprecations": "Deprecated support for MySQL 8.0.",
+        "migrationSteps": "To upgrade from 8.4 to 9.0, ensure all clusters are backed up and follow the upgrade procedure."
       }
     ],
     "resolution": {
-      "summary": "You should see the InnoDB Cluster status as 'Ready' when everything is working correctly, e.g., 'kubectl get innodbclusters.mysql.oracle.com mycluster'.",
+      "summary": "You should see the InnoDB Cluster 'mycluster' listed with the status 'Ready' when running 'kubectl get innodbclusters.mysql.oracle.com -n mysql-operator'.",
       "codeSnippets": [
         "helm repo add mysql-operator https://mysql.github.io/mysql-operator/",
         "helm repo update",
         "helm install mysql-operator mysql-operator/mysql-operator --namespace mysql-operator --create-namespace",
         "kubectl get deployment -n mysql-operator mysql-operator",
-        "kubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword='sakila'",
+        "kubectl create secret generic mypwds --from-literal=rootUser=root --from-literal=rootHost=% --from-literal=rootPassword: <REDACTED>'",
         "kubectl apply -f - <<EOF\napiVersion: mysql.oracle.com/v2\nkind: InnoDBCluster\nmetadata:\n  name: mycluster\nspec:\n  secretName: mypwds\n  version: '8.4'\nEOF",
-        "kubectl get innodbclusters.mysql.oracle.com mycluster"
+        "kubectl get innodbclusters.mysql.oracle.com -n mysql-operator"
       ]
     }
   },
@@ -176,10 +175,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary resources."
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources and the required tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:10:07.455Z",
+    "scannedAt": "2026-04-08T18:22:07.573Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
