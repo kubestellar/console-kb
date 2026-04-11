@@ -1,0 +1,73 @@
+{
+  "version": "kc-mission-v1",
+  "name": "spire-6630-node-attestor-azure-imds-runtime-error-plugin-panic",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "spire: Node attestor azure_imds runtime error / plugin panic",
+    "description": "Node attestor azure_imds runtime error / plugin panic. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify spire troubleshoot symptoms",
+        "description": "Check for the issue in your spire deployment:\n```bash\nkubectl get pods -n spire -l app.kubernetes.io/name=spire\nkubectl logs -l app.kubernetes.io/name=spire -n spire --tail=100 | grep -i error\n```\nLook for error: `invalid memory address or nil pointer dereference\" external=false plugin_name=azure_imds plugin_type=NodeAttestor stack=`"
+      },
+      {
+        "title": "Review spire configuration",
+        "description": "Inspect the relevant spire configuration:\n```bash\nkubectl get all -n spire -l app.kubernetes.io/name=spire\nkubectl get configmap -n spire -l app.kubernetes.io/part-of=spire\n```\nHello,\n\nWe have tested attesting agent nodes with the [azure_imds](https://github.com/spiffe/spire/blob/main/doc/plugin_server_nodeattestor_azure_imds.md) node attestor."
+      },
+      {
+        "title": "Apply the fix for Node attestor azure_imds runtime error / plugin panic",
+        "description": "Azure IMDS node attestation for VMSS instances.\n\nVMSS NICs don't always have a Network Security Group attached. `parseNetworkInterfaceConfig` was dereferencing `NetworkSecurityGroup.ID` unconditionally, causing a plugin panic when attesting VMSS nodes with no NSG on their NIC.\n\nadded nil checks for `Properties`, `NetworkSecurityGroup`, and `NetworkSecurityGroup.ID`. if there's no NSG the `SecurityGroup` field is left as zero-value. also guard `ipconfig.Properties` and `Subnet` against nil in\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Confirm Node attestor azure_imds runtime error / plugin… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=spire -n spire --tail=50 --since=5m\nkubectl get events -n spire --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `invalid memory address or nil pointer dereference\" external=false plugin_name=azure_imds plugin_type=NodeAttestor stack=` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "Azure IMDS node attestation for VMSS instances.\n\nVMSS NICs don't always have a Network Security Group attached. `parseNetworkInterfaceConfig` was dereferencing `NetworkSecurityGroup.ID` unconditionally, causing a plugin panic when attesting VMSS nodes with no NSG on their NIC.\n\nadded nil checks for `Properties`, `NetworkSecurityGroup`, and `NetworkSecurityGroup.ID`.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "spire",
+      "graduated",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "spire"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/spiffe/spire/issues/6630",
+      "repo": "https://github.com/spiffe/spire",
+      "pr": "https://github.com/spiffe/spire/pull/6795"
+    },
+    "reactions": 6,
+    "comments": 3,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with spire installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-11T06:24:21.367Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
