@@ -1,1 +1,5 @@
-# trouuleshooting Solutions\n\nCommunity-contributed AI mission solutions for troubleshooting scenarios.\n\nSee the [root README](../../README.md) for how to import solutions into KubeStellar Console.
+# Troubleshooting Fixes
+
+Community-contributed AI mission fixes for troubleshooting scenarios.
+
+See the [root README](../../README.md) for how to import fixes into KubeStellar Console.
