@@ -2,6 +2,7 @@
 import { readdir, readFile, writeFile, stat } from 'fs/promises';
 import { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
+import { scoreMissionAdvanced } from './advanced-quality-scorer.mjs';
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
 const INDEX_PATH = join(SOLUTIONS_DIR, 'index.json');
@@ -62,7 +63,15 @@ function extractMetadata(content, filePath) {
     // Include versioning metadata when present in the mission file
     if (data.metadata?.projectVersion) entry.projectVersion = data.metadata.projectVersion;
     if (data.metadata?.maturity) entry.maturity = data.metadata.maturity;
-    if (data.metadata?.qualityScore != null) entry.qualityScore = data.metadata.qualityScore;
+    
+    // Evaluate advanced quality score
+    const project = data.metadata?.cncfProjects?.[0] || category;
+    const scoreResult = scoreMissionAdvanced(data, project, relPath);
+    entry.qualityScore = scoreResult.score;
+    entry.qualityBreakdown = scoreResult.breakdown;
+    entry.qualityIssues = scoreResult.issues;
+    entry.qualitySuggestions = scoreResult.suggestions;
+    entry.qualityPass = scoreResult.pass;
 
     return entry;
   } catch (e) {
@@ -92,8 +101,8 @@ function extractIssueTypes(data) {
   return types;
 }
 
-export async function buildIndex() {
-  const files = await walkDir(SOLUTIONS_DIR);
+export async function buildIndex(targetDir = SOLUTIONS_DIR) {
+  const files = await walkDir(targetDir);
   const missions = [];
   
   for (const filePath of files) {
@@ -109,8 +118,9 @@ export async function buildIndex() {
     missions: missions.sort((a, b) => a.title.localeCompare(b.title)),
   };
   
-  await writeFile(INDEX_PATH, JSON.stringify(index, null, 2) + '\n');
-  console.log(`Generated index with ${missions.length} missions at ${INDEX_PATH}`);
+  const targetIndexPath = targetDir === SOLUTIONS_DIR ? INDEX_PATH : join(targetDir, 'index.json');
+  await writeFile(targetIndexPath, JSON.stringify(index, null, 2) + '\n');
+  console.log(`Generated index with ${missions.length} missions at ${targetIndexPath}`);
   return index;
 }
 

@@ -49,14 +49,14 @@ metadata:
   });
 
   it('should generate index with valid missions', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     expect(index.version).toBe(1);
     expect(index.generatedAt).toBeTruthy();
     expect(index.missions.length).toBeGreaterThanOrEqual(2);
   });
 
   it('should extract metadata from YAML missions', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     const crash = index.missions.find(m => m.title === 'Fix CrashLoopBackOff');
     expect(crash).toBeDefined();
     expect(crash.tags).toContain('pod');
@@ -66,7 +66,7 @@ metadata:
   });
 
   it('should extract metadata from JSON missions', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     const rbac = index.missions.find(m => m.title === 'Fix RBAC Denied Errors');
     expect(rbac).toBeDefined();
     expect(rbac.tags).toContain('rbac');
@@ -75,38 +75,38 @@ metadata:
   });
 
   it('should skip invalid files gracefully', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     const invalid = index.missions.find(m => m.path?.includes('invalid'));
     expect(invalid).toBeUndefined();
   });
 
   it('should sort missions by title', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     for (let i = 1; i < index.missions.length; i++) {
       expect(index.missions[i].title.localeCompare(index.missions[i-1].title)).toBeGreaterThanOrEqual(0);
     }
   });
 
   it('should include count in index', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     expect(index.count).toBe(index.missions.length);
   });
 
   it('should include versioning metadata when present', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     const rbac = index.missions.find(m => m.title === 'Fix RBAC Denied Errors');
     expect(rbac).toBeDefined();
     expect(rbac.maturity).toBe('graduated');
-    expect(rbac.qualityScore).toBe(85);
+    expect(rbac.qualityScore).toBeDefined(); // Now dynamically evaluated
     expect(rbac.projectVersion).toBe('2.1.0');
   });
 
   it('should omit versioning metadata when absent', async () => {
-    const index = await buildIndex();
+    const index = await buildIndex(TEST_DIR);
     const crash = index.missions.find(m => m.title === 'Fix CrashLoopBackOff');
     expect(crash).toBeDefined();
     expect(crash.maturity).toBeUndefined();
-    expect(crash.qualityScore).toBeUndefined();
+    expect(crash.qualityScore).toBeDefined(); // Now dynamically evaluated for all
     expect(crash.projectVersion).toBeUndefined();
   });
 });
