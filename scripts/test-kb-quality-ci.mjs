@@ -1,7 +1,5 @@
 import { readFileSync } from 'fs';
-import { scoreMissionAdvanced } from './advanced-quality-scorer.mjs';
-
-const MIN_SCORE = 60;
+import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
 
 function main() {
   const files = process.argv.slice(2);
@@ -26,7 +24,7 @@ function main() {
       console.log(`=================================================`);
       console.log(`File: ${file}`);
       console.log(`Project: ${result.project}`);
-      console.log(`Score: ${result.score}/100 (Pass: ${result.pass ? '✅' : '❌'})`);
+      console.log(`Score: ${result.score}/100 (${result.pass ? '[PASS] OK' : '[FAIL] BELOW THRESHOLD'})`);
       console.log(`Breakdown:`);
       Object.entries(result.breakdown).forEach(([k, v]) => {
         console.log(`  - ${k}: ${v}`);
@@ -34,12 +32,12 @@ function main() {
       
       if (result.issues.length > 0) {
         console.log(`\nIssues Found:`);
-        result.issues.forEach(i => console.log(`  ❌ ${i}`));
+        result.issues.forEach(i => console.log(`  [!] ${i}`));
       }
       
       if (result.suggestions.length > 0) {
         console.log(`\nSuggestions:`);
-        result.suggestions.forEach(s => console.log(`  💡 ${s}`));
+        result.suggestions.forEach(s => console.log(`  [*] ${s}`));
       }
 
       console.log(`=================================================\n`);

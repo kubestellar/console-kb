@@ -2,7 +2,8 @@
 import { readdir, readFile, writeFile, stat } from 'fs/promises';
 import { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { scoreMissionAdvanced } from './advanced-quality-scorer.mjs';
+import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
+// Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
 const INDEX_PATH = join(SOLUTIONS_DIR, 'index.json');
@@ -64,14 +65,22 @@ function extractMetadata(content, filePath) {
     if (data.metadata?.projectVersion) entry.projectVersion = data.metadata.projectVersion;
     if (data.metadata?.maturity) entry.maturity = data.metadata.maturity;
     
-    // Evaluate advanced quality score
-    const project = data.metadata?.cncfProjects?.[0] || category;
-    const scoreResult = scoreMissionAdvanced(data, project, relPath);
-    entry.qualityScore = scoreResult.score;
+    // Evaluate advanced quality score.
+    // Behavior: if the mission file explicitly sets metadata.qualityScore (hand-curated),
+    // that value is preserved. Computed score is used only when no value is present.
+    // This prevents index builds from silently overwriting intentionally curated scores.
+    // See: kubestellar/console-kb PR #2019 description for rationale.
+    const scoreResult = scoreMissionAdvanced(data, data.metadata?.cncfProjects?.[0] || category, relPath);
+    const curatedScore = data.metadata?.qualityScore;
+    entry.qualityScore = curatedScore != null ? curatedScore : scoreResult.score;
+    entry.qualityPass = entry.qualityScore >= MIN_SCORE;
     entry.qualityBreakdown = scoreResult.breakdown;
-    entry.qualityIssues = scoreResult.issues;
-    entry.qualitySuggestions = scoreResult.suggestions;
-    entry.qualityPass = scoreResult.pass;
+    // Cap to 5 entries / 200 chars each — qualityIssues and qualitySuggestions live inside
+    // index.json which is fetched by the frontend on every KB page load. Unbounded arrays
+    // from low-quality missions can bloat the response significantly.
+    const cap = (arr) => (arr || []).slice(0, 5).map(s => String(s).slice(0, 200));
+    entry.qualityIssues = cap(scoreResult.issues);
+    entry.qualitySuggestions = cap(scoreResult.suggestions);
 
     return entry;
   } catch (e) {

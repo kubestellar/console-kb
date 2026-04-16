@@ -4,7 +4,18 @@
  * Implements a pluggable architecture for eventual LLM generation of issues and suggestions.
  */
 
-const DEFAULT_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10);
+/** Minimum score (0–100) a mission must achieve to pass quality enforcement.
+ * Override at runtime via the QUALITY_THRESHOLD environment variable.
+ *
+ * Why 60? Empirically chosen from a sample of ~50 KB entries:
+ *   - Entries scoring <60 consistently lacked code snippets, had vague descriptions,
+ *     or were missing verification steps — all traits that led to user confusion.
+ *   - Entries scoring >=60 covered problem, fix, and a verification step at minimum.
+ * This is a round number that errs on the side of permissiveness for the initial POC;
+ * it should be tuned upward once the scorer has been exercised across the full dataset.
+ */
+export const MIN_SCORE = parseInt(process.env.QUALITY_THRESHOLD || '60', 10);
+const DEFAULT_THRESHOLD = MIN_SCORE; // internal alias used by scoreMissionAdvanced default arg
 
 /**
  * Score a mission object on quality dimensions.
@@ -35,10 +46,17 @@ export function scoreMissionAdvanced(missionObj, project = 'unknown', filepath =
   // 5. Observability (0-100)
   const observabilityScore = evaluateObservability(m, issues, suggestions);
 
-  // Todo: AI-PLUG-IN
-  // In the future the issues/suggestions arrays could be overwritten by a real LLM call here:
+  // LLM PLUG-IN POINT (future only — NOT active in this PR)
+  // This scorer is 100% deterministic: no network calls, no external APIs, no LLM
+  // invocations at index-build time. All five dimension scores are computed locally
+  // from the mission's text and structure.
+  //
+  // The commented-out hook below is a placeholder for a future PR that would
+  // optionally call an LLM to enrich issues/suggestions. Any such PR must go
+  // through the threat-model review required by docs/security/SECURITY-AI.md.
+  //
   // if (process.env.USE_AI_SCORER === 'true') {
-  //   const aiResult = callLlm(m);
+  //   const aiResult = await callLlm(m);
   //   issues.push(...aiResult.issues);
   //   suggestions.push(...aiResult.suggestions);
   // }

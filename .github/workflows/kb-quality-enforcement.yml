@@ -1,0 +1,47 @@
+name: KB Quality Enforcement
+on:
+  pull_request:
+    paths:
+      - 'fixes/**/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: |
+          cd scripts
+          npm ci || npm install
+
+      - name: Detect Changed KB Entries
+        id: detect-files
+        run: |
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 2>/dev/null || echo "")
+          if [ -z "$FILES" ]; then
+            echo "No KB files changed."
+            echo "files_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Files detected: $FILES"
+            echo "files_changed=true" >> $GITHUB_OUTPUT
+            # Prepare arguments for the script
+            # Write files to an env to handle spaces if any
+            echo "$FILES" > changed_files.txt
+          fi
+
+      - name: Run Quality Scorer
+        if: steps.detect-files.outputs.files_changed == 'true'
+        run: |
+          cd scripts
+          node test-kb-quality-ci.mjs $(cat ../changed_files.txt | tr '\n' ' ')

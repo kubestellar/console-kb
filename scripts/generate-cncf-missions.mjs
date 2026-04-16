@@ -1383,6 +1383,29 @@ function buildMissionJson({ project, issue, resolution, linkedPR, slug, missionT
 }
 
 /**
+ * Build a kc-mission-v1 document from a CNCF project, GitHub issue, and extracted resolution.
+ *
+ * This is the public API surface for mission generation. It is a pure, deterministic
+ * function — no network calls, no I/O, no LLM. Suitable for unit testing.
+ *
+ * Companion PR: kubestellar/console#8148 exposes scored missions via /api/missions/scores.
+ * Ensure any changes to the output shape are reflected in the Go indexJsonFormat struct.
+ *
+ * @param {object} project  - CNCF project descriptor (name, repo, maturity, category)
+ * @param {object} issue    - GitHub issue object (title, body, labels, html_url, number, reactions)
+ * @param {object} resolution - Extracted resolution (problem, solution, yamlSnippets, steps)
+ * @returns {Promise<object>} kc-mission-v1 document (async to allow future LLM enrichment via opt-in hook)
+ */
+async function generateMission(project, issue, resolution) {
+  const missionType = detectMissionType(issue)
+  const difficulty = estimateDifficulty(issue)
+  const slug = slugify(`${project.name}-${issue.number}-${issue.title}`)
+  const linkedPR = resolution._linkedPR || null
+
+  return buildMissionJson({ project, issue, resolution, linkedPR, slug, missionType, difficulty })
+}
+
+/**
  * Build detailed steps from the issue and resolution context.
  * Uses project-aware namespaces and commands instead of hardcoded cert-manager.
  * Non-Kubernetes projects get application-specific steps instead of kubectl commands.
@@ -2010,4 +2033,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary }

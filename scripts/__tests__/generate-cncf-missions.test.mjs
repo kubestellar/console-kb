@@ -102,32 +102,37 @@ describe('generateMission', () => {
     steps: ['Check liveness probe configuration', 'Update timeout value to 10 seconds'],
   }
 
-  it.skip('produces valid kc-mission-v1 format', async () => {
-    const issue = mockIssue({ title: 'Pod crash loop' })
+  it('produces valid kc-mission-v1 format', async () => {
+    const issue = mockIssue({ title: 'Pod crash loop', number: 1, html_url: 'https://github.com/test/repo/issues/1' })
     const mission = await generateMission(sampleProject, issue, resolution)
     expect(mission.version).toBe('kc-mission-v1')
     expect(mission.name).toBeDefined()
-    expect(mission.missionClass).toBe('solution')
+    expect(typeof mission.name).toBe('string')
+    expect(mission.missionClass).toBe('fixer')
     expect(mission.mission).toBeDefined()
+    expect(mission.mission.type).toBeDefined()
+    expect(mission.mission.steps).toBeInstanceOf(Array)
     expect(mission.metadata).toBeDefined()
     expect(mission.prerequisites).toBeDefined()
     expect(mission.security).toBeDefined()
   })
 
-  it.skip('includes correct CNCF project tag', async () => {
-    const issue = mockIssue({ title: 'Pod crash loop' })
+  it('includes correct CNCF project tag', async () => {
+    const issue = mockIssue({ title: 'Pod crash loop', number: 1, html_url: 'https://github.com/test/repo/issues/1' })
     const mission = await generateMission(sampleProject, issue, resolution)
     expect(mission.metadata.tags).toContain('kubernetes')
     expect(mission.metadata.cncfProjects).toEqual(['kubernetes'])
   })
 
-  it.skip('mission type matches issue labels', async () => {
+  it('mission type matches issue labels', async () => {
     const issue = mockIssue({
       title: 'Memory leak in controller',
+      number: 2,
+      html_url: 'https://github.com/test/repo/issues/2',
       labels: [{ name: 'memory' }],
     })
     const mission = await generateMission(sampleProject, issue, resolution)
-    // "memory" triggers 'analyze'
+    // "memory" label triggers 'analyze' via detectMissionType
     expect(mission.mission.type).toBe('analyze')
   })
 })
