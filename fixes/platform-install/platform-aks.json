@@ -6,118 +6,166 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Azure Kubernetes Service (AKS)",
-    "description": "Azure Kubernetes Service (AKS) is a managed Kubernetes service that simplifies the deployment, management, and operations of Kubernetes clusters in the Azure cloud. It is ideal for users looking to leverage Kubernetes without the overhead of managing the underlying infrastructure. Key trade-offs include reliance on Azure's ecosystem and potential costs associated with resource usage.",
+    "description": "Azure Kubernetes Service (AKS) is a managed Kubernetes service that simplifies the deployment, management, and operations of Kubernetes clusters in Azure. It is ideal for users looking for a fully managed solution with integrated Azure services, but it may incur additional costs compared to self-managed solutions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Install Azure CLI",
-        "description": "The Azure CLI is required to interact with Azure resources and manage your AKS cluster.\n\n```bash\n\ncurl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n\n```\n\n> This command installs the Azure CLI on Debian-based systems.",
+        "description": "The Azure CLI is required to interact with Azure resources. This command installs the Azure CLI on your local machine.\n\n```bash\n\ncurl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n\n```\n\n> For Debian-based systems.",
         "commands": [
           "curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash"
         ]
       },
       {
-        "title": "Create AKS Cluster",
+        "title": "Create an AKS Cluster",
         "description": "This command creates a new AKS cluster with the specified Kubernetes version, node count, and region.\n\n```bash\n\naz aks create --resource-group myResourceGroup --name myAKSCluster --node-count 3 --kubernetes-version 1.31 --location eastus\n\n```\n\n> Replace 'myResourceGroup' and 'myAKSCluster' with your desired names.",
         "commands": [
           "az aks create --resource-group myResourceGroup --name myAKSCluster --node-count 3 --kubernetes-version 1.31 --location eastus"
         ]
       },
       {
-        "title": "Set Up Kubeconfig",
-        "description": "This command configures your local kubeconfig file to connect to the newly created AKS cluster.\n\n```bash\n\naz aks get-credentials --resource-group myResourceGroup --name myAKSCluster\n\n```\n\n> This command merges the AKS cluster credentials into your kubeconfig.",
+        "title": "Configure kubectl",
+        "description": "This command configures kubectl to use the new AKS cluster by updating the kubeconfig file.\n\n```bash\n\naz aks get-credentials --resource-group myResourceGroup --name myAKSCluster\n\n```\n\n> This allows you to interact with your AKS cluster using kubectl.",
         "commands": [
           "az aks get-credentials --resource-group myResourceGroup --name myAKSCluster"
         ]
       },
       {
         "title": "Verify Cluster Nodes",
-        "description": "This command checks the status of the nodes in your AKS cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a status of 'Ready'.",
+        "description": "This command checks the status of the nodes in your AKS cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a 'Ready' status.",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "Configure autoscaling and monitoring for your AKS cluster to ensure optimal performance.\n\n```bash\n\naz aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5\n\naz monitor autoscale create --resource-group myResourceGroup --resource myAKSCluster --resource-type Microsoft.ContainerService/managedClusters --name myAutoscale --min-count 1 --max-count 5 --count 3\n\n```\n\n> This enables cluster autoscaler with specified min and max node counts.\n> This sets up monitoring for the cluster.",
+        "description": "This step sets up monitoring and autoscaling for your AKS cluster.\n\n```bash\n\naz aks enable-addons --resource-group myResourceGroup --name myAKSCluster --addons monitoring\n\naz aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5\n\n```\n\n> This enables Azure Monitor for containers.\n> This configures cluster autoscaling.",
         "commands": [
-          "az aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5",
-          "az monitor autoscale create --resource-group myResourceGroup --resource myAKSCluster --resource-type Microsoft.ContainerService/managedClusters --name myAutoscale --min-count 1 --max-count 5 --count 3"
+          "az aks enable-addons --resource-group myResourceGroup --name myAKSCluster --addons monitoring",
+          "az aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Delete AKS Cluster",
-        "description": "This command deletes the AKS cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\naz aks delete --resource-group myResourceGroup --name myAKSCluster --yes --no-wait\n\n```\n\n> This command will delete the cluster without waiting for completion.",
+        "title": "Delete the AKS Cluster",
+        "description": "This command deletes the AKS cluster and all associated resources. Be aware that this will result in data loss and orphaned resources.\n\n```bash\n\naz aks delete --resource-group myResourceGroup --name myAKSCluster --yes --no-wait\n\n```\n\n> This will remove the cluster and associated resources.",
         "commands": [
           "az aks delete --resource-group myResourceGroup --name myAKSCluster --yes --no-wait"
-        ]
-      },
-      {
-        "title": "Clean Up Resource Group",
-        "description": "This command deletes the resource group and all resources within it, which may include orphaned resources.\n\n```bash\n\naz group delete --name myResourceGroup --yes --no-wait\n\n```\n\n> This will remove the entire resource group and all its resources.",
-        "commands": [
-          "az group delete --name myResourceGroup --yes --no-wait"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade AKS Cluster",
-        "description": "Before upgrading, ensure you back up your workloads and configurations. This command upgrades the AKS cluster to the specified version.\n\n```bash\n\naz aks upgrade --resource-group myResourceGroup --name myAKSCluster --kubernetes-version 1.31\n\n```\n\n> This command upgrades the AKS cluster to version 1.31.",
+        "description": "Before upgrading, ensure you back up any critical data. This command upgrades the AKS cluster to the specified version.\n\n```bash\n\naz aks upgrade --resource-group myResourceGroup --name myAKSCluster --kubernetes-version 1.31\n\nkubectl get nodes\n\n```\n\n> Replace with the desired version.\n> Verify that the nodes are updated and in 'Ready' status.",
         "commands": [
-          "az aks upgrade --resource-group myResourceGroup --name myAKSCluster --kubernetes-version 1.31"
-        ]
-      },
-      {
-        "title": "Verify Upgrade",
-        "description": "After the upgrade, verify that the nodes are running the new version.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> Check that the nodes reflect the upgraded version.",
-        "commands": [
+          "az aks upgrade --resource-group myResourceGroup --name myAKSCluster --kubernetes-version 1.31",
           "kubectl get nodes"
-        ]
-      },
-      {
-        "title": "Post-Upgrade Configuration",
-        "description": "Reapply any configurations that may have been reset during the upgrade.\n\n```bash\n\naz monitor autoscale update --resource-group myResourceGroup --resource myAKSCluster --resource-type Microsoft.ContainerService/managedClusters --name myAutoscale --count 3\n\n```\n\n> Ensure autoscaling settings are still in place.",
-        "commands": [
-          "az monitor autoscale update --resource-group myResourceGroup --resource myAKSCluster --resource-type Microsoft.ContainerService/managedClusters --name myAutoscale --count 3"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create AKS cluster'",
+        "title": "Error: 'Failed to create the AKS cluster'",
         "description": "**Cause:** This may occur due to insufficient permissions or quota limits in your Azure subscription.\n\n**Fix:**\nCheck your Azure subscription permissions and ensure you have enough quota for the requested resources."
       },
       {
-        "title": "Error: 'Kubeconfig context not found'",
-        "description": "**Cause:** This happens when the kubeconfig file does not contain the context for the AKS cluster.\n\n**Fix:**\nRun 'az aks get-credentials --resource-group myResourceGroup --name myAKSCluster' to update your kubeconfig."
+        "title": "Error: 'kubectl: Unable to connect to the server'",
+        "description": "**Cause:** This indicates that kubectl is not configured correctly or the AKS cluster is down.\n\n**Fix:**\nRun 'az aks get-credentials --resource-group myResourceGroup --name myAKSCluster' to reconfigure kubectl."
       },
       {
-        "title": "Nodes not in 'Ready' state",
-        "description": "**Cause:** This could be due to insufficient resources or misconfiguration.\n\n**Fix:**\nCheck the node status with 'kubectl describe nodes' and ensure there are enough resources allocated."
+        "title": "Error: 'Insufficient CPU resources'",
+        "description": "**Cause:** This happens when the cluster does not have enough resources to schedule new pods.\n\n**Fix:**\nScale up your node count using 'az aks scale --resource-group myResourceGroup --name myAKSCluster --node-count <new-count>'."
       },
       {
-        "title": "Error: 'Cluster autoscaler not working'",
-        "description": "**Cause:** This may occur if the cluster autoscaler is not configured correctly.\n\n**Fix:**\nVerify the autoscaler settings with 'az aks show --resource-group myResourceGroup --name myAKSCluster --query 'agentPoolProfiles[].enableAutoScaling' -o table'."
+        "title": "Error: 'Pod is in CrashLoopBackOff'",
+        "description": "**Cause:** This indicates that a pod is failing to start due to application errors or misconfigurations.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name>' to diagnose the issue."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Introduced support for new Azure regions and improved integration with Azure Monitor.",
-        "deprecations": "Deprecated the use of certain legacy APIs for cluster management.",
-        "migrationSteps": "If upgrading from v1.30, ensure to review the new API changes and update any custom scripts accordingly."
+        "changes": "Added support for new Azure regions and improved integration with Azure Monitor.",
+        "deprecations": "Deprecated support for Kubernetes version 1.28.",
+        "migrationSteps": "If upgrading from 1.29, ensure all custom resources are compatible with the new version."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'kubectl get nodes' with all nodes in 'Ready' state, indicating that your AKS cluster is operational.",
+      "summary": "You should see a list of nodes with 'Ready' status when running 'kubectl get nodes'.",
       "codeSnippets": [
         "curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash",
         "az aks create --resource-group myResourceGroup --name myAKSCluster --node-count 3 --kubernetes-version 1.31 --location eastus",
+        "az aks get-credentials --resource-group myResourceGroup --name myAKSCluster",
+        "kubectl get nodes",
+        "az aks enable-addons --resource-group myResourceGroup --name myAKSCluster --addons monitoring",
+        "az aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "managed",
+      "managed-k8s",
+      "microsoft-azure"
+    ],
+    "platform": "aks",
+    "platformType": "managed",
+    "platformProvider": "Microsoft Azure",
+    "platformVersions": [
+      "v1.30",
+      "v1.31"
+    ],
+    "supportedK8sVersions": [
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [],
+    "targetResourceKinds": [
+      "Namespace",
+      "Deployment",
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "cli"
+    ],
+    "containerImages": [
+      "mcr.microsoft.com/azure-policy/alpine:prod_20200505.1"
+    ],
+    "sourceUrls": {
+      "docs": "https://learn.microsoft.com/en-us/azure/aks/",
+      "repo": "https://github.com/Azure/AKS"
+    },
+    "qualityScore": 98
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.25",
+    "tools": [
+      "kubectl",
+      "az"
+    ],
+    "cloudCLI": "az >= 2.0",
+    "resources": "Minimum 2 vCPU, 4GB RAM per node",
+    "description": "Ensure you have the Azure CLI and kubectl installed on your local machine."
+  },
+  "security": {
+    "scannedAt": "2026-04-17T12:13:54.880Z",
+    "scannerVersion": "platform-install-gen-2.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}",
         "az aks get-credentials --resource-group myResourceGroup --name myAKSCluster",
         "kubectl get nodes",
         "az aks update --resource-group myResourceGroup --name myAKSCluster --enable-cluster-autoscaler --min-count 1 --max-count 5",

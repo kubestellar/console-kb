@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Docker Desktop Kubernetes",
-    "description": "Docker Desktop for Mac provides an integrated Docker experience on macOS, including a local Kubernetes cluster. It is ideal for developers looking to build and test applications in a Kubernetes environment without the overhead of managing a full cluster. However, it may not be suitable for production workloads due to resource limitations.",
+    "description": "Docker Desktop for Mac provides an integrated Docker experience with Kubernetes support for local development. It simplifies the setup of a Kubernetes cluster on macOS, allowing developers to easily test and deploy applications. Key trade-offs include limited scalability compared to cloud solutions and reliance on macOS-specific features.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
@@ -20,7 +20,7 @@
       },
       {
         "title": "Install Docker Desktop",
-        "description": "Run the downloaded installer to install Docker Desktop on your Mac.\n\n```bash\n\nopen ~/Downloads/Docker.dmg\n\nsudo cp -R /Volumes/Docker/Docker.app /Applications/\n\nhdiutil unmount /Volumes/Docker\n\n```\n\n> Replace with the actual downloaded file name if different.\n> This copies Docker Desktop to your Applications folder.\n> This unmounts the Docker installer.",
+        "description": "Run the downloaded installer to set up Docker Desktop on your Mac.\n\n```bash\n\nopen ~/Downloads/Docker.dmg\n\nsudo cp -R /Volumes/Docker/Docker.app /Applications/\n\nhdiutil unmount /Volumes/Docker\n\n```\n\n> Replace 'Docker.dmg' with the actual downloaded file name if different.\n> This copies Docker Desktop to your Applications folder.\n> This unmounts the Docker installer volume.",
         "commands": [
           "open ~/Downloads/Docker.dmg",
           "sudo cp -R /Volumes/Docker/Docker.app /Applications/",
@@ -28,16 +28,20 @@
         ]
       },
       {
-        "title": "Enable Kubernetes in Docker Desktop",
-        "description": "This step configures Docker Desktop to run a local Kubernetes cluster.\n\n```bash\n\nopen -a Docker\n\nsleep 10 && open -g 'Docker' --args --enable-kubernetes\n\n```\n\n> This launches Docker Desktop.\n> Waits for Docker to start and enables Kubernetes.",
+        "title": "Start Docker Desktop and Enable Kubernetes",
+        "description": "Launch Docker Desktop and enable Kubernetes support in the settings.\n\n```bash\n\nopen -a Docker\n\nsleep 30\n\nosascript -e 'tell application \"Docker\" to activate'\n\nosascript -e 'tell application \"System Events\" to tell process \"Docker\" to click menu item \"Preferences…\" of menu \"Docker\"'\n\nosascript -e 'tell application \"System Events\" to tell process \"Preferences\" to click checkbox \"Enable Kubernetes\"'\n\nosascript -e 'tell application \"System Events\" to tell process \"Preferences\" to click button \"Apply & Restart\"'\n\n```\n\n> This starts Docker Desktop.\n> Wait for Docker to initialize.\n> This brings Docker Desktop to the foreground.\n> This opens the preferences.\n> This enables Kubernetes.\n> This applies the changes and restarts Docker.",
         "commands": [
           "open -a Docker",
-          "sleep 10 && open -g 'Docker' --args --enable-kubernetes"
+          "sleep 30",
+          "osascript -e 'tell application \"Docker\" to activate'",
+          "osascript -e 'tell application \"System Events\" to tell process \"Docker\" to click menu item \"Preferences…\" of menu \"Docker\"'",
+          "osascript -e 'tell application \"System Events\" to tell process \"Preferences\" to click checkbox \"Enable Kubernetes\"'",
+          "osascript -e 'tell application \"System Events\" to tell process \"Preferences\" to click button \"Apply & Restart\"'"
         ]
       },
       {
         "title": "Verify Kubernetes Installation",
-        "description": "Check that Kubernetes is running correctly within Docker Desktop.\n\n```bash\n\nkubectl cluster-info\n\nkubectl get nodes\n\n```\n\n> This command shows the Kubernetes cluster information.\n> This command lists the nodes in the Kubernetes cluster.",
+        "description": "Check if Kubernetes is running and accessible via kubectl.\n\n```bash\n\nkubectl cluster-info\n\nkubectl get nodes\n\n```\n\n> This command shows the Kubernetes cluster information.\n> This command lists the nodes in the Kubernetes cluster.",
         "commands": [
           "kubectl cluster-info",
           "kubectl get nodes"
@@ -47,18 +51,20 @@
     "uninstall": [
       {
         "title": "Uninstall Docker Desktop",
-        "description": "This step removes Docker Desktop and all associated Kubernetes resources. Data loss may occur.\n\n```bash\n\nsudo rm -rf /Applications/Docker.app\n\nrm -rf ~/Library/Containers/com.docker.docker\n\n```\n\n> This removes the Docker application.\n> This removes Docker's container data.",
+        "description": "This will remove Docker Desktop and all associated Kubernetes resources. Data loss may occur.\n\n```bash\n\nosascript -e 'tell application \"Docker\" to quit'\n\nsudo rm -rf /Applications/Docker.app\n\nrm -rf ~/.docker\n\n```\n\n> This quits Docker Desktop.\n> This removes Docker Desktop from the Applications folder.\n> This removes Docker configuration and data.",
         "commands": [
+          "osascript -e 'tell application \"Docker\" to quit'",
           "sudo rm -rf /Applications/Docker.app",
-          "rm -rf ~/Library/Containers/com.docker.docker"
+          "rm -rf ~/.docker"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade Docker Desktop",
-        "description": "Backup your settings, perform the upgrade, and verify the installation.\n\n```bash\n\nopen https://store.docker.com/editions/community/docker-ce-desktop-mac\n\nopen ~/Downloads/Docker.dmg\n\nsudo cp -R /Volumes/Docker/Docker.app /Applications/\n\nkubectl get nodes\n\n```\n\n> Download the latest version.\n> Open the downloaded upgrade file.\n> Replace the existing Docker application.\n> Verify that the nodes are still available after the upgrade.",
+        "description": "Backup your Docker data, upgrade to the latest version, and verify the installation.\n\n```bash\n\ndocker save -o ~/docker-backup.tar docker-image-name\n\nopen https://store.docker.com/editions/community/docker-ce-desktop-mac\n\nopen ~/Downloads/Docker.dmg\n\nsudo cp -R /Volumes/Docker/Docker.app /Applications/\n\nkubectl get nodes\n\n```\n\n> Replace 'docker-image-name' with your actual image names.\n> Download the latest version.\n> Open the downloaded installer.\n> Replace the old version with the new one.\n> Verify that Kubernetes is still running.",
         "commands": [
+          "docker save -o ~/docker-backup.tar docker-image-name",
           "open https://store.docker.com/editions/community/docker-ce-desktop-mac",
           "open ~/Downloads/Docker.dmg",
           "sudo cp -R /Volumes/Docker/Docker.app /Applications/",
@@ -68,41 +74,41 @@
     ],
     "troubleshooting": [
       {
-        "title": "Kubernetes cluster is not starting",
-        "description": "**Cause:** Docker Desktop may not have enough resources allocated.\n\n**Fix:**\nIncrease CPU and memory allocation in Docker Desktop settings."
+        "title": "Error: 'Kubernetes is not running'",
+        "description": "**Cause:** Docker Desktop may not have started Kubernetes properly.\n\n**Fix:**\nRestart Docker Desktop and ensure Kubernetes is enabled in settings."
       },
       {
-        "title": "kubectl command not found",
-        "description": "**Cause:** kubectl is not installed or not in PATH.\n\n**Fix:**\nInstall kubectl using 'brew install kubectl'."
+        "title": "kubectl: command not found",
+        "description": "**Cause:** kubectl is not installed or not in the PATH.\n\n**Fix:**\nEnsure Docker Desktop is installed and kubectl is included in the installation."
       },
       {
-        "title": "Error: connection refused",
-        "description": "**Cause:** Kubernetes API server is not running.\n\n**Fix:**\nRestart Docker Desktop and check Kubernetes settings."
+        "title": "Error: 'Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused'",
+        "description": "**Cause:** Kubernetes API server is not running.\n\n**Fix:**\nCheck Docker Desktop settings to ensure Kubernetes is enabled and running."
       },
       {
-        "title": "Kubernetes version mismatch",
-        "description": "**Cause:** Docker Desktop may not be updated to the latest Kubernetes version.\n\n**Fix:**\nUpdate Docker Desktop to the latest version from the Docker website.\n\n**Affected versions:** <= 4.31"
+        "title": "Error: 'context deadline exceeded'",
+        "description": "**Cause:** Kubernetes cluster may be taking too long to start.\n\n**Fix:**\nWait for a few minutes and check the status again with 'kubectl cluster-info'."
       }
     ],
     "versionNotes": [
       {
         "version": "4.32",
-        "changes": "Added support for Kubernetes 1.30, improved resource management.",
+        "changes": "Improved Kubernetes integration and added support for Kubernetes v1.30.",
         "deprecations": "None.",
-        "migrationSteps": "No specific migration steps required."
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see output similar to 'Kubernetes master is running at https://192.168.99.100:8443' when running 'kubectl cluster-info'.",
+      "summary": "You should see output similar to 'Kubernetes master is running at https://127.0.0.1:6443' and a list of nodes when running 'kubectl get nodes'.",
       "codeSnippets": [
         "open https://store.docker.com/editions/community/docker-ce-desktop-mac",
         "open ~/Downloads/Docker.dmg",
         "sudo cp -R /Volumes/Docker/Docker.app /Applications/",
         "hdiutil unmount /Volumes/Docker",
         "open -a Docker",
-        "sleep 10 && open -g 'Docker' --args --enable-kubernetes",
-        "kubectl cluster-info",
-        "kubectl get nodes"
+        "sleep 30",
+        "osascript -e 'tell application \"Docker\" to activate'",
+        "osascript -e 'tell application \"System Events\" to tell process \"Docker\" to click menu item \"Preferences…\" of menu \"Docker\"'"
       ]
     }
   },
@@ -138,7 +144,8 @@
       "configuration"
     ],
     "installMethods": [
-      "cli"
+      "cli",
+      "gui"
     ],
     "containerImages": [
       "docker.io/library/nginx:latest"
@@ -159,7 +166,7 @@
     "description": "Ensure your Mac meets the minimum system requirements for Docker Desktop."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:26:39.187Z",
+    "scannedAt": "2026-04-17T12:19:31.175Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
