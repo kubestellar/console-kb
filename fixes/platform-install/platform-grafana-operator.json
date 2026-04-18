@@ -6,44 +6,54 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Grafana Operator",
-    "description": "The Grafana Operator simplifies the management of Grafana instances, dashboards, and data sources in Kubernetes. It is ideal for users who prefer infrastructure as code or GitOps workflows. Key trade-offs include the need for familiarity with Kubernetes custom resources and the potential complexity of managing multiple Grafana instances.",
+    "description": "The Grafana Operator is a Kubernetes operator that simplifies the management of Grafana instances, dashboards, and data sources using Kubernetes Custom Resources (CRs). It is ideal for users who prefer GitOps workflows or infrastructure as code approaches. Key trade-offs include the need for familiarity with Kubernetes CRs and potential complexity in managing multiple instances.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
+        "title": "Add the Grafana Helm repository",
+        "description": "This step adds the Grafana Helm chart repository to your Helm configuration, allowing you to install the Grafana Operator.\n\n```bash\n\nhelm repo add grafana-operator oci://ghcr.io/grafana/helm-charts\n\nhelm repo update\n\n```\n\n> This command sets up the repository for Grafana Operator.\n> Updates the local Helm chart repository cache.",
+        "commands": [
+          "helm repo add grafana-operator oci://ghcr.io/grafana/helm-charts",
+          "helm repo update"
+        ]
+      },
+      {
         "title": "Install the Grafana Operator",
-        "description": "This command installs the Grafana Operator in your Kubernetes cluster using Helm.\n\n```bash\n\nhelm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2\n\n```\n\n> Installs the Grafana Operator with the specified version.",
+        "description": "This command installs the Grafana Operator in your Kubernetes cluster using the specified version.\n\n```bash\n\nhelm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2\n\n```\n\n> Installs the Grafana Operator with the latest stable version.",
         "commands": [
           "helm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2"
         ]
       },
       {
-        "title": "Create a Grafana instance",
-        "description": "This step creates a Grafana instance using a custom resource definition (CRD).\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\n  labels:\n    dashboards: \"grafana\"\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: secret\nEOF\n\n```\n\n> Creates a Grafana instance with basic configuration.",
+        "title": "Verify the installation",
+        "description": "Check if the Grafana Operator is running correctly in the cluster.\n\n```bash\n\nkubectl get pods -n default\n\nkubectl get deployment grafana-operator -n default\n\n```\n\n> Replace 'default' with the namespace where the operator is installed if different.\n> Verifies that the Grafana Operator deployment is available.",
         "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\n  labels:\n    dashboards: \"grafana\"\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: secret\nEOF"
+          "kubectl get pods -n default",
+          "kubectl get deployment grafana-operator -n default"
+        ]
+      },
+      {
+        "title": "Create a Grafana instance",
+        "description": "This step creates a Grafana instance using a custom resource definition (CRD).\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: <REDACTED>\nEOF\n\n```\n\n> Creates a simple Grafana instance with admin credentials.",
+        "commands": [
+          "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: <REDACTED>\nEOF"
         ]
       },
       {
         "title": "Verify the Grafana instance",
-        "description": "This command checks the status of the Grafana instance to ensure it is running correctly.\n\n```bash\n\nkubectl get grafana grafana -o yaml\n\n```\n\n> Displays the details of the Grafana instance.",
+        "description": "Check if the Grafana instance is running and ready.\n\n```bash\n\nkubectl get grafana\n\nkubectl describe grafana grafana\n\n```\n\n> Lists all Grafana instances and their statuses.\n> Describes the Grafana instance for detailed information.",
         "commands": [
-          "kubectl get grafana grafana -o yaml"
-        ]
-      },
-      {
-        "title": "Deploy a sample dashboard",
-        "description": "This step deploys a sample Grafana dashboard using a custom resource definition (CRD).\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: sample-dashboard\nspec:\n  resyncPeriod: 30s\n  instanceSelector:\n    matchLabels:\n      dashboards: \"grafana\"\n  json: >\n    {\n      \"title\": \"Simple Dashboard\",\n      \"timezone\": \"browser\",\n      \"refresh\": \"5s\",\n      \"panels\": [],\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      }\n    }\nEOF\n\n```\n\n> Creates a sample dashboard in the Grafana instance.",
-        "commands": [
-          "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: sample-dashboard\nspec:\n  resyncPeriod: 30s\n  instanceSelector:\n    matchLabels:\n      dashboards: \"grafana\"\n  json: >\n    {\n      \"title\": \"Simple Dashboard\",\n      \"timezone\": \"browser\",\n      \"refresh\": \"5s\",\n      \"panels\": [],\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      }\n    }\nEOF"
+          "kubectl get grafana",
+          "kubectl describe grafana grafana"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the Grafana Operator",
-        "description": "This step removes the Grafana Operator and all associated resources. Be aware that this may lead to data loss if Grafana instances are not backed up.\n\n```bash\n\nhelm uninstall grafana-operator\n\nkubectl delete grafana grafana\n\n```\n\n> Uninstalls the Grafana Operator from the cluster.\n> Deletes the Grafana instance.",
+        "description": "This step removes the Grafana Operator from the cluster. Be aware that this may lead to loss of Grafana instances and associated resources.\n\n```bash\n\nhelm uninstall grafana-operator\n\nkubectl delete grafana grafana\n\n```\n\n> Uninstalls the Grafana Operator.\n> Deletes the Grafana instance created earlier.",
         "commands": [
           "helm uninstall grafana-operator",
           "kubectl delete grafana grafana"
@@ -53,47 +63,51 @@
     "upgrade": [
       {
         "title": "Upgrade the Grafana Operator",
-        "description": "Before upgrading, ensure you back up your Grafana instances. This step will upgrade the Grafana Operator to the latest version.\n\n```bash\n\nkubectl get grafana grafana -o yaml > grafana-backup.yaml\n\nhelm upgrade grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2\n\nkubectl get grafana grafana -o yaml\n\n```\n\n> Backs up the current Grafana instance configuration.\n> Upgrades the Grafana Operator to the specified version.\n> Verifies that the Grafana instance is still running after the upgrade.",
+        "description": "Backup the current configuration, upgrade the operator, and verify the upgrade.\n\n```bash\n\nkubectl get grafana -o yaml > grafana-backup.yaml\n\nhelm upgrade grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2\n\nkubectl get pods -n default\n\n```\n\n> Backs up the current Grafana instance configuration.\n> Upgrades the Grafana Operator to the specified version.\n> Verifies that the upgraded Grafana Operator is running.",
         "commands": [
-          "kubectl get grafana grafana -o yaml > grafana-backup.yaml",
+          "kubectl get grafana -o yaml > grafana-backup.yaml",
           "helm upgrade grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2",
-          "kubectl get grafana grafana -o yaml"
+          "kubectl get pods -n default"
         ]
       }
     ],
     "troubleshooting": [
       {
         "title": "Error: 'Error: unable to recognize \"\": no matches for kind \"Grafana\" in version \"grafana.integreatly.org/v1beta1\"'",
-        "description": "**Cause:** This indicates that the Grafana CRD is not installed or not recognized.\n\n**Fix:**\nEnsure that the Grafana Operator is installed and running properly."
+        "description": "**Cause:** The Grafana CRD may not be installed or registered correctly.\n\n**Fix:**\nEnsure the Grafana Operator is installed and the CRDs are applied: `kubectl apply -f https://raw.githubusercontent.com/grafana/grafana-operator/main/deploy/crds/grafana.integreatly.org_grafanas.yaml`."
       },
       {
-        "title": "Error: 'Error: failed to create Grafana: the server could not find the requested resource'",
-        "description": "**Cause:** This may occur if the Grafana instance is not defined correctly or the operator is not managing it.\n\n**Fix:**\nCheck the Grafana instance definition and ensure the operator is running."
+        "title": "Pod is in CrashLoopBackOff state.",
+        "description": "**Cause:** The Grafana instance may have misconfigured settings or insufficient resources.\n\n**Fix:**\nCheck the pod logs with `kubectl logs <pod-name>` and adjust the configuration or resources accordingly."
       },
       {
-        "title": "Error: 'Error: unable to connect to the Grafana instance'",
-        "description": "**Cause:** This can happen if the Grafana service is not exposed correctly.\n\n**Fix:**\nVerify the service configuration and ensure it is accessible."
+        "title": "Grafana instance not accessible.",
+        "description": "**Cause:** The service may not be exposed correctly or the ingress may not be configured.\n\n**Fix:**\nEnsure the service type is set to LoadBalancer or NodePort, and check ingress configurations."
       },
       {
-        "title": "Error: 'Error: Grafana instance not ready'",
-        "description": "**Cause:** The Grafana instance may not be fully initialized or there may be issues with the configuration.\n\n**Fix:**\nCheck the logs of the Grafana Operator and the Grafana instance for errors."
+        "title": "Error: 'Failed to install CRD: grafanas.integreatly.org already exists'",
+        "description": "**Cause:** The CRD for Grafana is already installed.\n\n**Fix:**\nUse `kubectl get crd` to check existing CRDs and skip CRD installation if already present."
       }
     ],
     "versionNotes": [
       {
         "version": "v5.22.2",
         "changes": "Added support for new Grafana features and improved CRD handling.",
-        "deprecations": "No specific deprecations noted in this version.",
+        "deprecations": "None.",
         "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see the Grafana instance running with the status 'Running' and the sample dashboard available in the Grafana UI.",
+      "summary": "You should see the Grafana instance running with the status 'Running' and the Grafana dashboard accessible via the configured service.",
       "codeSnippets": [
+        "helm repo add grafana-operator oci://ghcr.io/grafana/helm-charts",
+        "helm repo update",
         "helm upgrade -i grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator --version 5.22.2",
-        "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\n  labels:\n    dashboards: \"grafana\"\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: secret\nEOF",
-        "kubectl get grafana grafana -o yaml",
-        "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: sample-dashboard\nspec:\n  resyncPeriod: 30s\n  instanceSelector:\n    matchLabels:\n      dashboards: \"grafana\"\n  json: >\n    {\n      \"title\": \"Simple Dashboard\",\n      \"timezone\": \"browser\",\n      \"refresh\": \"5s\",\n      \"panels\": [],\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      }\n    }\nEOF"
+        "kubectl get pods -n default",
+        "kubectl get deployment grafana-operator -n default",
+        "kubectl apply -f - <<EOF\napiVersion: grafana.integreatly.org/v1beta1\nkind: Grafana\nmetadata:\n  name: grafana\nspec:\n  config:\n    log:\n      mode: \"console\"\n    security:\n      admin_user: root\n      admin_password: <REDACTED>\nEOF",
+        "kubectl get grafana",
+        "kubectl describe grafana grafana"
       ]
     }
   },
@@ -152,10 +166,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary resources."
+    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-18T12:10:39.713Z",
+    "scannedAt": "2026-04-18T00:11:39.933Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
