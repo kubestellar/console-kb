@@ -6,52 +6,46 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Trivy Operator (Aqua Security)",
-    "description": "The Trivy Operator is a Kubernetes-native security toolkit that continuously scans your cluster for vulnerabilities and compliance issues. It automates security reporting through Kubernetes Custom Resource Definitions, making it easy to monitor security risks in real-time. Key trade-offs include the need for proper RBAC configurations and potential performance impacts during scans.",
+    "description": "Trivy Operator is a Kubernetes-native security toolkit that helps you identify vulnerabilities in your container images and deployed applications. It is useful for ensuring compliance and security in your Kubernetes clusters. Key trade-offs include the need for proper RBAC configurations and potential performance overhead during vulnerability scanning.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Add the Trivy Operator Helm repository",
-        "description": "This step adds the official Trivy Operator Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add aquasecurity https://aquasecurity.github.io/helm-charts/\n\n```\n\n> This allows you to install the Trivy Operator using Helm.",
+        "title": "Add the Aqua Security Helm repository",
+        "description": "This step adds the official Aqua Security Helm repository to your Helm configuration, allowing you to install the Trivy Operator.\n\n```bash\n\nhelm repo add aqua https://aquasecurity.github.io/helm-charts\n\nhelm repo update\n\n```\n\n> This command adds the Aqua Security Helm repository.\n> Updates the local Helm chart repository cache.",
         "commands": [
-          "helm repo add aquasecurity https://aquasecurity.github.io/helm-charts/"
+          "helm repo add aqua https://aquasecurity.github.io/helm-charts",
+          "helm repo update"
         ]
       },
       {
         "title": "Install the Trivy Operator",
-        "description": "This command installs the Trivy Operator in the 'trivy-system' namespace with the specified version.\n\n```bash\n\nkubectl create namespace trivy-system\n\nhelm install trivy-operator aquasecurity/trivy-operator --namespace trivy-system --version 0.32.1\n\n```\n\n> Create a dedicated namespace for the Trivy Operator.\n> Install the Trivy Operator Helm chart.",
+        "description": "This step installs the Trivy Operator using Helm, specifying the namespace and version.\n\n```bash\n\nkubectl create namespace trivy-system\n\nhelm install trivy-operator aqua/trivy-operator --namespace trivy-system --version 0.23.0\n\n```\n\n> Creates a dedicated namespace for the Trivy Operator.\n> Installs the Trivy Operator in the trivy-system namespace.",
         "commands": [
           "kubectl create namespace trivy-system",
-          "helm install trivy-operator aquasecurity/trivy-operator --namespace trivy-system --version 0.32.1"
+          "helm install trivy-operator aqua/trivy-operator --namespace trivy-system --version 0.23.0"
         ]
       },
       {
         "title": "Verify the installation",
-        "description": "Check if the Trivy Operator pods are running correctly in the specified namespace.\n\n```bash\n\nkubectl get pods -n trivy-system\n\n```\n\n> You should see the Trivy Operator pods in a Running state.",
+        "description": "This step checks if the Trivy Operator pods are running correctly.\n\n```bash\n\nkubectl get pods -n trivy-system\n\n```\n\n> Lists all pods in the trivy-system namespace to verify the installation.",
         "commands": [
           "kubectl get pods -n trivy-system"
         ]
       },
       {
-        "title": "Create a sample Custom Resource",
-        "description": "This step creates a sample Custom Resource to initiate a vulnerability scan.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: trivy.aquasecurity.github.io/v1alpha1\nkind: VulnerabilityReport\nmetadata:\n  name: sample-vulnerability-report\n  namespace: default\nspec:\n  resource:\n    apiVersion: v1\n    kind: Pod\n    name: sample-pod\n    namespace: default\nEOF\n\n```\n\n> This creates a sample VulnerabilityReport resource.",
+        "title": "Create a TrivyConfiguration resource",
+        "description": "This step creates a TrivyConfiguration custom resource to define how the Trivy Operator should scan images.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: aquasecurity.github.io/v1alpha1\nkind: TrivyConfiguration\nmetadata:\n  name: trivy-config\n  namespace: trivy-system\nspec:\n  image: docker.io/aquasec/trivy:0.21.0\n  severity: HIGH, CRITICAL\nEOF\n\n```\n\n> Creates a configuration for scanning images with specified severity levels.",
         "commands": [
-          "cat <<EOF | kubectl apply -f -\napiVersion: trivy.aquasecurity.github.io/v1alpha1\nkind: VulnerabilityReport\nmetadata:\n  name: sample-vulnerability-report\n  namespace: default\nspec:\n  resource:\n    apiVersion: v1\n    kind: Pod\n    name: sample-pod\n    namespace: default\nEOF"
-        ]
-      },
-      {
-        "title": "Verify the Custom Resource",
-        "description": "Check if the Custom Resource created is ready and has generated a report.\n\n```bash\n\nkubectl get vulnerabilityreport -n default\n\n```\n\n> You should see the status of the VulnerabilityReport.",
-        "commands": [
-          "kubectl get vulnerabilityreport -n default"
+          "cat <<EOF | kubectl apply -f -\napiVersion: aquasecurity.github.io/v1alpha1\nkind: TrivyConfiguration\nmetadata:\n  name: trivy-config\n  namespace: trivy-system\nspec:\n  image: docker.io/aquasec/trivy:0.21.0\n  severity: HIGH, CRITICAL\nEOF"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the Trivy Operator",
-        "description": "This step removes the Trivy Operator and its associated resources. Be aware that this will delete all related Custom Resource Definitions and reports, leading to data loss.\n\n```bash\n\nhelm uninstall trivy-operator --namespace trivy-system\n\nkubectl delete namespace trivy-system\n\n```\n\n> Uninstalls the Trivy Operator.\n> Deletes the namespace and all resources within it.",
+        "description": "This step removes the Trivy Operator and its associated resources. Be aware that any configurations and scan results will be lost.\n\n```bash\n\nhelm uninstall trivy-operator --namespace trivy-system\n\nkubectl delete namespace trivy-system\n\n```\n\n> Uninstalls the Trivy Operator from the trivy-system namespace.\n> Deletes the namespace and all resources within it.",
         "commands": [
           "helm uninstall trivy-operator --namespace trivy-system",
           "kubectl delete namespace trivy-system"
@@ -61,49 +55,49 @@
     "upgrade": [
       {
         "title": "Upgrade the Trivy Operator",
-        "description": "Before upgrading, ensure to back up any important reports. This step will upgrade the Trivy Operator to the latest version.\n\n```bash\n\nkubectl get vulnerabilityreport -n default -o yaml > backup-vulnerability-reports.yaml\n\nhelm upgrade trivy-operator aquasecurity/trivy-operator --namespace trivy-system --version 0.32.1\n\nkubectl get pods -n trivy-system\n\n```\n\n> Backup existing VulnerabilityReports.\n> Upgrade the Trivy Operator to the specified version.\n> Verify that the upgraded pods are running.",
+        "description": "Before upgrading, ensure you back up any important configurations. This step upgrades the Trivy Operator to the specified version.\n\n```bash\n\nkubectl get trivyconfiguration -n trivy-system -o yaml > trivy-config-backup.yaml\n\nhelm upgrade trivy-operator aqua/trivy-operator --namespace trivy-system --version 0.23.0\n\nkubectl get pods -n trivy-system\n\n```\n\n> Backs up the current TrivyConfiguration.\n> Upgrades the Trivy Operator to the specified version.\n> Verifies that the pods are running after the upgrade.",
         "commands": [
-          "kubectl get vulnerabilityreport -n default -o yaml > backup-vulnerability-reports.yaml",
-          "helm upgrade trivy-operator aquasecurity/trivy-operator --namespace trivy-system --version 0.32.1",
+          "kubectl get trivyconfiguration -n trivy-system -o yaml > trivy-config-backup.yaml",
+          "helm upgrade trivy-operator aqua/trivy-operator --namespace trivy-system --version 0.23.0",
           "kubectl get pods -n trivy-system"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'no matches for kind \"VulnerabilityReport\" in version \"trivy.aquasecurity.github.io/v1alpha1\"'",
-        "description": "**Cause:** The Custom Resource Definition for VulnerabilityReport may not be installed.\n\n**Fix:**\nEnsure that the Trivy Operator is installed correctly and that the CRDs are applied."
+        "title": "Error: 'trivy-operator not found'",
+        "description": "**Cause:** The Trivy Operator has not been installed in the specified namespace.\n\n**Fix:**\nEnsure that you have installed the Trivy Operator in the correct namespace using the Helm install command."
       },
       {
-        "title": "Pods in 'trivy-system' namespace are in 'CrashLoopBackOff' state.",
-        "description": "**Cause:** The Trivy Operator may be misconfigured or lacking necessary permissions.\n\n**Fix:**\nCheck the logs of the pods using 'kubectl logs <pod-name> -n trivy-system' for errors."
+        "title": "Pods in 'CrashLoopBackOff' state",
+        "description": "**Cause:** The Trivy Operator may be misconfigured or unable to pull the required images.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n trivy-system' for more details."
       },
       {
-        "title": "Vulnerability reports are not generated.",
-        "description": "**Cause:** The Trivy Operator may not be watching the correct namespaces or resources.\n\n**Fix:**\nEnsure that the operator has the correct RBAC permissions and is configured to watch the desired namespaces."
+        "title": "No vulnerabilities found when expected",
+        "description": "**Cause:** The Trivy Operator may not be scanning the correct namespaces or images.\n\n**Fix:**\nVerify the TrivyConfiguration resource and ensure it targets the correct images and namespaces."
       },
       {
-        "title": "Error: 'failed to get report: not found'",
-        "description": "**Cause:** The specified VulnerabilityReport resource may not exist or may have been deleted.\n\n**Fix:**\nVerify the existence of the VulnerabilityReport using 'kubectl get vulnerabilityreport -n <namespace>'."
+        "title": "Error: 'permission denied'",
+        "description": "**Cause:** Insufficient RBAC permissions for the Trivy Operator.\n\n**Fix:**\nEnsure that the necessary RBAC roles and bindings are correctly configured for the Trivy Operator."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.32.1",
-        "changes": "Added support for new compliance reports including CIS Kubernetes Benchmark v1.23 and enhanced RBAC scanning capabilities.",
-        "deprecations": "No specific deprecations noted in this version.",
-        "migrationSteps": "No migration steps required for upgrading from previous versions."
+        "version": "v0.23",
+        "changes": "Added support for custom image repositories and improved scanning performance.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see the Trivy Operator pods running in the 'trivy-system' namespace and the created VulnerabilityReport should show a status of 'Ready'.",
+      "summary": "You should see the Trivy Operator pod running in the 'trivy-system' namespace with a status of 'Running'. Use 'kubectl get pods -n trivy-system' to verify.",
       "codeSnippets": [
-        "helm repo add aquasecurity https://aquasecurity.github.io/helm-charts/",
+        "helm repo add aqua https://aquasecurity.github.io/helm-charts",
+        "helm repo update",
         "kubectl create namespace trivy-system",
-        "helm install trivy-operator aquasecurity/trivy-operator --namespace trivy-system --version 0.32.1",
+        "helm install trivy-operator aqua/trivy-operator --namespace trivy-system --version 0.23.0",
         "kubectl get pods -n trivy-system",
-        "cat <<EOF | kubectl apply -f -\napiVersion: trivy.aquasecurity.github.io/v1alpha1\nkind: VulnerabilityReport\nmetadata:\n  name: sample-vulnerability-report\n  namespace: default\nspec:\n  resource:\n    apiVersion: v1\n    kind: Pod\n    name: sample-pod\n    namespace: default\nEOF",
-        "kubectl get vulnerabilityreport -n default"
+        "cat <<EOF | kubectl apply -f -\napiVersion: aquasecurity.github.io/v1alpha1\nkind: TrivyConfiguration\nmetadata:\n  name: trivy-config\n  namespace: trivy-system\nspec:\n  image: docker.io/aquasec/trivy:0.21.0\n  severity: HIGH, CRITICAL\nEOF"
       ]
     }
   },
@@ -119,16 +113,14 @@
     "platformType": "operator",
     "platformProvider": "Aqua Security",
     "platformVersions": [
-      "v0.32.1"
+      "v0.21",
+      "v0.22",
+      "v0.23"
     ],
     "supportedK8sVersions": [
       "1.25",
       "1.26",
-      "1.27",
-      "1.28",
-      "1.29",
-      "1.30",
-      "1.31"
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -145,7 +137,7 @@
       "helm"
     ],
     "containerImages": [
-      "ghcr.io/aquasecurity/trivy-operator:v0.32.1"
+      "docker.io/aquasec/trivy:0.21.0"
     ],
     "sourceUrls": {
       "docs": "https://aquasecurity.github.io/trivy-operator/",
@@ -160,10 +152,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
+    "description": "Ensure you have a Kubernetes cluster running version 1.25 or higher and the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-03-18T12:10:18.115Z",
+    "scannedAt": "2026-04-18T12:06:53.824Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
