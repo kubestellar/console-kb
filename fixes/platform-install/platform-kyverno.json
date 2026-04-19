@@ -6,52 +6,46 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Kyverno (Policy Engine)",
-    "description": "Kyverno is a Kubernetes-native policy engine that allows teams to manage security and compliance through policy-as-code. It is particularly useful for automating governance and ensuring that Kubernetes resources adhere to organizational policies. Key trade-offs include the need for proper policy definitions and potential performance impacts if overly complex policies are applied.",
+    "description": "Kyverno is a Kubernetes-native policy engine that allows users to manage security and compliance through policy-as-code. It is particularly useful for teams looking to enforce policies consistently across their Kubernetes clusters. Key trade-offs include the need for ongoing policy management and potential performance impacts depending on the complexity of the policies defined.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Add the Kyverno Helm repository",
-        "description": "This step adds the official Kyverno Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add kyverno https://kyverno.github.io/kyverno\n\n```\n\n> This command adds the Kyverno repository for Helm.",
+        "description": "This step adds the official Kyverno Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add kyverno https://kyverno.github.io/kyverno\n\nhelm repo update\n\n```\n\n> This command adds the Kyverno repository.\n> Updates the local Helm chart repository cache.",
         "commands": [
-          "helm repo add kyverno https://kyverno.github.io/kyverno"
+          "helm repo add kyverno https://kyverno.github.io/kyverno",
+          "helm repo update"
         ]
       },
       {
-        "title": "Install Kyverno",
-        "description": "This command installs Kyverno in the 'kyverno' namespace using the specified version.\n\n```bash\n\nkubectl create namespace kyverno\n\nhelm install kyverno kyverno/kyverno --namespace kyverno --version 1.17.1\n\n```\n\n> Create a namespace for Kyverno.\n> Install Kyverno with the specified version.",
+        "title": "Install Kyverno with Helm",
+        "description": "This step installs Kyverno in the 'kyverno' namespace using the specified version.\n\n```bash\n\nkubectl create namespace kyverno\n\nhelm install kyverno kyverno/kyverno --namespace kyverno --version 1.17.1\n\n```\n\n> Creates a namespace for Kyverno.\n> Installs Kyverno using the specified version.",
         "commands": [
           "kubectl create namespace kyverno",
           "helm install kyverno kyverno/kyverno --namespace kyverno --version 1.17.1"
         ]
       },
       {
-        "title": "Verify the installation",
-        "description": "This command checks if the Kyverno pods are running correctly.\n\n```bash\n\nkubectl get pods -n kyverno\n\n```\n\n> Ensure all Kyverno pods are in the 'Running' state.",
+        "title": "Verify Kyverno installation",
+        "description": "This step checks if the Kyverno pods are running successfully.\n\n```bash\n\nkubectl get pods -n kyverno\n\n```\n\n> Lists all pods in the kyverno namespace to verify the installation.",
         "commands": [
           "kubectl get pods -n kyverno"
         ]
       },
       {
-        "title": "Create a sample policy",
-        "description": "This step creates a sample policy to demonstrate Kyverno's functionality.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kyverno/kyverno/main/docs/examples/policies/policy.yaml\n\n```\n\n> Apply a sample policy from the Kyverno GitHub repository.",
+        "title": "Create an example policy",
+        "description": "This step creates a sample policy to demonstrate Kyverno's functionality.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-labels\nspec:\n  rules:\n    - name: check-labels\n      match:\n        resources:\n          kinds:\n            - Pod\n      validate:\n        message: \"Label 'app' is required.\"\n        pattern:\n          metadata:\n            labels:\n              app: ?\nEOF\n\n```\n\n> This command creates a policy that requires the 'app' label on Pods.",
         "commands": [
-          "kubectl apply -f https://raw.githubusercontent.com/kyverno/kyverno/main/docs/examples/policies/policy.yaml"
-        ]
-      },
-      {
-        "title": "Verify the policy",
-        "description": "This command checks if the policy is applied and functioning as expected.\n\n```bash\n\nkubectl get cpol -n kyverno\n\n```\n\n> List the cluster policies to verify the sample policy is present.",
-        "commands": [
-          "kubectl get cpol -n kyverno"
+          "kubectl apply -f - <<EOF\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-labels\nspec:\n  rules:\n    - name: check-labels\n      match:\n        resources:\n          kinds:\n            - Pod\n      validate:\n        message: \"Label 'app' is required.\"\n        pattern:\n          metadata:\n            labels:\n              app: ?\nEOF"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall Kyverno",
-        "description": "This step removes Kyverno and its associated resources. Be aware that any policies created will also be deleted.\n\n```bash\n\nhelm uninstall kyverno --namespace kyverno\n\nkubectl delete namespace kyverno\n\n```\n\n> Uninstall the Kyverno release.\n> Delete the namespace and all resources within it.",
+        "description": "This step removes Kyverno from the cluster. Be aware that any policies created will also be deleted, which may lead to data loss in terms of policy enforcement.\n\n```bash\n\nhelm uninstall kyverno --namespace kyverno\n\nkubectl delete namespace kyverno\n\n```\n\n> Uninstalls the Kyverno release.\n> Deletes the Kyverno namespace and all resources within it.",
         "commands": [
           "helm uninstall kyverno --namespace kyverno",
           "kubectl delete namespace kyverno"
@@ -61,9 +55,9 @@
     "upgrade": [
       {
         "title": "Upgrade Kyverno",
-        "description": "Before upgrading, ensure you back up existing policies. This step performs the upgrade and verifies the installation.\n\n```bash\n\nkubectl get cpol -n kyverno -o yaml > backup-policies.yaml\n\nhelm upgrade kyverno kyverno/kyverno --namespace kyverno --version 1.17.1\n\nkubectl get pods -n kyverno\n\n```\n\n> Backup existing policies to a file.\n> Upgrade Kyverno to the specified version.\n> Verify that all pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you have a backup of your policies. This step will upgrade Kyverno to the latest version.\n\n```bash\n\nkubectl get clusterpolicies -o yaml > clusterpolicies-backup.yaml\n\nhelm upgrade kyverno kyverno/kyverno --namespace kyverno --version 1.17.1\n\nkubectl get pods -n kyverno\n\n```\n\n> Backs up existing cluster policies.\n> Upgrades Kyverno to the specified version.\n> Verifies that the Kyverno pods are running after the upgrade.",
         "commands": [
-          "kubectl get cpol -n kyverno -o yaml > backup-policies.yaml",
+          "kubectl get clusterpolicies -o yaml > clusterpolicies-backup.yaml",
           "helm upgrade kyverno kyverno/kyverno --namespace kyverno --version 1.17.1",
           "kubectl get pods -n kyverno"
         ]
@@ -71,39 +65,39 @@
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Kyverno is not running'",
-        "description": "**Cause:** Kyverno pods may not have started due to insufficient resources.\n\n**Fix:**\nCheck the resource allocation and ensure the nodes have enough CPU and memory."
+        "title": "Error: 'failed to create policy'",
+        "description": "**Cause:** This may occur if the policy YAML is incorrectly formatted.\n\n**Fix:**\nCheck the policy YAML for syntax errors and ensure it adheres to the required schema."
       },
       {
-        "title": "Error: 'Policy not applied'",
-        "description": "**Cause:** The policy may have syntax errors or is not properly defined.\n\n**Fix:**\nReview the policy YAML for errors and validate it using 'kubectl apply --dry-run'."
+        "title": "Kyverno pod is in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This can happen if there is an issue with the configuration or resource limits.\n\n**Fix:**\nCheck the logs of the Kyverno pod using 'kubectl logs <pod-name> -n kyverno' for more details."
       },
       {
-        "title": "Error: 'Failed to create resource'",
-        "description": "**Cause:** The policy may be blocking the creation of certain resources based on its rules.\n\n**Fix:**\nCheck the policy rules and adjust them if necessary."
+        "title": "Policies are not being enforced",
+        "description": "**Cause:** This may occur if the policies are not correctly applied or if there are issues with the Kyverno controller.\n\n**Fix:**\nEnsure that the policies are applied correctly and check the status of the Kyverno pods."
       },
       {
-        "title": "Kyverno pod crashes with 'OOMKilled'",
-        "description": "**Cause:** The pod is exceeding its memory limits.\n\n**Fix:**\nIncrease the memory limits in the Kyverno deployment configuration."
+        "title": "Error: 'unable to validate resource'",
+        "description": "**Cause:** This can happen if the resource being validated does not match the policy criteria.\n\n**Fix:**\nReview the policy rules and ensure that the resource meets the specified criteria."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.17.1",
-        "changes": "Improved policy validation performance and added support for new policy types.",
-        "deprecations": "Deprecated certain legacy policy types that are no longer recommended.",
-        "migrationSteps": "Review and update any deprecated policies to align with the new policy types."
+        "changes": "Improved policy validation performance and added support for new Kubernetes resource types.",
+        "deprecations": "No specific deprecations noted in this release.",
+        "migrationSteps": "No special migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see the Kyverno pods running with the output similar to 'NAME READY STATUS RESTARTS AGE' followed by the pod names.",
+      "summary": "You should see the Kyverno pods running in the 'kyverno' namespace with a status of 'Running'. Use 'kubectl get pods -n kyverno' to verify.",
       "codeSnippets": [
         "helm repo add kyverno https://kyverno.github.io/kyverno",
+        "helm repo update",
         "kubectl create namespace kyverno",
         "helm install kyverno kyverno/kyverno --namespace kyverno --version 1.17.1",
         "kubectl get pods -n kyverno",
-        "kubectl apply -f https://raw.githubusercontent.com/kyverno/kyverno/main/docs/examples/policies/policy.yaml",
-        "kubectl get cpol -n kyverno"
+        "kubectl apply -f - <<EOF\napiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: require-labels\nspec:\n  rules:\n    - name: check-labels\n      match:\n        resources:\n          kinds:\n            - Pod\n      validate:\n        message: \"Label 'app' is required.\"\n        pattern:\n          metadata:\n            labels:\n              app: ?\nEOF"
       ]
     }
   },
@@ -160,10 +154,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the required tools installed."
+    "description": "Ensure you have a Kubernetes cluster running version 1.25 or higher and have kubectl and Helm installed."
   },
   "security": {
-    "scannedAt": "2026-03-17T12:13:36.661Z",
+    "scannedAt": "2026-04-19T18:08:55.576Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

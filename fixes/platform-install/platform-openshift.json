@@ -6,117 +6,130 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Red Hat OpenShift Container Platform (OCP)",
-    "description": "Red Hat OpenShift Container Platform (OCP) is an enterprise Kubernetes distribution that provides a developer-friendly platform for deploying and managing containerized applications. It includes additional features such as a developer console, integrated CI/CD, and enhanced security. Key trade-offs include the complexity of setup and the need for a subscription for enterprise features.",
+    "description": "Red Hat OpenShift Container Platform (OCP) is a powerful Kubernetes distribution that provides a comprehensive platform for developing and managing containerized applications. It is ideal for enterprises looking for a robust solution with built-in CI/CD, monitoring, and security features. However, it may require more resources and has a steeper learning curve compared to simpler Kubernetes distributions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
     "steps": [
       {
-        "title": "Install the OpenShift CLI",
-        "description": "This step installs the OpenShift command-line interface (CLI) tool, which is essential for interacting with your OpenShift cluster.\n\n```bash\n\ncurl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m).tar.gz\n\ntar -xvf oc-linux-$(uname -s)-$(uname -m).tar.gz\n\nsudo mv oc /usr/local/bin/\n\noc version\n\n```\n\n> Download the latest OpenShift CLI\n> Extract the downloaded tarball\n> Move the CLI to a directory in your PATH\n> Verify the installation of the OpenShift CLI",
+        "title": "Install the CLI",
+        "description": "This step installs the OpenShift CLI (oc) which is necessary for interacting with your OpenShift cluster.\n\n```bash\n\ncurl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m) && chmod +x oc-linux-$(uname -s)-$(uname -m) && sudo mv oc-linux-$(uname -s)-$(uname -m) /usr/local/bin/oc\n\n```\n\n> This command downloads the latest OpenShift CLI.",
         "commands": [
-          "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m).tar.gz",
-          "tar -xvf oc-linux-$(uname -s)-$(uname -m).tar.gz",
-          "sudo mv oc /usr/local/bin/",
-          "oc version"
+          "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m) && chmod +x oc-linux-$(uname -s)-$(uname -m) && sudo mv oc-linux-$(uname -s)-$(uname -m) /usr/local/bin/oc"
         ]
       },
       {
-        "title": "Create an OpenShift Cluster",
-        "description": "This step creates a new OpenShift cluster using the OpenShift Installer. You will specify the version, node count, and region.\n\n```bash\n\nopenshift-install create cluster --dir=<INSTALL_DIR> --log-level=info\n\n```\n\n> Replace <INSTALL_DIR> with your desired installation directory",
+        "title": "Create the OpenShift Cluster",
+        "description": "This step creates an OpenShift cluster using the OpenShift Installer.\n\n```bash\n\nopenshift-install create cluster --dir=cluster --log-level=info\n\n```\n\n> Make sure to configure the install-config.yaml file in the cluster directory before running this command.",
         "commands": [
-          "openshift-install create cluster --dir=<INSTALL_DIR> --log-level=info"
+          "openshift-install create cluster --dir=cluster --log-level=info"
         ]
       },
       {
         "title": "Set up kubeconfig",
-        "description": "This step configures your kubeconfig file to allow access to your new OpenShift cluster.\n\n```bash\n\nexport KUBECONFIG=<INSTALL_DIR>/auth/kubeconfig\n\noc login -u kubeadmin -p <PASSWORD> https://<CLUSTER_API_URL>:6443\n\n```\n\n> Set the KUBECONFIG environment variable\n> Replace <PASSWORD> and <CLUSTER_API_URL> with your cluster's details",
+        "description": "This step configures your kubeconfig file to access the OpenShift cluster.\n\n```bash\n\nexport KUBECONFIG=$(pwd)/cluster/auth/kubeconfig\n\n```\n\n> This sets the KUBECONFIG environment variable to point to your cluster's kubeconfig.",
         "commands": [
-          "export KUBECONFIG=<INSTALL_DIR>/auth/kubeconfig",
-          "oc login -u kubeadmin -p <PASSWORD> https://<CLUSTER_API_URL>:6443"
+          "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig"
         ]
       },
       {
         "title": "Verify Cluster Nodes",
-        "description": "This step checks the status of the nodes in your OpenShift cluster to ensure they are ready.\n\n```bash\n\noc get nodes\n\n```\n\n> List all nodes and their statuses",
+        "description": "This step checks the status of the nodes in your OpenShift cluster.\n\n```bash\n\noc get nodes\n\n```\n\n> You should see the nodes listed with a status of 'Ready'.",
         "commands": [
           "oc get nodes"
         ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "This step includes setting up monitoring, autoscaling, and RBAC for your OpenShift cluster.\n\n```bash\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/cluster-monitoring-config.yaml\n\noc adm policy add-cluster-role-to-user cluster-admin <USERNAME>\n\n```\n\n> Apply the monitoring configuration\n> Replace <USERNAME> with the user you want to grant admin privileges",
+        "description": "This step enables monitoring and autoscaling features in your OpenShift cluster.\n\n```bash\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/cluster-monitoring-config.yaml\n\noc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler-config.yaml\n\n```\n\n> This command sets up the monitoring configuration.\n> This command sets up the autoscaler configuration.",
         "commands": [
           "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/cluster-monitoring-config.yaml",
-          "oc adm policy add-cluster-role-to-user cluster-admin <USERNAME>"
+          "oc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler-config.yaml"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall OpenShift Cluster",
-        "description": "This step will remove the OpenShift cluster and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\nopenshift-install destroy cluster --dir=<INSTALL_DIR> --log-level=info\n\n```\n\n> Replace <INSTALL_DIR> with your installation directory",
+        "title": "Remove the OpenShift Cluster",
+        "description": "This step will remove the OpenShift cluster and all associated resources. Be aware that this will lead to data loss.\n\n```bash\n\nopenshift-install destroy cluster --dir=cluster --log-level=info\n\n```",
         "commands": [
-          "openshift-install destroy cluster --dir=<INSTALL_DIR> --log-level=info"
+          "openshift-install destroy cluster --dir=cluster --log-level=info"
         ]
       },
       {
         "title": "Clean Up Orphaned Resources",
-        "description": "This step ensures that any orphaned resources such as load balancers, PVCs, and DNS records are removed.\n\n```bash\n\nkubectl delete pvc --all\n\nkubectl delete services --all\n\n```\n\n> Delete all persistent volume claims\n> Delete all services",
+        "description": "This step ensures that any orphaned resources such as load balancers and PVCs are removed.\n\n```bash\n\ngcloud compute addresses delete <ADDRESS_NAME> --region=<REGION>\n\n```\n\n> Replace <ADDRESS_NAME> and <REGION> with your specific values.",
         "commands": [
-          "kubectl delete pvc --all",
-          "kubectl delete services --all"
+          "gcloud compute addresses delete <ADDRESS_NAME> --region=<REGION>"
         ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade OpenShift Cluster",
-        "description": "Before upgrading, ensure you back up your cluster data. This step will guide you through the upgrade process.\n\n```bash\n\noc adm upgrade --to=<NEW_VERSION>\n\noc get nodes\n\noc get clusterversion\n\n```\n\n> Replace <NEW_VERSION> with the target version\n> Verify that all nodes are ready after the upgrade\n> Check the cluster version to confirm the upgrade",
+        "title": "Backup Cluster Data",
+        "description": "Before upgrading, ensure that you backup your cluster data.\n\n```bash\n\noc adm must-gather --image=quay.io/openshift-release-dev/ocp-v4.0-art-dev:latest\n\n```\n\n> This command gathers all necessary data for backup.",
         "commands": [
-          "oc adm upgrade --to=<NEW_VERSION>",
-          "oc get nodes",
-          "oc get clusterversion"
+          "oc adm must-gather --image=quay.io/openshift-release-dev/ocp-v4.0-art-dev:latest"
+        ]
+      },
+      {
+        "title": "Drain and Cordon Nodes",
+        "description": "This step prepares the nodes for upgrade by draining and cordoning them.\n\n```bash\n\noc adm drain <NODE_NAME> --ignore-daemonsets --delete-local-data\n\noc adm cordon <NODE_NAME>\n\n```\n\n> Replace <NODE_NAME> with the name of your node.\n> This prevents new pods from being scheduled on the node.",
+        "commands": [
+          "oc adm drain <NODE_NAME> --ignore-daemonsets --delete-local-data",
+          "oc adm cordon <NODE_NAME>"
+        ]
+      },
+      {
+        "title": "Upgrade the Cluster",
+        "description": "This step performs the actual upgrade of the OpenShift cluster.\n\n```bash\n\noc adm upgrade --to-image=<NEW_IMAGE>\n\n```\n\n> Replace <NEW_IMAGE> with the desired version.",
+        "commands": [
+          "oc adm upgrade --to-image=<NEW_IMAGE>"
+        ]
+      },
+      {
+        "title": "Post-Upgrade Verification",
+        "description": "This step verifies that the upgrade was successful.\n\n```bash\n\noc get nodes\n\n```\n\n> Ensure all nodes are in 'Ready' state.",
+        "commands": [
+          "oc get nodes"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'oc login: error: unable to connect to the server'",
-        "description": "**Cause:** The OpenShift API server may be down or unreachable.\n\n**Fix:**\nCheck the status of the OpenShift API server and network connectivity."
+        "title": "Error: 'Unable to connect to the server: dial tcp <IP>:<PORT>: connect: connection refused'",
+        "description": "**Cause:** This indicates that the OpenShift API server is not reachable.\n\n**Fix:**\nCheck the status of the OpenShift services and ensure they are running."
       },
       {
-        "title": "Error: 'node not ready'",
-        "description": "**Cause:** One or more nodes may not be in a ready state due to resource constraints or configuration issues.\n\n**Fix:**\nInspect the node status and logs using 'oc describe node <NODE_NAME>'."
+        "title": "Error: 'no matches for kind \"Deployment\" in version \"apps/v1\"'",
+        "description": "**Cause:** This usually means that the API version is not supported in the current cluster version.\n\n**Fix:**\nEnsure that you are using the correct API version for your OpenShift version.\n\n**Affected versions:** <= 4.14"
       },
       {
-        "title": "Error: 'failed to pull image'",
-        "description": "**Cause:** The image may not be available in the specified registry.\n\n**Fix:**\nVerify the image name and check the image registry for availability."
+        "title": "Error: 'Insufficient CPU for pod'",
+        "description": "**Cause:** This indicates that there are not enough resources available to schedule the pod.\n\n**Fix:**\nScale up your cluster or adjust resource requests for your pods."
       },
       {
-        "title": "Error: 'no resources found'",
-        "description": "**Cause:** The specified resource may not exist in the current namespace.\n\n**Fix:**\nEnsure you are in the correct namespace or check the resource name."
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** This indicates that the specified image cannot be pulled from the registry.\n\n**Fix:**\nCheck the image name and ensure that the image exists in the specified registry."
       }
     ],
     "versionNotes": [
       {
         "version": "4.17",
-        "changes": "Introduced enhanced security features, improved developer experience with new CLI commands.",
-        "deprecations": "Deprecated legacy authentication methods.",
-        "migrationSteps": "Review the new security features and update your authentication methods accordingly."
+        "changes": "Added support for new storage classes, improved security features, and enhanced monitoring capabilities.",
+        "deprecations": "Deprecated legacy networking plugins.",
+        "migrationSteps": "If upgrading from 4.16, ensure to migrate any legacy networking configurations to the new supported plugins."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'oc get nodes' showing all nodes in 'Ready' status.",
+      "summary": "You should see the nodes listed with a status of 'Ready' when running 'oc get nodes'.",
       "codeSnippets": [
-        "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m).tar.gz",
-        "tar -xvf oc-linux-$(uname -s)-$(uname -m).tar.gz",
-        "sudo mv oc /usr/local/bin/",
-        "oc version",
-        "openshift-install create cluster --dir=<INSTALL_DIR> --log-level=info",
-        "export KUBECONFIG=<INSTALL_DIR>/auth/kubeconfig",
-        "oc login -u kubeadmin -p <PASSWORD> https://<CLUSTER_API_URL>:6443",
-        "oc get nodes"
+        "curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/oc-linux-$(uname -s)-$(uname -m) && chmod +x oc-linux-$(uname -s)-$(uname -m) && sudo mv oc-linux-$(uname -s)-$(uname -m) /usr/local/bin/oc",
+        "openshift-install create cluster --dir=cluster --log-level=info",
+        "export KUBECONFIG=$(pwd)/cluster/auth/kubeconfig",
+        "oc get nodes",
+        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-monitoring-operator/master/deploy/cluster-monitoring-config.yaml",
+        "oc apply -f https://raw.githubusercontent.com/openshift/cluster-autoscaler/master/deploy/cluster-autoscaler-config.yaml"
       ]
     }
   },
@@ -159,7 +172,7 @@
       "kubectl"
     ],
     "containerImages": [
-      "registry.redhat.io/openshift4/ose-operator:v4.17"
+      "quay.io/openshift/origin-4.17:latest"
     ],
     "sourceUrls": {
       "docs": "https://docs.openshift.com/container-platform/latest/",
@@ -173,12 +186,12 @@
       "kubectl",
       "openshift-install"
     ],
-    "cloudCLI": "oc >= 4.14",
+    "cloudCLI": "gcloud >= 450.0",
     "resources": "Minimum 4 vCPU, 16GB RAM per node",
-    "description": "Ensure you have the necessary tools installed and sufficient resources for the cluster."
+    "description": "Ensure you have the necessary tools and resources before proceeding with the installation."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:23:33.884Z",
+    "scannedAt": "2026-04-19T18:11:03.802Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
