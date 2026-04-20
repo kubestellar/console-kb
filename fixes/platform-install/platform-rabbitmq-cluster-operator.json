@@ -6,87 +6,93 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure RabbitMQ Cluster Operator",
-    "description": "The RabbitMQ Cluster Operator simplifies the deployment and management of RabbitMQ clusters on Kubernetes. It automates tasks such as cluster creation, upgrades, and graceful shutdowns. This operator is ideal for users looking to manage RabbitMQ clusters efficiently within Kubernetes environments.",
+    "description": "The RabbitMQ Cluster Operator is a Kubernetes operator designed to manage RabbitMQ clusters within Kubernetes environments. It simplifies the deployment, scaling, and management of RabbitMQ instances, making it ideal for applications that require reliable messaging. Key trade-offs include the need for Kubernetes expertise and potential complexity in configuration.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
-        "title": "Install the RabbitMQ Cluster Operator",
-        "description": "This step installs the RabbitMQ Cluster Operator using the official kubectl manifest from the RabbitMQ project.\n\n```bash\n\nkubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml\n\n```\n\n> Installs the RabbitMQ Cluster Operator and its CRDs from the latest official release.",
+        "title": "Add the RabbitMQ Cluster Operator Helm repository",
+        "description": "This step adds the official RabbitMQ Cluster Operator Helm repository to your Helm configuration.\n\n```bash\n\nhelm repo add rabbitmq https://rabbitmq.github.io/cluster-operator\n\n```\n\n> This allows you to install the operator using Helm.",
         "commands": [
-          "kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml"
+          "helm repo add rabbitmq https://rabbitmq.github.io/cluster-operator"
+        ]
+      },
+      {
+        "title": "Install the RabbitMQ Cluster Operator",
+        "description": "This step installs the RabbitMQ Cluster Operator using Helm, which manages the lifecycle of RabbitMQ clusters.\n\n```bash\n\nhelm install rabbitmq-operator rabbitmq/cluster-operator --version 2.20.1 --namespace rabbitmq-system --create-namespace\n\n```\n\n> This installs the operator in a dedicated namespace.",
+        "commands": [
+          "helm install rabbitmq-operator rabbitmq/cluster-operator --version 2.20.1 --namespace rabbitmq-system --create-namespace"
         ]
       },
       {
         "title": "Deploy a RabbitMQ cluster",
-        "description": "This step deploys a sample RabbitMQ cluster using a predefined configuration.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rabbitmq/cluster-operator/main/docs/examples/hello-world/rabbitmq.yaml\n\n```\n\n> Applies the sample RabbitMQ cluster configuration.",
+        "description": "This step deploys a sample RabbitMQ cluster using a predefined configuration file.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/rabbitmq/cluster-operator/main/docs/examples/hello-world/rabbitmq.yaml\n\n```\n\n> This creates a RabbitMQ cluster with default settings.",
         "commands": [
           "kubectl apply -f https://raw.githubusercontent.com/rabbitmq/cluster-operator/main/docs/examples/hello-world/rabbitmq.yaml"
         ]
       },
       {
         "title": "Verify the RabbitMQ cluster is running",
-        "description": "This step checks the status of the RabbitMQ cluster to ensure it is running correctly.\n\n```bash\n\nkubectl get pods -n rabbitmq-system\n\nkubectl get rabbitmqclusters -n rabbitmq-system\n\n```\n\n> Lists all pods in the RabbitMQ namespace to verify their status.\n> Checks the status of the RabbitMQ cluster custom resource.",
+        "description": "This step checks the status of the RabbitMQ pods to ensure they are running correctly.\n\n```bash\n\nkubectl get pods -n rabbitmq-system\n\n```\n\n> Look for the status of the RabbitMQ pods to confirm they are in 'Running' state.",
         "commands": [
-          "kubectl get pods -n rabbitmq-system",
-          "kubectl get rabbitmqclusters -n rabbitmq-system"
+          "kubectl get pods -n rabbitmq-system"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the RabbitMQ Cluster Operator",
-        "description": "This step removes the RabbitMQ Cluster Operator and associated resources. Be aware that this may lead to data loss if the RabbitMQ cluster is not backed up.\n\n```bash\n\nkubectl delete -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml\n\n```\n\n> Removes the RabbitMQ Cluster Operator and its CRDs.",
+        "description": "This step removes the RabbitMQ Cluster Operator and all associated resources. Be aware that this may result in data loss if persistent volumes are not retained.\n\n```bash\n\nhelm uninstall rabbitmq-operator --namespace rabbitmq-system\n\nkubectl delete namespace rabbitmq-system\n\n```\n\n> This command removes the operator.\n> This command deletes the namespace and all resources within it.",
         "commands": [
-          "kubectl delete -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml"
+          "helm uninstall rabbitmq-operator --namespace rabbitmq-system",
+          "kubectl delete namespace rabbitmq-system"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade the RabbitMQ Cluster Operator",
-        "description": "Before upgrading, ensure you have a backup of your RabbitMQ data. This step will upgrade the operator to the latest version.\n\n```bash\n\nkubectl get rabbitmqclusters --all-namespaces -o yaml > backup-rabbitmqclusters.yaml\n\nkubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml\n\nkubectl get pods -n rabbitmq-system\n\n```\n\n> Backs up the current RabbitMQ cluster configuration.\n> Re-applies the latest operator manifest to upgrade.\n> Verifies that the pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you backup any important data. This step upgrades the operator to the specified version.\n\n```bash\n\nhelm upgrade rabbitmq-operator rabbitmq/cluster-operator --version 2.20.1 --namespace rabbitmq-system\n\nkubectl get pods -n rabbitmq-system\n\n```\n\n> This command upgrades the operator to the latest version.\n> Verify that the pods are running after the upgrade.",
         "commands": [
-          "kubectl get rabbitmqclusters --all-namespaces -o yaml > backup-rabbitmqclusters.yaml",
-          "kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml",
+          "helm upgrade rabbitmq-operator rabbitmq/cluster-operator --version 2.20.1 --namespace rabbitmq-system",
           "kubectl get pods -n rabbitmq-system"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create RabbitMQ cluster'",
-        "description": "**Cause:** This may occur if the required permissions are not set for the operator.\n\n**Fix:**\nEnsure that the operator has the necessary RBAC permissions to create resources."
+        "title": "Error: 'Failed to install CRD'",
+        "description": "**Cause:** The Custom Resource Definition (CRD) may not have been applied correctly.\n\n**Fix:**\nReapply the CRD using 'kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml'."
       },
       {
-        "title": "Pod is in 'CrashLoopBackOff' state",
-        "description": "**Cause:** This can happen if the RabbitMQ configuration is incorrect or if there are insufficient resources.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n rabbitmq-system' for details and adjust the configuration or resources accordingly."
+        "title": "RabbitMQ pods are in 'CrashLoopBackOff' state",
+        "description": "**Cause:** This may occur due to misconfiguration or resource limits being exceeded.\n\n**Fix:**\nCheck the pod logs with 'kubectl logs <pod-name> -n rabbitmq-system' for more details."
       },
       {
-        "title": "RabbitMQ cluster is not reachable",
-        "description": "**Cause:** Network policies or service configurations may be blocking access.\n\n**Fix:**\nVerify the service configuration and network policies to ensure they allow traffic to the RabbitMQ service."
+        "title": "Error: 'RabbitMQ cluster not ready'",
+        "description": "**Cause:** The RabbitMQ cluster may not have enough resources allocated.\n\n**Fix:**\nEnsure that the cluster has sufficient CPU and memory resources allocated in the configuration."
       },
       {
-        "title": "Error: 'No resources found'",
-        "description": "**Cause:** This indicates that the RabbitMQ cluster has not been created or was deleted.\n\n**Fix:**\nReapply the RabbitMQ cluster configuration using 'kubectl apply -f <cluster-config-file>'."
+        "title": "Error: 'Permission denied'",
+        "description": "**Cause:** RBAC permissions may not be set correctly for the operator.\n\n**Fix:**\nEnsure that the service account used by the operator has the necessary permissions."
       }
     ],
     "versionNotes": [
       {
-        "version": "v2.19.2",
-        "changes": "Improved handling of RabbitMQ cluster upgrades and added support for custom resource validation.",
-        "deprecations": "No specific deprecations noted in this release.",
-        "migrationSteps": "No migration steps are required for this version."
+        "version": "v2.20.1",
+        "changes": "Added support for RabbitMQ 4.1.3, improved CRD management.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see the RabbitMQ pods running with a status of 'Running' when executing 'kubectl get pods -n rabbitmq-system'. The RabbitMQ cluster custom resource should also show a status of 'Ready'.",
+      "summary": "You should see the RabbitMQ pods running with the output similar to 'NAME READY STATUS RESTARTS AGE' followed by the pod names in the 'Running' state.",
       "codeSnippets": [
-        "kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml",
+        "helm repo add rabbitmq https://rabbitmq.github.io/cluster-operator",
+        "helm install rabbitmq-operator rabbitmq/cluster-operator --version 2.20.1 --namespace rabbitmq-system --create-namespace",
         "kubectl apply -f https://raw.githubusercontent.com/rabbitmq/cluster-operator/main/docs/examples/hello-world/rabbitmq.yaml",
-        "kubectl get pods -n rabbitmq-system",
-        "kubectl get rabbitmqclusters -n rabbitmq-system"
+        "kubectl get pods -n rabbitmq-system"
       ]
     }
   },
@@ -127,10 +133,11 @@
       "configuration"
     ],
     "installMethods": [
-      "kubectl"
+      "cli",
+      "helm"
     ],
     "containerImages": [
-      "docker.io/rabbitmq/cluster-operator:v2.19.2"
+      "docker.io/rabbitmq:4.1.3"
     ],
     "sourceUrls": {
       "docs": "https://www.rabbitmq.com/kubernetes/operator/operator-overview",
@@ -141,13 +148,14 @@
   "prerequisites": {
     "kubernetes": ">=1.25",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a running Kubernetes cluster with kubectl installed."
+    "description": "Ensure you have a running Kubernetes cluster with kubectl and Helm installed."
   },
   "security": {
-    "scannedAt": "2026-03-18T12:11:25.950Z",
+    "scannedAt": "2026-04-20T18:16:57.749Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
