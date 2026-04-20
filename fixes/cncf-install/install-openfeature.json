@@ -6,13 +6,17 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Openfeature on Kubernetes",
-    "description": "OpenFeature is an open specification that provides a vendor-agnostic, community-driven API for feature flagging. Installing OpenFeature allows you to integrate feature flag management into your applications seamlessly.",
+    "description": "OpenFeature is an open specification that provides a vendor-agnostic, community-driven API for feature flagging. Installing OpenFeature allows you to integrate feature flag management into your applications seamlessly. The OpenFeature Operator requires cert-manager as a prerequisite.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
+        "title": "Install cert-manager (required prerequisite)",
+        "description": "The OpenFeature Operator requires cert-manager to issue webhook certificates. Install cert-manager if it is not already present on the cluster:\n\n```bash\nkubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml\n```\n\nWait for all cert-manager deployments to become Available before continuing:\n\n```bash\nkubectl wait --for=condition=Available=True deploy --all -n cert-manager --timeout=300s\n```"
+      },
+      {
         "title": "Add the Helm repository",
-        "description": "Add the OpenFeature Helm repository to your local Helm configuration using the following command:\n```bash\nhelm repo add open-feature-operator https://open-feature.github.io/open-feature-operator\n```"
+        "description": "Add the OpenFeature Helm repository to your local Helm configuration using the following command:\n```bash\nhelm repo add openfeature https://open-feature.github.io/open-feature-operator/\n```"
       },
       {
         "title": "Update the Helm repository",
@@ -20,35 +24,31 @@
       },
       {
         "title": "Install OpenFeature",
-        "description": "Install the OpenFeature operator using Helm. This command will create a new namespace called 'openfeature' and deploy the operator there:\n```bash\nhelm install open-feature-operator open-feature-operator/open-feature-operator --namespace openfeature --create-namespace --version 0.8.9\n```"
+        "description": "Install (or upgrade) the OpenFeature operator using Helm:\n```bash\nhelm upgrade --install openfeature openfeature/open-feature-operator\n```"
       },
       {
         "title": "Verify the installation",
-        "description": "Check that the OpenFeature operator pod is running:\n```bash\nkubectl get pods -n openfeature\n```"
-      },
-      {
-        "title": "Post-install configuration",
-        "description": "Configure resource limits for the OpenFeature operator to ensure it runs efficiently:\n```bash\nkubectl set resources deployment open-feature-operator --namespace openfeature --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi\n```"
+        "description": "Check that the OpenFeature operator pod is running:\n```bash\nkubectl get pods -n open-feature-operator-system\n```"
       }
     ],
     "uninstall": [
       {
         "title": "Remove the Helm release",
-        "description": "Uninstall the OpenFeature operator using Helm:\n```bash\nhelm uninstall open-feature-operator --namespace openfeature\n```"
+        "description": "Uninstall the OpenFeature operator using Helm:\n```bash\nhelm uninstall openfeature\n```"
       },
       {
         "title": "Clean up CRDs",
-        "description": "Remove any Custom Resource Definitions (CRDs) associated with OpenFeature:\n```bash\nkubectl delete crd featureflags.openfeature.dev\nkubectl delete crd featureflagproviders.openfeature.dev\n```"
+        "description": "Remove any Custom Resource Definitions (CRDs) associated with OpenFeature. The v1beta1 API replaces `FeatureFlagProvider` with `FeatureFlagSource` and `InProcessConfiguration`:\n```bash\nkubectl delete crd featureflags.core.openfeature.dev\nkubectl delete crd featureflagsources.core.openfeature.dev\nkubectl delete crd inprocessconfigurations.core.openfeature.dev\n```\n\nNote: CRD names/groups should be verified against the installed chart version — see the official installation docs: https://github.com/open-feature/open-feature-operator/blob/main/docs/installation.md"
       },
       {
         "title": "Remove the namespace",
-        "description": "Delete the 'openfeature' namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace openfeature\n```"
+        "description": "Delete the operator namespace to clean up any remaining resources:\n```bash\nkubectl delete namespace open-feature-operator-system\n```"
       }
     ],
     "upgrade": [
       {
         "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration of the OpenFeature operator:\n```bash\nkubectl get all -n openfeature -o yaml > openfeature-backup.yaml\n```"
+        "description": "Before upgrading, back up the current configuration of the OpenFeature operator:\n```bash\nkubectl get all -n open-feature-operator-system -o yaml > openfeature-backup.yaml\n```"
       },
       {
         "title": "Update the Helm repository",
@@ -56,35 +56,36 @@
       },
       {
         "title": "Upgrade OpenFeature",
-        "description": "Upgrade the OpenFeature operator to the latest version:\n```bash\nhelm upgrade open-feature-operator open-feature-operator/open-feature-operator --namespace openfeature --version 0.8.9\n```"
+        "description": "Upgrade the OpenFeature operator to the latest version:\n```bash\nhelm upgrade --install openfeature openfeature/open-feature-operator\n```"
       },
       {
         "title": "Verify the upgrade",
-        "description": "Check that the OpenFeature operator pod is running after the upgrade:\n```bash\nkubectl get pods -n openfeature\n```"
+        "description": "Check that the OpenFeature operator pod is running after the upgrade:\n```bash\nkubectl get pods -n open-feature-operator-system\n```"
       }
     ],
     "troubleshooting": [
       {
         "title": "Pods stuck in Pending state",
-        "description": "If your OpenFeature pods are stuck in a Pending state, check for insufficient resources in your cluster:\n```bash\nkubectl describe pod <pod-name> -n openfeature\n``` \nEnsure that your cluster has enough CPU and memory resources available."
+        "description": "If your OpenFeature pods are stuck in a Pending state, check for insufficient resources in your cluster:\n```bash\nkubectl describe pod <pod-name> -n open-feature-operator-system\n``` \nEnsure that your cluster has enough CPU and memory resources available."
       },
       {
         "title": "OpenFeature operator pod crashes",
-        "description": "If the OpenFeature operator pod is crashing, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n openfeature\n``` \nLook for any configuration issues or missing dependencies."
+        "description": "If the OpenFeature operator pod is crashing, check the logs for errors:\n```bash\nkubectl logs <pod-name> -n open-feature-operator-system\n``` \nLook for any configuration issues or missing dependencies (for example, cert-manager not installed)."
       },
       {
         "title": "Helm installation fails",
-        "description": "If the Helm installation fails, check for existing resources that may conflict:\n```bash\nkubectl get all -n openfeature\n``` \nEnsure there are no existing deployments or services with the same name."
+        "description": "If the Helm installation fails, confirm cert-manager is Ready and check for existing resources that may conflict:\n```bash\nkubectl get pods -n cert-manager\nkubectl get all -n open-feature-operator-system\n``` \nEnsure there are no existing deployments or services with the same name."
       }
     ],
     "resolution": {
-      "summary": "A successful installation of OpenFeature will have the operator running in the 'openfeature' namespace with all pods in the Running state. You can verify this by checking the status of the pods using kubectl.",
+      "summary": "A successful installation of OpenFeature will have the operator running in the 'open-feature-operator-system' namespace with all pods in the Running state, and cert-manager operational as a prerequisite. You can verify this by checking the status of the pods using kubectl.",
       "codeSnippets": [
-        "helm repo add open-feature-operator https://open-feature.github.io/open-feature-operator",
+        "kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml",
+        "kubectl wait --for=condition=Available=True deploy --all -n cert-manager --timeout=300s",
+        "helm repo add openfeature https://open-feature.github.io/open-feature-operator/",
         "helm repo update",
-        "helm install open-feature-operator open-feature-operator/open-feature-operator --namespace openfeature --create-namespace --version 0.8.9",
-        "kubectl get pods -n openfeature",
-        "kubectl set resources deployment open-feature-operator --namespace openfeature --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi"
+        "helm upgrade --install openfeature openfeature/open-feature-operator",
+        "kubectl get pods -n open-feature-operator-system"
       ]
     }
   },
@@ -114,12 +115,12 @@
     "maturity": "incubating",
     "projectVersion": "v0.8.0",
     "containerImages": [
-      "openfeature/open-feature-operator:v0.8.9"
+      "openfeature/open-feature-operator:v0.9.0"
     ],
     "sourceUrls": {
       "docs": "https://openfeature.dev",
       "repo": "https://github.com/open-feature/spec",
-      "helm": "https://open-feature.github.io/open-feature-operator"
+      "helm": "https://open-feature.github.io/open-feature-operator/"
     },
     "qualityScore": 100
   },
@@ -129,7 +130,10 @@
       "helm",
       "kubectl"
     ],
-    "description": "You need a Kubernetes cluster and Helm installed to deploy OpenFeature."
+    "dependencies": [
+      "cert-manager"
+    ],
+    "description": "You need a Kubernetes cluster, Helm, kubectl, and cert-manager installed to deploy OpenFeature."
   },
   "security": {
     "scannedAt": "2026-03-18T06:24:53.939Z",
