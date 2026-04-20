@@ -6,57 +6,54 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Kagenti",
-    "description": "Kagenti is a cloud-native middleware for deploying and orchestrating AI agents via A2A and MCP protocols on Kubernetes. It provides a standardized approach to agent communication, security, and management. Kagenti is installed via OCI-based Helm charts from GitHub Container Registry.",
+    "description": "Kagenti is a cloud-native middleware designed for deploying and orchestrating AI agents through standardized communication protocols. It simplifies the deployment complexity and enhances security for agent-based applications. Ideal for organizations looking to streamline their AI agent operations while ensuring security and scalability.",
     "type": "deploy",
     "status": "completed",
-    "estimatedMinutes": 30,
+    "estimatedMinutes": 20,
     "steps": [
       {
-        "title": "Verify prerequisites",
-        "description": "Ensure you have the required tools installed:\n\n```bash\nkubectl version --client\nhelm version\n```\n\n> Requires kubectl >= 1.32.1 and Helm >= 3.18.0 (Helm v4 is not supported). You also need a Kubernetes cluster with admin access.",
+        "title": "Add Kagenti Helm Repository",
+        "description": "This step adds the Kagenti Helm repository to your local Helm configuration, allowing you to install Kagenti using Helm.\n\n```bash\n\nhelm repo add kagenti https://kagenti.github.io/kagenti\n\nhelm repo update\n\n```\n\n> This command adds the official Kagenti Helm repository.\n> Updates the local Helm chart repository cache.",
         "commands": [
-          "kubectl version --client",
-          "helm version"
+          "helm repo add kagenti https://kagenti.github.io/kagenti",
+          "helm repo update"
         ]
       },
       {
-        "title": "Install Kagenti dependencies",
-        "description": "Install the Kagenti dependencies chart, which sets up required operators and CRDs:\n\n```bash\nhelm install kagenti-deps oci://ghcr.io/kagenti/kagenti/kagenti-deps --namespace kagenti --create-namespace\n```\n\n> This installs dependencies like the Kagenti operator and webhook components.",
+        "title": "Install Kagenti CRDs",
+        "description": "This step installs the Custom Resource Definitions (CRDs) required by Kagenti to manage its resources effectively.\n\n```bash\n\nkubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml\n\n```\n\n> This command applies the CRD for Kagenti.",
         "commands": [
-          "helm install kagenti-deps oci://ghcr.io/kagenti/kagenti/kagenti-deps --namespace kagenti --create-namespace"
+          "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml"
         ]
       },
       {
-        "title": "Install Kagenti",
-        "description": "Install the main Kagenti chart from the OCI registry:\n\n```bash\nhelm install kagenti oci://ghcr.io/kagenti/kagenti/kagenti --namespace kagenti\n```\n\n> For custom values, download the default values file from the repo: https://github.com/kagenti/kagenti/tree/main/charts/kagenti",
+        "title": "Install Kagenti using Helm",
+        "description": "This step installs the Kagenti application in the specified namespace using Helm.\n\n```bash\n\nhelm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1\n\n```\n\n> This command installs Kagenti in the 'kagenti' namespace.",
         "commands": [
-          "helm install kagenti oci://ghcr.io/kagenti/kagenti/kagenti --namespace kagenti"
+          "helm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1"
         ]
       },
       {
-        "title": "Verify the deployment",
-        "description": "Check that all Kagenti components are running:\n\n```bash\nkubectl get pods -n kagenti\nkubectl get svc -n kagenti\n```\n\n> You should see the Kagenti operator, webhook, and core service pods in Running state.",
+        "title": "Create an Example Custom Resource",
+        "description": "This step creates an example Custom Resource (CR) to demonstrate how to deploy an AI agent using Kagenti.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\n  replicas: 1\nEOF\n\n```\n\n> This command creates a sample agent resource.",
         "commands": [
-          "kubectl get pods -n kagenti",
-          "kubectl get svc -n kagenti"
+          "kubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\n  replicas: 1\nEOF"
         ]
       },
       {
-        "title": "Optional: Install the TUI (terminal UI)",
-        "description": "Kagenti provides a Go-based terminal UI that must be built from source:\n\n```bash\ngit clone https://github.com/kagenti/kagenti.git\ncd kagenti\nmake install-tui\n```\n\n> The TUI binary will be installed to your GOPATH/bin. There are no pre-built CLI binaries in GitHub releases.",
+        "title": "Verify the Installation",
+        "description": "This step checks the status of the Kagenti installation and ensures that the agent is running correctly.\n\n```bash\n\nkubectl get pods -n kagenti\n\n```\n\n> This command lists all pods in the 'kagenti' namespace to verify that the agent is running.",
         "commands": [
-          "git clone https://github.com/kagenti/kagenti.git",
-          "cd kagenti && make install-tui"
+          "kubectl get pods -n kagenti"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall Kagenti",
-        "description": "Remove the Kagenti deployment and dependencies:\n\n```bash\nhelm uninstall kagenti --namespace kagenti\nhelm uninstall kagenti-deps --namespace kagenti\nkubectl delete namespace kagenti\n```\n\n> Uninstall the main chart first, then dependencies.",
+        "description": "This step removes the Kagenti installation and its resources. Be aware that this will delete all associated data and resources.\n\n```bash\n\nhelm uninstall kagenti --namespace kagenti\n\nkubectl delete namespace kagenti\n\n```\n\n> This command uninstalls the Kagenti release.\n> This command deletes the 'kagenti' namespace and all its resources.",
         "commands": [
           "helm uninstall kagenti --namespace kagenti",
-          "helm uninstall kagenti-deps --namespace kagenti",
           "kubectl delete namespace kagenti"
         ]
       }
@@ -64,46 +61,48 @@
     "upgrade": [
       {
         "title": "Upgrade Kagenti",
-        "description": "Upgrade to a newer version by specifying the OCI chart version:\n\n```bash\nkubectl get all -n kagenti -o yaml > kagenti-backup.yaml\nhelm upgrade kagenti-deps oci://ghcr.io/kagenti/kagenti/kagenti-deps --namespace kagenti\nhelm upgrade kagenti oci://ghcr.io/kagenti/kagenti/kagenti --namespace kagenti\nkubectl get pods -n kagenti\n```\n\n> Always backup before upgrading. Upgrade dependencies first, then the main chart.",
+        "description": "Before upgrading, ensure that you back up any important data. This step will upgrade Kagenti to the latest version.\n\n```bash\n\nkubectl get pods -n kagenti -o json | jq '.items[] | {name: .metadata.name, status: .status.phase}'\n\nhelm upgrade kagenti kagenti/kagenti --namespace kagenti --version 0.5.1\n\nkubectl get pods -n kagenti\n\n```\n\n> Check the status of the pods before upgrading.\n> This command upgrades Kagenti to the specified version.\n> Verify that the pods are running after the upgrade.",
         "commands": [
-          "kubectl get all -n kagenti -o yaml > kagenti-backup.yaml",
-          "helm upgrade kagenti-deps oci://ghcr.io/kagenti/kagenti/kagenti-deps --namespace kagenti",
-          "helm upgrade kagenti oci://ghcr.io/kagenti/kagenti/kagenti --namespace kagenti",
+          "kubectl get pods -n kagenti -o json | jq '.items[] | {name: .metadata.name, status: .status.phase}'",
+          "helm upgrade kagenti kagenti/kagenti --namespace kagenti --version 0.5.1",
           "kubectl get pods -n kagenti"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Kubernetes cluster unreachable'",
-        "description": "**Cause:** The kubeconfig may not be set up correctly or the cluster is down.\n\n**Fix:**\nVerify your kubeconfig and cluster connectivity with `kubectl cluster-info`."
+        "title": "Error: 'KAgent not found'",
+        "description": "**Cause:** The specified KAgent resource does not exist in the cluster.\n\n**Fix:**\nEnsure that the KAgent resource is created correctly and check the namespace."
       },
       {
-        "title": "OCI chart pull fails",
-        "description": "**Cause:** Authentication may be required for GHCR.\n\n**Fix:**\nLog in to GHCR: `helm registry login ghcr.io -u <github-username> -p <github-token>`"
+        "title": "Error: 'ImagePullBackOff'",
+        "description": "**Cause:** The specified container image cannot be pulled from the registry.\n\n**Fix:**\nVerify the image name and ensure that the image is available in the specified registry."
       },
       {
-        "title": "Pods in 'CrashLoopBackOff' state",
-        "description": "**Cause:** There may be an issue with the application configuration or resource limits.\n\n**Fix:**\nCheck pod logs with `kubectl logs <pod-name> -n kagenti` to diagnose the issue."
+        "title": "Error: 'CrashLoopBackOff'",
+        "description": "**Cause:** The application inside the pod is crashing due to misconfiguration or missing dependencies.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n kagenti' to identify the issue."
       },
       {
-        "title": "Dependencies chart fails to install",
-        "description": "**Cause:** The Kagenti operator or webhook CRDs may not be available.\n\n**Fix:**\nCheck that the OCI artifacts are accessible: `helm show chart oci://ghcr.io/kagenti/kagenti/kagenti-deps`"
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** The Kubernetes API server is unreachable, possibly due to network issues.\n\n**Fix:**\nCheck your kubeconfig and network connectivity to the cluster."
       }
     ],
     "versionNotes": [
       {
         "version": "v0.5.1",
-        "changes": "Stable release with A2A and MCP protocol support for AI agent orchestration.",
-        "deprecations": "None.",
+        "changes": "Added support for new agent types and improved security features.",
+        "deprecations": "No deprecations in this version.",
         "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "Install via OCI Helm charts: first `kagenti-deps` then `kagenti` from `oci://ghcr.io/kagenti/kagenti/`. Verify with `kubectl get pods -n kagenti`.",
+      "summary": "You should see the Kagenti agent pod running with a status of 'Running' when executing 'kubectl get pods -n kagenti'.",
       "codeSnippets": [
-        "helm install kagenti-deps oci://ghcr.io/kagenti/kagenti/kagenti-deps --namespace kagenti --create-namespace",
-        "helm install kagenti oci://ghcr.io/kagenti/kagenti/kagenti --namespace kagenti",
+        "helm repo add kagenti https://kagenti.github.io/kagenti",
+        "helm repo update",
+        "kubectl apply -f https://raw.githubusercontent.com/kagenti/kagenti/v0.5.1/deploy/crds/kagenti.io_kagent_crd.yaml",
+        "helm install kagenti kagenti/kagenti --namespace kagenti --create-namespace --version 0.5.1",
+        "kubectl apply -f - <<EOF\napiVersion: kagenti.io/v1\nkind: KAgent\nmetadata:\n  name: example-agent\nspec:\n  image: kagenti/agent:latest\n  replicas: 1\nEOF",
         "kubectl get pods -n kagenti"
       ]
     }
@@ -123,11 +122,11 @@
       "v0.5.1"
     ],
     "supportedK8sVersions": [
+      "1.26",
+      "1.27",
       "1.28",
       "1.29",
-      "1.30",
-      "1.31",
-      "1.32"
+      "1.30"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -144,25 +143,26 @@
       "helm"
     ],
     "containerImages": [
-      "ghcr.io/kagenti/kagenti:v0.5.1"
+      "kagenti/agent:latest"
     ],
     "sourceUrls": {
-      "docs": "https://kagenti.io",
+      "docs": "https://kagenti.github.io/.github/",
       "repo": "https://github.com/kagenti/kagenti"
     },
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.28",
+    "kubernetes": ">=1.26",
     "tools": [
-      "kubectl >= 1.32.1",
-      "helm >= 3.18.0"
+      "kubectl",
+      "helm 3.x"
     ],
+    "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "A Kubernetes cluster with admin access. Helm v4 is not supported. For local development, Kind with Docker Desktop (16GB RAM, 4 cores recommended)."
+    "description": "Ensure you have a Kubernetes cluster running with the required resources."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:26:21.554Z",
+    "scannedAt": "2026-04-20T06:39:43.013Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
