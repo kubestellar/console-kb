@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-workflows-8684-workflow-deadlocks-on-mutex-in-steps-template-if-controller-",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo-workflows: Workflow deadlocks on mutex in steps template if controller is restarted",
+    "description": "Workflow deadlocks on mutex in steps template if controller is restarted. Requested by 26+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo-workflows deployment",
+        "description": "Verify your argo-workflows version and configuration:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nhelm list -n argo-workflows 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo-workflows installation."
+      },
+      {
+        "title": "Review argo-workflows configuration",
+        "description": "Inspect the relevant argo-workflows configuration:\n```bash\nkubectl get all -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get configmap -n argo-workflows -l app.kubernetes.io/part-of=argo-workflows\n```\n**What happened/what you expected to happen?**\n\nI expect my workflow to complete successfully even if the workflows controller is restarted. The same issue does not occur if the mutex is on the container template or at the workflow level."
+      },
+      {
+        "title": "Apply the fix for Workflow deadlocks on mutex in steps template if controller…",
+        "description": "In workflow/sync/sync_manager.go the behaviour of how mutexes are implemented looks wrong to me. I believe this is what is causing #8684. \n\nThis is the issue: \nOn restart, the key to acquire locks is called via the output of getResourceKey. \nPlease check `func (cm *Manager) Initialize(wfs\n```yaml\nargo submit deadlock.yaml\nsleep 5\nkubectl delete pod -l app.kubernetes.io/component=workflow-controller\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows\nkubectl get events -n argo-workflows --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Workflow deadlocks on mutex in steps template if controller…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "In workflow/sync/sync_manager.go the behaviour of how mutexes are implemented looks wrong to me. I believe this is what is causing #8684. \n\nThis is the issue: \nOn restart, the key to acquire locks is called via the output of getResourceKey.",
+      "codeSnippets": [
+        "argo submit deadlock.yaml\nsleep 5\nkubectl delete pod -l app.kubernetes.io/component=workflow-controller",
+        "# deadlock.yaml\napiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  generateName: deadlock-test-\nspec:\n  entrypoint: main-steps\n\n  templates:\n    - name: main-steps\n      synchronization:\n        mutex:\n          name: \"mutex-{{workflow.name}}\"\n      steps:\n        - - name: main\n            template: main-container\n\n    - name: main-container\n      container:\n        image: \"busybox:latest\"\n        command: [\"sh\"]\n        args: [\"-c\", \"sleep 10; exit 0\"]",
+        "synchronization:\n    mutex:\n      holding:\n      - holder: deadlock-test-4lp66\n        mutex: kube-system/Mutex/mutex-deadlock-test-4lp66\n      waiting:\n      - holder: kube-system/deadlock-test-4lp66\n        mutex: kube-system/Mutex/mutex-deadlock-test-4lp66"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo-workflows",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo-workflows"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Configmap",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-workflows/issues/8684",
+      "repo": "https://github.com/argoproj/argo-workflows"
+    },
+    "reactions": 26,
+    "comments": 29,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo-workflows installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-21T06:39:48.667Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
