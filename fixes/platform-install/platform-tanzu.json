@@ -6,69 +6,72 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure VMware Tanzu Kubernetes Grid",
-    "description": "VMware Tanzu Kubernetes Grid is a distribution that simplifies the deployment and management of Kubernetes clusters in an enterprise environment. It leverages the Tanzu Framework and Carvel packaging to provide a robust and integrated experience. Key trade-offs include the need for familiarity with VMware tools and potential complexity in setup compared to simpler Kubernetes distributions.",
+    "description": "VMware Tanzu Kubernetes Grid is a distribution that provides a comprehensive platform for managing Kubernetes clusters in an enterprise environment. It leverages the Tanzu Framework and Carvel packaging to enhance the user experience and streamline operations. Key trade-offs include the complexity of setup and management versus the robust features and integrations it offers.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
     "steps": [
       {
         "title": "Install the Tanzu CLI",
-        "description": "This step installs the Tanzu CLI, which is necessary to manage Tanzu Kubernetes Grid.\n\n```bash\n\ncurl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64.tar.gz | tar xz -C /usr/local/bin\n\n```\n\n> Install the Tanzu CLI binary",
+        "description": "This step installs the Tanzu CLI, which is essential for managing Tanzu Kubernetes Grid.\n\n```bash\n\ncurl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64 -o /usr/local/bin/tanzu\n\nchmod +x /usr/local/bin/tanzu\n\n```\n\n> Download the Tanzu CLI binary.\n> Make the Tanzu CLI executable.",
         "commands": [
-          "curl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64.tar.gz | tar xz -C /usr/local/bin"
+          "curl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64 -o /usr/local/bin/tanzu",
+          "chmod +x /usr/local/bin/tanzu"
         ]
       },
       {
         "title": "Initialize the Tanzu CLI",
-        "description": "This step initializes the Tanzu CLI and sets up the necessary configurations.\n\n```bash\n\ntanzu init\n\n```\n\n> Initializes the Tanzu CLI environment",
+        "description": "This step initializes the Tanzu CLI and sets up the necessary configurations.\n\n```bash\n\ntanzu init\n\n```\n\n> Initialize the Tanzu CLI environment.",
         "commands": [
           "tanzu init"
         ]
       },
       {
-        "title": "Create a Kubernetes cluster",
-        "description": "This command creates a new Kubernetes cluster with specified version and node count.\n\n```bash\n\ntanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --num-nodes 3 --region us-west-2\n\n```\n\n> Creates a cluster named 'my-cluster' with 3 nodes",
+        "title": "Create a Tanzu Kubernetes Cluster",
+        "description": "This step creates a new Tanzu Kubernetes cluster with specified parameters.\n\n```bash\n\ntanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --region us-west1 --node-count 3\n\n```\n\n> Create a cluster named 'my-cluster' with 3 nodes.",
         "commands": [
-          "tanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --num-nodes 3 --region us-west-2"
+          "tanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --region us-west1 --node-count 3"
         ]
       },
       {
         "title": "Set up kubeconfig",
-        "description": "This step configures your kubeconfig file to interact with the newly created cluster.\n\n```bash\n\ntanzu cluster kubeconfig get my-cluster --admin --context\n\n```\n\n> Fetches the kubeconfig for the cluster",
+        "description": "This step configures your kubeconfig to access the newly created cluster.\n\n```bash\n\ntanzu cluster kubeconfig get my-cluster --admin --context\n\n```\n\n> Get the kubeconfig for the cluster.",
         "commands": [
           "tanzu cluster kubeconfig get my-cluster --admin --context"
         ]
       },
       {
-        "title": "Verify cluster nodes",
-        "description": "This command checks the status of the nodes in your cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> Lists all nodes in the cluster",
+        "title": "Verify Cluster Nodes",
+        "description": "This step checks the status of the nodes in the cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> Verify that all nodes are in 'Ready' state.",
         "commands": [
           "kubectl get nodes"
+        ]
+      },
+      {
+        "title": "Post-Install Configuration",
+        "description": "This step includes optional configurations for autoscaling and monitoring.\n\n```bash\n\ntanzu package install metrics-server --package-name metrics-server.tanzu.vmware.com --version 0.4.4 --namespace kube-system\n\ntanzu cluster autoscaler enable my-cluster\n\n```\n\n> Install metrics server for monitoring.\n> Enable autoscaling for the cluster.",
+        "commands": [
+          "tanzu package install metrics-server --package-name metrics-server.tanzu.vmware.com --version 0.4.4 --namespace kube-system",
+          "tanzu cluster autoscaler enable my-cluster"
         ]
       }
     ],
     "uninstall": [
       {
-        "title": "Uninstall the Tanzu Kubernetes cluster",
-        "description": "This step removes the Kubernetes cluster and warns about potential data loss.\n\n```bash\n\ntanzu cluster delete my-cluster\n\n```\n\n> This will delete the cluster and all associated resources",
+        "title": "Uninstall the Tanzu Kubernetes Cluster",
+        "description": "This step removes the Tanzu Kubernetes cluster and may result in data loss. Ensure to backup any important data before proceeding.\n\n```bash\n\ntanzu cluster delete my-cluster\n\nkubectl delete namespace my-cluster\n\n```\n\n> Delete the cluster named 'my-cluster'.\n> Remove the namespace associated with the cluster.",
         "commands": [
-          "tanzu cluster delete my-cluster"
-        ]
-      },
-      {
-        "title": "Remove Tanzu CLI",
-        "description": "This command removes the Tanzu CLI from your system.\n\n```bash\n\nrm /usr/local/bin/tanzu\n\n```\n\n> Removes the Tanzu CLI binary",
-        "commands": [
-          "rm /usr/local/bin/tanzu"
+          "tanzu cluster delete my-cluster",
+          "kubectl delete namespace my-cluster"
         ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade the Tanzu Kubernetes cluster",
-        "description": "Backup your cluster, upgrade the cluster version, and verify the upgrade.\n\n```bash\n\ntanzu cluster backup my-cluster\n\ntanzu cluster upgrade my-cluster --kubernetes-version v1.29.1\n\nkubectl get nodes\n\n```\n\n> Backup the cluster before upgrading\n> Upgrades the cluster to the specified version\n> Verify that the nodes are running the new version",
+        "title": "Upgrade the Tanzu Kubernetes Cluster",
+        "description": "Before upgrading, ensure to backup your cluster data. This step upgrades the cluster to a new version.\n\n```bash\n\ntanzu cluster backup my-cluster --namespace kube-system\n\ntanzu cluster upgrade my-cluster --kubernetes-version v1.29.1\n\nkubectl get nodes\n\n```\n\n> Backup the cluster before upgrading.\n> Upgrade the cluster to Kubernetes version 1.29.1.\n> Verify that all nodes are in 'Ready' state after the upgrade.",
         "commands": [
-          "tanzu cluster backup my-cluster",
+          "tanzu cluster backup my-cluster --namespace kube-system",
           "tanzu cluster upgrade my-cluster --kubernetes-version v1.29.1",
           "kubectl get nodes"
         ]
@@ -76,38 +79,41 @@
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Failed to create cluster: timeout waiting for cluster to be ready'",
-        "description": "**Cause:** The cluster may not have enough resources allocated or there may be network issues.\n\n**Fix:**\nCheck the resource allocation and ensure the network is properly configured."
+        "title": "Error: 'Failed to create cluster: API server not reachable'",
+        "description": "**Cause:** The Kubernetes API server is not accessible, possibly due to network issues.\n\n**Fix:**\nCheck your network settings and ensure that the API server is reachable."
       },
       {
-        "title": "Error: 'kubectl: command not found'",
-        "description": "**Cause:** The kubectl command-line tool is not installed or not in the PATH.\n\n**Fix:**\nInstall kubectl using 'curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/local/bin/kubectl'"
+        "title": "Error: 'Cluster is not ready'",
+        "description": "**Cause:** One or more nodes are not in a 'Ready' state.\n\n**Fix:**\nRun 'kubectl get nodes' to check the status and troubleshoot any failing nodes."
       },
       {
-        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** The kubeconfig file may not be correctly configured or the cluster certificate is invalid.\n\n**Fix:**\nRegenerate the kubeconfig using 'tanzu cluster kubeconfig get my-cluster --admin --context'"
+        "title": "Error: 'Insufficient resources to create cluster'",
+        "description": "**Cause:** The specified node count exceeds available resources.\n\n**Fix:**\nEnsure your environment meets the minimum resource requirements and adjust the node count."
       },
       {
-        "title": "Error: 'Cluster is not running'",
-        "description": "**Cause:** The cluster may have failed to start due to insufficient resources or misconfiguration.\n\n**Fix:**\nCheck the cluster status with 'tanzu cluster list' and ensure all nodes are healthy."
+        "title": "Error: 'Metrics server not found'",
+        "description": "**Cause:** The metrics server is not installed or not running.\n\n**Fix:**\nInstall the metrics server using 'tanzu package install metrics-server'."
       }
     ],
     "versionNotes": [
       {
         "version": "2.5",
-        "changes": "Added support for Kubernetes v1.29, improved integration with Carvel tools.",
-        "deprecations": "Deprecated support for Kubernetes v1.26.",
-        "migrationSteps": "If upgrading from 2.4, ensure to backup your clusters and check compatibility with existing workloads."
+        "changes": "Added support for Kubernetes 1.29, improved CLI commands for cluster management.",
+        "deprecations": "Deprecated older Kubernetes versions (1.25 and below).",
+        "migrationSteps": "If upgrading from 2.4, ensure to backup your clusters and follow the upgrade commands."
       }
     ],
     "resolution": {
-      "summary": "You should see a list of nodes with the status 'Ready' when running 'kubectl get nodes'.",
+      "summary": "You should see the output of 'kubectl get nodes' showing all nodes in 'Ready' state, confirming the cluster is operational.",
       "codeSnippets": [
-        "curl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64.tar.gz | tar xz -C /usr/local/bin",
+        "curl -L https://github.com/vmware-tanzu/tanzu-framework/releases/download/v0.29.0/tanzu-framework-linux-amd64 -o /usr/local/bin/tanzu",
+        "chmod +x /usr/local/bin/tanzu",
         "tanzu init",
-        "tanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --num-nodes 3 --region us-west-2",
+        "tanzu cluster create my-cluster --plan dev --kubernetes-version v1.29.0 --region us-west1 --node-count 3",
         "tanzu cluster kubeconfig get my-cluster --admin --context",
-        "kubectl get nodes"
+        "kubectl get nodes",
+        "tanzu package install metrics-server --package-name metrics-server.tanzu.vmware.com --version 0.4.4 --namespace kube-system",
+        "tanzu cluster autoscaler enable my-cluster"
       ]
     }
   },
@@ -146,7 +152,7 @@
       "cli"
     ],
     "containerImages": [
-      "docker.io/library/nginx:latest"
+      "docker.io/library/tanzu-framework:v0.29.0"
     ],
     "sourceUrls": {
       "docs": "https://docs.vmware.com/en/VMware-Tanzu-Kubernetes-Grid/",
@@ -158,14 +164,14 @@
     "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "tanzu CLI"
+      "tanzu CLI v0.29.0"
     ],
     "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have the necessary tools and resources before starting the installation."
+    "description": "Ensure you have the required tools and resources before starting the installation."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:24:13.338Z",
+    "scannedAt": "2026-04-23T12:19:11.948Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
