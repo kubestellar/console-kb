@@ -6,35 +6,36 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure K3s (Lightweight Kubernetes)",
-    "description": "K3s is a lightweight, fully conformant Kubernetes distribution designed for resource-constrained environments. It is ideal for edge computing, IoT, and development scenarios where a full Kubernetes installation may be too heavy. Key trade-offs include a simplified architecture and reduced resource consumption at the cost of some advanced Kubernetes features.",
+    "description": "K3s is a lightweight Kubernetes distribution designed for resource-constrained environments, making it ideal for edge computing, IoT, and development. It simplifies the installation process by bundling all necessary components into a single binary, but may lack some advanced features found in full Kubernetes distributions.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 15,
     "steps": [
       {
         "title": "Install K3s Binary",
-        "description": "This step installs the K3s binary on your server, which is the core component of K3s.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -\n\n```\n\n> This command fetches and installs the latest K3s version.",
+        "description": "This step installs the K3s binary on your system, which is the core component of K3s.\n\n```bash\n\ncurl -sfL https://get.k3s.io | sh -\n\n```\n\n> This command downloads and installs the latest K3s version.",
         "commands": [
           "curl -sfL https://get.k3s.io | sh -"
         ]
       },
       {
         "title": "Verify K3s Installation",
-        "description": "Check that K3s is running correctly and the necessary services are up.\n\n```bash\n\nsudo k3s kubectl get nodes\n\n```\n\n> This command lists the nodes in your K3s cluster.",
+        "description": "Check that K3s is running correctly by verifying the status of the K3s service.\n\n```bash\n\nsystemctl status k3s\n\n```\n\n> This command shows the status of the K3s service.",
         "commands": [
-          "sudo k3s kubectl get nodes"
+          "systemctl status k3s"
         ]
       },
       {
         "title": "Set Up Kubeconfig",
-        "description": "Configure your kubeconfig file to interact with the K3s cluster using kubectl.\n\n```bash\n\nsudo k3s kubectl config view --raw > ~/.kube/config\n\n```\n\n> This command saves the K3s kubeconfig to your home directory.",
+        "description": "Configure kubectl to use the K3s context for managing the cluster.\n\n```bash\n\nexport KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n\nkubectl get nodes\n\n```\n\n> This sets the KUBECONFIG environment variable to point to the K3s configuration.\n> Verify that kubectl can communicate with the K3s cluster.",
         "commands": [
-          "sudo k3s kubectl config view --raw > ~/.kube/config"
+          "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+          "kubectl get nodes"
         ]
       },
       {
         "title": "Deploy a Sample Application",
-        "description": "Deploy a simple application to verify that your K3s cluster is functioning as expected.\n\n```bash\n\nkubectl create deployment nginx --image=nginx\n\nkubectl expose deployment nginx --port=80 --type=NodePort\n\n```\n\n> This command deploys an Nginx server.\n> This command exposes the Nginx deployment.",
+        "description": "Deploy a simple Nginx application to verify that K3s is functioning as expected.\n\n```bash\n\nkubectl create deployment nginx --image=nginx\n\nkubectl expose deployment nginx --port=80 --type=NodePort\n\n```\n\n> This command creates a deployment running Nginx.\n> Expose the Nginx deployment to access it externally.",
         "commands": [
           "kubectl create deployment nginx --image=nginx",
           "kubectl expose deployment nginx --port=80 --type=NodePort"
@@ -42,67 +43,71 @@
       },
       {
         "title": "Verify Application Deployment",
-        "description": "Check that the application is running and accessible.\n\n```bash\n\nkubectl get services\n\n```\n\n> This command lists the services to find the NodePort.",
+        "description": "Check that the Nginx application is running and accessible.\n\n```bash\n\nkubectl get pods\n\nkubectl get svc\n\n```\n\n> This command lists all pods to verify that the Nginx pod is running.\n> This command shows the service details, including the NodePort.",
         "commands": [
-          "kubectl get services"
+          "kubectl get pods",
+          "kubectl get svc"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall K3s",
-        "description": "This step removes K3s and all associated resources. Be aware that this will delete all workloads and data in the cluster.\n\n```bash\n\nsudo /usr/local/bin/k3s-uninstall.sh\n\n```\n\n> This command uninstalls K3s.",
+        "description": "This step removes K3s from your system. Be aware that this will delete all resources in the cluster, leading to potential data loss.\n\n```bash\n\n/usr/local/bin/k3s-uninstall.sh\n\n```\n\n> Run this script to uninstall K3s.",
         "commands": [
-          "sudo /usr/local/bin/k3s-uninstall.sh"
+          "/usr/local/bin/k3s-uninstall.sh"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade K3s",
-        "description": "Backup your current configuration, perform the upgrade, and verify the installation.\n\n```bash\n\nkubectl get all --all-namespaces > k3s-backup.txt\n\ncurl -sfL https://get.k3s.io | sh -\n\nsudo k3s kubectl get nodes\n\n```\n\n> Backup current resources.\n> This command fetches and installs the latest K3s version.\n> Verify that nodes are running after the upgrade.",
+        "description": "Before upgrading, ensure you back up your cluster data. This step involves draining nodes, upgrading K3s, and verifying the upgrade.\n\n```bash\n\nkubectl drain <node-name> --ignore-daemonsets\n\ncurl -sfL https://get.k3s.io | sh -\n\nkubectl uncordon <node-name>\n\nkubectl get nodes\n\n```\n\n> Drain the node to prepare for upgrade.\n> This command upgrades K3s to the latest version.\n> Uncordon the node to allow scheduling again.\n> Verify that all nodes are in a Ready state after the upgrade.",
         "commands": [
-          "kubectl get all --all-namespaces > k3s-backup.txt",
+          "kubectl drain <node-name> --ignore-daemonsets",
           "curl -sfL https://get.k3s.io | sh -",
-          "sudo k3s kubectl get nodes"
+          "kubectl uncordon <node-name>",
+          "kubectl get nodes"
         ]
       }
     ],
     "troubleshooting": [
       {
         "title": "Error: 'k3s is not running'",
-        "description": "**Cause:** K3s service may not be started or is failing to start.\n\n**Fix:**\nCheck the logs with 'sudo journalctl -u k3s' to identify the issue."
+        "description": "**Cause:** The K3s service may not have started correctly.\n\n**Fix:**\nCheck the logs with 'journalctl -u k3s' to diagnose the issue."
       },
       {
-        "title": "Error: 'Unable to connect to the server: x509: certificate signed by unknown authority'",
-        "description": "**Cause:** Kubeconfig may not be set up correctly or K3s is not running.\n\n**Fix:**\nEnsure K3s is running and kubeconfig is correctly set with 'sudo k3s kubectl config view --raw > ~/.kube/config'."
+        "title": "Error: 'kubectl: command not found'",
+        "description": "**Cause:** kubectl may not be installed or not in the PATH.\n\n**Fix:**\nInstall kubectl using 'curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/local/bin/kubectl'."
       },
       {
-        "title": "Pods are stuck in 'Pending' state",
-        "description": "**Cause:** Insufficient resources available in the cluster.\n\n**Fix:**\nCheck node resources with 'kubectl describe nodes' and ensure there are enough resources allocated."
+        "title": "Error: 'Failed to connect to the server'",
+        "description": "**Cause:** Kubeconfig may not be set correctly.\n\n**Fix:**\nEnsure KUBECONFIG is set correctly with 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml'."
       },
       {
-        "title": "Error: 'Failed to pull image'",
-        "description": "**Cause:** The specified container image may not be available or accessible.\n\n**Fix:**\nVerify the image name and check network connectivity to the image registry."
+        "title": "Error: 'No resources found'",
+        "description": "**Cause:** The cluster may not have any resources deployed.\n\n**Fix:**\nDeploy a sample application using 'kubectl create deployment nginx --image=nginx'."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for new CNI plugins, improved metrics server integration.",
-        "deprecations": "Deprecated support for certain legacy storage backends.",
-        "migrationSteps": "If upgrading from v1.30, ensure to check the compatibility of your existing workloads."
+        "changes": "Added support for additional storage backends including Postgres, improved metrics server integration.",
+        "deprecations": "Deprecated the use of certain legacy flags in the CLI.",
+        "migrationSteps": "If upgrading from v1.30, ensure to review the new storage backend configurations."
       }
     ],
     "resolution": {
-      "summary": "You should see output similar to 'NAME                 STATUS   ROLES    AGE   VERSION' when running 'kubectl get nodes'.",
+      "summary": "You should see output from 'kubectl get nodes' showing your nodes in a Ready state and 'kubectl get pods' showing your applications running.",
       "codeSnippets": [
         "curl -sfL https://get.k3s.io | sh -",
-        "sudo k3s kubectl get nodes",
-        "sudo k3s kubectl config view --raw > ~/.kube/config",
+        "systemctl status k3s",
+        "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+        "kubectl get nodes",
         "kubectl create deployment nginx --image=nginx",
         "kubectl expose deployment nginx --port=80 --type=NodePort",
-        "kubectl get services"
+        "kubectl get pods",
+        "kubectl get svc"
       ]
     }
   },
@@ -141,7 +146,7 @@
       "cli"
     ],
     "containerImages": [
-      "rancher/k3s:v1.31.0"
+      "docker.io/rancher/k3s:v1.31.0"
     ],
     "sourceUrls": {
       "docs": "https://docs.k3s.io/",
@@ -152,14 +157,15 @@
   "prerequisites": {
     "kubernetes": ">=1.25",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "curl"
     ],
     "cloudCLI": "none",
     "resources": "Minimum 1 vCPU, 512MB RAM per node",
-    "description": "Ensure your environment meets the minimum resource requirements."
+    "description": "Ensure your system meets the minimum resource requirements and has the necessary tools installed."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:24:30.369Z",
+    "scannedAt": "2026-04-24T00:16:10.686Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []

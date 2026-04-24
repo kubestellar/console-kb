@@ -6,71 +6,82 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Charmed Kubernetes",
-    "description": "Charmed Kubernetes is a distribution of Kubernetes that is designed for ease of deployment and management using Juju. It is ideal for users looking for a robust Kubernetes solution that integrates well with Ubuntu and offers modern metrics and monitoring capabilities. Key trade-offs include the need for Juju for deployment and management, which may add complexity for users unfamiliar with it.",
+    "description": "Charmed Kubernetes is a distribution of Kubernetes that is designed for ease of deployment and management using Juju. It is ideal for users who want a fully managed Kubernetes experience on various cloud platforms while leveraging the latest features of Kubernetes. Key trade-offs include the need for Juju and the potential complexity of managing charms.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 30,
     "steps": [
       {
         "title": "Install Juju",
-        "description": "Juju is required to deploy Charmed Kubernetes. This step installs Juju on your system.\n\n```bash\n\nsudo snap install juju --classic\n\n```\n\n> Installs the latest stable version of Juju.",
+        "description": "Juju is required to deploy Charmed Kubernetes. This step installs the Juju client on your local machine.\n\n```bash\n\nsudo snap install juju --classic\n\n```\n\n> Installs the latest stable version of Juju.",
         "commands": [
           "sudo snap install juju --classic"
         ]
       },
       {
-        "title": "Bootstrap the Kubernetes Controller",
-        "description": "This command initializes the Juju controller and deploys the Kubernetes control plane.\n\n```bash\n\njuju bootstrap <cloud> --config kubernetes-version=1.31\n\n```\n\n> Replace <cloud> with your cloud provider (e.g., aws, gcp, azure).",
+        "title": "Bootstrap the Juju Controller",
+        "description": "This command initializes a Juju controller, which is necessary for managing your Kubernetes deployment.\n\n```bash\n\njuju bootstrap aws/us-east-1 --config bootstrap-series=jammy\n\n```\n\n> Replace 'aws/us-east-1' with your desired cloud and region.",
         "commands": [
-          "juju bootstrap <cloud> --config kubernetes-version=1.31"
+          "juju bootstrap aws/us-east-1 --config bootstrap-series=jammy"
         ]
       },
       {
-        "title": "Deploy Charmed Kubernetes Bundle",
-        "description": "This step deploys the Charmed Kubernetes bundle which includes all necessary components.\n\n```bash\n\njuju deploy charmed-kubernetes\n\n```\n\n> Deploys the latest stable version of Charmed Kubernetes.",
+        "title": "Deploy Charmed Kubernetes",
+        "description": "This command deploys the Charmed Kubernetes bundle, which includes all necessary components.\n\n```bash\n\njuju deploy charmed-kubernetes\n\n```\n\n> This will deploy the latest version of Charmed Kubernetes.",
         "commands": [
           "juju deploy charmed-kubernetes"
         ]
       },
       {
-        "title": "Verify the Deployment",
-        "description": "Check the status of the deployed units to ensure everything is running correctly.\n\n```bash\n\njuju status\n\n```\n\n> This command shows the status of all deployed units.",
+        "title": "Verify Deployment",
+        "description": "After deployment, verify that all Kubernetes components are running correctly.\n\n```bash\n\njuju status\n\n```\n\n> Check the status of the deployed services.",
         "commands": [
           "juju status"
         ]
       },
       {
-        "title": "Post-Installation Configuration",
-        "description": "Configure additional features such as monitoring and autoscaling as needed.\n\n```bash\n\njuju add-relation kubernetes-master:metrics prometheus:metrics\n\njuju config kubernetes-worker enable-autoscaling=true\n\n```\n\n> Sets up monitoring with Prometheus.\n> Enables autoscaling for worker nodes.",
+        "title": "Configure Kubernetes Access",
+        "description": "Set up your kubeconfig to access the Kubernetes cluster.\n\n```bash\n\njuju config kubernetes-master kubeconfig\n\n```\n\n> This retrieves the kubeconfig for accessing your cluster.",
         "commands": [
-          "juju add-relation kubernetes-master:metrics prometheus:metrics",
-          "juju config kubernetes-worker enable-autoscaling=true"
+          "juju config kubernetes-master kubeconfig"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Remove Charmed Kubernetes",
-        "description": "This step removes the Charmed Kubernetes deployment and all associated resources. Be aware that this will result in data loss.\n\n```bash\n\njuju destroy-controller <controller-name> --destroy-all-models\n\n```\n\n> Replace <controller-name> with your Juju controller name.",
+        "description": "This will remove the Charmed Kubernetes deployment and all associated resources. Be aware that this may lead to data loss.\n\n```bash\n\njuju destroy-controller --destroy-all-models --yes\n\n```\n\n> This command will remove the Juju controller and all models.",
         "commands": [
-          "juju destroy-controller <controller-name> --destroy-all-models"
+          "juju destroy-controller --destroy-all-models --yes"
         ]
       },
       {
         "title": "Clean Up Orphaned Resources",
-        "description": "This command helps to clean up any orphaned resources that may remain after the controller is destroyed.\n\n```bash\n\njuju remove-application <app-name>\n\n```\n\n> Replace <app-name> with any remaining applications.",
+        "description": "Ensure that any orphaned resources such as load balancers or persistent volumes are removed.\n\n```bash\n\naws ec2 describe-load-balancers | jq '.LoadBalancers[] | .LoadBalancerName'\n\n```\n\n> List load balancers to check for any that need manual deletion.",
         "commands": [
-          "juju remove-application <app-name>"
+          "aws ec2 describe-load-balancers | jq '.LoadBalancers[] | .LoadBalancerName'"
         ]
       }
     ],
     "upgrade": [
       {
-        "title": "Upgrade Charmed Kubernetes",
-        "description": "Before upgrading, ensure you have a backup of your data. This process will upgrade your Charmed Kubernetes deployment to the latest version.\n\n```bash\n\njuju backup\n\njuju deploy charmed-kubernetes --revision <new-revision>\n\njuju status\n\n```\n\n> Creates a backup of the current state.\n> Replace <new-revision> with the desired version.\n> Verify that the upgrade was successful.",
+        "title": "Backup Current Deployment",
+        "description": "Before upgrading, back up your current Juju models and configurations.\n\n```bash\n\njuju export-model > model-backup.yaml\n\n```\n\n> This command exports the current model configuration.",
         "commands": [
-          "juju backup",
-          "juju deploy charmed-kubernetes --revision <new-revision>",
+          "juju export-model > model-backup.yaml"
+        ]
+      },
+      {
+        "title": "Upgrade Charmed Kubernetes",
+        "description": "This command upgrades the Charmed Kubernetes deployment to the latest version.\n\n```bash\n\njuju deploy charmed-kubernetes --revision <new-revision>\n\n```\n\n> Replace <new-revision> with the desired version.",
+        "commands": [
+          "juju deploy charmed-kubernetes --revision <new-revision>"
+        ]
+      },
+      {
+        "title": "Verify Upgrade",
+        "description": "Check the status of the deployment to ensure the upgrade was successful.\n\n```bash\n\njuju status\n\n```\n\n> Verify that all services are running as expected after the upgrade.",
+        "commands": [
           "juju status"
         ]
       }
@@ -78,38 +89,37 @@
     "troubleshooting": [
       {
         "title": "Error: 'juju bootstrap failed'",
-        "description": "**Cause:** This may occur if the specified cloud provider is not configured correctly.\n\n**Fix:**\nCheck your cloud credentials and ensure they are set up correctly."
+        "description": "**Cause:** This can occur if the cloud provider credentials are incorrect or insufficient.\n\n**Fix:**\nVerify your cloud provider credentials and permissions."
       },
       {
-        "title": "Error: 'unit is in error state'",
-        "description": "**Cause:** This can happen if a charm fails to deploy due to resource constraints.\n\n**Fix:**\nCheck the logs of the failing unit with 'juju debug-log' and ensure sufficient resources are available."
+        "title": "Error: 'kubernetes-master not ready'",
+        "description": "**Cause:** The Kubernetes master may not have completed its initialization.\n\n**Fix:**\nRun 'juju status' to check logs and ensure all services are up."
       },
       {
-        "title": "Error: 'kubernetes version not supported'",
-        "description": "**Cause:** The specified Kubernetes version is not compatible with the current Juju bundle.\n\n**Fix:**\nEnsure you are using a supported Kubernetes version as per the Charmed Kubernetes documentation.\n\n**Affected versions:** <= 1.28"
+        "title": "Error: 'juju deploy failed'",
+        "description": "**Cause:** This may happen if there are network issues or if the charm is not available.\n\n**Fix:**\nCheck your network connectivity and ensure the charm is available on Charmhub."
       },
       {
-        "title": "Error: 'relation not found'",
-        "description": "**Cause:** This indicates that a required relation between charms is missing.\n\n**Fix:**\nAdd the necessary relation using 'juju add-relation <charm1>:<relation> <charm2>:<relation>'."
+        "title": "Error: 'kubeconfig not found'",
+        "description": "**Cause:** The kubeconfig file may not have been generated or configured correctly.\n\n**Fix:**\nRun 'juju config kubernetes-master kubeconfig' to regenerate the kubeconfig."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for Kubernetes 1.31 features and improved charm relations.",
-        "deprecations": "Deprecated support for Kubernetes versions below 1.29.",
-        "migrationSteps": "If upgrading from 1.30, ensure to check compatibility of custom charms."
+        "changes": "Added support for Kubernetes v1.31 features, including new API resources and improved metrics.",
+        "deprecations": "Deprecated support for Kubernetes v1.28.",
+        "migrationSteps": "If upgrading from v1.30, ensure all charms are compatible with v1.31."
       }
     ],
     "resolution": {
-      "summary": "You should see the output of 'juju status' indicating all units are active and idle.",
+      "summary": "You should see 'kubernetes-master' and other components in the 'active' state when running 'juju status'.",
       "codeSnippets": [
         "sudo snap install juju --classic",
-        "juju bootstrap <cloud> --config kubernetes-version=1.31",
+        "juju bootstrap aws/us-east-1 --config bootstrap-series=jammy",
         "juju deploy charmed-kubernetes",
         "juju status",
-        "juju add-relation kubernetes-master:metrics prometheus:metrics",
-        "juju config kubernetes-worker enable-autoscaling=true"
+        "juju config kubernetes-master kubeconfig"
       ]
     }
   },
@@ -125,7 +135,6 @@
     "platformType": "distribution",
     "platformProvider": "Canonical",
     "platformVersions": [
-      "v1.29",
       "v1.30",
       "v1.31"
     ],
@@ -149,13 +158,14 @@
       "cli"
     ],
     "containerImages": [
-      "docker.io/ubuntu/k8s:1.31"
+      "docker.io/charmed-kubernetes/kubernetes-control-plane:v1.31",
+      "docker.io/charmed-kubernetes/kubernetes-worker:v1.31"
     ],
     "sourceUrls": {
       "docs": "https://ubuntu.com/kubernetes/docs",
       "repo": "https://github.com/charmed-kubernetes/bundle"
     },
-    "qualityScore": 93
+    "qualityScore": 96
   },
   "prerequisites": {
     "kubernetes": ">=1.29",
@@ -164,10 +174,10 @@
     ],
     "cloudCLI": "none",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have Juju installed and configured with access to your cloud provider."
+    "description": "Ensure you have Juju installed and a compatible cloud environment set up."
   },
   "security": {
-    "scannedAt": "2026-04-03T06:25:41.272Z",
+    "scannedAt": "2026-04-24T00:17:18.883Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
