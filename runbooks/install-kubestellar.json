@@ -1,0 +1,235 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-install-kubestellar",
+  "missionClass": "runbook",
+  "author": "KubeStellar Admin",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install KubeStellar via Helm (Standalone Mode)",
+    "description": "Production-grade, idempotent runbook to install KubeStellar in standalone mode using the 'kubestellar/kubestellar-core' Helm chart. IMPORTANT: This chart deploys KubeStellar core controllers into the kubestellar-system namespace only. It does NOT provision KubeFlex, virtual control planes, ITS (Inventory & Transport Space), or WDS (Workload Description Space). Those components require separate provisioning steps beyond the scope of this runbook. Every step is deterministic, fail-fast, and safe to re-run.",
+    "type": "deploy",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "id": "step-01-cluster-connectivity",
+        "title": "Verify Cluster Connectivity",
+        "description": "Confirm the current kubeconfig context resolves and the API server is reachable before any other operations. Fail fast if the context is misconfigured or the cluster is unreachable.",
+        "commands": [
+          "kubectl cluster-info"
+        ],
+        "validation": "kubectl cluster-info 2>&1 | grep -q 'Kubernetes control plane is running'",
+        "failureHandling": "Verify $KUBECONFIG points to a valid kubeconfig file. Run 'kubectl config current-context' to identify the active context. If using a cloud provider, re-run the cluster credential refresh command (e.g., 'aws eks update-kubeconfig' or 'gcloud container clusters get-credentials'). Ensure no VPN or firewall blocks the API server endpoint."
+      },
+      {
+        "id": "step-02-node-readiness",
+        "title": "Verify All Nodes Are Ready",
+        "description": "Enumerate every cluster node and fail fast if any node is in a non-Ready state. A degraded node pool will cause pod scheduling failures during installation.",
+        "commands": [
+          "kubectl get nodes",
+          "kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{\" \"}{.status.conditions[?(@.type==\"Ready\")].status}{\"\\n\"}{end}' | awk '$2 != \"True\" { print \"ERROR: Node \" $1 \" is not Ready\"; found=1 } END { if (found) exit 1 }'"
+        ],
+        "validation": "kubectl get nodes --no-headers | awk '$2 != \"Ready\" { exit 1 }'",
+        "failureHandling": "Identify unhealthy nodes with 'kubectl describe node <node-name>'. Common causes: disk pressure (check 'Conditions' block), network plugin failure, or cloud provider degraded zone. For managed clusters, trigger a node pool repair via cloud console. Do not proceed until all nodes show STATUS=Ready."
+      },
+      {
+        "id": "step-03-rbac-validation",
+        "title": "Verify RBAC Permissions for Installation",
+        "description": "Confirm the active service account or user has the specific RBAC verbs required to install KubeStellar: creating namespaces, applying CRDs, and creating deployments. Uses explicit verb+resource pairs to avoid wildcard anti-patterns.",
+        "commands": [
+          "kubectl auth can-i create namespace",
+          "kubectl auth can-i create customresourcedefinitions.apiextensions.k8s.io",
+          "kubectl auth can-i create clusterroles.rbac.authorization.k8s.io",
+          "kubectl auth can-i create deployments.apps --namespace kube-system"
+        ],
+        "validation": "kubectl auth can-i create namespace && kubectl auth can-i create customresourcedefinitions.apiextensions.k8s.io",
+        "failureHandling": "The current user or service account lacks cluster-admin privileges. Bind the ClusterAdmin role: 'kubectl create clusterrolebinding installer-admin --clusterrole=cluster-admin --user=$(kubectl config current-context)'. If using ServiceAccount tokens, patch the SA's RoleBinding. Contact your cluster administrator if operating in a restricted environment."
+      },
+      {
+        "id": "step-04-helm-availability",
+        "title": "Verify Helm CLI Availability",
+        "description": "Confirm Helm v3 is installed and accessible in PATH before attempting any chart operations.",
+        "commands": [
+          "helm version --short"
+        ],
+        "validation": "helm version --short 2>&1 | grep -q '^v3\\.'",
+        "failureHandling": "Install Helm v3 via the official script: 'curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash'. Helm v2 is not supported and will produce schema errors."
+      },
+      {
+        "id": "step-05-helm-repo-setup",
+        "title": "Add and Update KubeStellar Helm Repository",
+        "description": "Idempotently register the official KubeStellar Helm chart repository and refresh the local index. The '|| true' guard on repo add prevents failure on re-runs when the repo is already registered.",
+        "commands": [
+          "helm repo add kubestellar https://kubestellar.github.io/helm || true",
+          "helm repo update kubestellar"
+        ],
+        "validation": "helm search repo kubestellar/kubestellar-core --output json | grep -q 'kubestellar/kubestellar-core'",
+        "failureHandling": "If 'helm repo update' fails, check outbound connectivity: 'curl -I https://kubestellar.github.io/helm/index.yaml'. Corporate proxies may require HTTPS_PROXY to be set. If the repository index is stale, run 'helm repo remove kubestellar && helm repo add kubestellar https://kubestellar.github.io/helm' to force re-registration."
+      },
+      {
+        "id": "step-05b-cluster-stability-guard",
+        "title": "Cluster Stability Guard — Confirm API Server Responds Consistently",
+        "description": "Execute three consecutive no-op API server calls (listing namespaces) with a 5-second pause between each. All three must succeed to confirm the control plane is not intermittently unavailable before the Helm install begins. This guard prevents silent mid-install failures caused by transient API server blips.",
+        "commands": [
+          "kubectl get namespaces --request-timeout=15s > /dev/null && echo 'API check 1/3: OK'",
+          "sleep 5",
+          "kubectl get namespaces --request-timeout=15s > /dev/null && echo 'API check 2/3: OK'",
+          "sleep 5",
+          "kubectl get namespaces --request-timeout=15s > /dev/null && echo 'API check 3/3: OK'"
+        ],
+        "validation": "kubectl get namespaces --request-timeout=15s > /dev/null 2>&1 && echo 'Cluster stability guard passed'",
+        "failureHandling": "If any of the three checks fail, the cluster API server is not reliably reachable. Do NOT proceed with installation. Steps: (1) Re-run step-01 cluster connectivity check. (2) Check API server pod health: 'kubectl get pods -n kube-system | grep kube-apiserver'. (3) Verify etcd health if self-managed: 'kubectl get pods -n kube-system | grep etcd'. (4) On managed clusters, check cloud provider status page. Wait at least 5 minutes and retry."
+      },
+      {
+        "id": "step-06-install-core-chart",
+        "title": "Deploy KubeStellar Core Components via Helm (Standalone Mode)",
+        "description": "Execute an idempotent 'helm upgrade --install' to deploy KubeStellar core controllers into the kubestellar-system namespace using the 'kubestellar/kubestellar-core' chart. NOTE: This chart operates in standalone mode — it does NOT install KubeFlex, provision virtual control planes, or create ITS/WDS spaces. The --wait flag blocks until primary workload pods are Running before returning control.",
+        "commands": [
+          "helm upgrade --install kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --create-namespace --wait --timeout 15m"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'",
+        "failureHandling": "If the release times out: (1) Check pod status: 'kubectl get pods -n kubestellar-system'. (2) Identify failing pods: 'kubectl describe pod -n kubestellar-system <pod-name>'. (3) Check for image pull errors: 'kubectl get events -n kubestellar-system --sort-by=.lastTimestamp'. For a clean retry, run 'helm uninstall kubestellar-core -n kubestellar-system --wait || true' then re-execute this step."
+      },
+      {
+        "id": "step-07-pod-readiness",
+        "title": "Verify KubeStellar Pods Are Running",
+        "description": "Wait for all pods in kubestellar-system to reach Running state. This confirms that all KubeStellar core controller workloads have been successfully scheduled and started by the kubelet.",
+        "commands": [
+          "kubectl get pods --namespace kubestellar-system",
+          "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=300s"
+        ],
+        "validation": "kubectl get pods --namespace kubestellar-system --no-headers | awk '$3 != \"Running\" && $3 != \"Completed\" { print \"NOT READY: \" $1 \" (\" $3 \")\"; found=1 } END { if (found) exit 1 }'",
+        "failureHandling": "If pods are not reaching Ready: (1) Check pod status: 'kubectl get pods -n kubestellar-system'. (2) Inspect logs: 'kubectl logs <pod-name> -n kubestellar-system --tail=50'. (3) Check events: 'kubectl get events -n kubestellar-system --sort-by=.lastTimestamp'. Common causes: ImagePullBackOff (registry rate limit or bad tag), Pending (insufficient node resources), CrashLoopBackOff (misconfiguration — check logs). If stuck, run 'helm uninstall kubestellar-core -n kubestellar-system --wait || true', delete the namespace, and retry step-06."
+      },
+      {
+        "id": "step-08-post-install-verification",
+        "title": "Post-Install Resource Verification",
+        "description": "List all resources created in kubestellar-system to confirm Deployments, Services, ConfigMaps, and ServiceAccounts are present. This non-destructive check produces a human-readable inventory of the installed components.",
+        "commands": [
+          "kubectl get all --namespace kubestellar-system",
+          "kubectl get deployments --namespace kubestellar-system -o wide",
+          "kubectl get serviceaccounts --namespace kubestellar-system",
+          "kubectl get configmaps --namespace kubestellar-system"
+        ],
+        "validation": "kubectl get deployments --namespace kubestellar-system --no-headers 2>/dev/null | grep -qv '^$'",
+        "failureHandling": "If no deployments are found in kubestellar-system, the Helm install may have deployed to the wrong namespace or failed silently. Run 'helm status kubestellar-core -n kubestellar-system' to confirm release status. If the release is not found, re-run step-06. Check 'kubectl get ns' to verify the namespace was created."
+      },
+      {
+        "id": "step-09-resolution-summary",
+        "title": "Confirm Full Installation Success",
+        "description": "Execute a final consolidated health check confirming all standalone KubeStellar components are operational: Helm release deployed, all pods Running, and Deployments available.",
+        "commands": [
+          "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"' && echo 'Helm release: OK'",
+          "kubectl get pods --namespace kubestellar-system --no-headers | awk '$3 != \"Running\" && $3 != \"Completed\" { exit 1 }' && echo 'All pods running: OK'",
+          "kubectl get deployments --namespace kubestellar-system --no-headers | awk '$2 == \"0/0\" { exit 1 }' && echo 'Deployments present: OK'"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'",
+        "failureHandling": "If any check fails at this stage, reference the corresponding earlier step for targeted remediation. Do NOT attempt a partial fix. Run the full uninstall section and restart from step-01 to ensure a clean state."
+      }
+    ],
+    "resolution": {
+      "summary": "KubeStellar has been installed in standalone mode via the kubestellar/kubestellar-core Helm chart. Core controllers are running in the kubestellar-system namespace. NOTE: This installation does NOT include KubeFlex, ITS, WDS, or virtual control planes. To add those capabilities, refer to the KubeStellar full installation guide at https://docs.kubestellar.io/main/direct/get-started/",
+      "codeSnippets": [
+        "kubectl get all -n kubestellar-system",
+        "kubectl get deployments -n kubestellar-system",
+        "helm status kubestellar-core -n kubestellar-system"
+      ]
+    },
+    "uninstall": [
+      {
+        "id": "uninstall-01",
+        "title": "Uninstall KubeStellar Helm Release",
+        "description": "Purge the kubestellar-core Helm release from the cluster, removing all Helm-managed resources in kubestellar-system. The '|| true' guard ensures idempotency on repeated runs when the release is already absent.",
+        "commands": [
+          "helm uninstall kubestellar-core --namespace kubestellar-system --wait --timeout 5m || true",
+          "kubectl delete namespace kubestellar-system --wait --timeout=120s --ignore-not-found=true"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system 2>&1 | grep -q 'not found'",
+        "failureHandling": "If Helm reports the release is already uninstalled, this is expected on re-runs and is not an error. If namespace deletion hangs, a resource with a finalizer is blocking it. Inspect: 'kubectl get all -n kubestellar-system'. Force-clear finalizers on blocking resources before deleting the namespace again."
+      },
+      {
+        "id": "uninstall-02",
+        "title": "Remove Residual KubeStellar CRDs",
+        "description": "Delete any cluster-scoped CRDs installed by the kubestellar-core chart that may not be automatically removed by 'helm uninstall'. The --ignore-not-found flag ensures idempotency. Run 'kubectl get crds | grep kubestellar' first to identify which CRDs are present.",
+        "commands": [
+          "kubectl get crds | grep kubestellar || echo 'No KubeStellar CRDs found'",
+          "kubectl delete crds -l app.kubernetes.io/managed-by=Helm --ignore-not-found=true 2>/dev/null || true"
+        ],
+        "validation": "kubectl get crds 2>/dev/null | grep -qv kubestellar && echo 'No KubeStellar CRDs present'",
+        "failureHandling": "If specific CRDs are stuck with finalizers, identify them with 'kubectl get crds | grep kubestellar' and delete individually with 'kubectl delete crd <crd-name> --ignore-not-found=true'. If blocked by a finalizer, patch it out: 'kubectl patch crd <crd-name> --type json --patch \"[{\\\"op\\\":\\\"remove\\\",\\\"path\\\":\\\"/metadata/finalizers\\\"}]\"'."
+      }
+    ],
+    "troubleshooting": [
+      {
+        "id": "ts-01-webhook-timeout",
+        "title": "Helm Install Fails with Webhook Timeout",
+        "description": "Symptom: Helm install exits with 'failed to call webhook: context deadline exceeded' or 'connection refused'. Cause: The mutating/validating webhook service is not yet serving before Kubernetes calls it during resource admission. Diagnosis: 'kubectl get mutatingwebhookconfiguration,validatingwebhookconfiguration | grep kubestellar'. Fix: (1) Increase the Helm timeout: '--timeout 20m'. (2) Temporarily set the webhook failurePolicy to 'Ignore' to allow installation to proceed: 'kubectl patch mutatingwebhookconfiguration <name> --type=json -p \"[{\\\"op\\\":\\\"replace\\\",\\\"path\\\":\\\"/webhooks/0/failurePolicy\\\",\\\"value\\\":\\\"Ignore\\\"}]\"'. (3) After controllers are Running, revert the failurePolicy to 'Fail'."
+      },
+      {
+        "id": "ts-02-image-pull-backoff",
+        "title": "Pods Stuck in ImagePullBackOff",
+        "description": "Symptom: Pods show 'ImagePullBackOff' or 'ErrImagePull' in 'kubectl get pods -n kubestellar-system'. Cause: Container registry rate limiting (Docker Hub anonymous pull limits), invalid image tag, or no internet access on cluster nodes. Diagnosis: 'kubectl describe pod <pod-name> -n kubestellar-system | grep -A10 Events'. Fix: (1) Configure a registry mirror or pull-through cache in containerd/CRI-O config on each node. (2) Pre-pull images on nodes: 'docker pull <image>:<tag>'. (3) If using a private registry, create an imagePullSecret and patch the ServiceAccount: 'kubectl create secret docker-registry regcred --docker-server=<server> --docker-username=<user> --docker-password=<pass> -n kubestellar-system'. (4) Use '--set image.pullPolicy=IfNotPresent' if images are already pre-pulled."
+      },
+      {
+        "id": "ts-03-insufficient-resources",
+        "title": "Pods Pending Due to Insufficient CPU or Memory",
+        "description": "Symptom: Pods remain in 'Pending' state with 'Insufficient cpu' or 'Insufficient memory' events. Cause: The cluster nodes do not have enough allocatable resources for KubeStellar controller pods. Diagnosis: 'kubectl describe nodes | grep -A10 \"Allocated resources\"' and 'kubectl get pods -n kubestellar-system -o wide'. Fix: (1) Scale up the node pool or increase node size. (2) Reduce resource requests via Helm values: 'helm upgrade --install kubestellar-core kubestellar/kubestellar-core -n kubestellar-system --set controller.resources.requests.cpu=100m --set controller.resources.requests.memory=128Mi'. (3) Evict low-priority workloads from nodes to free capacity. Minimum recommended: 2 vCPU and 4 GB RAM allocatable."
+      },
+      {
+        "id": "ts-04-helm-release-stuck",
+        "title": "Helm Release Stuck in 'pending-install' or 'failed' State",
+        "description": "Symptom: 'helm status kubestellar-core -n kubestellar-system' reports 'pending-install' or 'failed' instead of 'deployed'. Cause: A previous interrupted Helm install left the release in a broken state. Diagnosis: 'helm list -n kubestellar-system -a' to see all release states. Fix: (1) Delete the broken release history: 'helm uninstall kubestellar-core -n kubestellar-system || true'. (2) Delete the namespace to ensure clean state: 'kubectl delete ns kubestellar-system --ignore-not-found=true'. (3) Wait for namespace deletion to complete: 'kubectl wait --for=delete namespace/kubestellar-system --timeout=120s || true'. (4) Re-run step-06."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "kubestellar",
+      "install",
+      "standalone",
+      "helm",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "management",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubestellar"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "ServiceAccount",
+      "ConfigMap",
+      "CustomResourceDefinition"
+    ],
+    "difficulty": "beginner",
+    "installMethods": [
+      "helm"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.kubestellar.io/main/direct/get-started/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "helm",
+      "awk",
+      "grep",
+      "test"
+    ],
+    "cloudCLI": "none",
+    "resources": "Minimum 2 vCPU and 4 GB RAM allocatable across the cluster.",
+    "description": "Requires an operational Kubernetes context with cluster-admin equivalent privileges (ability to create Namespaces, CRDs, ClusterRoles, and Deployments). This runbook installs KubeStellar in standalone mode only — it does NOT provision KubeFlex, ITS, or WDS virtual control planes."
+  }
+}
