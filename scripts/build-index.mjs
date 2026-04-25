@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { readdir, readFile, writeFile, stat } from 'fs/promises';
-import { join, relative, extname } from 'path';
+import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
 // Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
+const RUNBOOKS_DIR = join(process.cwd(), 'runbooks');
 const INDEX_PATH = join(SOLUTIONS_DIR, 'index.json');
 
 async function walkDir(dir) {
@@ -24,14 +25,14 @@ async function walkDir(dir) {
 }
 
 function extractMetadata(content, filePath) {
-  const relPath = relative(process.cwd(), filePath);
+  const relPath = relative(process.cwd(), filePath).split(path.sep).join('/');
   try {
     const data = filePath.endsWith('.json') ? JSON.parse(content) : parseYaml(content);
     if (!data || (!data.title && !data.mission?.title)) return null;
     
-    // Extract category from path: fixes/<category>/...
+    // Preserve category from mission file; fall back to path-based derivation
     const pathParts = relPath.split('/');
-    const category = pathParts.length > 1 ? pathParts[1] : 'general';
+    const category = data.category || (pathParts.length > 1 ? pathParts[1] : 'general');
 
     // Determine missionClass: explicit field > path-based > default
     let missionClass = data.missionClass;
@@ -111,22 +112,30 @@ function extractIssueTypes(data) {
 }
 
 export async function buildIndex(targetDir = SOLUTIONS_DIR) {
-  const files = await walkDir(targetDir);
-  const missions = [];
+  // Walk both the fixes/ and runbooks/ directories
+  let allFiles = await walkDir(targetDir);
   
-  for (const filePath of files) {
+  if (targetDir === SOLUTIONS_DIR) {
+    const runbookFiles = await walkDir(RUNBOOKS_DIR).catch(() => {
+      console.warn('No runbooks/ directory found — skipping.');
+      return [];
+    });
+    allFiles = [...allFiles, ...runbookFiles];
+  }
+  const missions = [];
+
+  for (const filePath of allFiles) {
     const content = await readFile(filePath, 'utf-8');
     const meta = extractMetadata(content, filePath);
     if (meta) missions.push(meta);
   }
-  
+
   const index = {
     version: 1,
     generatedAt: new Date().toISOString(),
     count: missions.length,
     missions: missions.sort((a, b) => a.title.localeCompare(b.title)),
   };
-  
   const targetIndexPath = targetDir === SOLUTIONS_DIR ? INDEX_PATH : join(targetDir, 'index.json');
   await writeFile(targetIndexPath, JSON.stringify(index, null, 2) + '\n');
   console.log(`Generated index with ${missions.length} missions at ${targetIndexPath}`);
