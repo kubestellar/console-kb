@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubefleet-101-allow-resourceoverride-to-select-a-cluster-by-cluster-name",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubefleet: Allow `ResourceOverride` to select a cluster by cluster name",
+    "description": "Allow `ResourceOverride` to select a cluster by cluster name. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kubefleet deployment",
+        "description": "Verify your kubefleet version and configuration:\n```bash\nkubectl get pods -n kubefleet -l app.kubernetes.io/name=kubefleet\nhelm list -n kubefleet 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kubefleet installation."
+      },
+      {
+        "title": "Review kubefleet configuration",
+        "description": "Inspect the relevant kubefleet configuration:\n```bash\nkubectl get all -n kubefleet -l app.kubernetes.io/name=kubefleet\nkubectl get configmap -n kubefleet -l app.kubernetes.io/part-of=kubefleet\n```\nWe have some use cases where certain specific member clusters require overrides. However, there's no obvious way to indicate that a `ResourceOverride` should apply to a _specific cluster by name_ - only `labelSelector` is currently supported (#100)."
+      },
+      {
+        "title": "Apply the fix for Allow `ResourceOverride` to select a cluster by cluster name",
+        "description": "### Description of your changes\n\nAutomatically adds a kubernetes-fleet.io/member-cluster-name label to MemberCluster objects during reconciliation, enabling users to select clusters by name in ResourceOverride and ClusterResourceOverride via labelSelector.\n\n-\nLabel is added on first reconcile (same\n```yaml\napiVersion: cluster.kubernetes-fleet.io/v1\nkind: MemberCluster\nmetadata:\n  annotations:\n    fleet.azure.com/cluster-resource-id: /subscriptions/<subscription-guid>/resourceGroups/<resource-group>/providers/Microsoft.ContainerService/managedClusters/workload-0\n  labels:\n    fleet.azure.com/location: westcentralus\n    fleet.azure.com/resource-group: <resource-group>\n    fleet.azure.com/subscription-id: <subscription-guid>\n  name: workload-0\nspec:\n  heartbeatPeriodSeconds: 15\n  identity:\n    kind: User\n    name: <user-guid>\nstatus:\n  properties:\n    kubernetes-fleet.io/node-count:\n      observati\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kubefleet -l app.kubernetes.io/name=kubefleet\nkubectl get events -n kubefleet --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Allow `ResourceOverride` to select a cluster by cluster name\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "### Description of your changes\n\nAutomatically adds a kubernetes-fleet.io/member-cluster-name label to MemberCluster objects during reconciliation, enabling users to select clusters by name in ResourceOverride and ClusterResourceOverride via labelSelector.",
+      "codeSnippets": [
+        "apiVersion: cluster.kubernetes-fleet.io/v1\nkind: MemberCluster\nmetadata:\n  annotations:\n    fleet.azure.com/cluster-resource-id: /subscriptions/<subscription-guid>/resourceGroups/<resource-group>/providers/Microsoft.ContainerService/managedClusters/workload-0\n  labels:\n    fleet.azure.com/location: westcentralus\n    fleet.azure.com/resource-group: <resource-group>\n    fleet.azure.com/subscription-id: <subscription-guid>\n  name: workload-0\nspec:\n  heartbeatPeriodSeconds: 15\n  identity:\n    kind: User\n    name: <user-guid>\nstatus:\n  properties:\n    kubernetes-fleet.io/node-count:\n      observationTime: \"2025-06-11T14:09:10Z\"\n      value: \"3\"\n    kubernetes.azure.com/per-cpu-core-cost:\n      observationTime: \"2025-06-11T14:09:10Z\"\n      value: \"0.000\"\n    kubernetes.azure.com/per-gb-memory-co",
+        "apiVersion: placement.kubernetes-fleet.io/v1alpha1\nkind: ResourceOverride\nmetadata:\n  name: resource-override\n  namespace: my-ns\nspec:\n  policy:\n    overrideRules:\n    - clusterSelector:\n        clusterSelectorTerms:\n        - labelSelector:\n            matchExpressions:\n            - key: fleet.azure.com/subscription-id\n              operator: In\n              values:\n              - <abc>\n      jsonPatchOverrides:\n      - op: replace\n        path: /data/K8S_CLUSTER\n        value: \"${MEMBER-CLUSTER-NAME}\"\n      overrideType: JSONPatch\n  resourceSelectors:\n  - group: \"\"\n    kind: ConfigMap\n    name: settings\n    version: v1",
+        "apiVersion: placement.kubernetes-fleet.io/v1alpha1\nkind: ResourceOverride\nmetadata:\n  name: resource-override\n  namespace: my-namespace\nspec:\n  policy:\n    overrideRules:\n    - clusterSelector:\n        clusterSelectorTerms:\n        - labelSelector:\n            matchExpressions:\n            - key: fleet.azure.com/location\n              operator: Exists\n      jsonPatchOverrides:\n      - op: replace\n        path: /data/K8S_CLUSTER\n        value: ${MEMBER-CLUSTER-NAME}\n      - op: replace\n        path: /data/K8S_POD_HOSTNAME_SUFFIX\n        value: .${MEMBER-CLUSTER-NAME}.cluster.fleet\n      overrideType: JSONPatch\n  resourceSelectors:\n  - group: \"\"\n    kind: ConfigMap\n    name: my-app-env-vars\n    version: v1"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubefleet",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kubefleet"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kubefleet-dev/kubefleet/issues/101",
+      "repo": "https://github.com/kubefleet-dev/kubefleet",
+      "pr": "https://github.com/kubefleet-dev/kubefleet/pull/578"
+    },
+    "reactions": 0,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubefleet installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-04-28T07:09:59.844Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
