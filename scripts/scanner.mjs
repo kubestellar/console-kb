@@ -161,6 +161,7 @@ const SAFE_CLI_COMMANDS = new Set([
   'kubectl', 'helm', 'jq', 'awk', 'grep', 'sed', 'cut', 'tr', 'sort',
   'uniq', 'wc', 'head', 'tail', 'cat', 'echo', 'date', 'basename',
   'dirname', 'xargs', 'find', 'ls', 'yq', 'kustomize', 'istioctl',
+  'bash', 'sh', 'zsh', 'ksh',  // shell interpreters used in markdown code blocks
 ]);
 
 /**
@@ -171,17 +172,31 @@ function isSafeCLIMatch(value) {
   // Extract content inside $(...) blocks
   const subshells = [...value.matchAll(/\$\(([^)]+)\)/g)].map(m => m[1].trim());
   if (subshells.length === 0) {
-    // For backtick pattern: check piped commands after ; or &&
-    const segments = value.replace(/^`|`$/g, '').split(/[;&|]+/).map(s => s.trim()).filter(Boolean);
+    // For backtick pattern: check all command invocations
+    // Remove backticks and normalize whitespace (handles multi-line code blocks)
+    const content = value.replace(/^`|`$/g, '').trim();
+    
+    // Split by command separators (; && ||) to get individual commands
+    const segments = content.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
+    
     return segments.every(seg => {
-      const cmd = seg.split(/\s+/)[0];
-      return SAFE_CLI_COMMANDS.has(cmd);
+      // Extract the first word/command from each segment
+      // Handle potential bash redirects and arguments
+      const firstWord = seg.split(/[\s\|>]+/)[0].trim();
+      // Empty segments are safe (can happen with extra separators)
+      return !firstWord || SAFE_CLI_COMMANDS.has(firstWord);
     });
   }
+  
+  // For $() subshells
   return subshells.every(inner => {
-    // First command in a pipeline or chain
-    const cmds = inner.split(/[|;&]+/).map(s => s.trim().split(/\s+/)[0]);
-    return cmds.every(cmd => SAFE_CLI_COMMANDS.has(cmd));
+    // Split by command separators to get all commands in the pipeline
+    const segments = inner.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
+    return segments.every(seg => {
+      // Extract the first word from each segment
+      const firstWord = seg.split(/[\s\|>]+/)[0].trim();
+      return !firstWord || SAFE_CLI_COMMANDS.has(firstWord);
+    });
   });
 }
 
