@@ -144,7 +144,6 @@ export const CNCF_PROJECTS = [
   { name: "k8sgpt", repo: "k8sgpt-ai/k8sgpt", maturity: "sandbox", category: "app-definition" },
   { name: "k8up", repo: "k8up-io/k8up", maturity: "sandbox", category: "app-definition" },
   { name: "kagent", repo: "kagent-dev/kagent", maturity: "sandbox", category: "app-definition" },
-  { name: "kairos", repo: "kairos-io/kairos", maturity: "sandbox", category: "app-definition" },
   { name: "kaito", repo: "kaito-project/kaito", maturity: "sandbox", category: "app-definition" },
   { name: "kanister", repo: "kanisterio/kanister", maturity: "sandbox", category: "app-definition" },
   { name: "kcl", repo: "kcl-lang/kcl", maturity: "sandbox", category: "app-definition" },
