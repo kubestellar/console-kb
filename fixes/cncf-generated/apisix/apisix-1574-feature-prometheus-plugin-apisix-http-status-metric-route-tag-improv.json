@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "apisix-1574-feature-prometheus-plugin-apisix-http-status-metric-route-tag-improv",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "apisix: feature:  prometheus plugin `apisix_http_status` metric  `route` tag Improve recognition",
+    "description": "feature:  prometheus plugin `apisix_http_status` metric  `route` tag Improve recognition. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current apisix deployment",
+        "description": "Verify your apisix version and configuration:\n```bash\nkubectl get pods -n apisix -l app.kubernetes.io/name=apisix\nhelm list -n apisix 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working apisix installation."
+      },
+      {
+        "title": "Review apisix configuration",
+        "description": "Inspect the relevant apisix configuration:\n```bash\nkubectl get all -n apisix -l app.kubernetes.io/name=apisix\nkubectl get configmap -n apisix -l app.kubernetes.io/part-of=apisix\n```\n### Issue description\nmetric like this:\napisix_http_status{code=\"200\",route=\"00000000000000000030\",service=\"\",node=\"10.30.30.35\"} \nThe value of the route tag needs to be changed to the real route value instead of route id.\nand add host field."
+      },
+      {
+        "title": "Apply the fix for feature:  prometheus plugin `apisix_http_status` metric …",
+        "description": "Under the condition of setting `uris` or `hosts`, I want to record the specific elements in the `uris` or `hosts` that match the current request.\nAt first I tried to take advantage of the pass by reference feature of the table, so I wrote the following code\n```\n    handler = function (api_ctx,\n```yaml\nhandler = function (api_ctx, curr_req_matched_record)\n        api_ctx.matched_params = nil\n        api_ctx.matched_route = route\n        --to keep the record which matches the current request and pass it to api_ctx\n        api_ctx.curr_req_matched_record = curr_req_matched_record\n    end\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n apisix -l app.kubernetes.io/name=apisix\nkubectl get events -n apisix --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"feature:  prometheus plugin `apisix_http_status` metric …\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Under the condition of setting `uris` or `hosts`, I want to record the specific elements in the `uris` or `hosts` that match the current request.",
+      "codeSnippets": [
+        "handler = function (api_ctx, curr_req_matched_record)\n        api_ctx.matched_params = nil\n        api_ctx.matched_route = route\n        --to keep the record which matches the current request and pass it to api_ctx\n        api_ctx.curr_req_matched_record = curr_req_matched_record\n    end",
+        "local curr_req_matched_record = {}\n    match_opts.matched = curr_req_matched_record\n\n    local ok = uri_router:dispatch(api_ctx.var.uri, match_opts, api_ctx, curr_req_matched_record)",
+        "match_opts.method = api_ctx.var.request_method\n    match_opts.host = api_ctx.var.host\n    match_opts.remote_addr = api_ctx.var.remote_addr\n    match_opts.vars = api_ctx.var\n\n    match_opts.matched = {}\n    local ok = uri_router:dispatch(api_ctx.var.uri, match_opts, api_ctx)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "apisix",
+      "community",
+      "api-gateway",
+      "feature"
+    ],
+    "cncfProjects": [
+      "apisix"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/apache/apisix/issues/1574",
+      "repo": "https://github.com/apache/apisix"
+    },
+    "reactions": 2,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with apisix installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-08T07:08:23.268Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
