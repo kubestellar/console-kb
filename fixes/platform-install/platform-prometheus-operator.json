@@ -6,54 +6,44 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "Install and Configure Prometheus Operator / kube-prometheus-stack",
-    "description": "The Prometheus Operator simplifies the deployment and management of Prometheus monitoring stacks on Kubernetes. It leverages Kubernetes custom resources to automate configuration and management, making it easier to set up monitoring for applications. Key trade-offs include the need for familiarity with Kubernetes resources and potential complexity in advanced configurations.",
+    "description": "The Prometheus Operator simplifies the deployment and management of Prometheus monitoring stacks on Kubernetes. It leverages Kubernetes custom resources to automate configuration, making it easier to set up monitoring for applications. Key trade-offs include the need for familiarity with Kubernetes resources and potential complexity in advanced configurations.",
     "type": "deploy",
     "status": "completed",
     "estimatedMinutes": 20,
     "steps": [
       {
         "title": "Add the Prometheus Operator Helm repository",
-        "description": "This step adds the official Prometheus Operator Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\n\nhelm repo update\n\n```\n\n> This is the official repository for the Prometheus Operator.\n> Updates the local Helm chart repository cache.",
+        "description": "This step adds the official Prometheus Operator Helm chart repository to your Helm configuration.\n\n```bash\n\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\n\n```\n\n> This is the official repository for the Prometheus Operator.",
         "commands": [
-          "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts",
-          "helm repo update"
+          "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts"
         ]
       },
       {
         "title": "Install the Prometheus Operator",
-        "description": "This step installs the Prometheus Operator using Helm, specifying the namespace and version.\n\n```bash\n\nkubectl create namespace monitoring\n\nhelm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.75.0\n\n```\n\n> Creates a namespace for the monitoring stack.\n> Installs the kube-prometheus-stack with a specific version.",
+        "description": "This command installs the Prometheus Operator using Helm, specifying the namespace and version.\n\n```bash\n\nhelm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace --version 0.77.0\n\n```\n\n> Change the version as needed.",
         "commands": [
-          "kubectl create namespace monitoring",
-          "helm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.75.0"
+          "helm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace --version 0.77.0"
         ]
       },
       {
         "title": "Verify the installation",
-        "description": "This step checks if the Prometheus Operator and its components are running correctly.\n\n```bash\n\nkubectl get pods -n monitoring\n\nkubectl get svc -n monitoring\n\n```\n\n> Lists all pods in the monitoring namespace to verify they are running.\n> Lists all services in the monitoring namespace.",
+        "description": "Check if the Prometheus Operator and its components are running correctly.\n\n```bash\n\nkubectl get pods -n monitoring\n\n```\n\n> You should see pods for Prometheus, Alertmanager, and Grafana.",
         "commands": [
-          "kubectl get pods -n monitoring",
-          "kubectl get svc -n monitoring"
+          "kubectl get pods -n monitoring"
         ]
       },
       {
         "title": "Create a Prometheus custom resource",
-        "description": "This step creates a basic Prometheus custom resource to start monitoring.\n\n```bash\n\ncat <<EOF | kubectl apply -f -\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  resources:\n    requests:\n      cpu: 100m\n      memory: 400Mi\nEOF\n\n```\n\n> Creates a Prometheus instance with specified resources.",
+        "description": "This step creates a custom resource definition for Prometheus to start monitoring your applications.\n\n```bash\n\nkubectl apply -f - <<EOF\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  serviceMonitorSelector:\n    matchLabels:\n      app: my-app\nEOF\n\n```\n\n> Replace 'my-app' with your application's label.",
         "commands": [
-          "cat <<EOF | kubectl apply -f -\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  resources:\n    requests:\n      cpu: 100m\n      memory: 400Mi\nEOF"
-        ]
-      },
-      {
-        "title": "Verify the Prometheus custom resource",
-        "description": "This step checks if the Prometheus instance is running correctly.\n\n```bash\n\nkubectl get prometheus -n monitoring\n\n```\n\n> Lists all Prometheus instances in the monitoring namespace.",
-        "commands": [
-          "kubectl get prometheus -n monitoring"
+          "kubectl apply -f - <<EOF\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  serviceMonitorSelector:\n    matchLabels:\n      app: my-app\nEOF"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Uninstall the Prometheus Operator",
-        "description": "This step removes the Prometheus Operator and all associated resources. Be aware that this will delete all monitoring data and configurations.\n\n```bash\n\nhelm uninstall prometheus-operator --namespace monitoring\n\nkubectl delete namespace monitoring\n\n```\n\n> Uninstalls the Prometheus Operator from the specified namespace.\n> Deletes the monitoring namespace and all its resources.",
+        "description": "This command removes the Prometheus Operator and all associated resources. Be aware that this will delete all monitoring data.\n\n```bash\n\nhelm uninstall prometheus-operator --namespace monitoring\n\nkubectl delete namespace monitoring\n\n```\n\n> This will remove the Helm release.\n> This will delete the namespace and all resources within it.",
         "commands": [
           "helm uninstall prometheus-operator --namespace monitoring",
           "kubectl delete namespace monitoring"
@@ -63,51 +53,46 @@
     "upgrade": [
       {
         "title": "Upgrade the Prometheus Operator",
-        "description": "This step includes backing up your current configuration, upgrading the operator, and verifying the upgrade.\n\n```bash\n\nkubectl get prometheus -n monitoring -o yaml > prometheus-backup.yaml\n\nhelm upgrade prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.76.0\n\nkubectl get pods -n monitoring\n\n```\n\n> Backs up the current Prometheus configuration.\n> Upgrades the Prometheus Operator to the specified version.\n> Verifies that all pods are running after the upgrade.",
+        "description": "Before upgrading, ensure you back up your Prometheus data. Then, upgrade the Helm release and verify the installation.\n\n```bash\n\nhelm upgrade prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.77.0\n\nkubectl get pods -n monitoring\n\n```\n\n> Change the version as needed.\n> Verify that all pods are running after the upgrade.",
         "commands": [
-          "kubectl get prometheus -n monitoring -o yaml > prometheus-backup.yaml",
-          "helm upgrade prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.76.0",
+          "helm upgrade prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.77.0",
           "kubectl get pods -n monitoring"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Error creating service account'",
-        "description": "**Cause:** The service account required for Prometheus Operator is missing.\n\n**Fix:**\nRun 'kubectl create serviceaccount prometheus-operator -n monitoring' to create the service account."
+        "title": "Error: 'Error creating service monitor'",
+        "description": "**Cause:** This usually happens when the service monitor selector does not match any existing services.\n\n**Fix:**\nEnsure that the labels in your service match the selector in the service monitor."
       },
       {
-        "title": "Prometheus pod is in CrashLoopBackOff",
-        "description": "**Cause:** Insufficient resources allocated to the Prometheus pod.\n\n**Fix:**\nIncrease the resource requests in the Prometheus custom resource definition."
+        "title": "Prometheus is not scraping metrics",
+        "description": "**Cause:** This can occur if the service monitor is not configured correctly or the target is down.\n\n**Fix:**\nCheck the service monitor configuration and ensure the target application is running."
       },
       {
-        "title": "Error: 'Failed to connect to the API server'",
-        "description": "**Cause:** Kubeconfig is not set up correctly or the API server is down.\n\n**Fix:**\nEnsure your kubeconfig is correctly configured and the API server is running."
+        "title": "Grafana dashboard not loading",
+        "description": "**Cause:** This may happen if the Grafana service is not exposed correctly.\n\n**Fix:**\nCheck the Grafana service type and ensure it is set to LoadBalancer or NodePort."
       },
       {
-        "title": "Alertmanager is not receiving alerts",
-        "description": "**Cause:** Alertmanager configuration is incorrect or missing.\n\n**Fix:**\nCheck the Alertmanager configuration and ensure it is correctly set up in the custom resource."
+        "title": "Pods in CrashLoopBackOff",
+        "description": "**Cause:** This indicates that the pod is failing to start, often due to misconfiguration.\n\n**Fix:**\nCheck the pod logs using 'kubectl logs <pod-name> -n monitoring' for more details."
       }
     ],
     "versionNotes": [
       {
-        "version": "v0.76",
-        "changes": "Added support for custom alerting rules and improved Grafana dashboards.",
-        "deprecations": "Deprecated legacy alerting rules format.",
-        "migrationSteps": "Update alerting rules to the new format as per the documentation."
+        "version": "v0.77",
+        "changes": "Added support for new alerting rules and improved Grafana dashboards.",
+        "deprecations": "No deprecations in this version.",
+        "migrationSteps": "No specific migration steps required for this version."
       }
     ],
     "resolution": {
-      "summary": "You should see the Prometheus instance running with a status of 'Running' when executing 'kubectl get prometheus -n monitoring'.",
+      "summary": "You should see the output of 'kubectl get pods -n monitoring' showing all pods in the Running state.",
       "codeSnippets": [
         "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts",
-        "helm repo update",
-        "kubectl create namespace monitoring",
-        "helm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --version 0.75.0",
+        "helm install prometheus-operator prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace --version 0.77.0",
         "kubectl get pods -n monitoring",
-        "kubectl get svc -n monitoring",
-        "cat <<EOF | kubectl apply -f -\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  resources:\n    requests:\n      cpu: 100m\n      memory: 400Mi\nEOF",
-        "kubectl get prometheus -n monitoring"
+        "kubectl apply -f - <<EOF\napiVersion: monitoring.coreos.com/v1\nkind: Prometheus\nmetadata:\n  name: example-prometheus\n  namespace: monitoring\nspec:\n  replicas: 1\n  serviceAccountName: prometheus-operator\n  serviceMonitorSelector:\n    matchLabels:\n      app: my-app\nEOF"
       ]
     }
   },
@@ -130,11 +115,7 @@
     "supportedK8sVersions": [
       "1.25",
       "1.26",
-      "1.27",
-      "1.28",
-      "1.29",
-      "1.30",
-      "1.31"
+      "1.27"
     ],
     "cncfProjects": [],
     "targetResourceKinds": [
@@ -151,8 +132,9 @@
       "helm"
     ],
     "containerImages": [
-      "docker.io/prometheus/prometheus:v2.30.3",
-      "docker.io/prometheus/alertmanager:v0.24.0"
+      "docker.io/prometheus/alertmanager:v0.25.0",
+      "docker.io/prometheus/prometheus:v2.31.0",
+      "docker.io/grafana/grafana:v8.5.0"
     ],
     "sourceUrls": {
       "docs": "https://prometheus-operator.dev/",
@@ -167,10 +149,10 @@
       "helm 3.x"
     ],
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have a Kubernetes cluster running with the necessary tools installed."
+    "description": "Ensure you have a Kubernetes cluster running with sufficient resources."
   },
   "security": {
-    "scannedAt": "2026-04-24T00:18:30.106Z",
+    "scannedAt": "2026-05-08T06:31:40.841Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
