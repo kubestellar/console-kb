@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "cloud-native-network-185-youki-exec-did-not-join-the-correct-pid-namespace",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "cloud-native-network: `youki exec` did not join the correct pid namespace",
+    "description": "`youki exec` did not join the correct pid namespace. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current cloud-native-network deployment",
+        "description": "Verify your cloud-native-network version and configuration:\n```bash\nkubectl get pods -n cloud-native-network -l app.kubernetes.io/name=cloud-native-network\nhelm list -n cloud-native-network 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working cloud-native-network installation."
+      },
+      {
+        "title": "Review cloud-native-network configuration",
+        "description": "Inspect the relevant cloud-native-network configuration:\n```bash\nkubectl get all -n cloud-native-network -l app.kubernetes.io/name=cloud-native-network\nkubectl get configmap -n cloud-native-network -l app.kubernetes.io/part-of=cloud-native-network\n```\n~~This will lead `youki exec` to fail at the moment.~~\n```\n[DEBUG src/container/builder_impl.rs:83] 2021-08-05T0856.915335338+02:00 failed to run container_init: Failed to clean up extra fds\n\nCaused by:\n    0: Failed to obtain opened fds\n    1:"
+      },
+      {
+        "title": "Apply the fix for `youki exec` did not join the correct pid namespace",
+        "description": "Fix #13 Fix #201\n~~Note: I left `PreStart` hooks out since the spec mentioned that it is deprecated. Adding it takes no effort in the future.~~\nEdit: I have to add this since integration and docker seems to use this.\nNote2: I disabled `preserve-fds` for `exec` due to #185, so at least this code can\n```yaml\n[DEBUG src/container/builder_impl.rs:83] 2021-08-05T08:28:56.915335338+02:00 failed to run container_init: Failed to clean up extra fds\n\nCaused by:\n    0: Failed to obtain opened fds\n    1: /proc/self/fd is not the actual procfs\n    2: No such file or directory (os error 2)\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n cloud-native-network -l app.kubernetes.io/name=cloud-native-network\nkubectl get events -n cloud-native-network --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"`youki exec` did not join the correct pid namespace\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Fix #13 Fix #201\n~~Note: I left `PreStart` hooks out since the spec mentioned that it is deprecated. Adding it takes no effort in the future.~~\nEdit: I have to add this since integration and docker seems to use this.\nNote2: I disabled `preserve-fds` for `exec` due to #185, so at least this code can be tested manually. This will be fixed immediatly afterwards.",
+      "codeSnippets": [
+        "[DEBUG src/container/builder_impl.rs:83] 2021-08-05T08:28:56.915335338+02:00 failed to run container_init: Failed to clean up extra fds\n\nCaused by:\n    0: Failed to obtain opened fds\n    1: /proc/self/fd is not the actual procfs\n    2: No such file or directory (os error 2)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "cloud-native-network",
+      "sandbox",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "cloud-native-network"
+    ],
+    "targetResourceKinds": [
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/youki-dev/youki/issues/185",
+      "repo": "https://github.com/youki-dev/youki",
+      "pr": "https://github.com/youki-dev/youki/pull/187"
+    },
+    "reactions": 1,
+    "comments": 14,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with cloud-native-network installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-08T06:47:23.448Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
