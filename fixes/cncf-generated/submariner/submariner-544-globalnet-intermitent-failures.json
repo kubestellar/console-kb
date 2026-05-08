@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "submariner-544-globalnet-intermitent-failures",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "submariner: Globalnet intermitent failures",
+    "description": "Globalnet intermitent failures. Community-reported issue.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify submariner troubleshoot symptoms",
+        "description": "Check for the issue in your submariner deployment:\n```bash\nkubectl get pods -n submariner -l app.kubernetes.io/name=submariner\nkubectl logs -l app.kubernetes.io/name=submariner -n submariner --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review submariner configuration",
+        "description": "Inspect the relevant submariner configuration:\n```bash\nkubectl get all -n submariner -l app.kubernetes.io/name=submariner\nkubectl get configmap -n submariner -l app.kubernetes.io/part-of=submariner\n```\nThe globalnet IP implementation fails to work sometimes, it needs investigation.\n\nLogs: https://api.travis-ci.com/v3/job/327959427/log.txt"
+      },
+      {
+        "title": "Apply the fix for Globalnet intermitent failures",
+        "description": "The way subctl works is that it will first look for the existing clusters that are registered with the Broker cluster and then try to allocate a non-overlapping globalCidr to the newly joining cluster. So, in your case, even though you ran the subctl join command sequentially, submariner pods on\n```yaml\nbash-4.2$ kubectl get clusters -n submariner-operator\nNAME                      AGE\nnmanos-cluster-a-tunnel   46m\nnmanos-cluster-b-tunnel   46m\n\nbash-4.2$ kubectl describe cluster nmanos-cluster-a-tunnel -n submariner-operator\nName:         nmanos-cluster-a-tunnel\nNamespace:    submariner-operator\nLabels:       <none>\nAnnotations:  <none>\nAPI Version:  submariner.io/v1\nKind:         Cluster\nMetadata:\n  Creation Timestamp:  2020-05-06T07:27:16Z\n  Generation:          1\n  Resource Version:    27076\n  Self Link:           /apis/submariner.io/v1/namespaces/submariner-operator/clusters/nmanos-clust\n```"
+      },
+      {
+        "title": "Confirm Globalnet intermitent failures is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=submariner -n submariner --tail=50 --since=5m\nkubectl get events -n submariner --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "The way subctl works is that it will first look for the existing clusters that are registered with the Broker cluster and then try to allocate a non-overlapping globalCidr to the newly joining cluster.",
+      "codeSnippets": [
+        "bash-4.2$ kubectl get clusters -n submariner-operator\nNAME                      AGE\nnmanos-cluster-a-tunnel   46m\nnmanos-cluster-b-tunnel   46m\n\nbash-4.2$ kubectl describe cluster nmanos-cluster-a-tunnel -n submariner-operator\nName:         nmanos-cluster-a-tunnel\nNamespace:    submariner-operator\nLabels:       <none>\nAnnotations:  <none>\nAPI Version:  submariner.io/v1\nKind:         Cluster\nMetadata:\n  Creation Timestamp:  2020-05-06T07:27:16Z\n  Generation:          1\n  Resource Version:    27076\n  Self Link:           /apis/submariner.io/v1/namespaces/submariner-operator/clusters/nmanos-cluster-a-\ntunnel\n  UID:                 cd1ec52b-3d78-4e5d-90b7-20bb7c6f98cc\nSpec:\n  cluster_cidr:\n    10.252.0.0/14\n  cluster_id:  nmanos-cluster-a-tunnel\n  color_codes:\n    blue\n  global_cidr:\n    169.2"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "submariner",
+      "sandbox",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "submariner"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/submariner-io/submariner/issues/544",
+      "repo": "https://github.com/submariner-io/submariner"
+    },
+    "reactions": 0,
+    "comments": 12,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with submariner installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-08T07:03:33.035Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
