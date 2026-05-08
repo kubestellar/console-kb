@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kepler-636-sigsegv-on-ubuntu-20",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kepler: SIGSEGV on Ubuntu 20",
+    "description": "SIGSEGV on Ubuntu 20. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kepler deployment",
+        "description": "Verify your kepler version and configuration:\n```bash\nkubectl get pods -n kepler -l app.kubernetes.io/name=kepler\nhelm list -n kepler 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kepler installation."
+      },
+      {
+        "title": "Review kepler configuration",
+        "description": "Inspect the relevant kepler configuration:\n```bash\nkubectl get all -n kepler -l app.kubernetes.io/name=kepler\nkubectl get configmap -n kepler -l app.kubernetes.io/part-of=kepler\n```\nCurrently, we are trying to run kepler in a Kubernetes v1.25.9 cluster and ran into a segmentation violation trying to start the exporter.\n\n**To Reproduce**\nSteps to reproduce the behavior:\n1."
+      },
+      {
+        "title": "Apply the fix for SIGSEGV on Ubuntu 20",
+        "description": "Fix #636\n\nThe cgroup v1 stat had `IgnoreNotExist`, but if the cgroup does not exist if returns an empty structure, which leads to segmentation fault.\n```yaml\nI0418 12:10:46.309045       1 gpu.go:43] Failed to init nvml, err: could not init nvml: error opening libnvidia-ml.so.1: libnvidia-ml.so.1: cannot open shared object file: No such file or directory\nI0418 12:10:46.312663       1 exporter.go:149] Kepler running on version: d1bfdc4\nI0418 12:10:46.312718       1 config.go:169] using gCgroup ID in the BPF program: true\nI0418 12:10:46.313033       1 config.go:170] kernel version: 5.4\nI0418 12:10:46.313353       1 rapl_msr_util.go:129] failed to open path /dev/cpu/0/msr: no such file or directory\nI0418 12:10:46.313684       1 power.go:64] Not able to\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kepler -l app.kubernetes.io/name=kepler\nkubectl get events -n kepler --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"SIGSEGV on Ubuntu 20\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Fix #636\n\nThe cgroup v1 stat had `IgnoreNotExist`, but if the cgroup does not exist if returns an empty structure, which leads to segmentation fault.",
+      "codeSnippets": [
+        "I0418 12:10:46.309045       1 gpu.go:43] Failed to init nvml, err: could not init nvml: error opening libnvidia-ml.so.1: libnvidia-ml.so.1: cannot open shared object file: No such file or directory\nI0418 12:10:46.312663       1 exporter.go:149] Kepler running on version: d1bfdc4\nI0418 12:10:46.312718       1 config.go:169] using gCgroup ID in the BPF program: true\nI0418 12:10:46.313033       1 config.go:170] kernel version: 5.4\nI0418 12:10:46.313353       1 rapl_msr_util.go:129] failed to open path /dev/cpu/0/msr: no such file or directory\nI0418 12:10:46.313684       1 power.go:64] Not able to obtain power, use estimate method\nI0418 12:10:46.737341       1 exporter.go:167] Initializing the GPU collector\nperf_event_open: No such file or directory\nI0418 12:10:48.953114       1 bcc_attacher.g",
+        "$ kubectl logs -n monitoring kepler-exporter-7wn7f\nI0423 20:28:08.234665       1 gpu.go:43] Failed to init nvml, err: could not init nvml: error opening libnvidia-ml.so.1: libnvidia-ml.so.1: cannot open shared object file: No such file or directory\nI0423 20:28:08.238057       1 exporter.go:149] Kepler running on version: 56723f5\nI0423 20:28:08.238142       1 config.go:169] using gCgroup ID in the BPF program: true\nI0423 20:28:08.238290       1 config.go:170] kernel version: 5.4\nI0423 20:28:08.238483       1 rapl_msr_util.go:129] failed to open path /dev/cpu/0/msr: no such file or directory\nI0423 20:28:08.238899       1 power.go:77] Not able to obtain power, use estimate method\nI0423 20:28:08.352261       1 exporter.go:167] Initializing the GPU collector\nperf_event_open: No such file or dir",
+        "Image:         quay.io/sustainable_computing_io/kepler:latest\n    Image ID:      quay.io/sustainable_computing_io/kepler@sha256:5af0fbe3e67a023babc67caf059d63ba2bc6c47f65e4d2b771e713d6d7c5a2ed"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kepler",
+      "sandbox",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kepler"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/sustainable-computing-io/kepler/issues/636",
+      "repo": "https://github.com/sustainable-computing-io/kepler",
+      "pr": "https://github.com/sustainable-computing-io/kepler/pull/637"
+    },
+    "reactions": 0,
+    "comments": 15,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kepler installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-08T06:53:33.227Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
