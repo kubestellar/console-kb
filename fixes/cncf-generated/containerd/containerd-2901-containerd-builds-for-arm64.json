@@ -1,0 +1,82 @@
+{
+  "version": "kc-mission-v1",
+  "name": "containerd-2901-containerd-builds-for-arm64",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "containerd: containerd builds for arm64",
+    "description": "containerd builds for arm64. Requested by 7+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current containerd deployment",
+        "description": "Verify your containerd version and configuration:\n```bash\nkubectl get pods -n containerd -l app.kubernetes.io/name=containerd\nhelm list -n containerd 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working containerd installation."
+      },
+      {
+        "title": "Review containerd configuration",
+        "description": "Inspect the relevant containerd configuration:\n```bash\nkubectl get all -n containerd -l app.kubernetes.io/name=containerd\nkubectl get configmap -n containerd -l app.kubernetes.io/part-of=containerd\n```\nThere are prebuilt binaries for amd64. As arm64 grows in popularity for building micro Kubernetes clusters, it would be nice to be able to pick arm64 builds of containerd instead of needing to install docker, or spend a lot of time building"
+      },
+      {
+        "title": "Apply the fix for containerd builds for arm64",
+        "description": "This patch adds the CI configuration to enable the support for arm build in OpenLab.\n\nAfter this, each pull request in containerd will trigger the ``containerd-arm64-build`` job which verified the arm build on ARM cluster.\n\nAs the first version, we mark this job as non-voting job, that means the\n```yaml\nkind: pipeline\nname: default\n\nplatform:\n  os: linux\n  arch: arm64\n\nworkspace:\n  base: /go\n  path: src/github.com/containerd/containerd\n\nsteps:\n- name: build\n  image: golang:1.10.3\n  commands:\n  - apt-get update\n  - apt-get install -y btrfs-tools libseccomp-dev\n  - make\n  - make test\n```"
+      },
+      {
+        "title": "Upgrade containerd to include the fix",
+        "description": "If the fix is included in a newer release, upgrade containerd:\n```bash\nhelm repo update\nhelm upgrade containerd containerd/containerd --namespace containerd\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n containerd\nhelm list -n containerd\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n containerd -l app.kubernetes.io/name=containerd\nkubectl get events -n containerd --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"containerd builds for arm64\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This patch adds the CI configuration to enable the support for arm build in OpenLab.\n\nAfter this, each pull request in containerd will trigger the ``containerd-arm64-build`` job which verified the arm build on ARM cluster.\n\nAs the first version, we mark this job as non-voting job, that means the build job result is just a reference for developer and would not block the PR to be merged.",
+      "codeSnippets": [
+        "kind: pipeline\nname: default\n\nplatform:\n  os: linux\n  arch: arm64\n\nworkspace:\n  base: /go\n  path: src/github.com/containerd/containerd\n\nsteps:\n- name: build\n  image: golang:1.10.3\n  commands:\n  - apt-get update\n  - apt-get install -y btrfs-tools libseccomp-dev\n  - make\n  - make test",
+        "FAIL: TestSetNegativeOomScoreAdjustmentWhenPrivileged\nFAIL: TestFMountat/MountWithInvalidSource\nFAIL: TestFMountat/Normal"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "containerd",
+      "graduated",
+      "runtime",
+      "feature"
+    ],
+    "cncfProjects": [
+      "containerd"
+    ],
+    "targetResourceKinds": [
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/containerd/containerd/issues/2901",
+      "repo": "https://github.com/containerd/containerd",
+      "pr": "https://github.com/containerd/containerd/pull/3242"
+    },
+    "reactions": 7,
+    "comments": 21,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with containerd installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-08T06:42:03.463Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
