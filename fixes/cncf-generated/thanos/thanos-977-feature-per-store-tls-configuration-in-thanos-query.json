@@ -6,32 +6,33 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "thanos: [Feature] Per-Store TLS configuration in Thanos Query",
-    "description": "[Feature] Per-Store TLS configuration in Thanos Query. Requested by 92+ users.",
+    "description": "Feature request for Thanos Query to talk to some StoreAPI endpoints over plain gRPC while using different TLS settings for other endpoints. The original issue came from operators running an in-cluster store without TLS and remote stores in other clusters with TLS enabled. The practical solution is to switch Query from one global gRPC client TLS configuration to file-based endpoint discovery with default_client_config and per-endpoint client_config overrides.",
     "type": "feature",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current thanos deployment",
-        "description": "Verify your thanos version and configuration:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nhelm list -n thanos 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working thanos installation."
+        "title": "Inspect how Query currently connects to StoreAPI endpoints",
+        "description": "Start by checking whether your Query deployment still uses global gRPC client flags such as `--grpc-client-tls-*` together with static `--endpoint` or `--store` arguments. Those global flags apply to every remote store equally and are the reason mixed TLS and non-TLS topologies are hard to express.\n\n```bash\nkubectl -n monitoring get deploy thanos-query -o yaml | sed -n '/containers:/,/volumes:/p'\nkubectl -n monitoring get configmap thanos-query-endpoints -o yaml 2>/dev/null || echo \"No endpoint SD ConfigMap yet\"\nkubectl -n monitoring get secret | grep thanos-query\n```\nLook for a topology like this: one in-cluster sidecar/store reachable as plain gRPC traffic and one or more cross-cluster stores that require a CA bundle, SNI/server name, or mTLS client certificate."
       },
       {
-        "title": "Review thanos configuration",
-        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\n## Request\nFeature request to add support for per-store tls configuration.\n\n## Use Case\nI have `store` running alongside `query` on my main \"monitoring\" cluster and we don't use TLS for comms between pods on the same cluster."
+        "title": "Create an endpoint SD file with default and per-endpoint TLS settings",
+        "description": "Model the Query connections in a YAML file instead of repeating CLI flags. Put shared defaults in `default_client_config`, then override only the remote stores that need stronger TLS settings. This is the key technical change behind the feature request: Query can keep talking insecurely to local stores while using a distinct TLS client config for each remote store.\n\n```yaml\ndefault_client_config:\n  tls_config:\n    enabled: false\n  compression: snappy\n\nendpoints:\n  - address: thanos-sidecar.monitoring.svc.cluster.local:10901\n\n  - address: thanos-store.eu1.example.com:10901\n    client_config:\n      tls_config:\n        enabled: true\n        ca_file: /etc/thanos/certs/eu1/ca.crt\n      server_name: thanos-store.eu1.example.com\n\n  - address: thanos-store.us1.example.com:10901\n    client_config:\n      tls_config:\n        enabled: true\n        cert_file: /etc/thanos/certs/us1/client.crt\n        key_file: /etc/thanos/certs/us1/client.key\n        ca_file: /etc/thanos/certs/us1/ca.crt\n      server_name: thanos-store.us1.example.com\n```\nImportant details:\n- `client_config` overrides `default_client_config` for just one endpoint.\n- Omitting a field inherits the default; setting a field to an empty string explicitly clears an inherited value.\n- TLS is only overridable for file-based endpoint discovery, not for endpoints supplied solely by static CLI flags or DNS SD."
       },
       {
-        "title": "Apply the fix for [Feature] Per-Store TLS configuration in Thanos Query",
-        "description": "Why does it need that?\n\nI think you should be able to proxy all the traffic to GPRC backend.\n\nSomething like:\n```\nhttp {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                     \n```yaml\nhttp {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                      '\"$http_user_agent\"';\n \n    server {\n        listen 80 http2;\n \n        access_log logs/access.log main;\n \n        location / {\n            # Replace localhost:50051 with the address and port of your gRPC server\n            # The 'grpc://' prefix is optional; unencrypted gRPC is the default\n            grpc_pass grpc://localhost:50051;\n        }\n    }\n}\n```"
+        "title": "Mount the endpoint file and certificates into the Query pod",
+        "description": "Store the endpoint discovery YAML in a ConfigMap, store remote CA/client certs in a Secret, and update the Query deployment to read them. This turns the feature request into an actionable rollout plan.\n\n```bash\nkubectl -n monitoring create configmap thanos-query-endpoints \\\n  --from-file=endpoints.yaml=./endpoints.yaml \\\n  --dry-run=client -o yaml | kubectl apply -f -\n\nkubectl -n monitoring create secret generic thanos-query-store-certs \\\n  --from-file=eu1/ca.crt=./eu1-ca.crt \\\n  --from-file=us1/ca.crt=./us1-ca.crt \\\n  --from-file=us1/client.crt=./us1-client.crt \\\n  --from-file=us1/client.key=./us1-client.key \\\n  --dry-run=client -o yaml | kubectl apply -f -\n```\nExample deployment fragment:\n\n```yaml\nspec:\n  template:\n    spec:\n      containers:\n        - name: thanos-query\n          args:\n            - query\n            - --http-address=0.0.0.0:10902\n            - --grpc-address=0.0.0.0:10901\n            - --endpoint.sd-config-file=/etc/thanos/endpoints/endpoints.yaml\n          volumeMounts:\n            - name: endpoint-sd\n              mountPath: /etc/thanos/endpoints\n              readOnly: true\n            - name: store-certs\n              mountPath: /etc/thanos/certs\n              readOnly: true\n      volumes:\n        - name: endpoint-sd\n          configMap:\n            name: thanos-query-endpoints\n        - name: store-certs\n          secret:\n            secretName: thanos-query-store-certs\n```\nIf you still have deprecated global flags like `--grpc-client-tls-secure` or `--grpc-client-tls-ca`, remove them after migrating so they do not mask endpoint-specific behavior."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Feature] Per-Store TLS configuration in Thanos Query\" is functioning correctly."
+        "title": "Verify mixed secure and insecure stores are healthy",
+        "description": "After rollout, confirm that Query discovers every store and that TLS failures are limited to the endpoint that is misconfigured.\n\n```bash\nkubectl -n monitoring rollout status deploy/thanos-query\nkubectl -n monitoring logs deploy/thanos-query --since=10m | egrep \"endpoint|store|tls|grpc\"\nkubectl -n monitoring port-forward deploy/thanos-query 10902:10902\ncurl -s http://127.0.0.1:10902/api/v1/stores | jq '.data[] | {name: .name, lastError: .lastError}'\n```\nHealthy output should show the local in-cluster store connected without TLS and the remote stores connected with their own CA/server-name/client-certificate settings. If one remote endpoint fails hostname verification or mTLS authentication, only that store should report `lastError`, which makes debugging much easier than a single global TLS toggle."
       }
     ],
     "resolution": {
-      "summary": "Why does it need that?\n\nI think you should be able to proxy all the traffic to GPRC backend.",
+      "summary": "Thanos Query solved this class of deployments by allowing per-endpoint client configuration in file-based service discovery. Instead of forcing one global `--grpc-client-tls-*` setting onto every StoreAPI connection, operators can define shared defaults and then override TLS, CA bundles, SNI, client certificates, and compression for specific remote stores. This is especially useful when one Query instance fans out to a mix of in-cluster non-TLS sidecars and cross-cluster TLS-protected stores.",
       "codeSnippets": [
-        "http {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                      '\"$http_user_agent\"';\n \n    server {\n        listen 80 http2;\n \n        access_log logs/access.log main;\n \n        location / {\n            # Replace localhost:50051 with the address and port of your gRPC server\n            # The 'grpc://' prefix is optional; unencrypted gRPC is the default\n            grpc_pass grpc://localhost:50051;\n        }\n    }\n}",
-        "- query.cluster1.foobar.com:443\n    - query.cluster2.foobar.com:443\n    - query.cluster3.foobar.com:443\n    - query.cluster4.foobar.com:443\n    - dnssrv+_grpc._tcp.thanos-sidecar-grpc.thanos.svc.cluster.local\n    - dnssrv+_grpc._tcp.thanos-query-grpc.thanos.svc.cluster.local"
+        "default_client_config:\n  tls_config:\n    enabled: false\n\nendpoints:\n  - address: thanos-sidecar.monitoring.svc.cluster.local:10901\n\n  - address: thanos-store.remote.example.com:10901\n    client_config:\n      tls_config:\n        enabled: true\n        ca_file: /etc/thanos/certs/remote/ca.crt\n        cert_file: /etc/thanos/certs/remote/client.crt\n        key_file: /etc/thanos/certs/remote/client.key\n      server_name: thanos-store.remote.example.com",
+        "args:\n  - query\n  - --endpoint.sd-config-file=/etc/thanos/endpoints/endpoints.yaml\nvolumeMounts:\n  - name: endpoint-sd\n    mountPath: /etc/thanos/endpoints\n    readOnly: true\n  - name: store-certs\n    mountPath: /etc/thanos/certs\n    readOnly: true",
+        "kubectl -n monitoring logs deploy/thanos-query --since=10m | egrep \"endpoint|store|tls|grpc\"\ncurl -s http://127.0.0.1:10902/api/v1/stores | jq '.data[] | {name: .name, lastError: .lastError}'"
       ]
     }
   },
@@ -46,7 +47,9 @@
       "thanos"
     ],
     "targetResourceKinds": [
-      "Pod"
+      "Deployment",
+      "ConfigMap",
+      "Secret"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -55,7 +58,8 @@
     "maturity": "incubating",
     "sourceUrls": {
       "issue": "https://github.com/thanos-io/thanos/issues/977",
-      "repo": "https://github.com/thanos-io/thanos"
+      "repo": "https://github.com/thanos-io/thanos",
+      "docs": "https://thanos.io/tip/components/query.md/#per-endpoint-tls-configuration"
     },
     "reactions": 92,
     "comments": 80,
@@ -64,9 +68,12 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "curl",
+      "jq",
+      "openssl"
     ],
-    "description": "A running Kubernetes cluster with thanos installed or the issue environment reproducible."
+    "description": "Access to a Kubernetes cluster running Thanos Query plus at least one StoreAPI endpoint. You should be able to edit the Query Deployment, create ConfigMaps and Secrets for endpoint discovery and certificates, and inspect Query logs or the /api/v1/stores endpoint."
   },
   "security": {
     "scannedAt": "2026-05-09T06:51:16.001Z",
