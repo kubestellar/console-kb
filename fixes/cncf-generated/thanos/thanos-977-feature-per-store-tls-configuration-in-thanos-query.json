@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "thanos-977-feature-per-store-tls-configuration-in-thanos-query",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "thanos: [Feature] Per-Store TLS configuration in Thanos Query",
+    "description": "[Feature] Per-Store TLS configuration in Thanos Query. Requested by 92+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current thanos deployment",
+        "description": "Verify your thanos version and configuration:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nhelm list -n thanos 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working thanos installation."
+      },
+      {
+        "title": "Review thanos configuration",
+        "description": "Inspect the relevant thanos configuration:\n```bash\nkubectl get all -n thanos -l app.kubernetes.io/name=thanos\nkubectl get configmap -n thanos -l app.kubernetes.io/part-of=thanos\n```\n## Request\nFeature request to add support for per-store tls configuration.\n\n## Use Case\nI have `store` running alongside `query` on my main \"monitoring\" cluster and we don't use TLS for comms between pods on the same cluster."
+      },
+      {
+        "title": "Apply the fix for [Feature] Per-Store TLS configuration in Thanos Query",
+        "description": "Why does it need that?\n\nI think you should be able to proxy all the traffic to GPRC backend.\n\nSomething like:\n```\nhttp {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                     \n```yaml\nhttp {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                      '\"$http_user_agent\"';\n \n    server {\n        listen 80 http2;\n \n        access_log logs/access.log main;\n \n        location / {\n            # Replace localhost:50051 with the address and port of your gRPC server\n            # The 'grpc://' prefix is optional; unencrypted gRPC is the default\n            grpc_pass grpc://localhost:50051;\n        }\n    }\n}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n thanos -l app.kubernetes.io/name=thanos\nkubectl get events -n thanos --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Feature] Per-Store TLS configuration in Thanos Query\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Why does it need that?\n\nI think you should be able to proxy all the traffic to GPRC backend.",
+      "codeSnippets": [
+        "http {\n    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '\n                      '$status $body_bytes_sent \"$http_referer\" '\n                      '\"$http_user_agent\"';\n \n    server {\n        listen 80 http2;\n \n        access_log logs/access.log main;\n \n        location / {\n            # Replace localhost:50051 with the address and port of your gRPC server\n            # The 'grpc://' prefix is optional; unencrypted gRPC is the default\n            grpc_pass grpc://localhost:50051;\n        }\n    }\n}",
+        "- query.cluster1.foobar.com:443\n    - query.cluster2.foobar.com:443\n    - query.cluster3.foobar.com:443\n    - query.cluster4.foobar.com:443\n    - dnssrv+_grpc._tcp.thanos-sidecar-grpc.thanos.svc.cluster.local\n    - dnssrv+_grpc._tcp.thanos-query-grpc.thanos.svc.cluster.local"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "thanos",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/thanos-io/thanos/issues/977",
+      "repo": "https://github.com/thanos-io/thanos"
+    },
+    "reactions": 92,
+    "comments": 80,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with thanos installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-09T06:51:16.001Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
