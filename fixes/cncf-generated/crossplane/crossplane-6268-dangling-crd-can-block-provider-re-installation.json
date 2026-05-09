@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-6268-dangling-crd-can-block-provider-re-installation",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: Dangling CRD can block provider re-installation",
+    "description": "Dangling CRD can block provider re-installation. This issue affects 43+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify crossplane troubleshoot symptoms",
+        "description": "Check for the issue in your crossplane deployment:\n```bash\nkubectl get pods -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review crossplane configuration",
+        "description": "Inspect the relevant crossplane configuration:\n```bash\nkubectl get all -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl get configmap -n crossplane -l app.kubernetes.io/part-of=crossplane\n```\n### What happened?\n\nWe are running into a situation where a provider CRD which is stuck in deletion can stop (but not block) the re-installation of the same provider."
+      },
+      {
+        "title": "Apply the fix for Dangling CRD can block provider re-installation",
+        "description": ">I believe we've seen this in our CI cluster a few times, and I believe clearing the ownerReferences on the CRDs is a workaround/temporary fix.\n\nYes this works as a workaround and allows for the re-installation of the provider. It leads to something pretty interesting:\nIt unblocks the re-creation\n```yaml\nhelm install crossplane \\\n--namespace crossplane-system \\\n--create-namespace crossplane-stable/crossplane \\\n--version 1.18.2\n\ncat <<EOF | kubectl apply -f -\napiVersion: pkg.crossplane.io/v1\nkind: Provider\nmetadata:\n  name: provider-dummy\nspec:\n    package: xpkg.upbound.io/upbound/provider-dummy:v0.3.0\nEOF\n\ncat <<EOF | kubectl apply -f -\napiVersion: iam.dummy.upbound.io/v1alpha1\nkind: Robot\nmetadata:\n  name: example\nspec:\n  forProvider:\n    color: yellow\nEOF\n```"
+      },
+      {
+        "title": "Upgrade crossplane to include the fix",
+        "description": "If the fix is included in a newer release, upgrade crossplane:\n```bash\nhelm repo update\nhelm upgrade crossplane crossplane/crossplane --namespace crossplane\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n crossplane\nhelm list -n crossplane\n```"
+      },
+      {
+        "title": "Confirm Dangling CRD can block provider re-installation is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=50 --since=5m\nkubectl get events -n crossplane --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": ">I believe we've seen this in our CI cluster a few times, and I believe clearing the ownerReferences on the CRDs is a workaround/temporary fix.\n\nYes this works as a workaround and allows for the re-installation of the provider.",
+      "codeSnippets": [
+        "helm install crossplane \\\n--namespace crossplane-system \\\n--create-namespace crossplane-stable/crossplane \\\n--version 1.18.2\n\ncat <<EOF | kubectl apply -f -\napiVersion: pkg.crossplane.io/v1\nkind: Provider\nmetadata:\n  name: provider-dummy\nspec:\n    package: xpkg.upbound.io/upbound/provider-dummy:v0.3.0\nEOF\n\ncat <<EOF | kubectl apply -f -\napiVersion: iam.dummy.upbound.io/v1alpha1\nkind: Robot\nmetadata:\n  name: example\nspec:\n  forProvider:\n    color: yellow\nEOF",
+        "k patch robots.iam.dummy.upbound.io example -p '{\"metadata\":{\"finalizers\":[\"example\"]}}' --type=merge\n\nk delete providers provider-dummy"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/issues/6268",
+      "repo": "https://github.com/crossplane/crossplane"
+    },
+    "reactions": 43,
+    "comments": 8,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-09T06:47:35.947Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
