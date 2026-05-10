@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kube-burner-862-rfe-ability-to-template-the-kind-field-of-a-kubernetes-object",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kube-burner: [RFE] Ability to template the kind field of a kubernetes object",
+    "description": "[RFE] Ability to template the kind field of a kubernetes object. Community-requested feature.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kube-burner deployment",
+        "description": "Verify your kube-burner version and configuration:\n```bash\nkubectl get pods -n kube-burner -l app.kubernetes.io/name=kube-burner\nhelm list -n kube-burner 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kube-burner installation."
+      },
+      {
+        "title": "Review kube-burner configuration",
+        "description": "Inspect the relevant kube-burner configuration:\n```bash\nkubectl get all -n kube-burner -l app.kubernetes.io/name=kube-burner\nkubectl get configmap -n kube-burner -l app.kubernetes.io/part-of=kube-burner\n```\nWhile attempting to create a single job that can create a number of CRDs and CRs with minimal number of pre-created yaml manifests, I discovered it seems not possible to have template language in the `kind` field of an object."
+      },
+      {
+        "title": "Apply the fix for [RFE] Ability to template the kind field of a kubernetes…",
+        "description": "This specific issue has been addressed by https://github.com/kube-burner/kube-burner/pull/999, can you confirm if that solution works for you  ?\n\nThanks!\n```yaml\n---\nglobal:\n  gc: false\n\njobs:\n- name: test-crd-cr\n  jobType: create\n  jobIterations: 5\n  namespacedIterations: false\n  cleanup: true\n  podWait: false\n  qps: 10\n  burst: 10\n  objects:\n  - objectTemplate: crd.yml\n    replicas: 1\n\n  - objectTemplate: cr.yml\n    replicas: 1\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kube-burner -l app.kubernetes.io/name=kube-burner\nkubectl get events -n kube-burner --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[RFE] Ability to template the kind field of a kubernetes…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This specific issue has been addressed by https://github.com/kube-burner/kube-burner/pull/999, can you confirm if that solution works for you  ?\n\nThanks!",
+      "codeSnippets": [
+        "---\nglobal:\n  gc: false\n\njobs:\n- name: test-crd-cr\n  jobType: create\n  jobIterations: 5\n  namespacedIterations: false\n  cleanup: true\n  podWait: false\n  qps: 10\n  burst: 10\n  objects:\n  - objectTemplate: crd.yml\n    replicas: 1\n\n  - objectTemplate: cr.yml\n    replicas: 1",
+        "---\napiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: testcrds{{.Iteration}}.testcrd.example.com\nspec:\n  group: testcrd.example.com\n  versions:\n    - name: v1\n      served: true\n      storage: true\n      schema:\n        openAPIV3Schema:\n          type: object\n          properties:\n            spec:\n              type: object\n              properties:\n                workload:\n                  type: string\n                iterations:\n                  type: integer\n  scope: Namespaced\n  names:\n    plural: testcrds{{.Iteration}}\n    singular: testcrd{{.Iteration}}\n    kind: TestCRD{{.Iteration}}\n    shortNames:\n    - tcrd{{.Iteration}}",
+        "---\napiVersion: testcrd.example.com/v1\nkind: TestCRD{{.Iteration}}\nmetadata:\n  name: test{{.Replica}}\nspec:\n  workload: {{randAlpha 5}}\n  iterations: {{.Iteration}}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kube-burner",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kube-burner"
+    ],
+    "targetResourceKinds": [
+      "Customresourcedefinition",
+      "Job"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kube-burner/kube-burner/issues/862",
+      "repo": "https://github.com/kube-burner/kube-burner"
+    },
+    "reactions": 1,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kube-burner installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-10T07:11:52.659Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
