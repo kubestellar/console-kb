@@ -1,0 +1,146 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-thanos",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Thanos on Kubernetes",
+    "description": "Thanos is a highly available metrics system that extends existing Prometheus deployments with long-term storage, global query view, and unlimited retention across multiple clusters. Installing Thanos allows platform teams to aggregate and query metrics from many Prometheus instances in a single, horizontally scalable system.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the Bitnami Helm repository",
+        "description": "Add the Bitnami Helm chart repository to your local Helm configuration to access the Thanos chart.\n```bash\nhelm repo add bitnami https://charts.bitnami.com/bitnami\nhelm repo update\n```"
+      },
+      {
+        "title": "Install Thanos using Helm",
+        "description": "Install Thanos in a new namespace called 'thanos' using the Bitnami chart.\n```bash\nhelm install thanos bitnami/thanos --version 17.4.1 --namespace thanos --create-namespace\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the Thanos component pods (query, query-frontend, compactor, storegateway) are running successfully.\n```bash\nkubectl get pods --namespace thanos\n```"
+      },
+      {
+        "title": "Configure resource limits",
+        "description": "Set resource limits for the Thanos query component to ensure it runs efficiently under load.\n```bash\nkubectl patch deployment thanos-query -n thanos -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"query\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}}]}}}}'\n```"
+      },
+      {
+        "title": "Access the Thanos Query UI",
+        "description": "Set up port forwarding to access the Thanos Query UI from your local machine.\n```bash\nkubectl port-forward svc/thanos-query-frontend --namespace thanos 9090:9090\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the Thanos Helm release from the cluster.\n```bash\nhelm uninstall thanos --namespace thanos\n```"
+      },
+      {
+        "title": "Clean up persistent resources",
+        "description": "Delete any persistent volume claims (PVCs) created by the Thanos compactor and store gateway components.\n```bash\nkubectl delete pvc --all --namespace thanos\n```"
+      },
+      {
+        "title": "Remove namespace and verify",
+        "description": "Delete the 'thanos' namespace to remove all remaining resources and verify the removal.\n```bash\nkubectl delete namespace thanos\nkubectl get namespaces\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current Helm values and resources for Thanos before upgrading.\n```bash\nhelm get values thanos --namespace thanos > thanos-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Make sure the Bitnami Helm repository is up to date with the latest charts.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade Thanos",
+        "description": "Upgrade the Thanos installation to the latest chart version.\n```bash\nhelm upgrade thanos bitnami/thanos --namespace thanos --version 17.4.1\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check that the Thanos pods are running the new version successfully.\n```bash\nkubectl get pods --namespace thanos\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Pods stuck in CrashLoopBackOff",
+        "description": "If Thanos component pods are in a CrashLoopBackOff state, check the logs for configuration errors or missing object storage credentials.\n```bash\nkubectl logs <pod-name> --namespace thanos\n```\nA common cause is a missing or malformed objstore.yml secret required by the compactor, storegateway, and sidecar components."
+      },
+      {
+        "title": "Query UI not reachable",
+        "description": "If the Thanos Query UI is not accessible, verify the service is running and the port forward targets the correct service.\n```bash\nkubectl get svc --namespace thanos\n```"
+      },
+      {
+        "title": "No metrics from existing Prometheus",
+        "description": "If queries return no data, ensure the Thanos sidecar is deployed alongside each Prometheus instance and is discoverable by the query component. Check the configured store endpoints.\n```bash\nkubectl exec -n thanos deploy/thanos-query -- wget -qO- http://localhost:10902/api/v1/stores\n```"
+      },
+      {
+        "title": "High memory usage in compactor",
+        "description": "If the Thanos compactor is consuming excessive memory, adjust its resource limits. Check current usage first.\n```bash\nkubectl top pods --namespace thanos\n```\nThen update the limits through Helm values or by editing the statefulset."
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of Thanos will have all component pods (query, query-frontend, compactor, storegateway) running in the 'thanos' namespace, and you will be able to access the Thanos Query UI at http://localhost:9090. Resource limits should be set appropriately and object storage should be configured to enable long-term metric retention.",
+      "codeSnippets": [
+        "helm repo add bitnami https://charts.bitnami.com/bitnami\nhelm repo update",
+        "helm install thanos bitnami/thanos --version 17.4.1 --namespace thanos --create-namespace",
+        "kubectl get pods --namespace thanos",
+        "kubectl patch deployment thanos-query -n thanos -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"query\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}}]}}}}'",
+        "kubectl port-forward svc/thanos-query-frontend --namespace thanos 9090:9090"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "observability",
+      "incubating"
+    ],
+    "cncfProjects": [
+      "thanos"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "StatefulSet",
+      "Service",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "incubating",
+    "projectVersion": "v0.39.2",
+    "containerImages": [
+      "docker.io/bitnami/thanos:0.39.2"
+    ],
+    "sourceUrls": {
+      "docs": "https://thanos.io",
+      "repo": "https://github.com/thanos-io/thanos",
+      "helm": "https://charts.bitnami.com/bitnami"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have a Kubernetes cluster running and have Helm and kubectl installed on your local machine. For production use, you will also need an object storage bucket (such as S3, GCS, or MinIO) to enable long-term metric retention."
+  },
+  "security": {
+    "scannedAt": "2026-05-12T00:00:00.000Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
