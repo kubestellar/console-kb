@@ -1,0 +1,146 @@
+{
+  "version": "kc-mission-v1",
+  "name": "install-apisix",
+  "missionClass": "install",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Install and Configure Apache APISIX on Kubernetes",
+    "description": "Apache APISIX is a dynamic, real-time, high-performance API gateway. It provides traffic management features including load balancing, dynamic upstream, canary release, circuit breaking, authentication, and observability. APISIX can handle north-south traffic as well as east-west traffic between services and can also run as a Kubernetes ingress controller.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Add the APISIX Helm repository",
+        "description": "Add the official Apache APISIX Helm chart repository to your Helm configuration.\n```bash\nhelm repo add apisix https://apache.github.io/apisix-helm-chart\nhelm repo update\n```"
+      },
+      {
+        "title": "Install APISIX using Helm",
+        "description": "Install APISIX in a new namespace called 'ingress-apisix' using the upstream chart. The chart bundles etcd as a dependency for APISIX's configuration store.\n```bash\nhelm install apisix apisix/apisix --version 2.13.0 --namespace ingress-apisix --create-namespace\n```"
+      },
+      {
+        "title": "Verify the installation",
+        "description": "Check that the APISIX and etcd pods are running successfully.\n```bash\nkubectl get pods --namespace ingress-apisix\n```"
+      },
+      {
+        "title": "Check the gateway service",
+        "description": "Confirm the APISIX gateway Service has been created. By default it is of type LoadBalancer.\n```bash\nkubectl get svc apisix-gateway --namespace ingress-apisix\n```"
+      },
+      {
+        "title": "Access the Admin API",
+        "description": "Set up port forwarding to reach the APISIX Admin API from your local machine. The chart ships with a default admin key that you should rotate before using in production.\n```bash\nkubectl port-forward -n ingress-apisix svc/apisix-admin 9180:9180\n```"
+      }
+    ],
+    "uninstall": [
+      {
+        "title": "Remove the Helm release",
+        "description": "Uninstall the APISIX release from the 'ingress-apisix' namespace.\n```bash\nhelm uninstall apisix --namespace ingress-apisix\n```"
+      },
+      {
+        "title": "Clean up persistent resources",
+        "description": "The bundled etcd runs as a StatefulSet with persistent volume claims. Delete them so the storage is released.\n```bash\nkubectl delete pvc --all --namespace ingress-apisix\n```"
+      },
+      {
+        "title": "Remove namespace and verify",
+        "description": "Delete the 'ingress-apisix' namespace and verify it has been removed.\n```bash\nkubectl delete namespace ingress-apisix\nkubectl get namespaces\n```"
+      }
+    ],
+    "upgrade": [
+      {
+        "title": "Backup current state",
+        "description": "Export the current Helm values before upgrading so you can restore any custom configuration if needed.\n```bash\nhelm get values apisix --namespace ingress-apisix > apisix-backup.yaml\n```"
+      },
+      {
+        "title": "Update the Helm repository",
+        "description": "Refresh the APISIX Helm repository to pick up the latest chart version.\n```bash\nhelm repo update\n```"
+      },
+      {
+        "title": "Upgrade APISIX",
+        "description": "Upgrade the release to the next chart version. Chart 2.14.0 ships APISIX 3.16.0, a minor version bump from 3.15.0 in chart 2.13.0.\n```bash\nhelm upgrade apisix apisix/apisix --namespace ingress-apisix --version 2.14.0\n```"
+      },
+      {
+        "title": "Verify the upgrade",
+        "description": "Check that the APISIX pods are running the new version.\n```bash\nkubectl get pods --namespace ingress-apisix\nkubectl get pods -n ingress-apisix -l app.kubernetes.io/name=apisix -o jsonpath='{.items[*].spec.containers[*].image}'\n```"
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "APISIX pods stuck waiting for etcd",
+        "description": "If the APISIX pods stay in Init or CrashLoopBackOff, check the etcd pods first. APISIX will not start until etcd is reachable and healthy.\n```bash\nkubectl get pods -n ingress-apisix -l app.kubernetes.io/name=etcd\nkubectl logs -n ingress-apisix -l app.kubernetes.io/name=etcd --tail=100\n```"
+      },
+      {
+        "title": "Admin API returning 401",
+        "description": "APISIX requires the X-API-KEY header for Admin API requests. The default key is defined in the chart values under 'apisix.admin.credentials.admin'. Confirm the key you are using matches the one in the cluster.\n```bash\nkubectl get -n ingress-apisix secret apisix -o jsonpath='{.data}'\nhelm get values apisix --namespace ingress-apisix\n```"
+      },
+      {
+        "title": "Gateway service stuck in Pending",
+        "description": "If the apisix-gateway Service stays Pending, your cluster may not have a LoadBalancer provider. Either install one (MetalLB on bare metal) or override the service type.\n```bash\nkubectl describe svc apisix-gateway -n ingress-apisix\nhelm upgrade apisix apisix/apisix --namespace ingress-apisix --set service.type=NodePort\n```"
+      },
+      {
+        "title": "Routes not taking effect",
+        "description": "If routes configured through the Admin API are not being served, check the APISIX worker logs for syntax or plugin errors.\n```bash\nkubectl logs -n ingress-apisix -l app.kubernetes.io/name=apisix --tail=200\n```"
+      }
+    ],
+    "resolution": {
+      "summary": "A successful installation of APISIX will show both the APISIX and etcd pods running in the 'ingress-apisix' namespace, an apisix-gateway Service reachable on its external IP or NodePort, and an Admin API accepting requests with the configured X-API-KEY. You can then register upstream services and routes through the Admin API or the ingress controller.",
+      "codeSnippets": [
+        "helm repo add apisix https://apache.github.io/apisix-helm-chart\nhelm repo update",
+        "helm install apisix apisix/apisix --version 2.13.0 --namespace ingress-apisix --create-namespace",
+        "kubectl get pods --namespace ingress-apisix",
+        "kubectl get svc apisix-gateway --namespace ingress-apisix",
+        "kubectl port-forward -n ingress-apisix svc/apisix-admin 9180:9180"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "installation",
+      "configuration",
+      "cncf",
+      "networking",
+      "graduated"
+    ],
+    "cncfProjects": [
+      "apisix"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "StatefulSet",
+      "Service",
+      "Namespace"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "installation",
+      "configuration"
+    ],
+    "installMethods": [
+      "helm"
+    ],
+    "maturity": "graduated",
+    "projectVersion": "v3.16.0",
+    "containerImages": [
+      "apache/apisix:3.16.0-debian"
+    ],
+    "sourceUrls": {
+      "docs": "https://apisix.apache.org/docs/",
+      "repo": "https://github.com/apache/apisix",
+      "helm": "https://apache.github.io/apisix-helm-chart"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "helm",
+      "kubectl"
+    ],
+    "description": "Ensure you have a Kubernetes cluster running and have Helm and kubectl installed on your local machine. The chart bundles etcd by default, so a StorageClass must be available in the cluster for the etcd PersistentVolumeClaims."
+  },
+  "security": {
+    "scannedAt": "2026-05-13T00:00:00.000Z",
+    "scannerVersion": "cncf-install-gen-1.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
