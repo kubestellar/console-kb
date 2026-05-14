@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdir, readFile, writeFile, stat } from 'fs/promises';
+import { readdir, readFile, writeFile } from 'fs/promises';
 import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
