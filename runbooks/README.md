@@ -20,7 +20,7 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 
 | File | Operation | Difficulty |
 |------|-----------|------------|
-| [`install-kubestellar.json`](./install-kubestellar.json) | Install KubeStellar core controllers via Helm (`kubestellar/kubestellar-core` chart, standalone mode). **Does NOT provision KubeFlex, ITS, or WDS.** | Intermediate |
+| [`install-kubestellar-controller.json`](./install-kubestellar-cotroller.json) | Install KubeStellar core controllers via Helm (`kubestellar/kubestellar-core` chart, standalone mode). **Does NOT provision KubeFlex, ITS, or WDS.** | Intermediate |
 
 > **⚠️ Deprecation notice — legacy `kubestellar/kubestellar` Helm components**
 >
@@ -32,8 +32,8 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 
 ## Planned Runbooks
 
-- `upgrade-kubestellar.json` — Safe in-place upgrade with pre-flight checks and rollback
-- `rollback-kubestellar.json` — Helm rollback with state reconciliation
+- `upgrade-kubestellar-controller.json` — Safe in-place upgrade with pre-flight checks and rollback
+- `rollback-kubestellar-controller.json` — Helm rollback with state reconciliation
 - `disaster-recovery.json` — Full cluster backup verification and restore
 - `sync-failure-triage.json` — Multi-cluster WDS→WEC propagation failure diagnosis
 
