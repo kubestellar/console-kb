@@ -24,11 +24,11 @@
       },
       {
         "title": "Deploy a sample workload to scan",
-        "description": "Deploy a deliberately outdated nginx Deployment in the default namespace so the Operator has something to scan. The Operator watches Pods cluster-wide by default and produces a VulnerabilityReport per workload-controller within ~30-60 seconds.\n```bash\nkubectl create deployment vulnerable-nginx --image=nginx:1.18\nkubectl rollout status deployment/vulnerable-nginx --timeout=60s\n```"
+        "description": "Create a dedicated 'trivy-demo' namespace and deploy a deliberately outdated nginx Deployment so the Operator has something to scan. The Operator watches Pods cluster-wide by default and produces a VulnerabilityReport per workload-controller within ~30-60 seconds. Using a dedicated namespace keeps the demo workload isolated from real workloads and gives a single-command teardown.\n```bash\nkubectl create namespace trivy-demo\nkubectl create deployment vulnerable-nginx --image=nginx:1.18 --namespace trivy-demo\nkubectl rollout status deployment/vulnerable-nginx --namespace trivy-demo --timeout=60s\n```"
       },
       {
         "title": "View the scan results",
-        "description": "Once the scan job completes, the Operator writes a VulnerabilityReport into the same namespace as the scanned workload. List the reports and look at the summary on one of them.\n```bash\nkubectl get vulnerabilityreports --all-namespaces\nkubectl get vulnerabilityreport -n default -o jsonpath='{.items[0].report.summary}'\n```\nFor a full list of CVEs, query the report directly:\n```bash\nkubectl get vulnerabilityreport -n default -o yaml\n```"
+        "description": "Once the scan job completes, the Operator writes a VulnerabilityReport into the same namespace as the scanned workload. List the reports and look at the summary on one of them.\n```bash\nkubectl get vulnerabilityreports --all-namespaces\nkubectl get vulnerabilityreport --namespace trivy-demo -o jsonpath='{.items[0].report.summary}'\n```\nFor a full list of CVEs, query the report directly:\n```bash\nkubectl get vulnerabilityreport --namespace trivy-demo -o yaml\n```"
       },
       {
         "title": "Restrict scan scope (recommended for production)",
@@ -46,7 +46,7 @@
     "uninstall": [
       {
         "title": "Remove the sample workload",
-        "description": "Remove any sample workloads you deployed so the Operator can drain its scan queue cleanly.\n```bash\nkubectl delete deployment vulnerable-nginx -n default\n```"
+        "description": "Remove the demo namespace so the Operator can drain its scan queue cleanly. Deleting the namespace removes the demo Deployment and its associated VulnerabilityReports in one step.\n```bash\nkubectl delete namespace trivy-demo\n```"
       },
       {
         "title": "Remove the Helm release",
@@ -82,15 +82,15 @@
       },
       {
         "title": "No VulnerabilityReport produced after deploying a workload",
-        "description": "If a workload exists but no report appears within a couple of minutes, the scan job itself may be stuck. Look at the scan jobs in the workload's namespace and the Operator's reconciler logs.\n```bash\nkubectl get jobs -n default\nkubectl describe job -n default $(kubectl get jobs -n default -o name | head -1)\nkubectl logs -n trivy-system deploy/trivy-operator --tail=200 | grep -i scan\n```"
+        "description": "If a workload exists but no report appears within a couple of minutes, the scan job itself may be stuck. Look at the scan jobs in the workload's namespace and the Operator's reconciler logs.\n```bash\nkubectl get jobs --namespace trivy-demo\nkubectl describe job --namespace trivy-demo $(kubectl get jobs --namespace trivy-demo -o name | head -1)\nkubectl logs -n trivy-system deploy/trivy-operator --tail=200 | grep -i scan\n```"
       },
       {
         "title": "Scan jobs fail with image-pull or DB-download errors",
-        "description": "Scan jobs and the Operator's policy loader need cluster egress to a container registry that mirrors the Trivy DB and policy bundles (the chart default is 'mirror.gcr.io', with 'ghcr.io/aquasecurity/trivy-db' as the upstream alternative). On kind clusters or restricted-egress networks where one of these is unreachable, scan jobs CrashLoopBackOff with 'failed to download vulnerability DB' and the Operator log shows 'connection refused' against the configured mirror. Pre-mirror the database to a registry your cluster can reach and override 'trivy.dbRepository'.\n```bash\nkubectl describe job -n default $(kubectl get jobs -n default -o name | head -1) | tail -20\nhelm get values trivy-operator --namespace trivy-system | grep -A2 dbRepository\n```\nFor air-gapped clusters, mirror 'ghcr.io/aquasecurity/trivy-db' and 'ghcr.io/aquasecurity/trivy-java-db' to your registry and override both 'trivy.dbRepository' and 'trivy.javaDbRepository' on install."
+        "description": "Scan jobs and the Operator's policy loader need cluster egress to a container registry that mirrors the Trivy DB and policy bundles (the chart default is 'mirror.gcr.io', with 'ghcr.io/aquasecurity/trivy-db' as the upstream alternative). On kind clusters or restricted-egress networks where one of these is unreachable, scan jobs CrashLoopBackOff with 'failed to download vulnerability DB' and the Operator log shows 'connection refused' against the configured mirror. Pre-mirror the database to a registry your cluster can reach and override 'trivy.dbRepository'.\n```bash\nkubectl describe job --namespace trivy-demo $(kubectl get jobs --namespace trivy-demo -o name | head -1) | tail -20\nhelm get values trivy-operator --namespace trivy-system | grep -A2 dbRepository\n```\nFor air-gapped clusters, mirror 'ghcr.io/aquasecurity/trivy-db' and 'ghcr.io/aquasecurity/trivy-java-db' to your registry and override both 'trivy.dbRepository' and 'trivy.javaDbRepository' on install."
       },
       {
         "title": "VulnerabilityReports are empty (no CVEs reported)",
-        "description": "If reports are produced but contain no findings, the scan completed but found nothing relevant for the configured severity threshold. Check the Operator config for severity filters.\n```bash\nhelm get values trivy-operator --namespace trivy-system | grep -i severity\nkubectl get vulnerabilityreport -n default -o jsonpath='{.items[0].report}' | head -100\n```"
+        "description": "If reports are produced but contain no findings, the scan completed but found nothing relevant for the configured severity threshold. Check the Operator config for severity filters.\n```bash\nhelm get values trivy-operator --namespace trivy-system | grep -i severity\nkubectl get vulnerabilityreport --namespace trivy-demo -o jsonpath='{.items[0].report}' | head -100\n```"
       },
       {
         "title": "High CPU usage in trivy-system namespace",
@@ -100,12 +100,16 @@
     "resolution": {
       "summary": "A successful production install of Trivy Operator has the Operator pod Running in 'trivy-system', VulnerabilityReports being produced for every Pod-spec in the configured target namespaces within a minute of workload creation, the Prometheus metrics endpoint scraped (or a ServiceMonitor enabled if Prometheus Operator is in use), scan scope tuned to exclude noisy namespaces, and resource limits set on both the Operator and the scanner job pods. From there reports can be queried via kubectl, exported to a SIEM, or wired into a Grafana dashboard via the Prometheus metrics.",
       "codeSnippets": [
-        "helm repo add aqua https://aquasecurity.github.io/helm-charts/\nhelm repo update",
-        "helm install trivy-operator aqua/trivy-operator --version 0.32.1 \\\n  --namespace trivy-system --create-namespace",
+        "helm repo add aqua https://aquasecurity.github.io/helm-charts/",
+        "helm repo update",
+        "helm install trivy-operator aqua/trivy-operator --version 0.32.1 --namespace trivy-system --create-namespace",
         "kubectl get pods --namespace trivy-system",
-        "kubectl create deployment vulnerable-nginx --image=nginx:1.18",
+        "kubectl create namespace trivy-demo",
+        "kubectl create deployment vulnerable-nginx --image=nginx:1.18 --namespace trivy-demo",
         "kubectl get vulnerabilityreports --all-namespaces",
-        "kubectl get vulnerabilityreport -n default -o jsonpath='{.items[0].report.summary}'"
+        "kubectl get vulnerabilityreport --namespace trivy-demo -o jsonpath='{.items[0].report.summary}'",
+        "helm uninstall trivy-operator --namespace trivy-system",
+        "kubectl delete namespace trivy-demo"
       ]
     }
   },
