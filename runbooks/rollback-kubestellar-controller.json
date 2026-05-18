@@ -1,0 +1,180 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-rollback-kubestellar-controller",
+  "missionClass": "runbook",
+  "author": "Vinay B M",
+  "authorGithub": "bmvinay7",
+  "mission": {
+    "title": "Roll back kubestellar-core to a known-good Helm revision",
+    "description": "Production-grade, idempotent runbook to revert the kubestellar-core Helm release to a previous revision after a failed or regressing upgrade. The workflow inspects the release history, picks the target revision, runs helm rollback, waits for pods to reach Ready, and confirms the release status returned to deployed. Pair this with upgrade-kubestellar-controller as the safety net for any in-place upgrade.",
+    "type": "rollback",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "id": "step-01-cluster-access",
+        "title": "Verify cluster access and current release status",
+        "description": "Confirm the kubeconfig context resolves and the kubestellar-core release exists in kubestellar-system before doing anything destructive.",
+        "commands": [
+          "kubectl cluster-info\n",
+          "kubectl config current-context\n",
+          "helm status kubestellar-core --namespace kubestellar-system --output json | jq '{name, version, status: .info.status}'\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system > /dev/null 2>&1\n",
+        "failureHandling": "If kubectl cannot reach the API server, run credentials-setup first. If helm status reports no release, there is nothing to roll back. Reinstall through install-kubestellar-controller instead."
+      },
+      {
+        "id": "step-02-inspect-history",
+        "title": "Inspect the Helm revision history",
+        "description": "Print the full release history so you can identify the previous deployed revision. The most recent deployed revision before the failing upgrade is the safe rollback target. Capture this output before continuing.",
+        "commands": [
+          "helm history kubestellar-core --namespace kubestellar-system\n",
+          "helm history kubestellar-core --namespace kubestellar-system --output json | jq '[.[] | {revision, status, chart, app_version}]'\n"
+        ],
+        "validation": "helm history kubestellar-core --namespace kubestellar-system --output json | jq -e 'length > 1'\n",
+        "failureHandling": "If the history shows only one revision, there is no prior state to roll back to. Run install-kubestellar-controller's uninstall section followed by a clean reinstall instead of attempting a rollback."
+      },
+      {
+        "id": "step-03-choose-target-revision",
+        "title": "Choose and confirm the rollback target revision",
+        "description": "Set ROLLBACK_REVISION to the revision number you want to land on. The script prints the chosen revision so the operator can confirm before applying. Pick a revision whose status was deployed and that you know to be healthy.",
+        "commands": [
+          "ROLLBACK_REVISION=\"${ROLLBACK_REVISION:-}\"\nif test -z \"$ROLLBACK_REVISION\"; then\n  echo \"Set ROLLBACK_REVISION to the revision number from helm history\"\n  exit 1\nfi\necho \"Rolling back kubestellar-core to revision $ROLLBACK_REVISION\"\n",
+          "helm history kubestellar-core --namespace kubestellar-system --output json | jq --arg rev \"$ROLLBACK_REVISION\" '.[] | select((.revision|tostring)==$rev)'\n"
+        ],
+        "validation": "test -n \"${ROLLBACK_REVISION:-}\"\n",
+        "failureHandling": "If the chosen revision does not appear in helm history, the value is wrong. Re-run step-02 and copy the exact revision integer. Do not pass a revision whose status field is failed."
+      },
+      {
+        "id": "step-04-pre-rollback-snapshot",
+        "title": "Capture pre-rollback pod snapshot",
+        "description": "Record the current pod inventory in kubestellar-system before the rollback so you can correlate state changes afterwards.",
+        "commands": [
+          "kubectl get pods --namespace kubestellar-system -o wide\n",
+          "kubectl get deployments --namespace kubestellar-system -o wide\n",
+          "kubectl get events --namespace kubestellar-system --sort-by=.lastTimestamp | tail -20\n"
+        ],
+        "validation": "kubectl get pods --namespace kubestellar-system > /dev/null 2>&1\n",
+        "failureHandling": "If kubectl cannot list pods, the API server may be degraded. Resolve API connectivity before applying the rollback because helm rollback also needs to talk to the API server."
+      },
+      {
+        "id": "step-05-apply-rollback",
+        "title": "Apply the Helm rollback to the target revision",
+        "description": "Run helm rollback with --wait so the command blocks until the older revision converges and pods reach Ready under the rolled-back manifests.",
+        "commands": [
+          "ROLLBACK_REVISION=\"${ROLLBACK_REVISION:-}\"\nhelm rollback kubestellar-core \"$ROLLBACK_REVISION\" --namespace kubestellar-system --wait --timeout 10m\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'\n",
+        "failureHandling": "If helm rollback fails or times out, inspect kubectl describe pod and kubectl logs in kubestellar-system. Common causes are PVC binding delays or admission webhook conflicts. Resolve the blocker, then re-run helm rollback. If the release is now stuck in pending-rollback, run helm history again and choose a different known-good revision."
+      },
+      {
+        "id": "step-06-verify-pod-readiness",
+        "title": "Verify pods reached Ready under the rolled-back revision",
+        "description": "Confirm every pod in kubestellar-system is Ready under the rolled-back revision. Capture kubectl get pods, kubectl get events, and kubectl logs output so the rollback can be audited later.",
+        "commands": [
+          "kubectl get pods --namespace kubestellar-system -o wide\n",
+          "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=300s\n",
+          "kubectl get events --namespace kubestellar-system --sort-by=.lastTimestamp | tail -20\n"
+        ],
+        "validation": "kubectl get pods --namespace kubestellar-system --no-headers | awk '$3 != \"Running\" && $3 != \"Completed\" { exit 1 }'\n",
+        "failureHandling": "If pods still fail to reach Ready, the chosen revision is not actually healthy on this cluster. Choose an earlier revision from helm history and re-run step-05. If no prior revision is healthy, run install-kubestellar-controller's uninstall and reinstall path."
+      },
+      {
+        "id": "step-07-confirm-rollback",
+        "title": "Confirm the release reports the expected revision",
+        "description": "Verify that helm status reflects the new current revision and the chart version matches what you expected. Print helm history so the new entry from the rollback is captured next to the upgrade timeline.",
+        "commands": [
+          "helm status kubestellar-core --namespace kubestellar-system --output json | jq '{name, version, status: .info.status, chart: .chart.metadata.version}'\n",
+          "helm history kubestellar-core --namespace kubestellar-system\n",
+          "kubectl get deployments --namespace kubestellar-system -o wide\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'\n",
+        "failureHandling": "If status is anything other than deployed, do not declare success. Inspect the helm history entry created by the rollback. If it shows failed, you need to escalate or pick another revision."
+      }
+    ],
+    "resolution": {
+      "summary": "kubestellar-core was rolled back to a known-good revision via helm rollback with health checks. The release is back in deployed state and pods are Ready under the previous chart version.",
+      "codeSnippets": [
+        "helm history kubestellar-core --namespace kubestellar-system",
+        "helm rollback kubestellar-core \"$ROLLBACK_REVISION\" --namespace kubestellar-system --wait --timeout 10m",
+        "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=300s",
+        "helm status kubestellar-core --namespace kubestellar-system --output json"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-pending-rollback",
+        "title": "Release stuck in pending-rollback",
+        "description": "An interrupted helm rollback can leave the release in pending-rollback. Run helm history to confirm. If a healthy older revision still exists, retry helm rollback against that revision. If not, uninstall through install-kubestellar-controller's uninstall section and reinstall."
+      },
+      {
+        "id": "ts-02-no-prior-revision",
+        "title": "helm history shows only the failed revision",
+        "description": "No prior state means a rollback is not possible. Run install-kubestellar-controller's uninstall steps to remove the broken release, then reinstall the chart at a known-good chart version."
+      },
+      {
+        "id": "ts-03-pvc-binding-delay",
+        "title": "Pods Pending after rollback because of PVC binding",
+        "description": "When persistence is enabled the rollback may need to bind a PVC before the pod can run. Run kubectl describe pod and kubectl get pvc in kubestellar-system. Confirm the StorageClass exists and the PVC was Bound under the previous revision."
+      },
+      {
+        "id": "ts-04-webhook-conflict",
+        "title": "Mutating or validating webhooks reject pod creation",
+        "description": "If the failed upgrade installed an incompatible webhook configuration, the rollback can be blocked. Inspect kubectl get mutatingwebhookconfiguration and kubectl get validatingwebhookconfiguration and temporarily set the webhook failurePolicy to Ignore so the rollback can complete, then restore the policy after the controllers are stable."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "kubestellar",
+      "rollback",
+      "helm",
+      "lifecycle",
+      "controller",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "management",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubestellar"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Pod",
+      "Service",
+      "ConfigMap"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "helm"
+    ],
+    "operationTypes": [
+      "rollback",
+      "lifecycle"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.kubestellar.io/main/direct/get-started/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "helm",
+      "jq"
+    ],
+    "cloudCLI": "none",
+    "resources": "An existing kubestellar-core release with at least two revisions in helm history.",
+    "description": "Pair this runbook with upgrade-kubestellar-controller. Export ROLLBACK_REVISION to the revision number you want to land on before running the mission."
+  }
+}

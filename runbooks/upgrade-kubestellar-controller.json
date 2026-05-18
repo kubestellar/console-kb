@@ -1,0 +1,193 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-upgrade-kubestellar-controller",
+  "missionClass": "runbook",
+  "author": "Vinay B M",
+  "authorGithub": "bmvinay7",
+  "mission": {
+    "title": "Upgrade KubeStellar controller via Helm with health gates and rollback readiness",
+    "description": "Production-grade, idempotent runbook to upgrade the kubestellar-core Helm release in place. The workflow records the current revision, verifies cluster and pod health before changing anything, refreshes the chart repository, runs a dry-run diff, applies helm upgrade, waits for the new pods to reach Ready, and confirms the release is in deployed status. Every step is fail-fast and prints enough state for the rollback runbook to take over if something goes wrong.",
+    "type": "upgrade",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "id": "step-01-cluster-connectivity",
+        "title": "Verify cluster connectivity and existing release",
+        "description": "Confirm the active kubeconfig context reaches the API server and the kubestellar-core release exists in the kubestellar-system namespace before touching anything.",
+        "commands": [
+          "kubectl cluster-info\n",
+          "kubectl config current-context\n",
+          "helm status kubestellar-core --namespace kubestellar-system --output json\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'\n",
+        "failureHandling": "If kubectl cannot reach the API server, stop and use the credentials-setup mission. If helm status reports the release is missing, run install-kubestellar-controller first instead of upgrade. Do not continue when the current state is unknown."
+      },
+      {
+        "id": "step-02-record-current-revision",
+        "title": "Record the current Helm revision and chart version",
+        "description": "Capture the current revision and chart version. The rollback runbook uses these values to return the release to a known good state if the new revision fails to come up clean.",
+        "commands": [
+          "helm history kubestellar-core --namespace kubestellar-system\n",
+          "helm get values kubestellar-core --namespace kubestellar-system\n",
+          "helm list --namespace kubestellar-system --output json | jq '.[] | select(.name==\"kubestellar-core\")'\n"
+        ],
+        "validation": "helm history kubestellar-core --namespace kubestellar-system --output json | jq -e 'length > 0'\n",
+        "failureHandling": "If helm history is empty, the release was created out of band and is not safe to upgrade with this runbook. Reinstall it cleanly through install-kubestellar-controller before retrying."
+      },
+      {
+        "id": "step-03-pod-health-baseline",
+        "title": "Verify all controller pods are Ready before upgrading",
+        "description": "Upgrading on top of a degraded release usually masks the existing failure as a new one. Confirm every pod in kubestellar-system is Ready first and capture the pod inventory for diff later.",
+        "commands": [
+          "kubectl get pods --namespace kubestellar-system\n",
+          "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=180s\n",
+          "kubectl get deployments --namespace kubestellar-system -o wide\n"
+        ],
+        "validation": "kubectl get pods --namespace kubestellar-system --no-headers | awk '$3 != \"Running\" && $3 != \"Completed\" { exit 1 }'\n",
+        "failureHandling": "If any pod is not Ready, run troubleshoot-general against kubestellar-system, fix the root cause, then return to this step. Do not attempt to upgrade a release with unhealthy pods."
+      },
+      {
+        "id": "step-04-refresh-helm-repo",
+        "title": "Refresh the KubeStellar Helm repository",
+        "description": "Update the local chart cache so helm sees the published target version. The repo add line is idempotent. helm repo update populates the latest chart metadata.",
+        "commands": [
+          "helm repo add kubestellar https://kubestellar.github.io/helm 2>/dev/null || true\n",
+          "helm repo update kubestellar\n",
+          "helm search repo kubestellar/kubestellar-core --versions | head -5\n"
+        ],
+        "validation": "helm search repo kubestellar/kubestellar-core --output json | jq -e 'length > 0'\n",
+        "failureHandling": "If helm repo update fails, check outbound HTTPS to https://kubestellar.github.io/helm/index.yaml. Corporate proxies may need HTTPS_PROXY exported. If the repo URL itself responds 404, escalate before continuing."
+      },
+      {
+        "id": "step-05-dry-run-diff",
+        "title": "Render the upgrade as a dry run and inspect the diff",
+        "description": "Render the upgrade with helm template plus helm upgrade --dry-run so you can see exactly what will change. Set TARGET_CHART_VERSION to the chart version you want to land on. Leave it empty to upgrade to the latest published chart.",
+        "commands": [
+          "TARGET_CHART_VERSION=\"${TARGET_CHART_VERSION:-}\"\necho \"Target chart version: ${TARGET_CHART_VERSION:-latest}\"\n",
+          "if test -n \"${TARGET_CHART_VERSION:-}\"; then\n  helm upgrade kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --version \"$TARGET_CHART_VERSION\" --dry-run --debug 2>&1 | tail -40\nelse\n  helm upgrade kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --dry-run --debug 2>&1 | tail -40\nfi\n"
+        ],
+        "validation": "helm upgrade kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --dry-run > /dev/null 2>&1\n",
+        "failureHandling": "If the dry run fails on schema or values errors, stop. Investigate which values need to change for the new chart version. Never apply an upgrade that did not pass dry run."
+      },
+      {
+        "id": "step-06-apply-upgrade",
+        "title": "Apply the Helm upgrade with wait and timeout",
+        "description": "Run helm upgrade with --install for idempotency, --wait so the command blocks until the new pods are Ready, and --timeout long enough to cover image pulls. The --rollback-on-failure flag automatically rolls back if the upgrade fails to converge inside the timeout window.",
+        "commands": [
+          "TARGET_CHART_VERSION=\"${TARGET_CHART_VERSION:-}\"\nif test -n \"${TARGET_CHART_VERSION:-}\"; then\n  helm upgrade --install kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --version \"$TARGET_CHART_VERSION\" --wait --rollback-on-failure --timeout 15m\nelse\n  helm upgrade --install kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --wait --rollback-on-failure --timeout 15m\nfi\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'\n",
+        "failureHandling": "If --rollback-on-failure triggered an automatic rollback, helm status will report the previous revision as deployed. Inspect kubectl describe pod and kubectl logs in kubestellar-system, fix the root cause, then retry. If you are on Helm v3, use --atomic instead of --rollback-on-failure. Run the rollback runbook if the release is stuck."
+      },
+      {
+        "id": "step-07-verify-pod-readiness",
+        "title": "Verify the new pods reach Ready and inspect events",
+        "description": "Wait for all pods in kubestellar-system to reach Ready under the new revision and capture their state with kubectl get pods, kubectl get events, and kubectl logs. This is the load-bearing health gate before declaring the upgrade complete and gives you the full event tail in case anything regresses.",
+        "commands": [
+          "kubectl get pods --namespace kubestellar-system -o wide\n",
+          "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=300s\n",
+          "kubectl get events --namespace kubestellar-system --sort-by=.lastTimestamp | tail -20\n"
+        ],
+        "validation": "kubectl get pods --namespace kubestellar-system --no-headers | awk '$3 != \"Running\" && $3 != \"Completed\" { exit 1 }'\n",
+        "failureHandling": "If pods are stuck Pending, check node capacity and image pull events with kubectl describe pod. If pods are CrashLoopBackOff, read kubectl logs and run the rollback runbook to return to the prior revision while you investigate."
+      },
+      {
+        "id": "step-08-confirm-deployed-revision",
+        "title": "Confirm Helm revision incremented and release is deployed",
+        "description": "Verify the Helm revision moved forward and the release is in the deployed state. Print the new history so the value is captured next to the upgrade output.",
+        "commands": [
+          "helm status kubestellar-core --namespace kubestellar-system --output json | jq '{name, version, status: .info.status}'\n",
+          "helm history kubestellar-core --namespace kubestellar-system\n",
+          "kubectl get deployments --namespace kubestellar-system -o wide\n"
+        ],
+        "validation": "helm status kubestellar-core --namespace kubestellar-system --output json | grep -q '\"status\":\"deployed\"'\n",
+        "failureHandling": "If status is anything other than deployed, do not declare the upgrade complete. Run the rollback runbook to return to the previous revision and triage offline."
+      }
+    ],
+    "resolution": {
+      "summary": "kubestellar-core was upgraded in place via helm upgrade with health checks before and after the change. The revision and release values are captured so the rollback runbook can revert cleanly if a regression surfaces later.",
+      "codeSnippets": [
+        "helm history kubestellar-core --namespace kubestellar-system",
+        "helm upgrade --install kubestellar-core kubestellar/kubestellar-core --namespace kubestellar-system --wait --rollback-on-failure --timeout 15m",
+        "kubectl wait --for=condition=Ready pod --all --namespace kubestellar-system --timeout=300s",
+        "helm status kubestellar-core --namespace kubestellar-system --output json"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-atomic-rollback",
+        "title": "helm reports the upgrade rolled back automatically",
+        "description": "When --rollback-on-failure triggers, helm status shows the previous revision still deployed. The new revision did not converge inside the timeout. Inspect events and pod logs in kubestellar-system, fix the cause, and only retry helm upgrade after a clean dry run."
+      },
+      {
+        "id": "ts-02-pending-install",
+        "title": "Release stuck in pending-upgrade",
+        "description": "A previous interrupted helm command can leave the release in pending-upgrade status. Inspect helm history. If a prior revision is healthy, run the rollback runbook to reset state. If not, uninstall and reinstall through install-kubestellar-controller."
+      },
+      {
+        "id": "ts-03-image-pull-backoff",
+        "title": "Pods stuck in ImagePullBackOff after upgrade",
+        "description": "Container registry rate limiting or a stale image tag can stall the new revision. Run kubectl describe pod to confirm the failure. Pre-pull images on nodes or configure imagePullSecrets, then retry the upgrade."
+      },
+      {
+        "id": "ts-04-values-incompatibility",
+        "title": "Dry run fails with values schema errors",
+        "description": "The new chart version may require migrated values. Compare helm get values kubestellar-core with the chart README for the target version, update the values file accordingly, and rerun step-05 before applying."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "kubestellar",
+      "upgrade",
+      "helm",
+      "lifecycle",
+      "controller",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "management",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubestellar"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Pod",
+      "Service",
+      "ConfigMap"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "helm"
+    ],
+    "operationTypes": [
+      "upgrade",
+      "lifecycle"
+    ],
+    "sourceUrls": {
+      "docs": "https://docs.kubestellar.io/main/direct/get-started/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "helm",
+      "jq"
+    ],
+    "cloudCLI": "none",
+    "resources": "An existing kubestellar-core release in kubestellar-system and cluster-admin equivalent permissions to update Deployments, ConfigMaps, and CRDs.",
+    "description": "Pair this runbook with rollback-kubestellar-controller. Export TARGET_CHART_VERSION when you need to pin a specific chart version. Leave it empty to upgrade to the latest published chart."
+  }
+}

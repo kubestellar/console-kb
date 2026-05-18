@@ -21,6 +21,12 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 | File | Operation | Difficulty |
 |------|-----------|------------|
 | [`install-kubestellar-controller.json`](./install-kubestellar-cotroller.json) | Install KubeStellar core controllers via Helm (`kubestellar/kubestellar-core` chart, standalone mode). **Does NOT provision KubeFlex, ITS, or WDS.** | Intermediate |
+| [`upgrade-kubestellar-controller.json`](./upgrade-kubestellar-controller.json) | In-place Helm upgrade of `kubestellar-core` with health gates, dry-run diff, and `--atomic` rollback safety. | Intermediate |
+| [`rollback-kubestellar-controller.json`](./rollback-kubestellar-controller.json) | Helm rollback of `kubestellar-core` to a known-good revision after a failed upgrade. Pairs with `upgrade-kubestellar-controller.json`. | Intermediate |
+| [`certificate-rotation.json`](./certificate-rotation.json) | Rotate kubeadm control-plane certificates and refresh kubeconfig. Resolves preflight `EXPIRED_CREDENTIALS`. | Intermediate |
+| [`cluster-upgrade.json`](./cluster-upgrade.json) | Upgrade a kubeadm-managed cluster with health gates. | Intermediate |
+| [`node-drain.json`](./node-drain.json) | Cordon, drain, and uncordon a node for maintenance. | Beginner |
+| [`rbac-audit.json`](./rbac-audit.json) | Audit and remediate `RBAC_DENIED` with least-privilege bindings. | Beginner |
 
 > **⚠️ Deprecation notice — legacy `kubestellar/kubestellar` Helm components**
 >
@@ -32,10 +38,7 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 
 ## Planned Runbooks
 
-- `upgrade-kubestellar-controller.json` — Safe in-place upgrade with pre-flight checks and rollback
-- `rollback-kubestellar-controller.json` — Helm rollback with state reconciliation
 - `disaster-recovery.json` — Full cluster backup verification and restore
-- `sync-failure-triage.json` — Multi-cluster WDS→WEC propagation failure diagnosis
 
 ## Contributing a Runbook
 
