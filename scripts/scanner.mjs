@@ -162,6 +162,7 @@ const SAFE_CLI_COMMANDS = new Set([
   'uniq', 'wc', 'head', 'tail', 'cat', 'echo', 'date', 'basename',
   'dirname', 'xargs', 'find', 'ls', 'yq', 'kustomize', 'istioctl',
   'bash', 'sh', 'zsh', 'ksh',  // shell interpreters used in markdown code blocks
+  'age', 'sops', 'systemd-run',  // encryption/secret management tools in CNCF docs
 ]);
 
 /**
