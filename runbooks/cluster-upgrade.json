@@ -1,0 +1,150 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-cluster-upgrade",
+  "missionClass": "runbook",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Upgrade a kubeadm-managed cluster with health gates",
+    "description": "Execution-ready runbook for a kubeadm-managed Kubernetes cluster upgrade. It validates health, plans the upgrade, updates kubeadm and kubelet packages on the current node, applies the control-plane upgrade, and verifies the cluster returns to Ready. Repeat the node package section one node at a time for additional control-plane or worker nodes.",
+    "type": "upgrade",
+    "status": "completed",
+    "estimatedMinutes": 30,
+    "steps": [
+      {
+        "id": "step-01-set-target-and-check-health",
+        "title": "Set the target version and confirm cluster health",
+        "description": "Export TARGET_VERSION and verify every node is Ready before starting. This prevents version skew and scheduling issues during the upgrade.",
+        "commands": [
+          ": \"${TARGET_VERSION:?Set TARGET_VERSION like v1.31.3}\"\n",
+          "kubectl get nodes -o wide\n",
+          "kubectl wait --for=condition=Ready node --all --timeout=300s\n"
+        ],
+        "validation": "kubectl get nodes --no-headers | awk '$2 != \"Ready\" { exit 1 }'\n",
+        "failureHandling": "If any node is NotReady, stop here and recover node health before attempting the upgrade. Version changes on a degraded cluster make rollback harder."
+      },
+      {
+        "id": "step-02-review-upgrade-plan",
+        "title": "Review the kubeadm upgrade plan",
+        "description": "Run kubeadm upgrade plan so you can verify the supported target version and required version skew before changing packages.",
+        "commands": [
+          "sudo kubeadm upgrade plan \"$TARGET_VERSION\"\n"
+        ],
+        "validation": "sudo kubeadm upgrade plan \"$TARGET_VERSION\" > /dev/null 2>&1\n",
+        "failureHandling": "If kubeadm rejects the target version, choose the next supported minor release instead of skipping versions."
+      },
+      {
+        "id": "step-03-upgrade-kubeadm-package",
+        "title": "Upgrade the kubeadm package on this node",
+        "description": "Update the kubeadm package using the host package manager. The command automatically handles apt-based and dnf-based systems.",
+        "commands": [
+          "if command -v apt-get > /dev/null 2>&1; then\n  sudo apt-get update\n  sudo apt-get install -y kubeadm\nelif command -v dnf > /dev/null 2>&1; then\n  sudo dnf upgrade -y kubeadm\nelse\n  echo \"Unsupported package manager\"\n  exit 1\nfi\n",
+          "sudo kubeadm version\n"
+        ],
+        "validation": "sudo kubeadm version > /dev/null 2>&1\n",
+        "failureHandling": "If package upgrade fails, check repository configuration and version pinning. Do not run kubeadm upgrade apply until the node has the desired kubeadm package."
+      },
+      {
+        "id": "step-04-apply-control-plane-upgrade",
+        "title": "Apply the control-plane upgrade on the current node",
+        "description": "Run kubeadm upgrade apply for the exported target version. This updates control-plane manifests and cluster version metadata.",
+        "commands": [
+          "sudo kubeadm upgrade apply \"$TARGET_VERSION\" -y\n"
+        ],
+        "validation": "kubectl version -o yaml | grep -q \"gitVersion: $TARGET_VERSION\"\n",
+        "failureHandling": "If apply fails, inspect kubeadm output carefully before retrying. Restore from your platform backup if the control plane does not recover, and do not proceed to other nodes until the API server is stable again."
+      },
+      {
+        "id": "step-05-upgrade-kubelet-and-kubectl",
+        "title": "Upgrade kubelet and kubectl on this node",
+        "description": "Bring node runtime tools to the same supported version band and restart kubelet so the node rejoins with the new binaries.",
+        "commands": [
+          "if command -v apt-get > /dev/null 2>&1; then\n  sudo apt-get install -y kubelet kubectl\nelif command -v dnf > /dev/null 2>&1; then\n  sudo dnf upgrade -y kubelet kubectl\nelse\n  echo \"Unsupported package manager\"\n  exit 1\nfi\n",
+          "sudo systemctl daemon-reload\nsudo systemctl restart kubelet\nsudo systemctl is-active kubelet\n"
+        ],
+        "validation": "sudo systemctl is-active --quiet kubelet\n",
+        "failureHandling": "If kubelet does not restart cleanly, inspect journalctl for cgroup driver mismatches or package conflicts before touching the next node."
+      },
+      {
+        "id": "step-06-verify-cluster-readiness",
+        "title": "Verify node readiness and version alignment",
+        "description": "Confirm the upgraded node is Ready again and that the cluster reports the expected Kubernetes version. Repeat the node-specific package and kubelet steps on every remaining node one at a time.",
+        "commands": [
+          "kubectl get nodes -o wide\n",
+          "kubectl wait --for=condition=Ready node --all --timeout=300s\n"
+        ],
+        "validation": "kubectl get nodes --no-headers | awk '$2 != \"Ready\" { exit 1 }'\n",
+        "failureHandling": "If the node stays NotReady, stop the rollout and debug that node before touching the rest of the fleet. Use the node-drain runbook if you need to evacuate workloads."
+      }
+    ],
+    "resolution": {
+      "summary": "The current kubeadm-managed node and control plane were upgraded to the target version with health checks before and after the change. Repeat the node-specific package steps on each remaining node until the cluster is aligned.",
+      "codeSnippets": [
+        "sudo kubeadm upgrade plan \"$TARGET_VERSION\"",
+        "sudo kubeadm upgrade apply \"$TARGET_VERSION\" -y",
+        "kubectl get nodes -o wide"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-version-skip",
+        "title": "Target version skips a minor release",
+        "description": "kubeadm upgrades must respect supported version skew. Upgrade sequentially by minor version instead of trying to jump across unsupported releases."
+      },
+      {
+        "id": "ts-02-worker-rollout",
+        "title": "Worker nodes still need upgrading",
+        "description": "After the control plane is stable, drain each worker node, upgrade kubeadm and kubelet on that node, restart kubelet, then uncordon before moving to the next node."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "cluster-upgrade",
+      "upgrade",
+      "kubeadm",
+      "maintenance",
+      "version-skew"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Node",
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "kubeadm"
+    ],
+    "operationTypes": [
+      "cluster-upgrade"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/"
+    },
+    "qualityScore": 97
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "kubeadm",
+      "systemctl"
+    ],
+    "cloudCLI": "none",
+    "resources": "A kubeadm-managed cluster and sudo access to the node being upgraded.",
+    "description": "Run this on a control-plane node first. Export TARGET_VERSION before starting and upgrade one node at a time."
+  }
+}

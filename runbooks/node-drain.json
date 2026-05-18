@@ -1,0 +1,139 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-node-drain",
+  "missionClass": "runbook",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Drain a Kubernetes node safely for maintenance",
+    "description": "Operational runbook for cordoning, draining, validating workload rescheduling, and restoring a node after maintenance. Use it before host patching, kubelet upgrades, or hardware work so workloads move cleanly without leaving the node schedulable.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "id": "step-01-select-node",
+        "title": "Select the target node and inspect hosted workloads",
+        "description": "Export NODE_NAME, confirm the node exists, and list the hosted pods that will be affected by the drain.",
+        "commands": [
+          ": \"${NODE_NAME:?Set NODE_NAME to the node you want to drain}\"\n",
+          "kubectl get node \"$NODE_NAME\" -o wide\n",
+          "kubectl get pods -A --field-selector spec.nodeName=\"$NODE_NAME\" -o wide\n"
+        ],
+        "validation": "kubectl get node \"$NODE_NAME\" > /dev/null 2>&1\n",
+        "failureHandling": "If the node name is wrong, stop and choose a valid node from kubectl get nodes. If the node is already NotReady, investigate the underlying issue before draining."
+      },
+      {
+        "id": "step-02-cordon-node",
+        "title": "Cordon the node to stop new scheduling",
+        "description": "Mark the node unschedulable first so no new workloads land while existing pods are being evicted.",
+        "commands": [
+          "kubectl cordon \"$NODE_NAME\"\n",
+          "kubectl get node \"$NODE_NAME\"\n"
+        ],
+        "validation": "kubectl get node \"$NODE_NAME\" -o jsonpath='{.spec.unschedulable}' | grep -q true\n",
+        "failureHandling": "If cordon fails because of RBAC, use the RBAC audit runbook to grant node maintenance access before continuing."
+      },
+      {
+        "id": "step-03-drain-workloads",
+        "title": "Drain workloads from the node",
+        "description": "Evict workloads while ignoring DaemonSets and removing emptyDir data only if your maintenance window allows it.",
+        "commands": [
+          "kubectl drain \"$NODE_NAME\" --ignore-daemonsets --delete-emptydir-data --grace-period=60 --timeout=10m\n"
+        ],
+        "validation": "kubectl get node \"$NODE_NAME\" -o jsonpath='{.spec.unschedulable}' | grep -q true\n",
+        "failureHandling": "If drain hangs, inspect PodDisruptionBudget settings and long termination times. Resolve the blocking workload instead of forcing the drain immediately."
+      },
+      {
+        "id": "step-04-verify-rescheduling",
+        "title": "Verify workloads rescheduled to healthy nodes",
+        "description": "Check that affected workloads are now running on other nodes and that the drained node remains unschedulable during maintenance.",
+        "commands": [
+          "kubectl get pods -A -o wide\n",
+          "kubectl get node \"$NODE_NAME\" -o wide\n"
+        ],
+        "validation": "kubectl get node \"$NODE_NAME\" -o jsonpath='{.spec.unschedulable}' | grep -q true\n",
+        "failureHandling": "If workloads did not reschedule, the cluster may lack spare capacity or a disruption budget may still be blocking progress. Add capacity or relax the budget."
+      },
+      {
+        "id": "step-05-uncordon-after-maintenance",
+        "title": "Uncordon the node after maintenance completes",
+        "description": "Return the node to service only after host maintenance, upgrades, or repairs are complete and kubelet health is green again.",
+        "commands": [
+          "kubectl uncordon \"$NODE_NAME\"\n",
+          "kubectl wait --for=condition=Ready node/\"$NODE_NAME\" --timeout=300s\n"
+        ],
+        "validation": "kubectl get node \"$NODE_NAME\" -o jsonpath='{.spec.unschedulable}' | grep -qv true\n",
+        "failureHandling": "If the node does not become Ready after uncordon, cordon it again and inspect kubelet, CNI, and disk health before leaving it schedulable."
+      }
+    ],
+    "resolution": {
+      "summary": "The target node was cordoned, drained, verified, and returned to service cleanly. This provides a repeatable node-drain operation for maintenance and upgrade workflows.",
+      "codeSnippets": [
+        "kubectl cordon \"$NODE_NAME\"",
+        "kubectl drain \"$NODE_NAME\" --ignore-daemonsets --delete-emptydir-data --grace-period=60 --timeout=10m",
+        "kubectl uncordon \"$NODE_NAME\""
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-pdb-block",
+        "title": "Drain is blocked by PodDisruptionBudget",
+        "description": "Inspect the affected workload and disruption budget, then scale replicas or adjust the budget temporarily so eviction can proceed without violating availability rules."
+      },
+      {
+        "id": "ts-02-daemonsets-remain",
+        "title": "DaemonSet pods still appear on the node",
+        "description": "That is expected because drain ignores DaemonSet-managed pods. Confirm only DaemonSet or mirror pods remain before starting maintenance."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "node-drain",
+      "maintenance",
+      "cordon",
+      "drain",
+      "reschedule"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Node",
+      "Pod",
+      "PodDisruptionBudget"
+    ],
+    "difficulty": "beginner",
+    "installMethods": [
+      "kubectl"
+    ],
+    "operationTypes": [
+      "node-drain"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    },
+    "qualityScore": 98
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Sufficient cluster capacity to reschedule workloads away from the drained node.",
+    "description": "Export NODE_NAME before running the mission. The operator needs permission to cordon, drain, and uncordon nodes."
+  }
+}

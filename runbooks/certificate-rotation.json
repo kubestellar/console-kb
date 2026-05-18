@@ -1,0 +1,162 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-certificate-rotation",
+  "missionClass": "runbook",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Rotate kubeadm control-plane certificates and refresh kubeconfig",
+    "description": "Production-grade runbook for kubeadm-managed clusters when certificates are near expiry or the console preflight reports EXPIRED_CREDENTIALS. The workflow backs up PKI assets, renews control-plane certificates, refreshes kubeconfig credentials, restarts kubelet, and verifies the API server is healthy again.",
+    "type": "maintain",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "id": "step-01-verify-access",
+        "title": "Verify cluster access and kubeadm availability",
+        "description": "Confirm the current host can reach the cluster API server and that kubeadm is present before touching certificate material.",
+        "commands": [
+          "kubectl cluster-info\n",
+          "sudo kubeadm version\n"
+        ],
+        "validation": "kubectl cluster-info > /dev/null 2>&1 && sudo kubeadm version > /dev/null 2>&1\n",
+        "failureHandling": "If kubectl cannot reach the API server, stop and restore connectivity first. If kubeadm is missing, run this procedure from a kubeadm control-plane node or install the matching kubeadm package."
+      },
+      {
+        "id": "step-02-audit-expiry",
+        "title": "Inspect certificate expiration windows",
+        "description": "Review kubeadm-managed certificate expiration so you can confirm the rotation target and capture the pre-change state.",
+        "commands": [
+          "sudo kubeadm certs check-expiration\n",
+          "sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -enddate\n"
+        ],
+        "validation": "sudo test -f /etc/kubernetes/pki/apiserver.crt && sudo kubeadm certs check-expiration > /dev/null 2>&1\n",
+        "failureHandling": "If /etc/kubernetes/pki is missing, this is not the right control-plane host. If kubeadm reports externally managed certificates, switch to your external PKI renewal process instead of kubeadm certificate renewal."
+      },
+      {
+        "id": "step-03-backup-pki",
+        "title": "Back up PKI and admin kubeconfig files",
+        "description": "Create a timestamped backup of the Kubernetes PKI directory and admin kubeconfig before renewing anything.",
+        "commands": [
+          "BACKUP_DIR=\"/var/backups/kubeadm-pki-$(date +%Y%m%d%H%M%S)\"\nsudo mkdir -p \"$BACKUP_DIR\"\nsudo cp -a /etc/kubernetes/pki \"$BACKUP_DIR\"/\nsudo cp /etc/kubernetes/admin.conf \"$BACKUP_DIR\"/admin.conf\necho \"$BACKUP_DIR\"\n"
+        ],
+        "validation": "sudo find /var/backups -maxdepth 1 -type d -name 'kubeadm-pki-*' | grep -q .\n",
+        "failureHandling": "If the backup step fails, do not continue. Confirm the filesystem has free space and that sudo works non-interactively for the operator running the mission."
+      },
+      {
+        "id": "step-04-renew-control-plane-certs",
+        "title": "Renew kubeadm-managed certificates",
+        "description": "Renew all kubeadm-managed control-plane certificates and regenerate the standard kubeconfig files that embed client certificates.",
+        "commands": [
+          "sudo kubeadm certs renew all\n",
+          "sudo kubeadm init phase kubeconfig admin\n",
+          "sudo kubeadm init phase kubeconfig controller-manager\n",
+          "sudo kubeadm init phase kubeconfig scheduler\n"
+        ],
+        "validation": "sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -checkend 2592000\n",
+        "failureHandling": "If renewal fails, restore /etc/kubernetes/pki and /etc/kubernetes/admin.conf from the backup created in step 3, then investigate kubeadm output before trying again."
+      },
+      {
+        "id": "step-05-restart-kubelet",
+        "title": "Restart kubelet so static pods reload certificates",
+        "description": "Restart kubelet on the control-plane node to force static pod manifests to re-read the renewed certificates and kubeconfigs.",
+        "commands": [
+          "sudo systemctl restart kubelet\n",
+          "sudo systemctl is-active kubelet\n"
+        ],
+        "validation": "sudo systemctl is-active --quiet kubelet\n",
+        "failureHandling": "If kubelet does not return to active state, inspect journalctl for kubelet startup errors and restore the PKI backup if the renewed files are malformed."
+      },
+      {
+        "id": "step-06-refresh-local-kubeconfig",
+        "title": "Refresh the operator kubeconfig and verify cluster health",
+        "description": "Copy the regenerated admin kubeconfig into the operator home directory, then verify the API server and nodes are healthy with the renewed credentials.",
+        "commands": [
+          "mkdir -p \"$HOME/.kube\"\nsudo cp /etc/kubernetes/admin.conf \"$HOME/.kube/config\"\nsudo chown \"$USER\" \"$HOME/.kube/config\"\nchmod 600 \"$HOME/.kube/config\"\n",
+          "kubectl get nodes -o wide\n",
+          "kubectl wait --for=condition=Ready node --all --timeout=300s\n"
+        ],
+        "validation": "kubectl get nodes --no-headers | awk '$2 != \"Ready\" { exit 1 }'\n",
+        "failureHandling": "If kubectl still reports expired credentials, confirm the refreshed file is the one referenced by KUBECONFIG. On multi-control-plane clusters, repeat certificate sync and kubelet restart on the remaining control-plane nodes."
+      }
+    ],
+    "resolution": {
+      "summary": "Control-plane certificates and kubeconfig client certificates have been rotated successfully. This runbook specifically addresses EXPIRED_CREDENTIALS preflight failures on kubeadm-managed clusters.",
+      "codeSnippets": [
+        "sudo kubeadm certs check-expiration",
+        "sudo kubeadm certs renew all",
+        "kubectl get nodes -o wide"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-external-pki",
+        "title": "Cluster uses externally managed certificates",
+        "description": "If kubeadm reports externally managed certificates, stop using this runbook and rotate the certificates through your enterprise PKI pipeline instead."
+      },
+      {
+        "id": "ts-02-multi-control-plane",
+        "title": "Only one control-plane node was renewed",
+        "description": "On HA clusters, renew and distribute certificates on each control-plane node. A single stale apiserver certificate can keep the load balancer serving an expired endpoint."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "certificate-rotation",
+      "certificates",
+      "kubeadm",
+      "security",
+      "credentials",
+      "EXPIRED_CREDENTIALS"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Node",
+      "Pod",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "kubeadm"
+    ],
+    "operationTypes": [
+      "certificate-rotation"
+    ],
+    "preflightErrorCodes": [
+      "EXPIRED_CREDENTIALS"
+    ],
+    "issueTypes": [
+      "CertificateExpired"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/"
+    },
+    "qualityScore": 98
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "kubeadm",
+      "openssl",
+      "systemctl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Access to a kubeadm control-plane node with sudo privileges.",
+    "description": "Use on kubeadm-managed clusters only. The operator must have shell access to a control-plane node and permission to restart kubelet."
+  }
+}

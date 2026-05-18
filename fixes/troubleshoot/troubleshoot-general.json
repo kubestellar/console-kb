@@ -1,0 +1,133 @@
+{
+  "version": "kc-mission-v1",
+  "name": "troubleshoot-general",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "General Kubernetes recovery workflow for UNKNOWN_EXECUTION_FAILURE",
+    "description": "Catch-all diagnostic mission for when the console preflight reports UNKNOWN_EXECUTION_FAILURE. It gathers context, checks cluster access, inspects events and failing pods, reviews logs, and provides a clean recovery path instead of blind retries.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Capture the failing context",
+        "description": "Record the current kubectl context and any command that failed so you can correlate later findings with the exact environment and namespace.",
+        "commands": [
+          "echo \"LAST_COMMAND=${LAST_COMMAND:-not-set}\"\n",
+          "kubectl config current-context\n",
+          "kubectl config view --minify\n"
+        ]
+      },
+      {
+        "title": "Check API server reachability first",
+        "description": "Confirm the failure is not caused by a dead control plane, expired credentials, or a missing kubeconfig before chasing workload-specific symptoms.",
+        "commands": [
+          "kubectl cluster-info\n",
+          "kubectl get nodes --request-timeout=15s\n"
+        ]
+      },
+      {
+        "title": "Inspect recent warning events",
+        "description": "Read the newest warning events across the cluster or in TARGET_NAMESPACE to surface scheduling, image pull, RBAC, and admission failures quickly.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-}\"\nif test -n \"$TARGET_NAMESPACE\"; then\n  kubectl get events -n \"$TARGET_NAMESPACE\" --sort-by=.lastTimestamp | tail -20\nelse\n  kubectl get events -A --sort-by=.lastTimestamp | tail -20\nfi\n"
+        ]
+      },
+      {
+        "title": "Inspect failing pods and workloads",
+        "description": "List non-running pods so you can see the exact state transition and reason fields.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-}\"\nif test -n \"$TARGET_NAMESPACE\"; then\n  kubectl get pods -n \"$TARGET_NAMESPACE\"\n  kubectl get pods -n \"$TARGET_NAMESPACE\" --field-selector=status.phase!=Running\nelse\n  kubectl get pods -A\n  kubectl get pods -A --field-selector=status.phase!=Running\nfi\n"
+        ]
+      },
+      {
+        "title": "Read logs from the affected workload",
+        "description": "If TARGET_NAMESPACE and TARGET_POD are known, fetch recent logs to capture application-level errors. This is usually the fastest way to turn an unknown execution failure into a specific root cause.",
+        "commands": [
+          "if test -n \"${TARGET_NAMESPACE:-}\" && test -n \"${TARGET_POD:-}\"; then\n  kubectl logs -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\" --tail=100\nelse\n  echo \"Set TARGET_NAMESPACE and TARGET_POD to fetch workload logs\"\nfi\n"
+        ]
+      },
+      {
+        "title": "Retry only after the root cause is identified",
+        "description": "Once you have a specific cause from events or logs, rerun the failed operation and verify that the symptom is gone. Avoid repeated blind retries because they hide transient and authorization problems.",
+        "commands": [
+          "if test -n \"${LAST_COMMAND:-}\"; then\n  echo \"Re-run after fixing the root cause: $LAST_COMMAND\"\nelse\n  echo \"Re-run the original operation only after applying the targeted fix\"\nfi\n"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "Failure turns out to be an RBAC problem",
+        "description": "Switch to the rbac-audit runbook and validate the exact forbidden verb and resource with kubectl auth can-i before making access changes."
+      },
+      {
+        "title": "Failure is caused by missing kubeconfig credentials",
+        "description": "Switch to the credentials-setup mission to restore ~/.kube/config or the exec plugin credentials before retrying the original operation."
+      }
+    ],
+    "resolution": {
+      "summary": "This mission turns UNKNOWN_EXECUTION_FAILURE into a concrete next step by gathering cluster state, warning events, failing workloads, and logs before retrying the original action.",
+      "codeSnippets": [
+        "kubectl cluster-info",
+        "kubectl get events -A --sort-by=.lastTimestamp | tail -20",
+        "kubectl logs -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\" --tail=100"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "troubleshoot-general",
+      "debug",
+      "recovery",
+      "UNKNOWN_EXECUTION_FAILURE",
+      "events",
+      "logs"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Event"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "debug",
+      "recovery"
+    ],
+    "installMethods": [
+      "kubectl"
+    ],
+    "operationTypes": [
+      "troubleshoot-general"
+    ],
+    "preflightErrorCodes": [
+      "UNKNOWN_EXECUTION_FAILURE"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/"
+    },
+    "qualityScore": 95
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Cluster read access; pod log access is recommended.",
+    "description": "Set TARGET_NAMESPACE, TARGET_POD, and LAST_COMMAND when you already know which workload or action failed."
+  }
+}

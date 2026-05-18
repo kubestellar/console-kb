@@ -1,0 +1,148 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-rbac-audit",
+  "missionClass": "runbook",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Audit RBAC access and remediate RBAC_DENIED safely",
+    "description": "Operational runbook for investigating forbidden errors and RBAC_DENIED preflight failures. It identifies the active subject, inventories bindings, validates least-privilege access, and applies a targeted RoleBinding or ClusterRoleBinding instead of a broad emergency privilege grant.",
+    "type": "audit",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "id": "step-01-identify-subject",
+        "title": "Identify the current Kubernetes subject and context",
+        "description": "Determine which user or service account the API server sees for the current kubeconfig context before making any RBAC changes.",
+        "commands": [
+          "kubectl config current-context\n",
+          "kubectl auth whoami\n"
+        ],
+        "validation": "kubectl auth whoami > /dev/null 2>&1\n",
+        "failureHandling": "If kubectl auth whoami fails, the kubeconfig itself is invalid or missing. Resolve credential setup first, then return to the RBAC audit."
+      },
+      {
+        "id": "step-02-inventory-bindings",
+        "title": "Inventory RoleBindings and ClusterRoleBindings",
+        "description": "Capture the current binding inventory so you can see which Role or ClusterRole is attached to the active subject and spot namespace gaps quickly.",
+        "commands": [
+          "kubectl get clusterrolebindings -o custom-columns=NAME:.metadata.name,ROLE:.roleRef.name,SUBJECTS:.subjects[*].name\n",
+          "kubectl get rolebindings -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,ROLE:.roleRef.name,SUBJECTS:.subjects[*].name\n"
+        ],
+        "validation": "kubectl get clusterrolebindings > /dev/null 2>&1 && kubectl get rolebindings -A > /dev/null 2>&1\n",
+        "failureHandling": "If listing bindings is denied, you need cluster-level RBAC review from an administrator. Export the exact forbidden message and request read access to RBAC resources before continuing."
+      },
+      {
+        "id": "step-03-check-effective-access",
+        "title": "Check effective access for the target namespace",
+        "description": "Use SubjectAccessReview via kubectl auth can-i to measure what the current subject can do in the namespace that triggered the failure. Override TARGET_NAMESPACE if the failure was not in default.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\necho \"Auditing namespace: $TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i --list -n \"$TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i get pods -n \"$TARGET_NAMESPACE\"\n"
+        ],
+        "validation": "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\" && kubectl auth can-i --list -n \"$TARGET_NAMESPACE\" > /dev/null 2>&1\n",
+        "failureHandling": "If SubjectAccessReview is blocked, ask a cluster administrator to run the audit with a privileged account. Preserve the namespace and verb/resource combination that failed so the follow-up binding stays least-privilege."
+      },
+      {
+        "id": "step-04-apply-least-privilege-binding",
+        "title": "Apply a targeted RoleBinding or ClusterRoleBinding",
+        "description": "Bind the current subject to an existing built-in ClusterRole such as view, edit, or admin instead of granting emergency cluster-admin access. Set AUDIT_SUBJECT and TARGET_NAMESPACE when needed.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nAUDIT_SUBJECT=\"${AUDIT_SUBJECT:-$(kubectl auth whoami -o jsonpath='{.status.userInfo.username}')}\"\nkubectl create rolebinding namespace-view --clusterrole=view --user=\"$AUDIT_SUBJECT\" -n \"$TARGET_NAMESPACE\" --dry-run=client -o yaml | kubectl apply -f -\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl get rolebinding namespace-view -n \"$TARGET_NAMESPACE\" -o wide\n"
+        ],
+        "validation": "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\" && kubectl get rolebinding namespace-view -n \"$TARGET_NAMESPACE\" > /dev/null 2>&1\n",
+        "failureHandling": "If a RoleBinding is not sufficient because the denied action is cluster-scoped, create a ClusterRoleBinding to an existing least-privilege ClusterRole that holds only the required resource and verb set."
+      },
+      {
+        "id": "step-05-verify-remediation",
+        "title": "Verify the denied operation now succeeds",
+        "description": "Repeat the same can-i check or low-risk read action that previously failed to confirm the RBAC change closed the gap without over-privileging the subject.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i get pods -n \"$TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl get pods -n \"$TARGET_NAMESPACE\" --request-timeout=15s\n"
+        ],
+        "validation": "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\" && kubectl auth can-i get pods -n \"$TARGET_NAMESPACE\" | grep -q yes\n",
+        "failureHandling": "If the permission is still denied, inspect the exact verb and resource from the forbidden message and bind the correct existing ClusterRole. If access is granted but the workload still fails, move to a workload-specific troubleshooting mission."
+      }
+    ],
+    "resolution": {
+      "summary": "The active Kubernetes subject was identified, existing bindings were audited, and a least-privilege RoleBinding or ClusterRoleBinding was applied to resolve RBAC_DENIED.",
+      "codeSnippets": [
+        "kubectl auth whoami",
+        "kubectl auth can-i --list -n default",
+        "kubectl create rolebinding namespace-view --clusterrole=view --user=\"$AUDIT_SUBJECT\" -n \"$TARGET_NAMESPACE\" --dry-run=client -o yaml | kubectl apply -f -"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-service-account-subject",
+        "title": "The workload runs as a service account, not a human user",
+        "description": "Set AUDIT_SUBJECT to system:serviceaccount:<namespace>:<name> and repeat the binding step. The RoleBinding must target the identity that the pod actually uses."
+      },
+      {
+        "id": "ts-02-cluster-scope",
+        "title": "The denied action is cluster scoped",
+        "description": "If the forbidden message references nodes, namespaces, or CRDs, use a ClusterRoleBinding to an existing least-privilege ClusterRole rather than a namespaced RoleBinding."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "rbac-audit",
+      "rbac",
+      "permissions",
+      "rolebinding",
+      "clusterrole",
+      "RBAC_DENIED"
+    ],
+    "platform": "kubernetes",
+    "platformType": "security",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "RoleBinding",
+      "ClusterRoleBinding",
+      "Role",
+      "ClusterRole"
+    ],
+    "difficulty": "beginner",
+    "installMethods": [
+      "kubectl"
+    ],
+    "operationTypes": [
+      "rbac-audit"
+    ],
+    "preflightErrorCodes": [
+      "RBAC_DENIED"
+    ],
+    "issueTypes": [
+      "RBACDenied"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    },
+    "qualityScore": 98
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Read access to RBAC resources; write access is required only for remediation.",
+    "description": "You need a kubeconfig that can reach the cluster API server. For service-account troubleshooting, know the namespace and service account name used by the workload."
+  }
+}
