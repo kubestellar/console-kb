@@ -1,0 +1,133 @@
+{
+  "version": "kc-mission-v1",
+  "name": "execution-failure-general",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Diagnose unknown execution failures when the console reports UNKNOWN_EXECUTION_FAILURE",
+    "description": "Repair mission for generic Kubernetes execution failures. Use it when the console preflight reports UNKNOWN_EXECUTION_FAILURE, when an operation fails without a clear root cause, or when you need a repeatable recovery workflow before retrying the original action.",
+    "type": "repair",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Check kubectl connectivity and capture the failing context",
+        "description": "Verify the active context, confirm the API server is reachable, and record the original command so later diagnostics stay tied to the same failure.",
+        "commands": [
+          "echo \"LAST_COMMAND=${LAST_COMMAND:-not-set}\"\n",
+          "kubectl config current-context\n",
+          "kubectl cluster-info\n"
+        ]
+      },
+      {
+        "title": "Inspect recent events for the fastest clue",
+        "description": "Review the newest warning events in the affected namespace or across the cluster to surface scheduling, image pull, admission, and node-health problems.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-}\"\nif test -n \"$TARGET_NAMESPACE\"; then\n  kubectl get events -n \"$TARGET_NAMESPACE\" --sort-by=.lastTimestamp | tail -20\nelse\n  kubectl get events -A --sort-by=.lastTimestamp | tail -20\nfi\n"
+        ]
+      },
+      {
+        "title": "Check node health and workload status",
+        "description": "Confirm cluster nodes are Ready and identify any non-running pods that align with the failed action.",
+        "commands": [
+          "kubectl get nodes -o wide\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-}\"\nif test -n \"$TARGET_NAMESPACE\"; then\n  kubectl get pods -n \"$TARGET_NAMESPACE\"\n  kubectl get pods -n \"$TARGET_NAMESPACE\" --field-selector=status.phase!=Running\nelse\n  kubectl get pods -A --field-selector=status.phase!=Running\nfi\n"
+        ]
+      },
+      {
+        "title": "Review describe output and recent pod logs",
+        "description": "If you already know the affected workload, inspect describe output and recent container logs to turn the generic failure into a concrete application or platform error.",
+        "commands": [
+          "if test -n \"${TARGET_NAMESPACE:-}\" && test -n \"${TARGET_POD:-}\"; then\n  kubectl describe pod -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\"\n  kubectl logs -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\" --tail=100 --all-containers\nelse\n  echo \"Set TARGET_NAMESPACE and TARGET_POD to inspect a specific workload\"\nfi\n"
+        ]
+      },
+      {
+        "title": "Apply common recovery actions and retry once",
+        "description": "After identifying the likely cause, run a targeted recovery action such as restarting a deployment, deleting a stuck pod, or draining an unhealthy node, then retry the original action one time.",
+        "commands": [
+          "if test -n \"${TARGET_NAMESPACE:-}\" && test -n \"${TARGET_DEPLOYMENT:-}\"; then kubectl rollout restart deployment/\"$TARGET_DEPLOYMENT\" -n \"$TARGET_NAMESPACE\"; else echo \"Set TARGET_NAMESPACE and TARGET_DEPLOYMENT to restart a deployment\"; fi\n",
+          "if test -n \"${TARGET_NAMESPACE:-}\" && test -n \"${TARGET_POD:-}\"; then kubectl delete pod -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\"; else echo \"Set TARGET_NAMESPACE and TARGET_POD to recreate a stuck pod\"; fi\n",
+          "if test -n \"${UNHEALTHY_NODE:-}\"; then kubectl cordon \"$UNHEALTHY_NODE\"; else echo \"Set UNHEALTHY_NODE to isolate a failing node before deeper repair\"; fi\n"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "kubectl fails before workload diagnostics start",
+        "description": "If kubectl cluster-info or kubectl auth whoami fails, this is probably a credential or API reachability issue. Switch to the EXPIRED_CREDENTIALS or MISSING_CREDENTIALS mission instead of continuing with workload recovery."
+      },
+      {
+        "title": "Events show Forbidden or RBAC errors",
+        "description": "Stop the generic recovery workflow and follow the RBAC_DENIED mission. Restarting workloads will not fix an authorization problem."
+      },
+      {
+        "title": "Deleting the pod does not help",
+        "description": "Inspect the owning Deployment, StatefulSet, or Job with kubectl describe and review its image, probes, and mounted secrets or configmaps. A recreated pod will keep failing until the controller-level issue is fixed."
+      }
+    ],
+    "resolution": {
+      "summary": "Cluster connectivity, events, node health, pod status, and logs were checked so UNKNOWN_EXECUTION_FAILURE can be narrowed to a concrete cause and followed by a targeted recovery action.",
+      "codeSnippets": [
+        "kubectl cluster-info",
+        "kubectl get events -A --sort-by=.lastTimestamp | tail -20",
+        "kubectl logs -n \"$TARGET_NAMESPACE\" \"$TARGET_POD\" --tail=100 --all-containers"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "preflight",
+      "unknown-execution-failure",
+      "troubleshoot",
+      "debug",
+      "error",
+      "recovery"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node",
+      "Event"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "debug",
+      "recovery"
+    ],
+    "installMethods": [
+      "kubectl"
+    ],
+    "operationTypes": [
+      "execution-troubleshooting"
+    ],
+    "preflightErrorCodes": [
+      "UNKNOWN_EXECUTION_FAILURE"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/"
+    },
+    "qualityScore": 96
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Cluster read access; restart or delete actions require write access to the affected workloads.",
+    "description": "Set TARGET_NAMESPACE, TARGET_POD, TARGET_DEPLOYMENT, LAST_COMMAND, and UNHEALTHY_NODE when you already know the failing workload or node."
+  }
+}

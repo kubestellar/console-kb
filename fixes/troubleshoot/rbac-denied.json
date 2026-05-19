@@ -1,0 +1,137 @@
+{
+  "version": "kc-mission-v1",
+  "name": "rbac-denied",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Resolve RBAC permission errors when the console reports RBAC_DENIED",
+    "description": "Repair mission for Kubernetes authorization failures. Use it when the console preflight reports RBAC_DENIED, when kubectl returns Forbidden errors, or when a user or service account needs a targeted RoleBinding or ClusterRoleBinding to perform the intended action.",
+    "type": "repair",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "title": "Identify the active subject and failing namespace",
+        "description": "Determine which Kubernetes identity is being denied and which namespace or cluster-scoped resource triggered the RBAC failure.",
+        "commands": [
+          "kubectl config current-context\n",
+          "kubectl auth whoami\n",
+          "echo \"TARGET_NAMESPACE=${TARGET_NAMESPACE:-default}\"\n"
+        ]
+      },
+      {
+        "title": "Check what the subject can do right now",
+        "description": "Use kubectl auth can-i to measure the current effective permissions for the verb and resource that failed, plus a broader namespace permission inventory.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i --list -n \"$TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i get pods -n \"$TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i create deployments.apps -n \"$TARGET_NAMESPACE\"\n"
+        ]
+      },
+      {
+        "title": "Find the relevant roles and existing bindings",
+        "description": "Inspect existing RoleBindings and ClusterRoleBindings so you can reuse an appropriate built-in role such as view, edit, or admin instead of guessing or over-privileging.",
+        "commands": [
+          "kubectl get rolebindings -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,ROLE:.roleRef.name,SUBJECTS:.subjects[*].name\n",
+          "kubectl get clusterrolebindings -o custom-columns=NAME:.metadata.name,ROLE:.roleRef.name,SUBJECTS:.subjects[*].name\n",
+          "kubectl get clusterroles view edit admin -o name\n"
+        ]
+      },
+      {
+        "title": "Create a targeted RoleBinding or ClusterRoleBinding",
+        "description": "Bind the active identity to the smallest role that grants the missing permission. Use a namespaced RoleBinding for namespace resources, or a ClusterRoleBinding only if the denied resource is cluster scoped.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nAUDIT_SUBJECT=\"${AUDIT_SUBJECT:-$(kubectl auth whoami -o jsonpath='{.status.userInfo.username}')}\"\nkubectl create rolebinding console-view --clusterrole=view --user=\"$AUDIT_SUBJECT\" -n \"$TARGET_NAMESPACE\" --dry-run=client -o yaml | kubectl apply -f -\n",
+          "AUDIT_SUBJECT=\"${AUDIT_SUBJECT:-$(kubectl auth whoami -o jsonpath='{.status.userInfo.username}')}\"\nkubectl create clusterrolebinding console-read-nodes --clusterrole=view --user=\"$AUDIT_SUBJECT\" --dry-run=client -o yaml | kubectl apply -f -\n"
+        ]
+      },
+      {
+        "title": "Verify the permission gap is closed",
+        "description": "Repeat the specific authorization check and a low-risk read operation to confirm RBAC_DENIED is resolved without granting unnecessary privileges.",
+        "commands": [
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl auth can-i get pods -n \"$TARGET_NAMESPACE\"\n",
+          "TARGET_NAMESPACE=\"${TARGET_NAMESPACE:-default}\"\nkubectl get pods -n \"$TARGET_NAMESPACE\" --request-timeout=15s\n",
+          "kubectl auth can-i get nodes\n"
+        ]
+      }
+    ],
+    "troubleshooting": [
+      {
+        "title": "The workload runs as a service account",
+        "description": "Set AUDIT_SUBJECT to system:serviceaccount:<namespace>:<name> or create the RoleBinding with --serviceaccount=<namespace>:<name>; a human user binding will not help a pod identity."
+      },
+      {
+        "title": "The denied resource is cluster scoped",
+        "description": "Resources such as nodes, namespaces, and CRDs require a ClusterRole plus ClusterRoleBinding. A namespaced RoleBinding cannot grant access to cluster-scoped resources."
+      },
+      {
+        "title": "You cannot list bindings to diagnose the problem",
+        "description": "Save the exact Forbidden message and ask a cluster administrator to inspect RBAC resources. If even kubectl auth can-i is blocked, the remediation must be performed by a more privileged identity."
+      }
+    ],
+    "resolution": {
+      "summary": "The denied subject, missing permission, and appropriate binding were identified, and a least-privilege RoleBinding or ClusterRoleBinding was applied to resolve RBAC_DENIED.",
+      "codeSnippets": [
+        "kubectl auth can-i --list -n \"$TARGET_NAMESPACE\"",
+        "kubectl create rolebinding console-view --clusterrole=view --user=\"$AUDIT_SUBJECT\" -n \"$TARGET_NAMESPACE\" --dry-run=client -o yaml | kubectl apply -f -",
+        "kubectl get pods -n \"$TARGET_NAMESPACE\" --request-timeout=15s"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "preflight",
+      "rbac-denied",
+      "permissions",
+      "rolebinding",
+      "clusterrole"
+    ],
+    "platform": "kubernetes",
+    "platformType": "security",
+    "platformProvider": "KubeStellar",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "RoleBinding",
+      "ClusterRoleBinding",
+      "Role",
+      "ClusterRole"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "RBACDenied",
+      "access"
+    ],
+    "installMethods": [
+      "kubectl"
+    ],
+    "operationTypes": [
+      "rbac-remediation"
+    ],
+    "preflightErrorCodes": [
+      "RBAC_DENIED"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    },
+    "qualityScore": 96
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl"
+    ],
+    "cloudCLI": "none",
+    "resources": "A kubeconfig that can reach the cluster API server; write access is required only for the binding step.",
+    "description": "Set TARGET_NAMESPACE and AUDIT_SUBJECT when the denied action came from a different namespace or from a service account."
+  }
+}
