@@ -1,0 +1,206 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-disaster-recovery",
+  "missionClass": "runbook",
+  "author": "Vinay B M",
+  "authorGithub": "bmvinay7",
+  "mission": {
+    "title": "Back up and restore etcd state on a kubeadm cluster",
+    "description": "Production-grade, idempotent runbook for kubeadm-managed clusters that takes an etcd snapshot, verifies its integrity, and restores cluster state from that snapshot when the data directory is corrupted or the latest cluster state needs to be rolled back. The flow uses etcdutl from the bundled etcd image so the restore works even when etcd is stopped, and re-uses the cluster name and peer URLs from the existing static pod manifest so the restored cluster keeps the same identity. This runbook is scoped to kubeadm or kind-style control planes that expose etcd as a static pod. Managed control planes such as EKS, GKE, and AKS rotate etcd internally and do not expose the data directory.",
+    "type": "recover",
+    "status": "completed",
+    "estimatedMinutes": 20,
+    "steps": [
+      {
+        "id": "step-01-confirm-kubeadm-control-plane",
+        "title": "Confirm the cluster is kubeadm-managed and etcd is reachable",
+        "description": "Verify the active context points at a kubeadm-style cluster where etcd runs as a static pod and the etcd PKI directory is present. Managed control planes do not expose etcd this way, so this runbook only applies to self-managed clusters.",
+        "commands": [
+          "kubectl config current-context\n",
+          "kubectl get pods -n kube-system -l component=etcd -o wide\n",
+          "kubectl exec -n kube-system etcd-$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}') -- etcdctl version\n"
+        ],
+        "validation": "kubectl get pods -n kube-system -l component=etcd --no-headers 2>/dev/null | grep -q Running\n",
+        "failureHandling": "If no etcd static pod is found, the cluster is most likely managed (EKS, GKE, AKS) or runs etcd outside the cluster. This runbook does not apply. Use your provider's backup feature instead. If kubectl exec fails, the API server may already be degraded. Skip ahead to restore from an existing snapshot in step-04 if you have one."
+      },
+      {
+        "id": "step-02-take-etcd-snapshot",
+        "title": "Take an etcd snapshot via the running etcd pod",
+        "description": "Use kubectl exec into the etcd static pod to call etcdctl snapshot save against localhost. The etcd image is distroless and has no shell, so the etcdctl binary must be invoked directly without a sh -c wrapper. Save the snapshot inside the pod's data dir mount because that path persists on the node and is reachable from a restore container later.",
+        "commands": [
+          "ETCD_POD=etcd-$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')\necho \"Using etcd pod: $ETCD_POD\"\n",
+          "kubectl exec -n kube-system \"$ETCD_POD\" -- etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/lib/etcd/snapshot.db\n"
+        ],
+        "validation": "kubectl exec -n kube-system etcd-$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}') -- etcdutl --write-out=table snapshot status /var/lib/etcd/snapshot.db > /dev/null 2>&1\n",
+        "failureHandling": "If etcdctl reports permission denied, confirm the certificate paths match the etcd manifest. If the snapshot fails partway through, the resulting file is incomplete. Re-run the command. The snapshot subcommand is non-destructive, so it is safe to retry as many times as needed."
+      },
+      {
+        "id": "step-03-verify-and-stage-snapshot-off-node",
+        "title": "Verify snapshot integrity and stage a copy off the node",
+        "description": "Use etcdutl snapshot status to confirm the snapshot has the expected revision and key count. In etcd v3.6 the snapshot status and snapshot restore subcommands moved from etcdctl to a separate etcdutl binary, so older runbooks that called etcdctl snapshot status will fail on current kind clusters. Copy the file off the node so the backup survives a node-level failure.",
+        "commands": [
+          "ETCD_POD=etcd-$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')\nNODE_NAME=$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')\nkubectl exec -n kube-system \"$ETCD_POD\" -- etcdutl --write-out=table snapshot status /var/lib/etcd/snapshot.db\n",
+          "BACKUP_DIR=\"${BACKUP_DIR:-$HOME/etcd-backups}\"\nNODE_NAME=$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')\nmkdir -p \"$BACKUP_DIR\"\ndocker cp \"${NODE_NAME}:/var/lib/etcd/snapshot.db\" \"${BACKUP_DIR}/etcd-snapshot-$(date +%Y%m%d%H%M%S).db\"\nls -la \"$BACKUP_DIR\"\n"
+        ],
+        "validation": "ls \"${BACKUP_DIR:-$HOME/etcd-backups}\"/etcd-snapshot-*.db > /dev/null 2>&1\n",
+        "failureHandling": "If etcdutl is not present, the cluster runs etcd v3.5 or earlier and you can use etcdctl snapshot status instead. If docker cp is not available because the control plane is a real VM rather than a kind node, scp the file off the host with rsync or scp instead. The remaining restore steps work the same way."
+      },
+      {
+        "id": "step-04-stop-etcd-by-moving-the-manifest",
+        "title": "Capture etcd identity values then stop etcd by moving the manifest",
+        "description": "Restore is destructive. Before touching the data directory, capture the cluster identity values from the etcd static pod manifest into shell variables so the later restore step can reuse them, then stop etcd by moving its manifest out of the manifests directory. The kubelet will tear down the etcd pod within roughly ten seconds. The API server will continue to serve cached state briefly, then start failing requests, which is expected.",
+        "commands": [
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\necho \"Capturing etcd identity from /etc/kubernetes/manifests/etcd.yaml on $NODE_NAME\"\ndocker exec \"$NODE_NAME\" cat /etc/kubernetes/manifests/etcd.yaml > /tmp/etcd-manifest.yaml\ngrep -- '--name=' /tmp/etcd-manifest.yaml | head -1\ngrep -- '--initial-advertise-peer-urls=' /tmp/etcd-manifest.yaml | head -1\ngrep -- '--initial-cluster=' /tmp/etcd-manifest.yaml | head -1\necho \"Set the values shown above as ETCD_NAME, ETCD_PEER_URL, ETCD_INITIAL_CLUSTER before continuing.\"\n",
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\ndocker exec \"$NODE_NAME\" mkdir -p /etc/kubernetes/manifests-backup\ndocker exec \"$NODE_NAME\" mv /etc/kubernetes/manifests/etcd.yaml /etc/kubernetes/manifests-backup/etcd.yaml\nsleep 12\ndocker exec \"$NODE_NAME\" crictl ps | grep etcd || echo \"etcd container is gone\"\n"
+        ],
+        "validation": "true\n",
+        "failureHandling": "If etcd does not exit within 30 seconds, the kubelet may be unhealthy. Inspect kubelet status on the node and remove the manifest manually only after confirming the kubelet is alive. On real VMs use systemctl to verify kubelet rather than docker exec."
+      },
+      {
+        "id": "step-05-rename-existing-data-directory",
+        "title": "Rename the existing etcd data directory",
+        "description": "Move the current data directory aside instead of deleting it. This preserves it for forensics if the restore fails and gives the restore command a clean target path to write to. The renamed directory also holds the snapshot file from step-02, which the next step will read from.",
+        "commands": [
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\nBACKUP_TS=\"${BACKUP_TS:-$(date +%s)}\"\ndocker exec \"$NODE_NAME\" mv /var/lib/etcd /var/lib/etcd.broken-${BACKUP_TS}\ndocker exec \"$NODE_NAME\" ls /var/lib | grep etcd\n"
+        ],
+        "validation": "true\n",
+        "failureHandling": "If the data dir is busy, etcd is still running. Re-run step-04 and confirm the etcd container is gone before retrying. On real VMs this command targets the host filesystem, so adjust the docker exec wrapper accordingly."
+      },
+      {
+        "id": "step-06-restore-snapshot-into-fresh-data-dir",
+        "title": "Restore the snapshot into a fresh data directory",
+        "description": "Use etcdutl snapshot restore inside a fresh container started from the same etcd image the static pod uses. ctr can run a one-shot container against the host network with /var/lib bind-mounted so the restore writes back to the kubelet-visible path. Reuse the values captured in step-04 (ETCD_NAME, ETCD_PEER_URL, ETCD_INITIAL_CLUSTER) so the restored cluster keeps the same identity. Restore writes to a NEW data directory; the swap to /var/lib/etcd happens in step-07.",
+        "commands": [
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\nBACKUP_TS=\"${BACKUP_TS:?Set BACKUP_TS to the same value used in step-05}\"\nETCD_NAME=\"${ETCD_NAME:?Set ETCD_NAME from step-04 output}\"\nETCD_PEER_URL=\"${ETCD_PEER_URL:?Set ETCD_PEER_URL from step-04 output}\"\nETCD_INITIAL_CLUSTER=\"${ETCD_INITIAL_CLUSTER:?Set ETCD_INITIAL_CLUSTER from step-04 output}\"\necho \"Restoring snapshot from /var/lib/etcd.broken-${BACKUP_TS}/snapshot.db as $ETCD_NAME\"\ndocker exec \"$NODE_NAME\" ctr -n=k8s.io run --rm --net-host --mount type=bind,src=/var/lib,dst=/var/lib,options=rbind:rw registry.k8s.io/etcd:3.6.6-0 etcdrestore-${BACKUP_TS} etcdutl snapshot restore /var/lib/etcd.broken-${BACKUP_TS}/snapshot.db --data-dir=/var/lib/etcd-restored --name=\"$ETCD_NAME\" --initial-cluster=\"$ETCD_INITIAL_CLUSTER\" --initial-advertise-peer-urls=\"$ETCD_PEER_URL\" --initial-cluster-token=etcd-cluster\n"
+        ],
+        "validation": "true\n",
+        "failureHandling": "If ctr cannot pull registry.k8s.io/etcd, the image may already be tagged differently locally. Run docker exec NODE_NAME crictl images and use the actual etcd image reference. If the restore fails with already exists, the previous attempt left /var/lib/etcd-restored on the node. Remove it with docker exec NODE_NAME rm -rf /var/lib/etcd-restored and retry."
+      },
+      {
+        "id": "step-07-swap-restored-data-dir-into-place",
+        "title": "Swap the restored data directory into the etcd path",
+        "description": "Rename the restored directory to /var/lib/etcd so the etcd manifest's hostPath sees the new state. The order matters. The data directory MUST be in place before the manifest is restored, otherwise the kubelet starts etcd against an empty path and corrupts the restored state.",
+        "commands": [
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\ndocker exec \"$NODE_NAME\" rm -rf /var/lib/etcd\ndocker exec \"$NODE_NAME\" mv /var/lib/etcd-restored /var/lib/etcd\ndocker exec \"$NODE_NAME\" ls /var/lib/etcd\n"
+        ],
+        "validation": "true\n",
+        "failureHandling": "If the swap fails because /var/lib/etcd is busy, the manifest may have been restored too early and etcd is already running. Repeat step-04 to stop etcd, then re-run this step before continuing. If /var/lib/etcd-restored is missing, step-06 did not complete. Re-run step-06."
+      },
+      {
+        "id": "step-08-restart-etcd-and-verify",
+        "title": "Restart etcd by restoring the manifest and verify cluster health",
+        "description": "Move the etcd static pod manifest back to the manifests directory. The kubelet will start etcd against the restored data within roughly twenty seconds. Then verify the API server reauthenticates against the restored cluster state with kubectl get nodes and kubectl get events for the kube-system namespace.",
+        "commands": [
+          "NODE_NAME=\"${NODE_NAME:-kb-test-control-plane}\"\ndocker exec \"$NODE_NAME\" mv /etc/kubernetes/manifests-backup/etcd.yaml /etc/kubernetes/manifests/etcd.yaml\nsleep 30\nkubectl get nodes -o wide\n",
+          "kubectl get events -n kube-system --sort-by=.lastTimestamp | tail -10\n",
+          "kubectl get pods -n kube-system -l component=etcd -o wide\n"
+        ],
+        "validation": "kubectl get pods -n kube-system -l component=etcd --no-headers 2>/dev/null | grep -q Running\n",
+        "failureHandling": "If kubectl returns Forbidden or connection refused, the API server is still recovering. Wait another 30 seconds and retry. If kubectl auth whoami eventually fails, the restored snapshot is from a different cluster certificate generation and the apiserver client certificates no longer match. Use the certificate-rotation runbook to renew them. If etcd CrashLoopBackOff, inspect kubectl logs etcd-NODE_NAME -n kube-system. Common causes are wrong --name, wrong --initial-cluster, or a snapshot taken from a different cluster ID."
+      }
+    ],
+    "resolution": {
+      "summary": "An etcd snapshot was taken, copied off the node, validated for integrity, and restored to a fresh data directory using etcdutl. The original cluster identity (member name, peer URLs, cluster token) was preserved so the API server reauthenticated against the restored state without certificate work. The restore correctly rolled back any object created after the snapshot was taken, which is the proof that the disaster-recovery cycle is working end to end.",
+      "codeSnippets": [
+        "kubectl exec -n kube-system etcd-NODE_NAME -- etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/lib/etcd/snapshot.db",
+        "kubectl exec -n kube-system etcd-NODE_NAME -- etcdutl --write-out=table snapshot status /var/lib/etcd/snapshot.db",
+        "docker exec NODE_NAME ctr -n=k8s.io run --rm --net-host --mount type=bind,src=/var/lib,dst=/var/lib,options=rbind:rw registry.k8s.io/etcd:3.6.6-0 etcdrestore etcdutl snapshot restore /var/lib/etcd.broken/snapshot.db --data-dir=/var/lib/etcd-restored",
+        "kubectl get pods -n kube-system -l component=etcd -o wide",
+        "kubectl get events -n kube-system --sort-by=.lastTimestamp"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-distroless-etcd-image",
+        "title": "kubectl exec fails with sh executable file not found",
+        "description": "The etcd image is distroless. There is no shell. Invoke etcdctl or etcdutl directly without a sh -c wrapper. Replace any kubectl exec POD -- sh -c '...' with kubectl exec POD -- etcdctl ... or kubectl exec POD -- etcdutl ..."
+      },
+      {
+        "id": "ts-02-etcdutl-vs-etcdctl",
+        "title": "etcdctl snapshot status or restore reports unknown subcommand",
+        "description": "In etcd v3.6 the snapshot status and snapshot restore subcommands were moved from etcdctl to a separate etcdutl binary that ships in the same image. Use etcdutl snapshot status and etcdutl snapshot restore. etcdctl snapshot save still works for the backup half."
+      },
+      {
+        "id": "ts-03-data-dir-already-exists",
+        "title": "etcdutl snapshot restore fails because data dir already exists",
+        "description": "The restore path must not exist before the command runs. Remove a previously failed restore directory with docker exec NODE rm -rf /var/lib/etcd-restored, then re-run step-06. Do not delete /var/lib/etcd.broken until you have verified the restored cluster is healthy."
+      },
+      {
+        "id": "ts-04-restore-order-corrupted-data",
+        "title": "etcd starts but is empty after restore",
+        "description": "The static pod manifest was restored before the data directory was swapped into place. The kubelet started etcd against an empty path and overwrote any progress. Stop etcd again with step-04, redo step-07 to swap the restored directory in, then redo step-08."
+      },
+      {
+        "id": "ts-05-cluster-id-mismatch",
+        "title": "etcd CrashLoopBackOff with cluster ID mismatch",
+        "description": "The snapshot was taken from a different cluster than the one being restored. etcdutl snapshot restore needs the SAME --initial-cluster, --initial-advertise-peer-urls, and --initial-cluster-token as the original manifest. Re-extract these values from /etc/kubernetes/manifests-backup/etcd.yaml and rerun step-06."
+      },
+      {
+        "id": "ts-06-managed-control-plane",
+        "title": "There is no etcd static pod in kube-system",
+        "description": "EKS, GKE, AKS, and most other managed Kubernetes services do not expose etcd as a static pod. The cloud provider runs etcd internally and provides its own backup feature. This runbook does not apply. Use your provider's snapshot or restore feature instead."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "disaster-recovery",
+      "etcd",
+      "backup",
+      "restore",
+      "snapshot",
+      "kubeadm",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31",
+      "1.32",
+      "1.33",
+      "1.34",
+      "1.35"
+    ],
+    "cncfProjects": [
+      "etcd",
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node",
+      "ConfigMap",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "installMethods": [
+      "kubeadm"
+    ],
+    "operationTypes": [
+      "disaster-recovery",
+      "backup",
+      "restore"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "docker",
+      "etcdctl",
+      "etcdutl"
+    ],
+    "cloudCLI": "none",
+    "resources": "Shell access to the control-plane node host (or docker exec on kind), sudo or root privileges to manipulate /etc/kubernetes/manifests and /var/lib/etcd, and roughly 50 MB of free disk per snapshot.",
+    "description": "This runbook covers kubeadm-style clusters where etcd runs as a static pod. Managed control planes (EKS, GKE, AKS) do not expose etcd this way and require provider-specific backup tooling instead. Pair this runbook with certificate-rotation if the restored snapshot crosses certificate generations."
+  }
+}

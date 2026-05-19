@@ -27,6 +27,7 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 | [`cluster-upgrade.json`](./cluster-upgrade.json) | Upgrade a kubeadm-managed cluster with health gates. | Intermediate |
 | [`node-drain.json`](./node-drain.json) | Cordon, drain, and uncordon a node for maintenance. | Beginner |
 | [`rbac-audit.json`](./rbac-audit.json) | Audit and remediate `RBAC_DENIED` with least-privilege bindings. | Beginner |
+| [`disaster-recovery.json`](./disaster-recovery.json) | Back up and restore etcd state on a kubeadm cluster. Validated end-to-end on kind v1.35 / etcd v3.6.6. | Advanced |
 
 > **⚠️ Deprecation notice — legacy `kubestellar/kubestellar` Helm components**
 >
@@ -38,7 +39,7 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 
 ## Planned Runbooks
 
-- `disaster-recovery.json` — Full cluster backup verification and restore
+_All originally planned runbooks have been delivered. Future additions tracked via `runbooks/` directory contributions._
 
 ## Contributing a Runbook
 
