@@ -6,30 +6,40 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "signoz: [Dashboard Request] ASP .NET Metrics Dashboard",
-    "description": "[Dashboard Request] ASP .NET Metrics Dashboard. Community-requested feature.",
+    "description": "Create an ASP.NET Metrics Dashboard in SigNoz to monitor key application metrics like request rate, error rate, latency, and resource utilization for .NET applications instrumented with OpenTelemetry.",
     "type": "feature",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current signoz deployment",
-        "description": "Verify your signoz version and configuration:\n```bash\nkubectl get pods -n signoz -l app.kubernetes.io/name=signoz\nhelm list -n signoz 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working signoz installation."
+        "title": "Instrument ASP.NET application with OpenTelemetry",
+        "description": "Add the OpenTelemetry SDK NuGet packages to your ASP.NET application and configure the exporter to send metrics to SigNoz:\n```bash\ndotnet add package OpenTelemetry.Extensions.Hosting\ndotnet add package OpenTelemetry.Instrumentation.AspNetCore\ndotnet add package OpenTelemetry.Instrumentation.Runtime\ndotnet add package OpenTelemetry.Exporter.OpenTelemetryProtocol\n```\nThen configure OpenTelemetry in your Program.cs (see resolution.codeSnippets for example configuration)."
       },
       {
-        "title": "Review signoz configuration",
-        "description": "Inspect the relevant signoz configuration:\n```bash\nkubectl get all -n signoz -l app.kubernetes.io/name=signoz\nkubectl get configmap -n signoz -l app.kubernetes.io/part-of=signoz\n```\n### 1. Dashboard Name\n\n**ASP .NET Metrics Dashboard**\n\n---\n\n### 2."
+        "title": "Verify metrics are being received in SigNoz",
+        "description": "Check the SigNoz UI to confirm that metrics are flowing from your ASP.NET application:\n```bash\n# Port-forward to SigNoz frontend (if running in Kubernetes)\nkubectl port-forward -n signoz svc/signoz-frontend 3301:3301\n```\nNavigate to http://localhost:3301 and go to Services → Your App Name to verify metrics like http_server_request_duration are being received."
       },
       {
-        "title": "Apply the fix for [Dashboard Request] ASP .NET Metrics Dashboard",
-        "description": "Hey community,\nThank you for your contributions to the dashboard bug bounty programme and for being part of the SigNoz community.\n\nSadly, we're winding down the bug bounty programme and closing all issues raised under it, including this one. The programme has been a wonderful way to collaborate with the community, and the dashboards that have come through it have made SigNoz materially better for everyone who uses it.\n\nWe thank you for the time and care that went into every contribution.\n\nSee the source issue for community-verified solutions."
+        "title": "Create the ASP.NET Metrics Dashboard",
+        "description": "In the SigNoz UI, create a new dashboard with panels for key HTTP metrics:\n\n1. **Request Rate Panel**: Use ClickHouse query against http_server_request_duration metric with rate aggregation\n2. **Error Rate Panel**: Query http_server_request_duration filtered by http.status_code >= 400\n3. **P99 Latency Panel**: Use P99 quantile of http_server_request_duration\n4. **Active Requests Panel**: Display current http_server_active_requests count\n\nEach panel should use the OTLP metric naming conventions and can be filtered by attributes like http.method, http.route, or http.status_code."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n signoz -l app.kubernetes.io/name=signoz\nkubectl get events -n signoz --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Dashboard Request] ASP .NET Metrics Dashboard\" is functioning correctly."
+        "title": "Add resource utilization panels",
+        "description": "Enhance the dashboard with .NET runtime metrics for comprehensive monitoring:\n\n1. **GC Collections Panel**: Track process_runtime_dotnet_gc_collections by generation (gen0, gen1, gen2)\n2. **ThreadPool Metrics Panel**: Monitor process_runtime_dotnet_threadpool_* metrics\n3. **Memory Usage Panel**: Display process_runtime_dotnet_gc_heap_size and process_runtime_dotnet_gc_allocated_bytes\n4. **CPU Usage Panel**: Show process.runtime.dotnet.cpu.utilization\n\nThese metrics are automatically collected when using OpenTelemetry.Instrumentation.Runtime."
+      },
+      {
+        "title": "Verify dashboard displays data correctly",
+        "description": "Confirm all dashboard panels are showing data:\n```bash\n# Generate some test traffic to your ASP.NET application\ncurl http://localhost:5000/api/health\ncurl http://localhost:5000/api/users\n```\nRefresh the SigNoz dashboard and verify that all panels update with the new metrics. Check that time ranges, filters, and aggregations work as expected."
       }
     ],
     "resolution": {
-      "summary": "Hey community,\nThank you for your contributions to the dashboard bug bounty programme and for being part of the SigNoz community.\n\nSadly, we're winding down the bug bounty programme and closing all issues raised under it, including this one.",
-      "codeSnippets": []
+      "summary": "Created an ASP.NET Metrics Dashboard in SigNoz by instrumenting the application with OpenTelemetry .NET SDK and configuring dashboard panels for HTTP request metrics (rate, errors, latency) and .NET runtime metrics (GC, ThreadPool, memory). The dashboard uses ClickHouse queries against OpenTelemetry metric names like http_server_request_duration, http_server_active_requests, and process_runtime_dotnet_gc_collections.",
+      "codeSnippets": [
+        {
+          "language": "csharp",
+          "code": "// Program.cs - Add OpenTelemetry metrics\nbuilder.Services.AddOpenTelemetry()\n    .WithMetrics(metrics => metrics\n        .AddAspNetCoreInstrumentation()\n        .AddRuntimeInstrumentation()\n        .AddOtlpExporter(opts => {\n            opts.Endpoint = new Uri(\"http://signoz-otel-collector:4317\");\n        }));",
+          "description": "Configure OpenTelemetry metrics instrumentation in ASP.NET Core application"
+        }
+      ]
     }
   },
   "metadata": {
@@ -37,13 +47,18 @@
       "signoz",
       "community",
       "apm",
-      "feature"
+      "feature",
+      "opentelemetry",
+      "dotnet",
+      "dashboard",
+      "metrics"
     ],
     "cncfProjects": [
       "signoz"
     ],
     "targetResourceKinds": [
-      "Deployment"
+      "Dashboard",
+      "ConfigMap"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -61,7 +76,8 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "dotnet"
     ],
     "description": "A running Kubernetes cluster with signoz installed or the issue environment reproducible."
   },
