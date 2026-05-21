@@ -2,86 +2,151 @@
   "version": "kc-mission-v1",
   "name": "install-falco",
   "missionClass": "install",
-  "author": "KubeStellar Bot",
-  "authorGithub": "kubestellar",
+  "author": "Vinay B M",
+  "authorGithub": "bmvinay7",
   "mission": {
     "title": "Install and Configure Falco on Kubernetes",
-    "description": "Falco is a cloud native runtime security tool designed to detect and alert on abnormal behavior and potential security threats in real-time. Installing Falco enables you to enhance the security posture of your Kubernetes environment by monitoring system calls and integrating with your container runtime.",
+    "description": "Falco is a CNCF graduated runtime security tool that detects abnormal behavior on hosts and containers by reading kernel events through a BPF probe. This mission installs Falco via the official Helm chart into a dedicated falco namespace, configures it to use the ruleset embedded in the Falco image so the pods come up cleanly even on restricted-egress clusters, and validates that the BPF driver is running. Two correctness fixes vs the previous mission revision: pass the chart version (8.0.1) instead of the app version (0.43.0), and disable the falcoctl artifact installer that crash-loops the init container when the cluster cannot reach falcosecurity.github.io.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Add the Falco Helm repository",
-        "description": "Add the official Falco Helm chart repository to your Helm configuration with the following command:\n```bash\nhelm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update\n```"
+        "title": "Add the Falco Security Helm repository",
+        "description": "Add the official Falco Helm chart repository to your Helm configuration. The repo serves the falco, falcosidekick, falcoctl, falco-talon, k8s-metacollector, and event-generator charts.\n\n```bash\nhelm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update\n```",
+        "commands": [
+          "helm repo add falcosecurity https://falcosecurity.github.io/charts",
+          "helm repo update"
+        ]
       },
       {
-        "title": "Install Falco using Helm",
-        "description": "Install Falco in the 'falco' namespace with the following command:\n```bash\nhelm install falco falcosecurity/falco --namespace falco --create-namespace --version 0.43.0\n```"
+        "title": "Install Falco using chart 8.0.1 (app v0.43.0) with the embedded ruleset",
+        "description": "The Helm --version flag takes the CHART version, not the application version. Chart 8.0.1 maps to Falco app v0.43.0. Passing --version 0.43.0 fails with 'chart not found'. Confirm the mapping with helm search repo falcosecurity/falco --versions.\n\nThe two falcoctl --set flags disable the runtime rule downloader. By default the falcoctl-artifact-install init container fetches https://falcosecurity.github.io/falcoctl/index.yaml at pod startup. On clusters with restricted egress (kind, k3d, air-gapped, corporate networks blocking github.io) this hangs and the init container crash-loops. Disabling the downloader is the documented way to use the snapshot of the official ruleset that is baked into the Falco image. Re-enable it later if your cluster has reliable outbound HTTPS to github.io and you want automatic rule updates.\n\n```bash\nhelm install falco falcosecurity/falco \\\n  --namespace falco --create-namespace \\\n  --version 8.0.1 \\\n  --set falcoctl.artifact.install.enabled=false \\\n  --set falcoctl.artifact.follow.enabled=false\n```",
+        "commands": [
+          "helm install falco falcosecurity/falco --namespace falco --create-namespace --version 8.0.1 --set falcoctl.artifact.install.enabled=false --set falcoctl.artifact.follow.enabled=false"
+        ]
       },
       {
-        "title": "Verify the Falco installation",
-        "description": "Check that the Falco pods are running successfully. Note that Falco runs as a DaemonSet, so you should see one pod per node.\n```bash\nkubectl get pods -n falco\n```"
+        "title": "Wait for the Falco DaemonSet to roll out",
+        "description": "Falco runs as a DaemonSet, one pod per node. The init containers compile or load the BPF probe, then the main falco container starts reading kernel events. On a single-node kind cluster this takes 30-90 seconds.\n\n```bash\nkubectl rollout status daemonset/falco -n falco --timeout=300s\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\n```\n\nExpected output: the rollout reports 'daemon set falco successfully rolled out' and each pod is READY 1/1 with status Running.",
+        "commands": [
+          "kubectl rollout status daemonset/falco -n falco --timeout=300s",
+          "kubectl get pods -n falco -l app.kubernetes.io/name=falco"
+        ]
       },
       {
-        "title": "Verify Falco is detecting events",
-        "description": "Check the Falco logs to verify it is running and detecting events:\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falco --tail=50\n```"
+        "title": "Verify Falco is processing kernel events",
+        "description": "Tail the Falco container logs and look for the 'Falco initialized with configuration files' line followed by 'Starting health webserver' and 'Events detected: 0'. A non-zero event count appears as soon as syscalls flow through the probe.\n\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=50\n```\n\nExpected output: lines beginning with 'Falco initialized', followed by libbpf/libpman engine messages and then the periodic 'Events detected: N' line.",
+        "commands": [
+          "kubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=50"
+        ]
+      },
+      {
+        "title": "Trigger a sample security event",
+        "description": "Falco watches container syscalls. Reading /etc/shadow inside any pod fires the built-in 'Read sensitive file untrusted' rule. This validates that the BPF probe is attached and that the embedded ruleset is loaded.\n\n```bash\nkubectl run falco-test --image=busybox:1.36 --restart=Never --rm -i --tty -- cat /etc/shadow\nkubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=20 | grep -E 'Warning|Notice|Error' | head -5\n```\n\nExpected output: the kubectl run command exits cleanly. The Falco logs include a line such as 'Warning Sensitive file opened for reading by non-trusted program ... file=/etc/shadow ...'.",
+        "commands": [
+          "kubectl run falco-test --image=busybox:1.36 --restart=Never --rm -i --tty -- cat /etc/shadow",
+          "kubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=20 | grep -E 'Warning|Notice|Error' | head -5"
+        ]
       }
     ],
-    "resolution": {
-      "summary": "A successful installation of Falco will show a Falco pod running on each node in the 'falco' namespace (it runs as a DaemonSet). Falco does not expose a web UI — it logs security events to stdout and can forward them to external systems via Falcosidekick.",
-      "codeSnippets": [
-        "helm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update",
-        "helm install falco falcosecurity/falco --namespace falco --create-namespace --version 0.43.0",
-        "kubectl get pods -n falco",
-        "kubectl logs -n falco -l app.kubernetes.io/name=falco --tail=50"
-      ]
-    },
     "uninstall": [
       {
-        "title": "Remove the Helm release",
-        "description": "Uninstall the Falco release from the 'falco' namespace using the following command:\n```bash\nhelm uninstall falco --namespace falco\n```"
+        "title": "Helm-uninstall Falco from its dedicated namespace",
+        "description": "Remove the Helm release. The chart removes its DaemonSet, ConfigMaps, ServiceAccount, RBAC, and Service on uninstall. Falco does not install any CRDs, so there are no CRDs to clean up afterwards.\n\n```bash\nhelm uninstall falco --namespace falco\n```",
+        "commands": [
+          "helm uninstall falco --namespace falco"
+        ]
       },
       {
-        "title": "Clean up CRDs and persistent resources",
-        "description": "Delete any Custom Resource Definitions (CRDs) and persistent volume claims (PVCs) associated with Falco. Use the following commands:\n```bash\nkubectl delete crd falcosecurity.org\nkubectl delete pvc --all -n falco\n```"
+        "title": "Delete the falco namespace",
+        "description": "Remove the falco namespace to clean up any remaining ConfigMaps or Secrets that the chart left behind via Helm resource-policy keep.\n\n```bash\nkubectl delete namespace falco --ignore-not-found\n```",
+        "commands": [
+          "kubectl delete namespace falco --ignore-not-found"
+        ]
       },
       {
-        "title": "Remove namespace and verify",
-        "description": "Delete the 'falco' namespace and verify its removal with the following commands:\n```bash\nkubectl delete namespace falco\nkubectl get namespaces\n```"
+        "title": "Verify the cluster is clean of Falco resources",
+        "description": "Confirm no Falco resources are left on the cluster.\n\n```bash\nkubectl get pods -A | grep -i falco\nkubectl get crd | grep -i falco\nkubectl get clusterrole,clusterrolebinding | grep -i falco\n```\n\nExpected output: no rows printed by any of the three commands.",
+        "commands": [
+          "kubectl get pods -A | grep -i falco",
+          "kubectl get crd | grep -i falco",
+          "kubectl get clusterrole,clusterrolebinding | grep -i falco"
+        ]
       }
     ],
     "upgrade": [
       {
-        "title": "Backup current state",
-        "description": "Before upgrading, back up the current configuration and state of Falco. You can do this by exporting the current DaemonSet:\n```bash\nkubectl get daemonset falco -n falco -o yaml > falco-backup.yaml\n```"
+        "title": "Back up the current Falco DaemonSet manifest",
+        "description": "Capture the live DaemonSet so you can roll back by re-applying it if the upgrade fails.\n\n```bash\nkubectl get daemonset/falco -n falco -o yaml > falco-daemonset-backup.yaml\n```",
+        "commands": [
+          "kubectl get daemonset/falco -n falco -o yaml > falco-daemonset-backup.yaml"
+        ]
       },
       {
-        "title": "Update repo and run upgrade command",
-        "description": "Update the Helm repository and upgrade Falco to the latest version using the following commands:\n```bash\nhelm repo update\nhelm upgrade falco falcosecurity/falco --namespace falco --version 0.44.0\n```"
+        "title": "Refresh the chart index and helm-upgrade Falco",
+        "description": "Find the chart version that matches your target Falco app version with helm search repo falcosecurity/falco --versions. Pass the chart version to --version. Keep the falcoctl --set flags consistent with the install or your pod will start trying to download rules again.\n\n```bash\nhelm repo update\nhelm search repo falcosecurity/falco --versions | head -5\nhelm upgrade falco falcosecurity/falco \\\n  --namespace falco \\\n  --version 8.0.1 \\\n  --reuse-values\nkubectl rollout status daemonset/falco -n falco --timeout=300s\n```",
+        "commands": [
+          "helm repo update",
+          "helm search repo falcosecurity/falco --versions | head -5",
+          "helm upgrade falco falcosecurity/falco --namespace falco --version 8.0.1 --reuse-values",
+          "kubectl rollout status daemonset/falco -n falco --timeout=300s"
+        ]
       },
       {
-        "title": "Verify the upgrade",
-        "description": "Check that the Falco pods are running the new version successfully:\n```bash\nkubectl get pods -n falco\n```"
+        "title": "Verify the upgraded pods are healthy",
+        "description": "Confirm every node has a Running Falco pod and the logs show the new app version.\n\n```bash\nkubectl get pods -n falco -l app.kubernetes.io/name=falco\nkubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=30 | grep -E 'Falco version|Starting health webserver'\n```",
+        "commands": [
+          "kubectl get pods -n falco -l app.kubernetes.io/name=falco",
+          "kubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=30 | grep -E 'Falco version|Starting health webserver'"
+        ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Falco pod is not starting",
-        "description": "If the Falco pod is in a 'CrashLoopBackOff' state, check the logs for errors:\n```bash\nkubectl logs -n falco -l app.kubernetes.io/name=falco\n``` \nLook for any configuration issues or missing permissions."
+        "title": "helm install fails with 'no chart version found for falco-0.43.0'",
+        "description": "**Cause:** The Helm --version flag expects the CHART version, not the Falco application version. v0.43.0 is the app version. The matching chart version is 8.0.1, returned by helm search repo falcosecurity/falco --versions.\n\n**Fix:**\nRun helm install with --version 8.0.1. Look up the chart-to-app mapping with helm search repo falcosecurity/falco --versions whenever you target a new app version."
       },
       {
-        "title": "Falco alerts not triggering",
-        "description": "If Falco is not generating alerts, ensure that the rules are correctly configured. Check the rules file:\n```bash\nkubectl exec -n falco -it $(kubectl get pods -n falco -l app.kubernetes.io/name=falco -o jsonpath='{.items[0].metadata.name}') -- cat /etc/falco/falco_rules.yaml\n``` \nMake sure the rules are enabled and correctly defined."
+        "title": "falcoctl-artifact-install init container is in CrashLoopBackOff",
+        "description": "**Cause:** By default the falcoctl-artifact-install init container fetches https://falcosecurity.github.io/falcoctl/index.yaml at pod startup and downloads the latest rule artifact. On clusters with restricted or flaky egress (kind, k3d, air-gapped, corporate networks blocking github.io) this hangs and the init container errors out with a 'dial tcp ...:443: i/o timeout'. The pod stays in Init:CrashLoopBackOff. The Falco image already contains a snapshot of the official rules, so the runtime fetch is optional.\n\n**Fix:**\nUpgrade with the two falcoctl artifact flags disabled to use the embedded ruleset.\n\n```bash\nhelm upgrade falco falcosecurity/falco \\\n  --namespace falco \\\n  --version 8.0.1 \\\n  --set falcoctl.artifact.install.enabled=false \\\n  --set falcoctl.artifact.follow.enabled=false\n```\n\nThis is the upstream-documented path for clusters that cannot reach the falcoctl artifact registry. Trade-off: rule updates published after your Falco image was built will not be picked up automatically. Re-enable both flags when your cluster has reliable HTTPS egress to github.io if you want automatic rule updates."
       },
       {
-        "title": "Falco events not appearing",
-        "description": "If Falco events are not appearing, ensure the DaemonSet is running on all nodes:\n```bash\nkubectl get ds -n falco\nkubectl get svc -n falco\n``` \nIf pods are not running, check the DaemonSet status and logs."
+        "title": "Falco pod stuck in Init:0/2 with 'image pull' errors on slow networks",
+        "description": "**Cause:** The Falco chart pulls falco, falcoctl, and (for the modern-bpf driver) sometimes a driver-loader image. On slow or saturated networks one of the pulls can time out, leaving the pod in ImagePullBackOff or its init step hung.\n\n**Fix:**\nDelete the stuck pod with kubectl delete pod -n falco -l app.kubernetes.io/name=falco so the kubelet retries the pull. If pulls keep timing out, pre-pull on each node with crictl pull falcosecurity/falco:0.43.0 (kind: docker exec kb-test-control-plane crictl pull falcosecurity/falco:0.43.0)."
       },
       {
-        "title": "Resource limits causing OOMKilled",
-        "description": "If the Falco pod is being killed due to out-of-memory (OOM) issues, consider increasing the memory limits via Helm values:\n```bash\nhelm upgrade falco falcosecurity/falco --namespace falco --set resources.limits.memory=1Gi\n``` \nAdjust the memory limit value accordingly."
+        "title": "Falco pod is Running but no events appear in the logs",
+        "description": "**Cause:** The most common reason on small clusters is that no syscalls are happening, the syscall buffer drop counter is too high, or the BPF probe failed to attach for one or two specific tracepoints (the 'libpman: failure while attaching TOCTOU mitigation program' lines are warnings, not fatal).\n\n**Fix:**\nGenerate a known-noisy syscall to confirm the probe is wired up.\n\n```bash\nkubectl run falco-test --image=busybox:1.36 --restart=Never --rm -i --tty -- cat /etc/shadow\nkubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=20 | grep -i shadow\n```\n\nIf no event line appears, increase log verbosity with --set falco.logLevel=debug and reapply with helm upgrade --reuse-values."
+      },
+      {
+        "title": "Falco pod is OOMKilled",
+        "description": "**Cause:** The default chart memory limit (512Mi) is enough for an idle cluster but can be exceeded on busy nodes with high syscall throughput.\n\n**Fix:**\nIncrease the memory limit in the chart values and helm-upgrade.\n\n```bash\nhelm upgrade falco falcosecurity/falco \\\n  --namespace falco \\\n  --version 8.0.1 \\\n  --reuse-values \\\n  --set resources.limits.memory=1Gi \\\n  --set resources.requests.memory=512Mi\n```"
+      },
+      {
+        "title": "BPF probe fails to attach on the kernel running on this node",
+        "description": "**Cause:** The modern-bpf driver requires CO-RE-capable kernels (Linux 5.8 and newer for the full feature set, 4.18 with reduced features). Some hardened or older distributions strip BTF info or specific tracepoints, which prevents the probe from attaching.\n\n**Fix:**\nFall back to the kernel-module driver if your kernel does not support modern-bpf, or to legacy-bpf as a middle ground.\n\n```bash\nhelm upgrade falco falcosecurity/falco \\\n  --namespace falco \\\n  --version 8.0.1 \\\n  --reuse-values \\\n  --set driver.kind=kmod\n```\n\nThe kmod driver builds a kernel module on first start and requires kernel headers on the node."
       }
-    ]
+    ],
+    "versionNotes": [
+      {
+        "version": "falco chart 8.0.1 (app v0.43.0)",
+        "changes": "Modern Falco chart layout with the falcoctl artifact downloader enabled by default. Ships the four-stage init pipeline: falcoctl-artifact-install, falcoctl-artifact-follow, falco-driver-loader, then the falco main container. The artifact install stage requires HTTPS egress to falcosecurity.github.io unless disabled.",
+        "deprecations": "Older mission revisions referenced --version 0.43.0 (the app version). The Falco chart switched to a separate chart-version line (8.x.y) starting with chart 3.0.0 (Feb 2023). Always look up the chart version before passing --version.",
+        "migrationSteps": "When upgrading from a pre-3.0.0 chart, helm uninstall the old release and helm install fresh with the new chart, because the Helm-managed resource shapes changed substantially in 3.0.0."
+      }
+    ],
+    "resolution": {
+      "summary": "After helm-installing chart 8.0.1 with the falcoctl artifact flags disabled, the falco DaemonSet rolls out and each pod reports 1/1 Ready with the falco container in Running state. Reading /etc/shadow inside any pod produces a 'Sensitive file opened for reading by non-trusted program' Warning event in the Falco logs, confirming the BPF probe is attached and the embedded ruleset is loaded. The root cause of the previous mission failing on kind and other restricted-egress clusters was that helm install --version 0.43.0 always errored with 'chart not found' because 0.43.0 is the app version not the chart version, and that even when the chart version was correct the falcoctl-artifact-install init container hung trying to reach falcosecurity.github.io and crash-looped the pod. This corrected mission pins chart 8.0.1, disables the runtime artifact downloader so the embedded ruleset is used, waits for the DaemonSet rollout, and triggers a sample event to validate end-to-end.",
+      "codeSnippets": [
+        "helm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm repo update",
+        "helm install falco falcosecurity/falco --namespace falco --create-namespace --version 8.0.1 --set falcoctl.artifact.install.enabled=false --set falcoctl.artifact.follow.enabled=false",
+        "kubectl rollout status daemonset/falco -n falco --timeout=300s",
+        "kubectl get pods -n falco -l app.kubernetes.io/name=falco",
+        "kubectl logs -n falco -l app.kubernetes.io/name=falco -c falco --tail=50",
+        "kubectl run falco-test --image=busybox:1.36 --restart=Never --rm -i --tty -- cat /etc/shadow",
+        "helm uninstall falco --namespace falco"
+      ]
+    }
   },
   "metadata": {
     "tags": [
@@ -89,14 +154,21 @@
       "configuration",
       "cncf",
       "security",
-      "graduated"
+      "graduated",
+      "runtime-security",
+      "ebpf"
     ],
     "cncfProjects": [
       "falco"
     ],
     "targetResourceKinds": [
       "DaemonSet",
-      "Namespace"
+      "Namespace",
+      "ConfigMap",
+      "ServiceAccount",
+      "ClusterRole",
+      "ClusterRoleBinding",
+      "Service"
     ],
     "difficulty": "intermediate",
     "issueTypes": [
@@ -109,11 +181,14 @@
     "maturity": "graduated",
     "projectVersion": "0.43.0",
     "containerImages": [
-      "falcosecurity/falco:0.43.0"
+      "docker.io/falcosecurity/falco:0.43.0",
+      "docker.io/falcosecurity/falco-driver-loader:0.43.0",
+      "docker.io/falcosecurity/falcoctl:0.12.2"
     ],
     "sourceUrls": {
-      "docs": "https://falco.org",
-      "repo": "https://github.com/falcosecurity/falco"
+      "docs": "https://falco.org/docs/",
+      "repo": "https://github.com/falcosecurity/falco",
+      "helm": "https://falcosecurity.github.io/charts"
     },
     "qualityScore": 100
   },
@@ -123,11 +198,11 @@
       "helm",
       "kubectl"
     ],
-    "description": "Ensure you have a Kubernetes cluster running version 1.24 or higher and have Helm and kubectl installed on your local machine."
+    "description": "Cluster admin access is required because Falco runs a privileged DaemonSet that loads a BPF probe (or kernel module) on each node. Linux kernel 5.8 or newer is recommended for the modern-bpf driver. Outbound HTTPS to docker.io is required to pull the Falco container images. Outbound HTTPS to falcosecurity.github.io is needed only if you want runtime rule updates via falcoctl. This mission disables that path so the install works on kind, k3d, air-gapped, and other restricted-egress environments by using the ruleset embedded in the Falco image."
   },
   "security": {
-    "scannedAt": "2026-02-28T21:44:15.027Z",
-    "scannerVersion": "cncf-install-gen-1.0.0",
+    "scannedAt": "2026-05-21T00:00:00.000Z",
+    "scannerVersion": "manual-review-1.0.0",
     "sanitized": true,
     "findings": []
   }
