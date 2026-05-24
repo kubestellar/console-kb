@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "network-policy",
+  "missionClass": "install",
+  "author": "kubestellar-hive",
+  "authorGithub": "kubestellar-hive",
+  "mission": {
+    "title": "Deploy baseline NetworkPolicy controls for zero-trust traffic",
+    "description": "Deployment mission for enabling NetworkPolicy enforcement in a Kubernetes namespace with default deny rules, explicit allow lists, and validation checks.",
+    "type": "deploy",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Verify the cluster CNI supports NetworkPolicy enforcement",
+        "description": "Confirm the active CNI plugin advertises NetworkPolicy support and that the target namespace is ready for policy rollout.\n```bash\nkubectl get pods -n kube-system -o wide | egrep \"calico|cilium|antrea|weave\"\nkubectl api-resources | grep -i networkpolicy\nkubectl get ns app-prod --show-labels\n```\nIf your plugin does not enforce policies, install or enable that capability before applying deny rules.",
+        "commands": [
+          "kubectl get pods -n kube-system -o wide | egrep \"calico|cilium|antrea|weave\"",
+          "kubectl api-resources | grep -i networkpolicy",
+          "kubectl get ns app-prod --show-labels"
+        ]
+      },
+      {
+        "title": "Create a default-deny policy for the namespace",
+        "description": "Start from a deny-all baseline so new Pods cannot receive ingress or egress traffic until explicitly allowed.\n```bash\ncat <<'EOF' | kubectl apply -n app-prod -f -\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: default-deny\nspec:\n  podSelector: {}\n  policyTypes:\n  - Ingress\n  - Egress\nEOF\nkubectl describe networkpolicy -n app-prod default-deny\n```\nApply this in a maintenance window or after staging equivalent allow rules if the namespace hosts critical traffic.",
+        "commands": [
+          "cat <<'EOF' | kubectl apply -n app-prod -f -\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: default-deny\nspec:\n  podSelector: {}\n  policyTypes:\n  - Ingress\n  - Egress\nEOF",
+          "kubectl describe networkpolicy -n app-prod default-deny"
+        ]
+      },
+      {
+        "title": "Create allow policies for required application traffic",
+        "description": "Add explicit policies for DNS, ingress from trusted frontends, and egress to the services your workload depends on.\n```bash\ncat <<'EOF' | kubectl apply -n app-prod -f -\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: allow-web-and-dns\nspec:\n  podSelector:\n    matchLabels:\n      app: api\n  policyTypes:\n  - Ingress\n  - Egress\n  ingress:\n  - from:\n    - podSelector:\n        matchLabels:\n          app: web\n    ports:\n    - protocol: TCP\n      port: 8080\n  egress:\n  - to:\n    - namespaceSelector:\n        matchLabels:\n          kubernetes.io/metadata.name: kube-system\n    ports:\n    - protocol: UDP\n      port: 53\nEOF\n```\nModel each allow rule after the real traffic matrix for the namespace instead of relying on broad catch-all policies.",
+        "commands": [
+          "cat <<'EOF' | kubectl apply -n app-prod -f -\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: allow-web-and-dns\nspec:\n  podSelector:\n    matchLabels:\n      app: api\n  policyTypes:\n  - Ingress\n  - Egress\n  ingress:\n  - from:\n    - podSelector:\n        matchLabels:\n          app: web\n    ports:\n    - protocol: TCP\n      port: 8080\n  egress:\n  - to:\n    - namespaceSelector:\n        matchLabels:\n          kubernetes.io/metadata.name: kube-system\n    ports:\n    - protocol: UDP\n      port: 53\nEOF"
+        ]
+      },
+      {
+        "title": "Test connectivity from allowed and denied paths",
+        "description": "Use disposable test Pods to prove required traffic still works and unexpected traffic is blocked.\n```bash\nkubectl run netshoot-allow -n app-prod --rm -it --restart=Never --image=nicolaka/netshoot -- sh -c \"nc -vz api 8080\"\nkubectl run netshoot-deny -n app-prod --rm -it --restart=Never --image=nicolaka/netshoot -- sh -c \"nc -vz db 5432\"\n```\nDocument both successful and blocked flows so the policy set stays auditable.",
+        "commands": [
+          "kubectl run netshoot-allow -n app-prod --rm -it --restart=Never --image=nicolaka/netshoot -- sh -c \"nc -vz api 8080\"",
+          "kubectl run netshoot-deny -n app-prod --rm -it --restart=Never --image=nicolaka/netshoot -- sh -c \"nc -vz db 5432\""
+        ]
+      },
+      {
+        "title": "Monitor ongoing policy enforcement",
+        "description": "Review the applied policies and watch CNI-specific logs or flow telemetry for dropped traffic after rollout.\n```bash\nkubectl get networkpolicy -n app-prod\nkubectl describe networkpolicy -n app-prod allow-web-and-dns\nkubectl logs -n kube-system -l k8s-app=cilium --tail=100\n```\nAdapt the observability command to your CNI plugin, and alert on repeated denied flows that indicate missing allow rules.",
+        "commands": [
+          "kubectl get networkpolicy -n app-prod",
+          "kubectl describe networkpolicy -n app-prod allow-web-and-dns",
+          "kubectl logs -n kube-system -l k8s-app=cilium --tail=100"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "The namespace now enforces a zero-trust baseline with a default deny policy, explicit allow rules for known traffic, and validation steps for ongoing monitoring.",
+      "codeSnippets": [
+        "kubectl api-resources | grep -i networkpolicy",
+        "kubectl describe networkpolicy -n app-prod default-deny",
+        "kubectl get networkpolicy -n app-prod"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "network-policy",
+      "security",
+      "networking",
+      "kubernetes",
+      "zero-trust"
+    ],
+    "priority": "high",
+    "category": "networking"
+  }
+}

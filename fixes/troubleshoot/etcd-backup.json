@@ -1,0 +1,72 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-backup",
+  "missionClass": "backup",
+  "author": "kubestellar-hive",
+  "authorGithub": "kubestellar-hive",
+  "mission": {
+    "title": "Create, verify, schedule, and restore etcd backups",
+    "description": "Operational runbook for protecting Kubernetes control-plane state with repeatable etcd snapshots and tested restore steps.",
+    "type": "operations",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Create an etcd snapshot from a control-plane node",
+        "description": "Use `etcdctl` with the live API server certificates on a control-plane node and store the snapshot on durable disk.\n```bash\nexport ETCDCTL_API=3\nsudo mkdir -p /var/backups/etcd\nsudo etcdctl \\\n  --endpoints=https://127.0.0.1:2379 \\\n  --cacert=/etc/kubernetes/pki/etcd/ca.crt \\\n  --cert=/etc/kubernetes/pki/etcd/server.crt \\\n  --key=/etc/kubernetes/pki/etcd/server.key \\\n  snapshot save /var/backups/etcd/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db\n```\nIf your cluster uses a stacked control plane, run this on one healthy control-plane node and copy the resulting snapshot to off-node storage.",
+        "commands": [
+          "export ETCDCTL_API=3",
+          "sudo mkdir -p /var/backups/etcd",
+          "sudo etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/backups/etcd/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db"
+        ]
+      },
+      {
+        "title": "Verify the snapshot is usable before relying on it",
+        "description": "Inspect the snapshot metadata and checksum immediately after creation.\n```bash\nLATEST_SNAPSHOT=$(ls -1t /var/backups/etcd/etcd-snapshot-*.db | head -1)\nsudo etcdctl snapshot status \"$LATEST_SNAPSHOT\" --write-out=table\nsha256sum \"$LATEST_SNAPSHOT\"\n```\nRecord the revision, size, and checksum in your ops log so you can confirm you restore the intended backup later.",
+        "commands": [
+          "LATEST_SNAPSHOT=$(ls -1t /var/backups/etcd/etcd-snapshot-*.db | head -1)",
+          "sudo etcdctl snapshot status \"$LATEST_SNAPSHOT\" --write-out=table",
+          "sha256sum \"$LATEST_SNAPSHOT\""
+        ]
+      },
+      {
+        "title": "Schedule periodic etcd backups with a CronJob",
+        "description": "Automate snapshots on a secured administrative node or maintenance cluster using a CronJob that mounts the etcd certificates and a persistent backup volume.\n```bash\nkubectl create namespace etcd-backup\ncat <<'EOF' | kubectl apply -f -\napiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: etcd-snapshot\n  namespace: etcd-backup\nspec:\n  schedule: \"0 */6 * * *\"\n  jobTemplate:\n    spec:\n      template:\n        spec:\n          restartPolicy: OnFailure\n          containers:\n          - name: etcdctl\n            image: bitnami/etcd:3.5.14\n            command:\n            - /bin/sh\n            - -c\n            - >-\n              ETCDCTL_API=3 etcdctl\n              --endpoints=https://127.0.0.1:2379\n              --cacert=/certs/ca.crt\n              --cert=/certs/server.crt\n              --key=/certs/server.key\n              snapshot save /backup/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db\nEOF\n```\nBack the CronJob with secure storage and retention policies; in production, also copy snapshots to object storage or another fault domain.",
+        "commands": [
+          "kubectl create namespace etcd-backup",
+          "cat <<'EOF' | kubectl apply -f -\napiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: etcd-snapshot\n  namespace: etcd-backup\nspec:\n  schedule: \"0 */6 * * *\"\n  jobTemplate:\n    spec:\n      template:\n        spec:\n          restartPolicy: OnFailure\n          containers:\n          - name: etcdctl\n            image: bitnami/etcd:3.5.14\n            command:\n            - /bin/sh\n            - -c\n            - >-\n              ETCDCTL_API=3 etcdctl\n              --endpoints=https://127.0.0.1:2379\n              --cacert=/certs/ca.crt\n              --cert=/certs/server.crt\n              --key=/certs/server.key\n              snapshot save /backup/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db\nEOF"
+        ]
+      },
+      {
+        "title": "Restore the cluster from a known-good snapshot",
+        "description": "Stop the control-plane static Pods, restore the snapshot into a clean data directory, then point the etcd manifest at the restored data path. Validate API health before rejoining other control-plane nodes.\n```bash\nexport ETCDCTL_API=3\nsudo systemctl stop kubelet\nsudo mv /var/lib/etcd /var/lib/etcd.broken-$(date +%Y%m%d-%H%M%S)\nsudo etcdctl snapshot restore /var/backups/etcd/etcd-snapshot-YYYYMMDD-HHMMSS.db \\\n  --data-dir=/var/lib/etcd-restore\nsudo sed -i \"s#--data-dir=/var/lib/etcd#--data-dir=/var/lib/etcd-restore#\" /etc/kubernetes/manifests/etcd.yaml\nsudo systemctl start kubelet\nkubectl get --raw='/readyz?verbose'\n```\nAfter the API server is healthy, restore the original static pod manifest path conventions that match your environment and reconcile any additional control-plane members.",
+        "commands": [
+          "export ETCDCTL_API=3",
+          "sudo systemctl stop kubelet",
+          "sudo mv /var/lib/etcd /var/lib/etcd.broken-$(date +%Y%m%d-%H%M%S)",
+          "sudo etcdctl snapshot restore /var/backups/etcd/etcd-snapshot-YYYYMMDD-HHMMSS.db --data-dir=/var/lib/etcd-restore",
+          "sudo sed -i \"s#--data-dir=/var/lib/etcd#--data-dir=/var/lib/etcd-restore#\" /etc/kubernetes/manifests/etcd.yaml",
+          "kubectl get --raw='/readyz?verbose'"
+        ]
+      }
+    ],
+    "resolution": {
+      "summary": "A verified etcd backup workflow is in place, scheduled backups are automated, and the restore procedure is documented for disaster recovery.",
+      "codeSnippets": [
+        "sudo etcdctl snapshot save /var/backups/etcd/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db",
+        "sudo etcdctl snapshot status \"$LATEST_SNAPSHOT\" --write-out=table",
+        "sudo etcdctl snapshot restore /var/backups/etcd/etcd-snapshot-YYYYMMDD-HHMMSS.db --data-dir=/var/lib/etcd-restore"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "backup",
+      "disaster-recovery",
+      "kubernetes",
+      "operations"
+    ],
+    "priority": "high",
+    "category": "cluster-operations"
+  }
+}
