@@ -12,7 +12,7 @@
     "steps": [
       {
         "title": "Identify the PVCs and workloads that need migration",
-        "description": "Capture the namespace, current storage class, access mode, and the workloads mounting the PVC before making changes.\n```bash\nNAMESPACE=app-prod\nkubectl get pvc -n \"$NAMESPACE\" -o wide\nkubectl get pods -n \"$NAMESPACE\" -o jsonpath='{range .items[*]}{.metadata.name}{\"\\t\"}{range .spec.volumes[*]}{.persistentVolumeClaim.claimName}{\" \"}{end}{\"\\n\"}{end}'\n```\nConfirm the target CSI driver supports `VolumeSnapshot` and provisioning from snapshot before continuing.",
+        "description": "Capture the namespace, current storage class, access mode, and the workloads mounting the PVC before making changes.\nbash\nNAMESPACE=app-prod\nkubectl get pvc -n \"$NAMESPACE\" -o wide\nkubectl get pods -n \"$NAMESPACE\" -o jsonpath='{range .items[*]}{.metadata.name}{\"\\t\"}{range .spec.volumes[*]}{.persistentVolumeClaim.claimName}{\" \"}{end}{\"\\n\"}{end}'\n\nConfirm the target CSI driver supports VolumeSnapshot and provisioning from snapshot before continuing.",
         "commands": [
           "NAMESPACE=app-prod",
           "kubectl get pvc -n \"$NAMESPACE\" -o wide",
@@ -21,7 +21,7 @@
       },
       {
         "title": "Create a VolumeSnapshot of the source PVC",
-        "description": "Quiesce the workload if the application requires crash-consistent snapshots, then create a `VolumeSnapshot` using the correct snapshot class.\n```bash\ncat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: snapshot.storage.k8s.io/v1\nkind: VolumeSnapshot\nmetadata:\n  name: app-data-migration-snap\nspec:\n  volumeSnapshotClassName: csi-snapclass\n  source:\n    persistentVolumeClaimName: app-data\nEOF\nkubectl get volumesnapshot -n \"$NAMESPACE\" app-data-migration-snap -o yaml\n```\nWait until `status.readyToUse: true` before creating the replacement claim.",
+        "description": "Quiesce the workload if the application requires crash-consistent snapshots, then create a VolumeSnapshot using the correct snapshot class.\nbash\ncat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: snapshot.storage.k8s.io/v1\nkind: VolumeSnapshot\nmetadata:\n  name: app-data-migration-snap\nspec:\n  volumeSnapshotClassName: csi-snapclass\n  source:\n    persistentVolumeClaimName: app-data\nEOF\nkubectl get volumesnapshot -n \"$NAMESPACE\" app-data-migration-snap -o yaml\n\nWait until status.readyToUse: true before creating the replacement claim.",
         "commands": [
           "cat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: snapshot.storage.k8s.io/v1\nkind: VolumeSnapshot\nmetadata:\n  name: app-data-migration-snap\nspec:\n  volumeSnapshotClassName: csi-snapclass\n  source:\n    persistentVolumeClaimName: app-data\nEOF",
           "kubectl get volumesnapshot -n \"$NAMESPACE\" app-data-migration-snap -o yaml"
@@ -29,7 +29,7 @@
       },
       {
         "title": "Create a new PVC from the snapshot",
-        "description": "Provision a destination claim on the new storage class using the snapshot as the data source.\n```bash\ncat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: app-data-migrated\nspec:\n  accessModes:\n  - ReadWriteOnce\n  storageClassName: fast-ssd\n  resources:\n    requests:\n      storage: 100Gi\n  dataSource:\n    name: app-data-migration-snap\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io\nEOF\nkubectl get pvc -n \"$NAMESPACE\" app-data-migrated\n```\nMatch size and access mode requirements from the original claim unless the target driver requires a larger allocation.",
+        "description": "Provision a destination claim on the new storage class using the snapshot as the data source.\nbash\ncat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: app-data-migrated\nspec:\n  accessModes:\n  - ReadWriteOnce\n  storageClassName: fast-ssd\n  resources:\n    requests:\n      storage: 100Gi\n  dataSource:\n    name: app-data-migration-snap\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io\nEOF\nkubectl get pvc -n \"$NAMESPACE\" app-data-migrated\n\nMatch size and access mode requirements from the original claim unless the target driver requires a larger allocation.",
         "commands": [
           "cat <<'EOF' | kubectl apply -n \"$NAMESPACE\" -f -\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: app-data-migrated\nspec:\n  accessModes:\n  - ReadWriteOnce\n  storageClassName: fast-ssd\n  resources:\n    requests:\n      storage: 100Gi\n  dataSource:\n    name: app-data-migration-snap\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io\nEOF",
           "kubectl get pvc -n \"$NAMESPACE\" app-data-migrated"
@@ -37,7 +37,7 @@
       },
       {
         "title": "Update the workload to use the new PVC",
-        "description": "Patch the Deployment, StatefulSet, or Helm values so new Pods mount the migrated claim, then roll the workload.\n```bash\nkubectl set volume deployment/my-app -n \"$NAMESPACE\" \\\n  --add --name=app-data --claim-name=app-data-migrated --mount-path=/var/lib/app --overwrite\nkubectl rollout restart deployment/my-app -n \"$NAMESPACE\"\nkubectl rollout status deployment/my-app -n \"$NAMESPACE\" --timeout=5m\n```\nFor StatefulSets or Helm-managed apps, make the equivalent declarative change in the workload manifest and apply it.",
+        "description": "Patch the Deployment, StatefulSet, or Helm values so new Pods mount the migrated claim, then roll the workload.\nbash\nkubectl set volume deployment/my-app -n \"$NAMESPACE\" \\\n  --add --name=app-data --claim-name=app-data-migrated --mount-path=/var/lib/app --overwrite\nkubectl rollout restart deployment/my-app -n \"$NAMESPACE\"\nkubectl rollout status deployment/my-app -n \"$NAMESPACE\" --timeout=5m\n\nFor StatefulSets or Helm-managed apps, make the equivalent declarative change in the workload manifest and apply it.",
         "commands": [
           "kubectl set volume deployment/my-app -n \"$NAMESPACE\" --add --name=app-data --claim-name=app-data-migrated --mount-path=/var/lib/app --overwrite",
           "kubectl rollout restart deployment/my-app -n \"$NAMESPACE\"",
@@ -46,7 +46,7 @@
       },
       {
         "title": "Verify data integrity on the new volume",
-        "description": "Confirm the application starts cleanly, mounted data is present, and a sample checksum or directory listing matches expectations.\n```bash\nPOD=$(kubectl get pods -n \"$NAMESPACE\" -l app=my-app -o jsonpath='{.items[0].metadata.name}')\nkubectl exec -n \"$NAMESPACE\" \"$POD\" -- df -h /var/lib/app\nkubectl exec -n \"$NAMESPACE\" \"$POD\" -- ls -lah /var/lib/app | head\n```\nRun any application-specific smoke tests now; this is the best point to detect truncated or inconsistent restored data.",
+        "description": "Confirm the application starts cleanly, mounted data is present, and a sample checksum or directory listing matches expectations.\nbash\nPOD=$(kubectl get pods -n \"$NAMESPACE\" -l app=my-app -o jsonpath='{.items[0].metadata.name}')\nkubectl exec -n \"$NAMESPACE\" \"$POD\" -- df -h /var/lib/app\nkubectl exec -n \"$NAMESPACE\" \"$POD\" -- ls -lah /var/lib/app | head\n\nRun any application-specific smoke tests now; this is the best point to detect truncated or inconsistent restored data.",
         "commands": [
           "POD=$(kubectl get pods -n \"$NAMESPACE\" -l app=my-app -o jsonpath='{.items[0].metadata.name}')",
           "kubectl exec -n \"$NAMESPACE\" \"$POD\" -- df -h /var/lib/app",
@@ -55,7 +55,7 @@
       },
       {
         "title": "Clean up the old PVC after validation",
-        "description": "Once the application has run successfully on the new volume and rollback is no longer needed, remove the old claim and snapshot objects.\n```bash\nkubectl scale deployment/my-app -n \"$NAMESPACE\" --replicas=0\nkubectl delete pvc -n \"$NAMESPACE\" app-data\nkubectl delete volumesnapshot -n \"$NAMESPACE\" app-data-migration-snap\nkubectl scale deployment/my-app -n \"$NAMESPACE\" --replicas=1\n```\nIf you need a rollback window, keep the old claim detached for an agreed retention period instead of deleting it immediately.",
+        "description": "Once the application has run successfully on the new volume and rollback is no longer needed, remove the old claim and snapshot objects.\nbash\nkubectl scale deployment/my-app -n \"$NAMESPACE\" --replicas=0\nkubectl delete pvc -n \"$NAMESPACE\" app-data\nkubectl delete volumesnapshot -n \"$NAMESPACE\" app-data-migration-snap\nkubectl scale deployment/my-app -n \"$NAMESPACE\" --replicas=1\n\nIf you need a rollback window, keep the old claim detached for an agreed retention period instead of deleting it immediately.",
         "commands": [
           "kubectl scale deployment/my-app -n \"$NAMESPACE\" --replicas=0",
           "kubectl delete pvc -n \"$NAMESPACE\" app-data",
