@@ -1,0 +1,158 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-restore-etcd-snapshot",
+  "missionClass": "runbook",
+  "author": "KubeStellar Console",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Restore a Kubernetes cluster from an etcd snapshot",
+    "description": "Production-grade restore runbook for kubeadm-managed Kubernetes control planes that recover etcd state from a previously taken snapshot. The workflow verifies snapshot integrity with etcdutl, stops the etcd static pod by moving its manifest, preserves the current data directory for rollback and forensics, restores the snapshot with the original cluster identity values, and then brings etcd back online so the API server rehydrates from the restored state. This runbook is intended for self-managed control planes where etcd is exposed as a static pod; managed Kubernetes services such as EKS, GKE, and AKS require provider-specific restore workflows instead.",
+    "type": "restore",
+    "status": "completed",
+    "estimatedMinutes": 15,
+    "steps": [
+      {
+        "id": "step-01-verify-snapshot",
+        "title": "Verify the snapshot file exists and passes integrity checks",
+        "description": "Confirm the snapshot file is present on the control-plane node or mounted into the restore environment, then inspect it with etcdutl snapshot status before touching the live etcd data directory. Capture the reported revision, hash, and total key count so you know which point-in-time state will be restored.",
+        "commands": [
+          "SNAPSHOT_PATH=\"${SNAPSHOT_PATH:-/var/lib/etcd-backup/snapshot.db}\"\nls -lh \"$SNAPSHOT_PATH\"\n",
+          "etcdutl --write-out=table snapshot status \"$SNAPSHOT_PATH\"\n"
+        ],
+        "validation": "SNAPSHOT_PATH=\"${SNAPSHOT_PATH:-/var/lib/etcd-backup/snapshot.db}\"\ntest -f \"$SNAPSHOT_PATH\" && etcdutl --write-out=table snapshot status \"$SNAPSHOT_PATH\" > /dev/null 2>&1\n",
+        "failureHandling": "If the file is missing, stop and locate a valid snapshot before proceeding. If etcdutl reports corruption or an unknown format, do not attempt a restore from that file; obtain a new snapshot or recover from a different backup copy."
+      },
+      {
+        "id": "step-02-stop-etcd",
+        "title": "Stop the etcd static pod by moving its manifest",
+        "description": "Capture the etcd member name, peer URL, and initial cluster string from the static pod manifest before moving it out of /etc/kubernetes/manifests. The kubelet will remove the running etcd pod, preventing writes while the restore is in progress. The API server will begin failing shortly after etcd stops, which is expected.",
+        "commands": [
+          "ETCD_MANIFEST=\"${ETCD_MANIFEST:-/etc/kubernetes/manifests/etcd.yaml}\"\nETCD_MANIFEST_BACKUP=\"${ETCD_MANIFEST_BACKUP:-/etc/kubernetes/manifests-backup/etcd.yaml}\"\nsudo mkdir -p \"$(dirname \"$ETCD_MANIFEST_BACKUP\")\"\ngrep -- '--name=' \"$ETCD_MANIFEST\" | head -1\ngrep -- '--initial-advertise-peer-urls=' \"$ETCD_MANIFEST\" | head -1\ngrep -- '--initial-cluster=' \"$ETCD_MANIFEST\" | head -1\n",
+          "ETCD_MANIFEST=\"${ETCD_MANIFEST:-/etc/kubernetes/manifests/etcd.yaml}\"\nETCD_MANIFEST_BACKUP=\"${ETCD_MANIFEST_BACKUP:-/etc/kubernetes/manifests-backup/etcd.yaml}\"\nsudo mv \"$ETCD_MANIFEST\" \"$ETCD_MANIFEST_BACKUP\"\nsleep 15\ncrictl ps | grep etcd || echo \"etcd container stopped\"\n"
+        ],
+        "validation": "crictl ps | grep -q etcd && exit 1 || exit 0\n",
+        "failureHandling": "If the manifest cannot be moved, verify sudo access and file paths on the control-plane host. If etcd is still running after the manifest move, confirm kubelet is healthy and wait a little longer before continuing."
+      },
+      {
+        "id": "step-03-stage-old-data-dir",
+        "title": "Rename the existing etcd data directory",
+        "description": "Move the current etcd data directory aside instead of deleting it. This preserves the pre-restore state for forensic inspection and makes room for a clean restore target. Record the timestamped directory name because it is useful if you need to roll back the restore attempt.",
+        "commands": [
+          "ETCD_DATA_DIR=\"${ETCD_DATA_DIR:-/var/lib/etcd}\"\nETCD_DATA_BACKUP=\"${ETCD_DATA_BACKUP:-/var/lib/etcd.pre-restore-$(date +%Y%m%d%H%M%S)}\"\nsudo mv \"$ETCD_DATA_DIR\" \"$ETCD_DATA_BACKUP\"\necho \"Original etcd data moved to $ETCD_DATA_BACKUP\"\nls -ld \"$ETCD_DATA_BACKUP\"\n"
+        ],
+        "validation": "ls -ld /var/lib/etcd.pre-restore-* > /dev/null 2>&1\n",
+        "failureHandling": "If the data directory is busy, etcd is probably still running and step-02 was incomplete. Do not force the move while etcd is active; return to step-02, confirm the pod is gone, then retry."
+      },
+      {
+        "id": "step-04-restore-snapshot",
+        "title": "Restore the snapshot using etcdutl with the original cluster identity",
+        "description": "Run etcdutl snapshot restore into a fresh data directory and reuse the same member name, initial cluster string, and advertised peer URL from the original manifest. Matching the original identity values is critical; otherwise etcd may start with a cluster ID mismatch or refuse to join the restored state.",
+        "commands": [
+          "SNAPSHOT_PATH=\"${SNAPSHOT_PATH:-/var/lib/etcd-backup/snapshot.db}\"\nRESTORE_DATA_DIR=\"${RESTORE_DATA_DIR:-/var/lib/etcd-restored}\"\nETCD_NAME=\"${ETCD_NAME:?Set ETCD_NAME from the manifest output in step-02}\"\nETCD_INITIAL_CLUSTER=\"${ETCD_INITIAL_CLUSTER:?Set ETCD_INITIAL_CLUSTER from the manifest output in step-02}\"\nETCD_PEER_URL=\"${ETCD_PEER_URL:?Set ETCD_PEER_URL from the manifest output in step-02}\"\nsudo rm -rf \"$RESTORE_DATA_DIR\"\nsudo etcdutl snapshot restore \"$SNAPSHOT_PATH\" --data-dir \"$RESTORE_DATA_DIR\" --name \"$ETCD_NAME\" --initial-cluster \"$ETCD_INITIAL_CLUSTER\" --initial-advertise-peer-urls \"$ETCD_PEER_URL\" --initial-cluster-token etcd-cluster\n",
+          "sudo rm -rf /var/lib/etcd\nsudo mv \"${RESTORE_DATA_DIR:-/var/lib/etcd-restored}\" /var/lib/etcd\nsudo chown -R root:root /var/lib/etcd\n"
+        ],
+        "validation": "test -d /var/lib/etcd/member\n",
+        "failureHandling": "If etcdutl says the restore directory already exists, remove the failed restore output and rerun the command. If the restore reports member or cluster identity errors, go back to step-02 and extract the exact values from the original manifest before retrying."
+      },
+      {
+        "id": "step-05-restart-and-verify",
+        "title": "Restart etcd and verify cluster health",
+        "description": "Move the static pod manifest back into place so kubelet starts etcd against the restored data set, then verify etcd and the API server recover cleanly. Successful validation should show the etcd pod running again and kubectl able to list cluster resources from the restored state.",
+        "commands": [
+          "ETCD_MANIFEST=\"${ETCD_MANIFEST:-/etc/kubernetes/manifests/etcd.yaml}\"\nETCD_MANIFEST_BACKUP=\"${ETCD_MANIFEST_BACKUP:-/etc/kubernetes/manifests-backup/etcd.yaml}\"\nsudo mv \"$ETCD_MANIFEST_BACKUP\" \"$ETCD_MANIFEST\"\nsleep 30\nkubectl get pods -n kube-system -l component=etcd -o wide\n",
+          "kubectl get nodes -o wide\nkubectl get --raw=/readyz?verbose\n"
+        ],
+        "validation": "kubectl get pods -n kube-system -l component=etcd --no-headers 2>/dev/null | grep -q Running && kubectl get nodes > /dev/null 2>&1\n",
+        "failureHandling": "If etcd does not come back up, inspect crictl logs or kubectl logs for the etcd static pod and confirm the restored data directory contains member data. If the API server remains unavailable after etcd is running, wait a little longer and then verify certificates and the restored snapshot generation are still compatible with the control plane."
+      }
+    ],
+    "resolution": {
+      "summary": "The control plane was restored from a verified etcd snapshot using the original etcd cluster identity. etcd restarted from the restored data directory and the Kubernetes API became healthy again against the recovered point-in-time state.",
+      "codeSnippets": [
+        "etcdutl --write-out=table snapshot status \"$SNAPSHOT_PATH\"",
+        "sudo mv /etc/kubernetes/manifests/etcd.yaml /etc/kubernetes/manifests-backup/etcd.yaml",
+        "sudo etcdutl snapshot restore \"$SNAPSHOT_PATH\" --data-dir /var/lib/etcd-restored --name \"$ETCD_NAME\" --initial-cluster \"$ETCD_INITIAL_CLUSTER\" --initial-advertise-peer-urls \"$ETCD_PEER_URL\" --initial-cluster-token etcd-cluster",
+        "sudo mv /var/lib/etcd-restored /var/lib/etcd",
+        "kubectl get pods -n kube-system -l component=etcd -o wide"
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-snapshot-corrupt",
+        "title": "etcdutl reports snapshot corruption or unreadable metadata",
+        "description": "The backup file is not safe to restore. Locate another snapshot copy or re-run the backup workflow. Do not continue with a restore from a file that fails snapshot status."
+      },
+      {
+        "id": "ts-02-etcd-still-running",
+        "title": "etcd stays up after moving the manifest",
+        "description": "The kubelet may be unhealthy or the manifest path is wrong. Confirm the manifest was moved off the exact path kubelet watches, then inspect kubelet status and wait for the static pod cleanup to complete before touching /var/lib/etcd."
+      },
+      {
+        "id": "ts-03-cluster-id-mismatch",
+        "title": "Restored etcd pod fails with member or cluster ID mismatch",
+        "description": "The restore used the wrong --name, --initial-cluster, or --initial-advertise-peer-urls values. Extract those values directly from the original etcd manifest, remove the failed restore directory, and re-run the restore step."
+      },
+      {
+        "id": "ts-04-managed-control-plane",
+        "title": "There is no etcd static pod on this cluster",
+        "description": "Managed providers such as EKS, GKE, and AKS do not expose etcd restoration through kubeadm static pods. Use the cloud provider's documented backup and restore mechanism instead of this runbook."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "restore",
+      "etcd",
+      "snapshot",
+      "kubeadm",
+      "control-plane",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31",
+      "1.32"
+    ],
+    "cncfProjects": [
+      "etcd",
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node",
+      "ConfigMap",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "installMethods": [
+      "kubeadm"
+    ],
+    "operationTypes": [
+      "restore",
+      "disaster-recovery"
+    ],
+    "sourceUrls": {
+      "docs": "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "crictl",
+      "etcdutl",
+      "sudo"
+    ],
+    "cloudCLI": "none",
+    "resources": "Shell access to a kubeadm-managed control-plane node, sudo privileges to modify /etc/kubernetes/manifests and /var/lib/etcd, and a previously captured etcd snapshot file.",
+    "description": "This restore runbook is for self-managed kubeadm clusters where etcd runs as a static pod. Capture ETCD_NAME, ETCD_INITIAL_CLUSTER, and ETCD_PEER_URL from the original manifest before running the restore command."
+  }
+}

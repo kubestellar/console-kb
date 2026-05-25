@@ -1,0 +1,148 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-restore-velero-backup",
+  "missionClass": "runbook",
+  "author": "KubeStellar Console",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "Restore Kubernetes resources from a Velero backup",
+    "description": "Production-grade restore runbook for recovering Kubernetes namespaces, persistent volumes, and workload resources from an existing Velero backup. The flow identifies a valid completed backup, creates a restore object with Velero, watches restore progress until it completes, and then validates that the restored namespaces and workloads return to Running or Ready states. This runbook assumes Velero is already installed and configured with access to the backup storage location that contains the desired backup.",
+    "type": "restore",
+    "status": "completed",
+    "estimatedMinutes": 10,
+    "steps": [
+      {
+        "id": "step-01-select-backup",
+        "title": "List available Velero backups and choose the restore source",
+        "description": "Inspect the backup inventory and pick a completed backup that contains the namespaces or resources you need. Capture the backup name in a shell variable so the following steps can reuse it consistently.",
+        "commands": [
+          "velero backup get\n",
+          "BACKUP_NAME=\"${BACKUP_NAME:-}\"\nif test -z \"$BACKUP_NAME\"; then\n  echo \"Set BACKUP_NAME to one of the completed backups from velero backup get\"\n  exit 1\nfi\nvelero backup describe \"$BACKUP_NAME\" --details\n"
+        ],
+        "validation": "BACKUP_NAME=\"${BACKUP_NAME:-}\"\ntest -n \"$BACKUP_NAME\" && velero backup get \"$BACKUP_NAME\" 2>/dev/null | grep -q Completed\n",
+        "failureHandling": "If no completed backups exist, there is nothing safe to restore. Resolve backup storage access or create a fresh backup before proceeding. If the chosen backup is PartiallyFailed, review the missing resources in velero backup describe and decide whether the restore is still acceptable."
+      },
+      {
+        "id": "step-02-create-restore",
+        "title": "Create a Velero restore from the selected backup",
+        "description": "Create a new restore object tied to the chosen backup. By default this restores all captured cluster-scoped and namespace-scoped resources; adjust include or exclude flags if you only want specific namespaces or resource kinds.",
+        "commands": [
+          "BACKUP_NAME=\"${BACKUP_NAME:?Set BACKUP_NAME from step-01}\"\nRESTORE_NAME=\"${RESTORE_NAME:-restore-${BACKUP_NAME}-$(date +%Y%m%d%H%M%S)}\"\nvelero restore create \"$RESTORE_NAME\" --from-backup \"$BACKUP_NAME\"\necho \"Created restore $RESTORE_NAME\"\n"
+        ],
+        "validation": "RESTORE_NAME=\"${RESTORE_NAME:-}\"\ntest -n \"$RESTORE_NAME\" && velero restore get \"$RESTORE_NAME\" > /dev/null 2>&1\n",
+        "failureHandling": "If Velero refuses to create the restore, inspect velero backup describe and ensure the backup is still available in object storage. Also confirm the Velero server pod is healthy and the restore name does not conflict with an existing object."
+      },
+      {
+        "id": "step-03-monitor-restore",
+        "title": "Monitor restore progress until Velero reports completion",
+        "description": "Watch the restore object and review details until Velero reports the restore completed successfully. This step surfaces warnings about skipped resources, plugin errors, or missing PV data before you validate application health.",
+        "commands": [
+          "RESTORE_NAME=\"${RESTORE_NAME:?Set RESTORE_NAME from step-02}\"\nvelero restore describe \"$RESTORE_NAME\" --details\n",
+          "velero restore logs \"$RESTORE_NAME\"\n"
+        ],
+        "validation": "RESTORE_NAME=\"${RESTORE_NAME:?Set RESTORE_NAME from step-02}\"\nvelero restore get \"$RESTORE_NAME\" 2>/dev/null | grep -q Completed\n",
+        "failureHandling": "If the restore is stuck InProgress, inspect the Velero deployment logs and check whether plugins can reach the backup storage location. If the status becomes PartiallyFailed or Failed, review the skipped resources and rerun the restore with narrower filters after fixing the underlying issue."
+      },
+      {
+        "id": "step-04-validate-resources",
+        "title": "Validate that restored namespaces, volumes, and workloads are healthy",
+        "description": "Confirm the restored namespaces exist again and that Pods, Deployments, StatefulSets, and PVCs have reconciled successfully. Tailor the namespace list to the workload that was restored so you verify the specific application recovery target rather than only the Velero control plane.",
+        "commands": [
+          "RESTORE_NAMESPACES=\"${RESTORE_NAMESPACES:-default}\"\nfor ns in $(echo \"$RESTORE_NAMESPACES\" | tr ',' ' '); do\n  kubectl get namespace \"$ns\"\n  kubectl get pods -n \"$ns\"\n  kubectl get pvc -n \"$ns\"\n  kubectl get deploy,statefulset -n \"$ns\"\ndone\n",
+          "kubectl get restores.velero.io -n velero\n"
+        ],
+        "validation": "RESTORE_NAMESPACES=\"${RESTORE_NAMESPACES:-default}\"\nfor ns in $(echo \"$RESTORE_NAMESPACES\" | tr ',' ' '); do\n  kubectl get namespace \"$ns\" > /dev/null 2>&1 || exit 1\n  kubectl get pods -n \"$ns\" --no-headers 2>/dev/null | awk '$3 != \"Running\" && $3 != \"Completed\" { exit 1 }' || exit 1\ndone\n",
+        "failureHandling": "If namespaces are restored but pods are not Running, inspect describe output, events, and PVC binding state for the affected workloads. Common follow-up actions include reinstalling missing CSI drivers, restoring Secrets or ConfigMaps that were excluded, or rerunning the restore with --restore-volumes enabled for PV data."
+      }
+    ],
+    "resolution": {
+      "summary": "A completed Velero backup was selected, a restore object was created, and the restore was monitored until completion. The recovered namespaces and workloads were then validated with kubectl to confirm the application state returned successfully.",
+      "codeSnippets": [
+        "velero backup get",
+        "velero restore create \"$RESTORE_NAME\" --from-backup \"$BACKUP_NAME\"",
+        "velero restore describe \"$RESTORE_NAME\" --details",
+        "velero restore logs \"$RESTORE_NAME\"",
+        "kubectl get pods -n \"$ns\""
+      ]
+    },
+    "troubleshooting": [
+      {
+        "id": "ts-01-no-completed-backup",
+        "title": "No suitable completed backup is available",
+        "description": "Restore only from backups that completed successfully. Fix backup storage access, inspect Velero server health, or create a new backup before attempting recovery."
+      },
+      {
+        "id": "ts-02-restore-partially-failed",
+        "title": "Velero marks the restore PartiallyFailed",
+        "description": "Use velero restore describe --details and velero restore logs to identify skipped resources or plugin failures. Correct the issue and rerun the restore with resource filters if only a subset needs to be retried."
+      },
+      {
+        "id": "ts-03-pvc-not-bound",
+        "title": "PersistentVolumeClaims do not bind after restore",
+        "description": "Check StorageClass availability, CSI driver readiness, and whether the backup included volume snapshots or filesystem backups for the workload. Application pods will stay Pending until their claims bind successfully."
+      },
+      {
+        "id": "ts-04-workloads-crash-after-restore",
+        "title": "Restored workloads start but crash immediately",
+        "description": "Inspect pod logs, restored Secrets, ConfigMaps, and service endpoints. The backup may have restored the workload definition without dependent runtime configuration or external services being ready yet."
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "restore",
+      "velero",
+      "backup",
+      "disaster-recovery",
+      "namespace",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "platformType": "operations",
+    "platformProvider": "KubeStellar",
+    "category": "runbook",
+    "supportedK8sVersions": [
+      "1.27",
+      "1.28",
+      "1.29",
+      "1.30",
+      "1.31",
+      "1.32"
+    ],
+    "cncfProjects": [
+      "velero",
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Namespace",
+      "PersistentVolumeClaim",
+      "Deployment",
+      "StatefulSet",
+      "Pod"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "helm",
+      "manifest"
+    ],
+    "operationTypes": [
+      "restore",
+      "backup",
+      "disaster-recovery"
+    ],
+    "sourceUrls": {
+      "docs": "https://velero.io/docs/main/restore-reference/"
+    },
+    "qualityScore": 100
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.27",
+    "tools": [
+      "kubectl",
+      "velero"
+    ],
+    "cloudCLI": "none",
+    "resources": "A working Velero installation, access to the object storage location that holds the backup artifacts, and RBAC that allows create and get on Velero backup and restore resources.",
+    "description": "Export BACKUP_NAME before starting and optionally set RESTORE_NAMESPACES to a comma-separated list of namespaces to validate after the restore completes."
+  }
+}
