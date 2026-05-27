@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "strimzi-11123-enhancement-support-for-k8s-gateway-tlsroute-on-kafka-listeners",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "strimzi: [Enhancement]: support for k8s Gateway TLSRoute on Kafka listeners",
+    "description": "[Enhancement]: support for k8s Gateway TLSRoute on Kafka listeners. Requested by 6+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current strimzi deployment",
+        "description": "Verify your strimzi version and configuration:\n```bash\nkubectl get pods -n strimzi -l app.kubernetes.io/name=strimzi\nhelm list -n strimzi 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working strimzi installation."
+      },
+      {
+        "title": "Review strimzi configuration",
+        "description": "Inspect the relevant strimzi configuration:\n```bash\nkubectl get all -n strimzi -l app.kubernetes.io/name=strimzi\nkubectl get configmap -n strimzi -l app.kubernetes.io/part-of=strimzi\n```\n### Related problem\n\nIt would be very helpful to have a new `tls-route` listener type which handles all of the templating for the newer Gateway TLSRoutes:"
+      },
+      {
+        "title": "Apply the fix for [Enhancement]: support for k8s Gateway TLSRoute on Kafka…",
+        "description": "This PR implements [SEP-136 Gateway API-based `type: tlsroute` listener](https://github.com/strim\n```yaml\nlisteners:\n    - configuration:\n        bootstrap:\n          alternativeNames:\n          - bootstrap.kafka.example.com\n        brokerCertChainAndKey: ...\n        brokers:\n        - advertisedHost: b1.kafka.example.com\n          advertisedPort: 443\n          broker: 1\n        ...\n      name: externaltls\n      port: 9095\n      tls: true\n      type: cluster-ip\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n strimzi -l app.kubernetes.io/name=strimzi\nkubectl get events -n strimzi --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Enhancement]: support for k8s Gateway TLSRoute on Kafka…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR implements [SEP-136 Gateway API-based `type: tlsroute` listener](https://github.com/strim",
+      "codeSnippets": [
+        "listeners:\n    - configuration:\n        bootstrap:\n          alternativeNames:\n          - bootstrap.kafka.example.com\n        brokerCertChainAndKey: ...\n        brokers:\n        - advertisedHost: b1.kafka.example.com\n          advertisedPort: 443\n          broker: 1\n        ...\n      name: externaltls\n      port: 9095\n      tls: true\n      type: cluster-ip",
+        "apiVersion: gateway.networking.k8s.io/v1alpha2\nkind: TLSRoute\nmetadata:\n  name: kafka-broker-1\n  namespace: kafka\nspec:\n  hostnames:\n  - b1.kafka.example.com\n  parentRefs:\n  - group: gateway.networking.k8s.io\n    kind: Gateway\n    name: my-gateway\n    namespace: ingress\n  rules:\n  - backendRefs:\n    - group: \"\"\n      kind: Service\n      name: cluster-broker-externaltls-1\n      namespace: kafka\n      port: 9095",
+        "apiVersion: gateway.envoyproxy.io/v1alpha1\nkind: BackendTrafficPolicy\nmetadata:\n  name: kafka-broker-1  # <-- arbitrary name for resource\n  namespace: kafka\nspec:\n  # ... misc Envoy configurations such as for connection limits\n  targetRefs:\n  - group: gateway.networking.k8s.io\n    kind: TLSRoute\n    name: kafka-broker-1  # <-- name of the TLSRoute from above, which could be derived from `{{ brokerId }}` or `{{ tlsRouteName }}` or something"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "strimzi",
+      "incubating",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "strimzi"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "Ingress",
+      "Namespace"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/strimzi/strimzi-kafka-operator/issues/11123",
+      "repo": "https://github.com/strimzi/strimzi-kafka-operator",
+      "pr": "https://github.com/strimzi/strimzi-kafka-operator/pull/12747"
+    },
+    "reactions": 6,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with strimzi installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-27T07:34:32.633Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
