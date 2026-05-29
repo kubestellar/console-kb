@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "keda-7486-fromenv-trigger-metadata-silently-fails-when-scaledobject-targets-argo",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "keda: *FromEnv trigger metadata silently fails when ScaledObject targets Argo Rollout with workloadRef",
+    "description": "*FromEnv trigger metadata silently fails when ScaledObject targets Argo Rollout with workloadRef. This issue affects 9+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify keda troubleshoot symptoms",
+        "description": "Check for the issue in your keda deployment:\n```bash\nkubectl get pods -n keda -l app.kubernetes.io/name=keda\nkubectl logs -l app.kubernetes.io/name=keda -n keda --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review keda configuration",
+        "description": "Inspect the relevant keda configuration:\n```bash\nkubectl get all -n keda -l app.kubernetes.io/name=keda\nkubectl get configmap -n keda -l app.kubernetes.io/part-of=keda\n```\n### Report\n\nWhen a ScaledObject targets an Argo Rollout using workloadRef, KEDA cannot resolve *FromEnv trigger metadata parameters (e.g. queueURLFromEnv). The same configuration works when targeting the Deployment directly."
+      },
+      {
+        "title": "Apply the fix for *FromEnv trigger metadata silently fails when ScaledObject…",
+        "description": "Hello,\nThis is a known issue when a CR references other and there isn't any easy solution. Currently we use dynamic client to get the CR content and try to find the pod section to get the envs from there, but in case of this CRD, the pod section is not present as it uses a reference to other\n```yaml\nerror parsing SQS queue metadata: error parsing SQS queue metadata: missing required parameter \"queueURL\" in [triggerMetadata resolvedEnv]\n```"
+      },
+      {
+        "title": "Confirm *FromEnv trigger metadata silently fails when… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=keda -n keda --tail=50 --since=5m\nkubectl get events -n keda --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Hello,\nThis is a known issue when a CR references other and there isn't any easy solution. Currently we use dynamic client to get the CR content and try to find the pod section to get the envs from there, but in case of this CRD, the pod section is not present as it uses a reference to other manifests. \n\nThe only way to solve this that I see is to use custom logic for this.",
+      "codeSnippets": [
+        "error parsing SQS queue metadata: error parsing SQS queue metadata: missing required parameter \"queueURL\" in [triggerMetadata resolvedEnv]",
+        "\"error\": \"error getting scalers cache error parsing SQS queue metadata: error parsing SQS queue metadata: missing required parameter \\\"queueURL\\\" in [triggerMetadata resolvedEnv]\"",
+        "apiVersion: argoproj.io/v1alpha1\nkind: Rollout\nmetadata:\n  name: my-app\nspec:\n  workloadRef:\n    apiVersion: apps/v1\n    kind: Deployment\n    name: my-app\n    scaleDown: onsuccess"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "keda",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "keda"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Configmap"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/kedacore/keda/issues/7486",
+      "repo": "https://github.com/kedacore/keda"
+    },
+    "reactions": 9,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with keda installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-29T07:23:58.750Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
