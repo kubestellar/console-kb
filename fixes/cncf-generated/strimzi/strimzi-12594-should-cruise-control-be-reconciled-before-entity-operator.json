@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "strimzi-12594-should-cruise-control-be-reconciled-before-entity-operator",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "strimzi: Should Cruise Control be reconciled before Entity Operator?",
+    "description": "Should Cruise Control be reconciled before Entity Operator?. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current strimzi deployment",
+        "description": "Verify your strimzi version and configuration:\n```bash\nkubectl get pods -n strimzi -l app.kubernetes.io/name=strimzi\nhelm list -n strimzi 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working strimzi installation."
+      },
+      {
+        "title": "Review strimzi configuration",
+        "description": "Inspect the relevant strimzi configuration:\n```bash\nkubectl get all -n strimzi -l app.kubernetes.io/name=strimzi\nkubectl get configmap -n strimzi -l app.kubernetes.io/part-of=strimzi\n```\nFor a long time, the reconciliation order in Stirmzi is:\n1. (ZooKeeper -> not with us anymore)\n2. Kafka\n3. Entity Operator\n4. Cruise Control\n5. Kafka Exporter\n\nOriginally, this order did not present any issues."
+      },
+      {
+        "title": "Apply the fix for Should Cruise Control be reconciled before Entity Operator?",
+        "description": "Reconcile Cruise Control before Entity Operator to ensure the Topic Operator CC API secret exists when Entity Operator reads it.\n\n**Changes:**\n\n- **`KafkaAssemblyOperator`**: Reorder reconciliation so Cruise Control runs before Entity Operator\n- **`CruiseControlReconciler`**: Add `topicOperatorCruiseControlApiSecret()` step to generate the `[cluster]-entity-topic-operator-cc-api` secret before `apiSecret()` reads it\n- **`HashLoginServiceApiCredentials`**: Add `generateTopicOperatorApiSecret()`\n\nSee the source issue for community-verified solutions."
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n strimzi -l app.kubernetes.io/name=strimzi\nkubectl get events -n strimzi --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Should Cruise Control be reconciled before Entity Operator?\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Reconcile Cruise Control before Entity Operator to ensure the Topic Operator CC API secret exists when Entity Operator reads it.",
+      "codeSnippets": []
+    }
+  },
+  "metadata": {
+    "tags": [
+      "strimzi",
+      "incubating",
+      "storage",
+      "feature"
+    ],
+    "cncfProjects": [
+      "strimzi"
+    ],
+    "targetResourceKinds": [
+      "Pod"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/strimzi/strimzi-kafka-operator/issues/12594",
+      "repo": "https://github.com/strimzi/strimzi-kafka-operator",
+      "pr": "https://github.com/strimzi/strimzi-kafka-operator/pull/12759"
+    },
+    "reactions": 5,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with strimzi installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-05-29T07:28:24.268Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
