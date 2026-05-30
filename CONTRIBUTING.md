@@ -6,6 +6,16 @@ To get started, kindly read through this document and familiarize yourself with 
 
 We can't wait to collaborate with you!
 
+## Fixer File Format
+
+All files under `fixes/` must use the `kc-mission-v1` fixer format.
+
+- JSON (`.json`) and YAML (`.yaml` / `.yml`) are accepted
+- YAML is preferred for hand-authored fixes because it supports comments
+- `name` should be kebab-case and match the filename without the extension
+
+See [`docs/fixer-schema.yaml`](docs/fixer-schema.yaml) for the annotated field reference and a complete example.
+
 ## Getting Started
 
 ### Issues

@@ -35,6 +35,8 @@ Each fixer mission is a self-contained package that includes:
 - **Tags** — categories for discovery (e.g., `multi-cluster`, `security`, `networking`)
 - **Compatibility** — Console version and tested Kubernetes versions
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the submission flow and [`docs/fixer-schema.yaml`](docs/fixer-schema.yaml) for the annotated format reference.
+
 ## Getting Started
 
 ### Browse Fixes
