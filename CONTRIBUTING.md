@@ -1,47 +1,208 @@
-# Contributing to KubeStellar
+# Contributing to Console KB
 
-Greetings! We are grateful for your interest in joining the KubeStellar community and making a positive impact. Whether you're raising issues, enhancing documentation, fixing bugs, or developing new features, your contributions are essential to our success.
+Welcome! The Console KB (Knowledge Base) is the community hub for sharing AI mission fixes created in the [KubeStellar Console](https://github.com/kubestellar/console). This repository contains mission definition files that users can import directly into their Console to solve common Kubernetes challenges.
 
-To get started, kindly read through this document and familiarize yourself with our code of conduct. If you have any inquiries, please feel free to reach out to us on [Slack](https://cloud-native.slack.com/archives/C097094RZ3M).
+We're grateful for your interest in contributing! Whether you're sharing a fix that saved you hours of debugging, improving an existing mission, or enhancing documentation, your contributions help the entire community.
 
-We can't wait to collaborate with you!
+If you have any questions, please reach out to us on [Slack](https://cloud-native.slack.com/archives/C097094RZ3M).
 
-## Fixer File Format
+## What is Console KB?
 
-All files under `fixes/` must use the `kc-mission-v1` fixer format.
+This repository stores **fixer mission files** — self-contained AI mission definitions that include:
 
-- JSON (`.json`) and YAML (`.yaml` / `.yml`) are accepted
-- YAML is preferred for hand-authored fixes because it supports comments
-- `name` should be kebab-case and match the filename without the extension
+- AI prompt and mission parameters
+- Step-by-step instructions for solving a specific Kubernetes problem
+- Prerequisites (cluster setup, CRDs, tools)
+- Validation commands to verify success
+- Tags and metadata for discovery
 
-See [`docs/fixer-schema.yaml`](docs/fixer-schema.yaml) for the annotated field reference and a complete example.
+Users import these fixes into KubeStellar Console to:
+- Save tokens by reusing proven fixes instead of re-prompting AI
+- Discover community-tested solutions to common challenges
+- Learn from real-world multi-cluster Kubernetes problem-solving
 
-## Getting Started
+## How to Contribute a Fix
 
-### Issues
+### 1. Create or Refine a Mission in KubeStellar Console
 
-Before reporting a new issue, please search our issue archive to see if it has already been reported or resolved.
+1. Use KubeStellar Console's AI Missions to solve a Kubernetes problem
+2. Test and validate the mission works in your environment
+3. Export the mission via **AI Missions → Export**
 
-To claim an issue that you are interested in, assign it to yourself by leaving a comment `/assign`. You may also remove yourself from an issue with `/unassign` in a comment.
+### 2. Prepare Your Fixer File
 
-### Pull Requests
+Your fixer file must conform to the `kc-mission-v1` format:
 
-When submitting a pull request, clear communication is appreciated. This can be achieved by providing:
+- **Format**: JSON (`.json`) or YAML (`.yaml` / `.yml`)
+  - YAML is preferred for hand-authored fixes because it supports comments
+- **Naming**: Use kebab-case for the filename and `name` field (e.g., `install-cert-manager.yaml`)
+- **Required fields**: `version`, `name`, `mission`
+- **Schema reference**: [`docs/fixer-schema.yaml`](docs/fixer-schema.yaml) contains the complete annotated field reference and example
 
-- Detailed description of the problem you are trying to solve, along with links to related GitHub issues
-- Explanation of your solution, including links to any design documentation and discussions
-- Information on how you tested and validated your solution
-- Updates to relevant documentation and examples, if applicable
+**Minimal example:**
 
-### Commits
+```yaml
+version: "kc-mission-v1"
+name: "install-cert-manager"
+missionClass: "install"
 
-In conformance with CNCF expectations, we will only merge commits that indicate your agreement with the Developer Certificate of Origin. This is indicated by doing a Git "sign-off" on the commit:
+mission:
+  title: "Install cert-manager"
+  description: "Install cert-manager for automated TLS certificate management"
+  type: "deploy"
+  status: "completed"
+  estimatedMinutes: 10
+
+  steps:
+    - title: "Apply cert-manager manifests"
+      description: "Install cert-manager using kubectl"
+      commands:
+        - "kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml"
+
+  resolution:
+    summary: "cert-manager installed successfully and all pods are running"
+    codeSnippets:
+      - "kubectl get pods -n cert-manager"
+
+metadata:
+  tags:
+    - "cert-manager"
+    - "tls"
+    - "security"
+  difficulty: "beginner"
+  platform: "kubernetes"
+
+prerequisites:
+  kubernetes: ">=1.24"
+  tools:
+    - "kubectl"
+```
+
+### 3. Validate Your Fixer File Locally
+
+Before submitting, validate your fixer against the schema:
+
+```bash
+# Install yq if you don't have it
+brew install yq  # macOS
+# or
+sudo apt-get install yq  # Linux
+
+# Validate YAML syntax
+yq eval '.' your-fixer-file.yaml > /dev/null
+
+# Verify required fields are present
+yq eval '.version, .name, .mission' your-fixer-file.yaml
+```
+
+**Checklist:**
+- [ ] File uses `kc-mission-v1` format
+- [ ] `name` field matches filename (without extension) in kebab-case
+- [ ] All required fields are present (`version`, `name`, `mission`)
+- [ ] Mission has been tested in a real environment
+- [ ] Tags and metadata accurately describe the fix
+- [ ] Prerequisites clearly state what's needed to run the mission
+
+### 4. Add Your Fix to the Repository
+
+1. **Fork this repository**
+2. **Choose the appropriate category** under `fixes/`:
+
+   | Category | Description |
+   |----------|-------------|
+   | `multi-cluster/` | Cross-cluster deployment, federation, sync patterns |
+   | `security/` | RBAC, network policies, secret management |
+   | `networking/` | Service mesh, ingress, DNS, connectivity |
+   | `observability/` | Monitoring, logging, alerting |
+   | `workloads/` | Application deployment strategies |
+   | `troubleshooting/` | Diagnostic missions for common issues |
+   | `cost-optimization/` | Resource right-sizing, cluster efficiency |
+   | `orbit/` | KubeStellar-specific orbit configuration |
+   | `cncf-generated/` | Auto-generated fixes from CNCF projects (managed by automation) |
+
+3. **Add your file** to the appropriate category:
+   ```bash
+   # Example: adding a cert-manager installation fix
+   cp my-fix.yaml fixes/security/install-cert-manager.yaml
+   ```
+
+4. **Test the file can be imported**: If you have access to a KubeStellar Console instance, test importing your fix to ensure it loads correctly
+
+### 5. Submit Your Pull Request
+
+1. **Commit with DCO sign-off** (required):
+   ```bash
+   git add fixes/your-category/your-fix-file.yaml
+   git commit -s -m "Add [mission name] fix"
+   git push origin your-branch-name
+   ```
+
+2. **Create a pull request** with:
+   - **Title**: Brief description of the fix (e.g., "Add cert-manager installation fix")
+   - **Description**: Include:
+     - What problem the mission solves
+     - What Kubernetes version(s) you tested it on
+     - Any special prerequisites or environment requirements
+     - Link to any related issues
+
+**Example PR description:**
+
+```markdown
+## Summary
+Adds a mission fix for installing cert-manager on Kubernetes clusters.
+
+## Problem Solved
+Automates cert-manager installation and verification, saving users from manual YAML application and pod checking.
+
+## Testing
+- Tested on Kubernetes 1.28 and 1.29
+- Verified in GKE and EKS clusters
+- All cert-manager pods start successfully
+
+## Prerequisites
+- Kubernetes cluster >=1.24
+- kubectl configured
+```
+
+## Developer Certificate of Origin (DCO)
+
+All commits must be signed off to indicate your agreement with the [Developer Certificate of Origin](https://developercertificate.org/):
 
 ```bash
 git commit -s -m "Your commit message"
 ```
 
-## Slash Commands
+The `-s` flag adds a "Signed-off-by" line to your commit message automatically.
+
+## Improving Existing Fixes
+
+Found a bug or improvement in an existing fix?
+
+1. Open an issue describing the problem
+2. Submit a PR with your improvements
+3. Include testing details in your PR description
+
+## Repository Structure
+
+```
+console-kb/
+├── fixes/                    # Community-contributed mission fixes
+│   ├── multi-cluster/        # Cross-cluster patterns
+│   ├── security/             # Security-related fixes
+│   ├── networking/           # Network configuration
+│   ├── observability/        # Monitoring and logging
+│   ├── workloads/            # Application deployment
+│   ├── troubleshooting/      # Diagnostic missions
+│   ├── cost-optimization/    # Resource optimization
+│   ├── orbit/                # KubeStellar orbit configs
+│   └── cncf-generated/       # Auto-generated from CNCF repos
+├── docs/                     # Documentation
+│   └── fixer-schema.yaml     # Authoritative format reference
+├── scripts/                  # Validation and automation scripts
+└── README.md                 # Repository overview
+```
+
+## Slash Commands for Issue/PR Management
 
 KubeStellar uses Prow and GitHub bots to help manage issues and pull requests:
 
@@ -57,6 +218,16 @@ KubeStellar uses Prow and GitHub bots to help manage issues and pull requests:
 - `/hold` - Prevent the PR from being merged
 - `/unhold` - Remove the hold
 
+## Getting Help
+
+- **Slack**: [#kubestellar on CNCF Slack](https://cloud-native.slack.com/archives/C097094RZ3M)
+- **Issues**: [GitHub Issues](https://github.com/kubestellar/console-kb/issues)
+- **Documentation**: [Console Documentation](https://github.com/kubestellar/console#readme)
+
 ## Code of Conduct
 
 Please refer to the KubeStellar [Code of Conduct](https://github.com/kubestellar/.github/blob/main/CODE_OF_CONDUCT.md).
+
+---
+
+Thank you for contributing to Console KB! Every fix you share helps developers worldwide solve Kubernetes challenges more efficiently. 🚀
