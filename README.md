@@ -59,6 +59,27 @@ Explore the [`fixes/`](fixes/) directory to find community-contributed AI missio
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed submission guidelines.
 
+## Operational Runbooks
+
+In addition to community-contributed fixes, this repository ships a curated `runbooks/` catalog for deterministic day-2 operations. These runbooks use the same `kc-mission-v1` format as fixes, but they are written for repeatable operational tasks such as upgrades, restores, certificate rotation, and RBAC remediation.
+
+Browse [`runbooks/`](runbooks/) or start with [`runbooks/README.md`](runbooks/README.md) for authoring expectations and operational context.
+
+| Runbook | Purpose |
+|---------|---------|
+| [`install-kubestellar-controller.json`](runbooks/install-kubestellar-controller.json) | Install the KubeStellar core controller in standalone mode with Helm. |
+| [`upgrade-kubestellar-controller.json`](runbooks/upgrade-kubestellar-controller.json) | Perform an in-place KubeStellar controller Helm upgrade with health gates and rollback readiness. |
+| [`rollback-kubestellar-controller.json`](runbooks/rollback-kubestellar-controller.json) | Roll back `kubestellar-core` to a known-good Helm revision after a failed or regressing upgrade. |
+| [`certificate-rotation.json`](runbooks/certificate-rotation.json) | Rotate kubeadm control-plane certificates, refresh kubeconfig, and clear expired credential issues. |
+| [`cluster-upgrade.json`](runbooks/cluster-upgrade.json) | Upgrade a kubeadm-managed cluster with prechecks, package updates, and post-upgrade validation. |
+| [`node-drain.json`](runbooks/node-drain.json) | Cordon, drain, validate, and restore a node during planned maintenance. |
+| [`rbac-audit.json`](runbooks/rbac-audit.json) | Audit RBAC access and apply least-privilege remediation for `RBAC_DENIED` failures. |
+| [`disaster-recovery.json`](runbooks/disaster-recovery.json) | Back up and restore kubeadm etcd state during disaster recovery for self-managed control planes. |
+| [`restore-etcd-snapshot.json`](runbooks/restore-etcd-snapshot.json) | Restore a Kubernetes control plane from an existing etcd snapshot with rollback safeguards. |
+| [`restore-velero-backup.json`](runbooks/restore-velero-backup.json) | Restore namespaces, volumes, and workloads from a completed Velero backup. |
+
+You can import runbooks into KubeStellar Console the same way you import fixes: copy the mission file, open **AI Missions → Import**, and upload or paste the JSON payload.
+
 ## Fix Categories
 
 | Category | Description |

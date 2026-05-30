@@ -78,27 +78,71 @@ prerequisites:
     - "kubectl"
 ```
 
-### 3. Validate Your Fixer File Locally
+### 3. Validate Your Fix or Runbook Locally
 
-Before submitting, validate your fixer against the schema:
+Before submitting, run the same local checks that back the repository automation in `scripts/`.
+
+#### Install validation tooling
 
 ```bash
-# Install yq if you don't have it
-brew install yq  # macOS
-# or
-sudo apt-get install yq  # Linux
-
-# Validate YAML syntax
-yq eval '.' your-fixer-file.yaml > /dev/null
-
-# Verify required fields are present
-yq eval '.version, .name, .mission' your-fixer-file.yaml
+cd scripts
+npm install
 ```
+
+#### Validate schema for your changed file
+
+Run schema validation from the repository root so paths match CI:
+
+```bash
+# From the repository root
+node scripts/validate-schema.mjs fixes/your-category/your-fix.yaml
+
+# Runbooks use the same validator
+node scripts/validate-schema.mjs runbooks/your-runbook.json
+```
+
+If you prefer npm scripts, the equivalent command is:
+
+```bash
+cd scripts
+npm run validate -- ../fixes/your-category/your-fix.yaml
+# or
+npm run validate -- ../runbooks/your-runbook.json
+```
+
+#### Run the script test suite
+
+```bash
+cd scripts
+npm run test
+```
+
+#### Optional: run the mission scanner locally
+
+This mirrors the PR scanning workflow and catches schema or safety issues before you open a pull request:
+
+```bash
+# From the repository root
+node scripts/scan-pr.mjs fixes/your-category/your-fix.yaml
+# or
+node scripts/scan-pr.mjs runbooks/your-runbook.json
+```
+
+#### What CI checks run on pull requests?
+
+The repository runs these checks automatically on PRs:
+
+- **Validate Mission Schema** (`.github/workflows/validate-schema.yml`) — checks changed `fixes/` and `runbooks/` files with `scripts/validate-schema.mjs`
+- **Scan Mission Files** (`.github/workflows/scan-missions.yml`) — runs `scripts/scan-pr.mjs` against changed mission files
+- **Mission Content Validation** (`.github/workflows/mission-content-validation.yml`) — validates changed JSON mission content and referenced assets
+- **KB Quality Enforcement** (`.github/workflows/kb-quality-enforcement.yml`) — scores changed JSON KB entries against the quality threshold
 
 **Checklist:**
 - [ ] File uses `kc-mission-v1` format
 - [ ] `name` field matches filename (without extension) in kebab-case
 - [ ] All required fields are present (`version`, `name`, `mission`)
+- [ ] `node scripts/validate-schema.mjs <path>` passes for every changed fix or runbook
+- [ ] `cd scripts && npm run test` passes
 - [ ] Mission has been tested in a real environment
 - [ ] Tags and metadata accurately describe the fix
 - [ ] Prerequisites clearly state what's needed to run the mission
