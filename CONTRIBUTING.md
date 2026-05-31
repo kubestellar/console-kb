@@ -38,6 +38,7 @@ Your fixer file must conform to the `kc-mission-v1` format:
 - **Naming**: Use kebab-case for the filename and `name` field (e.g., `install-cert-manager.yaml`)
 - **Required fields**: `version`, `name`, `mission`
 - **Schema reference**: [`docs/fixer-schema.yaml`](docs/fixer-schema.yaml) contains the complete annotated field reference and example
+- **Local validation**: Before opening a PR, run the mission validator described in Step 3 (`npm run validate` or `node scripts/validate-schema.mjs <path>`) to catch schema issues early
 
 **Minimal example:**
 
@@ -80,7 +81,7 @@ prerequisites:
 
 ### 3. Validate Your Fix or Runbook Locally
 
-Before submitting, run the same local checks that back the repository automation in `scripts/`.
+Before submitting, run the mission validation and repository checks that back the automation in `scripts/`.
 
 #### Install validation tooling
 
