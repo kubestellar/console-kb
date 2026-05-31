@@ -118,6 +118,23 @@ cd scripts
 npm run test
 ```
 
+#### Run integration testing for install missions
+
+For install missions, run the mission executor against a disposable cluster (for example, Kind) before opening your PR. This mirrors the integration-style validation done by automation.
+
+```bash
+# From the repository root
+export GITHUB_TOKEN=<github-token-with-models-access>
+export KUBECONFIG=~/.kube/config
+node scripts/mission-executor.mjs fixes/your-category/your-install-mission.json
+```
+
+You can validate command extraction without executing cluster changes by enabling dry-run mode:
+
+```bash
+DRY_RUN=true node scripts/mission-executor.mjs fixes/your-category/your-install-mission.json
+```
+
 #### Optional: run the mission scanner locally
 
 This mirrors the PR scanning workflow and catches schema or safety issues before you open a pull request:
@@ -144,6 +161,7 @@ The repository runs these checks automatically on PRs:
 - [ ] All required fields are present (`version`, `name`, `mission`)
 - [ ] `node scripts/validate-schema.mjs <path>` passes for every changed fix or runbook
 - [ ] `cd scripts && npm run test` passes
+- [ ] Install missions have integration validation via `node scripts/mission-executor.mjs <path>`
 - [ ] Mission has been tested in a real environment
 - [ ] Tags and metadata accurately describe the fix
 - [ ] Prerequisites clearly state what's needed to run the mission
