@@ -33,14 +33,75 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       batch_count: ${{ steps.plan.outputs.batch_count }}
       is_targeted: ${{ steps.plan.outputs.is_targeted }}
+      target_platforms: ${{ steps.sanitize.outputs.target_platforms }}
+      batch_size: ${{ steps.sanitize.outputs.batch_size }}
+      dry_run: ${{ steps.sanitize.outputs.dry_run }}
+      force_regenerate: ${{ steps.sanitize.outputs.force_regenerate }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Sanitize workflow inputs
+        id: sanitize
+        env:
+          RAW_TARGET_PLATFORMS: ${{ inputs.platforms || '' }}
+          RAW_BATCH_SIZE: ${{ inputs.batch_size || '20' }}
+          RAW_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          RAW_FORCE_REGENERATE: ${{ inputs.force_regenerate && 'true' || 'false' }}
+        run: |
+          sanitize_csv() {
+            local value="$1"
+            if [ -z "$value" ]; then
+              printf '%s' ''
+              return 0
+            fi
+
+            if printf '%s' "$value" | grep -Eq '^[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*$'; then
+              printf '%s' "$value"
+              return 0
+            fi
+
+            echo "::error::Invalid comma-separated input: $value"
+            exit 1
+          }
+
+          case "$RAW_BATCH_SIZE" in
+            ''|*[!0-9]*)
+              echo '::error::batch_size must be a positive integer'
+              exit 1
+              ;;
+          esac
+
+          if [ "$RAW_BATCH_SIZE" -lt 1 ]; then
+            echo '::error::batch_size must be greater than zero'
+            exit 1
+          fi
+
+          case "$RAW_DRY_RUN" in
+            true|false) ;;
+            *)
+              echo '::error::dry_run must be true or false'
+              exit 1
+              ;;
+          esac
+
+          case "$RAW_FORCE_REGENERATE" in
+            true|false) ;;
+            *)
+              echo '::error::force_regenerate must be true or false'
+              exit 1
+              ;;
+          esac
+
+          printf 'target_platforms=%s\n' "$(sanitize_csv "$RAW_TARGET_PLATFORMS")" >> "$GITHUB_OUTPUT"
+          printf 'batch_size=%s\n' "$RAW_BATCH_SIZE" >> "$GITHUB_OUTPUT"
+          printf 'dry_run=%s\n' "$RAW_DRY_RUN" >> "$GITHUB_OUTPUT"
+          printf 'force_regenerate=%s\n' "$RAW_FORCE_REGENERATE" >> "$GITHUB_OUTPUT"
       - name: Plan batches
         id: plan
+        env:
+          BATCH_SIZE: ${{ steps.sanitize.outputs.batch_size }}
+          TARGET: ${{ steps.sanitize.outputs.target_platforms }}
         run: |
           cd scripts && npm ci --silent
-          BATCH_SIZE="${{ inputs.batch_size || '20' }}"
-          TARGET="${{ inputs.platforms || '' }}"
 
           if [ -n "$TARGET" ]; then
             COUNT=$(echo "$TARGET" | tr ',' '\n' | wc -l | tr -d ' ')
@@ -84,10 +145,10 @@ jobs:
       max-parallel: 2
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '20'
 
@@ -101,16 +162,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LLM_TOKEN: ${{ secrets.GH_MODELS_PAT }}
-          TARGET_PLATFORMS: ${{ inputs.platforms || '' }}
+          TARGET_PLATFORMS: ${{ needs.plan.outputs.target_platforms }}
           BATCH_INDEX: ${{ matrix.batch_index }}
-          BATCH_SIZE: ${{ inputs.batch_size || '20' }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
-          FORCE_REGENERATE: ${{ inputs.force_regenerate || 'false' }}
+          BATCH_SIZE: ${{ needs.plan.outputs.batch_size }}
+          DRY_RUN: ${{ needs.plan.outputs.dry_run }}
+          FORCE_REGENERATE: ${{ needs.plan.outputs.force_regenerate }}
         run: node scripts/generate-platform-missions.mjs
 
       - name: Upload artifacts
-        if: ${{ inputs.dry_run != 'true' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ needs.plan.outputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: platform-missions-batch-${{ matrix.batch_index }}
           path: |
@@ -119,15 +180,15 @@ jobs:
 
   collect:
     needs: [plan, generate]
-    if: ${{ inputs.dry_run != 'true' }}
+    if: ${{ needs.plan.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '20'
 
@@ -135,7 +196,7 @@ jobs:
         run: cd scripts && npm ci --silent
 
       - name: Download all batch artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           pattern: platform-missions-batch-*
           merge-multiple: true

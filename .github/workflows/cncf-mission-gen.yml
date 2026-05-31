@@ -46,17 +46,99 @@ jobs:
       matrix: ${{ steps.calc.outputs.matrix }}
       batch_count: ${{ steps.calc.outputs.batch_count }}
       is_targeted: ${{ steps.calc.outputs.is_targeted }}
+      target_projects: ${{ steps.sanitize.outputs.target_projects }}
+      min_reactions: ${{ steps.sanitize.outputs.min_reactions }}
+      batch_size: ${{ steps.sanitize.outputs.batch_size }}
+      dry_run: ${{ steps.sanitize.outputs.dry_run }}
+      enabled_sources: ${{ steps.sanitize.outputs.enabled_sources }}
+      force_rescan: ${{ steps.sanitize.outputs.force_rescan }}
+      max_copilot_issues: ${{ steps.sanitize.outputs.max_copilot_issues }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '20'
+      - name: Sanitize workflow inputs
+        id: sanitize
+        env:
+          RAW_TARGET_PROJECTS: ${{ inputs.projects || '' }}
+          RAW_MIN_REACTIONS: ${{ inputs.min_reactions || '10' }}
+          RAW_BATCH_SIZE: ${{ inputs.batch_size || '20' }}
+          RAW_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          RAW_ENABLED_SOURCES: ${{ inputs.sources || '' }}
+          RAW_FORCE_RESCAN: ${{ inputs.force_rescan && 'true' || 'false' }}
+          RAW_MAX_COPILOT_ISSUES: ${{ inputs.max_issues || '10' }}
+        run: |
+          sanitize_csv() {
+            local value="$1"
+            if [ -z "$value" ]; then
+              printf '%s' ''
+              return 0
+            fi
+
+            if printf '%s' "$value" | grep -Eq '^[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*$'; then
+              printf '%s' "$value"
+              return 0
+            fi
+
+            echo "::error::Invalid comma-separated input: $value"
+            exit 1
+          }
+
+          validate_non_negative_integer() {
+            local name="$1"
+            local value="$2"
+            case "$value" in
+              ''|*[!0-9]*)
+                echo "::error::$name must be a non-negative integer"
+                exit 1
+                ;;
+            esac
+          }
+
+          validate_positive_integer() {
+            local name="$1"
+            local value="$2"
+            validate_non_negative_integer "$name" "$value"
+            if [ "$value" -lt 1 ]; then
+              echo "::error::$name must be greater than zero"
+              exit 1
+            fi
+          }
+
+          validate_positive_integer batch_size "$RAW_BATCH_SIZE"
+          validate_non_negative_integer min_reactions "$RAW_MIN_REACTIONS"
+          validate_non_negative_integer max_issues "$RAW_MAX_COPILOT_ISSUES"
+
+          case "$RAW_DRY_RUN" in
+            true|false) ;;
+            *)
+              echo '::error::dry_run must be true or false'
+              exit 1
+              ;;
+          esac
+
+          case "$RAW_FORCE_RESCAN" in
+            true|false) ;;
+            *)
+              echo '::error::force_rescan must be true or false'
+              exit 1
+              ;;
+          esac
+
+          printf 'target_projects=%s\n' "$(sanitize_csv "$RAW_TARGET_PROJECTS")" >> "$GITHUB_OUTPUT"
+          printf 'min_reactions=%s\n' "$RAW_MIN_REACTIONS" >> "$GITHUB_OUTPUT"
+          printf 'batch_size=%s\n' "$RAW_BATCH_SIZE" >> "$GITHUB_OUTPUT"
+          printf 'dry_run=%s\n' "$RAW_DRY_RUN" >> "$GITHUB_OUTPUT"
+          printf 'enabled_sources=%s\n' "$(sanitize_csv "$RAW_ENABLED_SOURCES")" >> "$GITHUB_OUTPUT"
+          printf 'force_rescan=%s\n' "$RAW_FORCE_RESCAN" >> "$GITHUB_OUTPUT"
+          printf 'max_copilot_issues=%s\n' "$RAW_MAX_COPILOT_ISSUES" >> "$GITHUB_OUTPUT"
       - name: Calculate batches
         id: calc
+        env:
+          BATCH_SIZE: ${{ steps.sanitize.outputs.batch_size }}
+          TARGET: ${{ steps.sanitize.outputs.target_projects }}
         run: |
-          BATCH_SIZE=${{ inputs.batch_size || '20' }}
-          TARGET="${{ inputs.projects || '' }}"
-
           if [ -n "$TARGET" ]; then
             echo "is_targeted=true" >> $GITHUB_OUTPUT
             echo 'matrix={"batch":[0]}' >> $GITHUB_OUTPUT
@@ -79,8 +161,8 @@ jobs:
       max-parallel: 3
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '20'
       - name: Install dependencies
@@ -89,17 +171,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_TOKEN: ${{ secrets.ORG_TOKEN }}
-          MIN_REACTIONS: ${{ inputs.min_reactions || '10' }}
-          TARGET_PROJECTS: ${{ inputs.projects || '' }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          MIN_REACTIONS: ${{ needs.plan.outputs.min_reactions }}
+          TARGET_PROJECTS: ${{ needs.plan.outputs.target_projects }}
+          DRY_RUN: ${{ needs.plan.outputs.dry_run }}
           BATCH_INDEX: ${{ needs.plan.outputs.is_targeted == 'true' && '' || matrix.batch }}
-          BATCH_SIZE: ${{ inputs.batch_size || '20' }}
-          ENABLED_SOURCES: ${{ inputs.sources || '' }}
-          FORCE_RESCAN: ${{ inputs.force_rescan || 'false' }}
-          MAX_COPILOT_ISSUES: ${{ inputs.max_issues || '10' }}
+          BATCH_SIZE: ${{ needs.plan.outputs.batch_size }}
+          ENABLED_SOURCES: ${{ needs.plan.outputs.enabled_sources }}
+          FORCE_RESCAN: ${{ needs.plan.outputs.force_rescan }}
+          MAX_COPILOT_ISSUES: ${{ needs.plan.outputs.max_copilot_issues }}
         run: node scripts/generate-cncf-missions.mjs
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: report-batch-${{ matrix.batch }}
           path: |
@@ -109,12 +191,12 @@ jobs:
 
   collect:
     needs: [plan, generate]
-    if: inputs.dry_run != true
+    if: needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Download all batch artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           pattern: report-batch-*
           merge-multiple: true
@@ -219,12 +301,12 @@ jobs:
           echo "Auto-merge will score and merge passing missions." >> $GITHUB_STEP_SUMMARY
 
   auto-merge:
-    needs: [generate, collect]
-    if: inputs.dry_run != true
+    needs: [plan, generate, collect]
+    if: needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '20'
       - name: Install dependencies
