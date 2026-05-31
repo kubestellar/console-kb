@@ -9,37 +9,46 @@
     "description": "ORAS (OCI Registry As Storage) is a CLI tool and Go library for pushing and pulling OCI artifacts to and from OCI-compliant registries. It enables using container registries to store any type of artifact, extending beyond container images.",
     "type": "deploy",
     "status": "completed",
+    "estimatedMinutes": 10,
     "steps": [
       {
         "title": "Install the ORAS CLI",
-        "description": "Download and install the ORAS CLI binary. Multiple installation methods are available.\n```bash\n# Using Homebrew (macOS/Linux)\nbrew install oras\n\n# Or download binary directly (Linux amd64)\ncurl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_amd64.tar.gz -o oras.tar.gz\ntar -xzf oras.tar.gz\nsudo mv oras /usr/local/bin/\n\n# Verify installation\noras version\n```"
+        "description": "Download and install the ORAS CLI binary from the official release artifacts. The example below targets Linux amd64. For other platforms, replace the `linux_amd64` suffix with `linux_arm64`, `darwin_arm64` (Apple silicon) or `darwin_amd64` (Intel Mac).\n```bash\nVERSION=\"1.3.2\"\ncurl -LO \"https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_linux_amd64.tar.gz\"\nmkdir -p oras-install/\ntar -zxf oras_${VERSION}_linux_amd64.tar.gz -C oras-install/\nsudo chown root:0 oras-install/oras\nsudo mv oras-install/oras /usr/local/bin/\nrm -rf oras_${VERSION}_linux_amd64.tar.gz oras-install/\n```\nAlternative installation methods:\n```bash\n# Homebrew (macOS/Linux)\nbrew install oras\n\n# Snap (Linux) -- classic confinement is required\nsnap install oras --classic\n\n# Go 1.24+\ngo install oras.land/oras/cmd/oras@v1.3.0\n```\n> Note: package managers such as Homebrew, Snap, WinGet and Nix may lag behind the latest GitHub release. Use the release artifacts above to guarantee version 1.3.2."
+      },
+      {
+        "title": "Verify the ORAS installation",
+        "description": "Confirm the CLI is on your PATH and reports the expected version. For production use, also verify the downloaded binary against the published checksums and signatures (see https://oras.land/docs/how_to_guides/verifying_binaries).\n```bash\noras version\n```\nExpected output (Go version, OS/Arch and commit will vary):\n```\nVersion:        1.3.2\nGo version:     go1.26.2\nOS/Arch:        linux/amd64\nGit commit:     fe425992fdfdf300a1cfb380bc4271b3e1a3d3db\nGit tree state: clean\n```"
       },
       {
         "title": "Push an artifact to a registry",
-        "description": "Use ORAS to push a file as an OCI artifact to a container registry.\n```bash\n# Create a sample artifact\necho \"Hello ORAS\" > artifact.txt\n\n# Push to a registry (replace with your registry)\noras push localhost:5000/myartifact:v1 artifact.txt\n```"
+        "description": "Use ORAS to push a file as an OCI artifact to a container registry. Setting an explicit artifact type makes the artifact easier to discover later.\n```bash\necho \"Hello ORAS\" > artifact.txt\noras push localhost:5000/myartifact:v1 --artifact-type application/vnd.acme.artifact.v1 artifact.txt:text/plain\n```"
       },
       {
         "title": "Pull an artifact from a registry",
-        "description": "Use ORAS to pull an OCI artifact back from the registry.\n```bash\nmkdir output && cd output\noras pull localhost:5000/myartifact:v1\ncat artifact.txt\n```"
+        "description": "Use ORAS to pull an OCI artifact back from the registry.\n```bash\nmkdir output\ncd output\noras pull localhost:5000/myartifact:v1\ncat artifact.txt\n```"
       },
       {
         "title": "Use ORAS in a Kubernetes Job",
-        "description": "Create a Kubernetes Job that uses ORAS to pull artifacts as part of a workflow.\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: oras-pull-job\nspec:\n  template:\n    spec:\n      containers:\n      - name: oras\n        image: ghcr.io/oras-project/oras:v1.3.1\n        command: [\"oras\"]\n        args: [\"pull\", \"registry.example.com/myartifact:v1\", \"-o\", \"/output\"]\n        volumeMounts:\n        - name: output\n          mountPath: /output\n      volumes:\n      - name: output\n        emptyDir: {}\n      restartPolicy: Never\nEOF\n```"
+        "description": "Create a Kubernetes Job that uses ORAS to pull artifacts as part of a workflow.\n```bash\ncat <<EOF | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: oras-pull-job\nspec:\n  template:\n    spec:\n      containers:\n      - name: oras\n        image: ghcr.io/oras-project/oras:v1.3.2\n        command: [\"oras\"]\n        args: [\"pull\", \"registry.example.com/myartifact:v1\", \"-o\", \"/output\"]\n        volumeMounts:\n        - name: output\n          mountPath: /output\n      volumes:\n      - name: output\n        emptyDir: {}\n      restartPolicy: Never\nEOF\n```"
+      },
+      {
+        "title": "Verify the Kubernetes Job completed",
+        "description": "Confirm the Job ran to completion and inspect its logs for the ORAS pull output.\n```bash\nkubectl get job oras-pull-job\nkubectl logs job/oras-pull-job\n```\nA successful run shows the Job's COMPLETIONS as 1/1. If the Job failed, the logs surface the registry or authentication error."
       }
     ],
     "resolution": {
-      "summary": "A successful installation will have the ORAS CLI available for pushing and pulling OCI artifacts. ORAS can also be used within Kubernetes Jobs to manage artifact distribution as part of CI/CD pipelines.",
+      "summary": "A successful installation will have the ORAS CLI available for pushing and pulling OCI artifacts, with `oras version` reporting 1.3.2. ORAS can also be used within Kubernetes Jobs to manage artifact distribution as part of CI/CD pipelines.",
       "codeSnippets": [
-        "brew install oras",
-        "curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_amd64.tar.gz -o oras.tar.gz\ntar -xzf oras.tar.gz\nsudo mv oras /usr/local/bin/",
-        "oras push localhost:5000/myartifact:v1 artifact.txt",
+        "VERSION=\"1.3.2\"\ncurl -LO \"https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_linux_amd64.tar.gz\"\nmkdir -p oras-install/\ntar -zxf oras_${VERSION}_linux_amd64.tar.gz -C oras-install/\nsudo chown root:0 oras-install/oras\nsudo mv oras-install/oras /usr/local/bin/",
+        "oras version",
+        "oras push localhost:5000/myartifact:v1 --artifact-type application/vnd.acme.artifact.v1 artifact.txt:text/plain",
         "oras pull localhost:5000/myartifact:v1"
       ]
     },
     "uninstall": [
       {
         "title": "Remove the ORAS binary",
-        "description": "Delete the ORAS binary from /usr/local/bin/ or uninstall via Homebrew."
+        "description": "Delete the ORAS binary from /usr/local/bin/ (`sudo rm /usr/local/bin/oras`) or uninstall via your package manager (`brew uninstall oras` or `snap remove oras`)."
       },
       {
         "title": "Clean up artifacts",
@@ -49,7 +58,7 @@
     "upgrade": [
       {
         "title": "Download the latest ORAS release",
-        "description": "Download the latest binary from the GitHub releases page or run brew upgrade oras."
+        "description": "Re-run the release-artifact install step with an updated VERSION value, download the latest binary from the GitHub releases page, or run `brew upgrade oras`. Confirm the result with `oras version`."
       }
     ],
     "troubleshooting": [
@@ -59,8 +68,13 @@
       },
       {
         "title": "Pull fails with not found error",
-        "description": "Verify the artifact reference (registry/repository:tag) is correct and exists in the registry.\n```bash\noras discover registry.example.com/myartifact:v1\n```"
+        "description": "Verify the artifact reference (registry/repository:tag) is correct and exists in the registry.\n```bash\noras repo tags registry.example.com/myartifact\noras manifest fetch registry.example.com/myartifact:v1\n```"
       }
+    ],
+    "references": [
+      "https://oras.land/docs/installation",
+      "https://oras.land/docs/how_to_guides/verifying_binaries",
+      "https://github.com/oras-project/oras/releases"
     ]
   },
   "metadata": {
@@ -87,12 +101,12 @@
       "kubectl"
     ],
     "maturity": "sandbox",
-    "projectVersion": "v1.3.1",
+    "projectVersion": "v1.3.2",
     "containerImages": [
-      "ghcr.io/oras-project/oras:v1.3.1"
+      "ghcr.io/oras-project/oras:v1.3.2"
     ],
     "sourceUrls": {
-      "docs": "https://oras.land/",
+      "docs": "https://oras.land/docs/installation",
       "repo": "https://github.com/oras-project/oras"
     },
     "qualityScore": 100
