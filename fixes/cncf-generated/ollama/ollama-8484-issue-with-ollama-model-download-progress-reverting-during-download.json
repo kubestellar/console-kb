@@ -5,34 +5,39 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "ollama: Issue with Ollama Model Download: Progress Reverting During Download",
-    "description": "Issue with Ollama Model Download: Progress Reverting During Download. This issue affects 32+ users.",
+    "title": "Troubleshoot Ollama Model Download Progress Reversion Issue",
+    "description": "This troubleshooting guide addresses the issue where Ollama model download progress reverts during large model downloads. The progress counter may decrease unexpectedly (e.g., from 60% back to 40%), and the total download size may appear to decrease. This is caused by intermittent connectivity issues with Cloudflare R2 hosting and affects users downloading large models like Llama 2, Mistral, and other 7B+ parameter models. This issue affects 32+ users and includes 62 comments on the GitHub issue.",
     "type": "troubleshoot",
     "status": "completed",
     "steps": [
       {
-        "title": "Identify ollama troubleshoot symptoms",
-        "description": "Check for the issue in your ollama installation:\n```bash\nollama --version\nollama list\n```\nLook for errors or warnings that may indicate the issue."
+        "title": "Identify Ollama download progress revert symptoms",
+        "description": "Reproduce and identify the progress revert issue when downloading models:\n\n```bash\nollama pull llama2\n```\n\nWatch for these symptoms:\n- Download progress reverting backwards (e.g., from 60% back to 40%)\n- Total download size decreasing unexpectedly\n- Stall messages appearing in the log:\n  ```\n  time=TIMESTAMP level=INFO source=download.go:370 msg=\"<id> part X stalled; retrying...\"\n  ```\n- Multiple retry attempts for the same model part\n\nIf you see these symptoms, you're experiencing the issue described in https://github.com/ollama/ollama/issues/8484"
       },
       {
-        "title": "Review ollama configuration",
-        "description": "Review the relevant ollama configuration:\n### What is the issue?\n\nWhile downloading models using `ollama run <model_name>`, the progress often reverts—sometimes after 10-12% or even after 60%. The total download size also decreases before continuing."
+        "title": "Understand the root cause",
+        "description": "### Root Cause\n\nThe issue occurs when downloading Ollama models from the Cloudflare R2 host (`dd20bb891979d25aebc8bec07b2b3bbc.r2.cloudflarestorage.com`). This host:\n- Is known to have intermittent connectivity issues\n- May be blocked or rate-limited by some ISPs\n- Causes connection timeouts and resets during large model downloads\n- Results in Ollama re-attempting downloads, which causes progress reversion\n\n### Why the Progress Reverts\n\nOllama uses chunked downloads. When a chunk transfer stalls or times out, Ollama retries from the beginning of that chunk, making the progress indicator show a lower percentage. This is especially noticeable for large models (7B+ parameters)."
       },
       {
-        "title": "Apply the fix for Issue with Ollama Model Download: Progress Reverting During…",
-        "description": "dd20bb891979d25aebc8bec07b2b3bbc.r2.cloudflarestorage.com has always been a problematic host.  I've seen speculation that this also hosts content that occasionally falls afoul of copyright laws and that some ISPs block/limit connections to that server.\n\nWhat does the following do:\n```console\ncurl\n```yaml\ntime=2025-01-19T16:09:54.920+03:30 level=INFO source=download.go:370 msg=\"170370233dd5 part 11 stalled; retrying. If this persists, press ctrl-c to exit, then 'ollama pull' to find a faster connection.\"\n```"
+        "title": "Implement workaround with retry script",
+        "description": "Create a retry wrapper script to automatically resume failed downloads. This allows Ollama to recover from temporary network issues:\n\n**For Linux/macOS:**\n\n```bash\n#!/bin/bash\nMODEL_NAME=\"${1:-llama2}\"\nMAX_RETRIES=5\nRETRY_COUNT=0\n\nwhile [ $RETRY_COUNT -lt $MAX_RETRIES ]; do\n    echo \"Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Downloading $MODEL_NAME...\"\n    ollama pull \"$MODEL_NAME\" && break\n    RETRY_COUNT=$((RETRY_COUNT + 1))\n    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then\n        echo \"Download failed. Waiting 10 seconds before retry...\"\n        sleep 10\n    fi\ndone\n\nif [ $RETRY_COUNT -ge $MAX_RETRIES ]; then\n    echo \"Failed to download $MODEL_NAME after $MAX_RETRIES attempts\"\n    exit 1\nfi\n\necho \"Successfully downloaded $MODEL_NAME\"\n```\n\n**For Windows (PowerShell):**\n\n```powershell\nparam(\n    [Parameter(Mandatory=$true)]\n    [string]$ModelName\n)\n\n$maxRetries = 5\n$retryCount = 0\n\nwhile ($retryCount -lt $maxRetries) {\n    Write-Host \"Attempt $($retryCount + 1)/$maxRetries: Downloading $ModelName...\"\n    & ollama pull $ModelName\n    \n    if ($LASTEXITCODE -eq 0) {\n        Write-Host \"Successfully downloaded $ModelName\"\n        exit 0\n    }\n    \n    $retryCount++\n    if ($retryCount -lt $maxRetries) {\n        Write-Host \"Download failed. Waiting 10 seconds before retry...\"\n        Start-Sleep -Seconds 10\n    }\n}\n\nWrite-Host \"Failed to download $ModelName after $maxRetries attempts\"\nexit 1\n```"
       },
       {
-        "title": "Confirm Issue with Ollama Model Download: Progress… is resolved",
-        "description": "Verify the fix by checking that the original error no longer occurs:\nTest ollama to confirm the issue is resolved.\nConfirm that the issue symptoms are gone."
+        "title": "Alternative: Use timeout with continuous retry",
+        "description": "If you prefer a simpler approach, use a timeout-based retry loop that prevents indefinite hangs:\n\n```bash\n#!/bin/bash\nMODEL=\"${1:-llama2}\"\nTIMEOUT=600  # 10 minutes per attempt\n\nwhile true; do\n    echo \"Attempting to download $MODEL with ${TIMEOUT}s timeout...\"\n    timeout $TIMEOUT ollama pull \"$MODEL\"\n    \n    if [ $? -eq 0 ]; then\n        echo \"Download completed successfully!\"\n        break\n    elif [ $? -eq 124 ]; then\n        echo \"Download timed out. Retrying...\"\n    else\n        echo \"Download failed. Retrying...\"\n    fi\n    \n    sleep 5\ndone\n```\n\nRun with: `bash download_model.sh llama2`"
+      },
+      {
+        "title": "Verify successful download",
+        "description": "Confirm the model was downloaded successfully:\n\n```bash\n# Check if model is in the list\nollama list | grep llama2\n\n# Verify by running the model\necho \"Test query\" | ollama run llama2 \"What is Kubernetes?\"\n```\n\nExpected output:\n- `ollama list` shows your model without errors\n- `ollama run` completes without stall/timeout messages\n- Model responds to queries normally\n\nIf the model appears in the list but running it fails, re-run your download script to ensure all chunks were properly transferred."
       }
     ],
     "resolution": {
-      "summary": "dd20bb891979d25aebc8bec07b2b3bbc.r2.cloudflarestorage.com has always been a problematic host.  I've seen speculation that this also hosts content that occasionally falls afoul of copyright laws and that some ISPs block/limit connections to that server.\n\nWhat does the following do:\n```console\ncurl -#L -C - -o sha256-6e7fdda508e91cb0f63de5c15ff79ac63a1584ccafd751c07ca12b7f442101b8",
+      "summary": "The issue is caused by intermittent connectivity problems with the Cloudflare R2 host that serves Ollama model downloads. This host (`dd20bb891979d25aebc8bec07b2b3bbc.r2.cloudflarestorage.com`) may be blocked, rate-limited, or have unstable connections from certain ISPs and networks.\n\n**Solution:** Use an automated retry mechanism to handle temporary network failures. The recommended approach is to wrap the `ollama pull` command in a retry script that:\n\n1. Attempts to download with a reasonable timeout (10 minutes per attempt)\n2. Automatically retries if the download stalls or times out\n3. Pauses briefly between attempts (5-10 seconds)\n4. Gives up after a maximum number of retries (typically 5-10)\n\nThis allows Ollama to recover from temporary connection issues without manual intervention. Once the model is successfully downloaded and appears in `ollama list`, the issue is resolved.",
       "codeSnippets": [
-        "time=2025-01-19T16:09:54.920+03:30 level=INFO source=download.go:370 msg=\"170370233dd5 part 11 stalled; retrying. If this persists, press ctrl-c to exit, then 'ollama pull' to find a faster connection.\"",
-        "#!/bin/sh\nwhile true; do\ntimeout 10s ollama pull <model-name>\ndone",
-        "param(\n    [Parameter(Mandatory=$true)]  # Force this argument to be required\n    [string]$model = \"\"                \n)\n\nwhile ($true) {\n    Write-Host \"Attempting to download model...\"\n    $process = Start-Process -FilePath \"ollama\" -ArgumentList \"pull $model\" -PassThru -NoNewWindow\n    \n    try {\n        $process | Wait-Process -Timeout 10 -ErrorAction Stop\n        \n        if ($process.ExitCode -eq 0) {\n            Write-Host \"Model downloaded successfully!\"\n            break \n        }\n        else {\n            Write-Host \"Download failed (Exit code: $($process.ExitCode)). Retrying...\"\n        }\n    }\n    catch {\n        Write-Host \"Timeout occurred, restarting download...\"\n        $process | Stop-Process -Force -ErrorAction SilentlyContinue\n    }\n    \n    Start-Sleep -Seconds 2\n}"
+        "# Bash retry script\n#!/bin/bash\nMODEL_NAME=\"${1:-llama2}\"\nMAX_RETRIES=5\nRETRY_COUNT=0\nwhile [ $RETRY_COUNT -lt $MAX_RETRIES ]; do\n    echo \"Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Downloading $MODEL_NAME...\"\n    ollama pull \"$MODEL_NAME\" && break\n    RETRY_COUNT=$((RETRY_COUNT + 1))\n    [ $RETRY_COUNT -lt $MAX_RETRIES ] && sleep 10\ndone",
+        "# PowerShell retry script\nparam([Parameter(Mandatory=$true)][string]$ModelName)\n$maxRetries = 5\n$retryCount = 0\nwhile ($retryCount -lt $maxRetries) {\n    Write-Host \"Attempt $($retryCount + 1)/$maxRetries: Downloading $ModelName...\"\n    & ollama pull $ModelName\n    if ($LASTEXITCODE -eq 0) { exit 0 }\n    $retryCount++\n    if ($retryCount -lt $maxRetries) { Start-Sleep -Seconds 10 }\n}\nWrite-Host \"Failed to download $ModelName after $maxRetries attempts\"\nexit 1",
+        "# Verify successful download\nollama list | grep llama2\necho 'Test' | ollama run llama2 'Respond with: success'",
+        "# Stall message from logs (expected behavior with retries)\ntime=2025-01-19T16:09:54.920+03:30 level=INFO source=download.go:370 msg=\"170370233dd5 part 11 stalled; retrying. If this persists, press ctrl-c to exit, then 'ollama pull' to find a faster connection.\""
       ]
     }
   },
