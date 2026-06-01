@@ -104,7 +104,7 @@ You can import runbooks into KubeStellar Console the same way you import fixes: 
 
 We welcome contributions! Whether you're sharing a fix that saved you hours of debugging or improving an existing fix, every contribution helps the community.
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on submitting fixes.
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on submitting fixes, local validation, and the purpose of generated repository files such as `generation-report.md` and `search-state.json`.
 
 ## License
 

@@ -166,6 +166,45 @@ The repository runs these checks automatically on PRs:
 - [ ] Tags and metadata accurately describe the fix
 - [ ] Prerequisites clearly state what's needed to run the mission
 
+## Generated Automation Files
+
+Two tracked files in the repository root are written by the CNCF mission generation automation. They are intentionally committed artifacts, but they are **not** hand-authored content files.
+
+### `generation-report.md`
+
+- **Purpose:** Human-readable summary of a CNCF mission generation run.
+- **Produced by:** `node scripts/generate-cncf-missions.mjs` from the repository root and the `.github/workflows/cncf-mission-gen.yml` workflow.
+- **What it contains:** Run timestamp, mission/PR counts, skipped/error totals, per-project summary rows, and links to created Copilot issues or PRs. Batched CI runs also create `generation-report-<batch>.md` artifacts before merging them into the top-level report.
+- **How to maintain it:** Do **not** edit it manually. Only regenerate it when you are intentionally working on the CNCF mission generation pipeline.
+- **PR expectation:** Do not refresh this file for ordinary fix, runbook, or documentation PRs. If you changed generation logic and reran the generator, include the updated report only when the diff is an expected result of that work.
+
+### `search-state.json`
+
+- **Purpose:** Persistent search ledger for incremental mission generation.
+- **Produced by:** `scripts/sources/search-state.mjs`, which is used by `scripts/generate-cncf-missions.mjs`.
+- **What it contains:** A versioned JSON object keyed by source repository and knowledge source (`github-issues`, `github-discussions`, `reddit`, `stackoverflow`). Each entry stores `lastSearched`, `processedIds`, and `cursor` so later runs can skip already-processed items and continue pagination safely.
+- **How to maintain it:** Do **not** edit it manually unless you are intentionally resetting or repairing generator state. The GitHub Actions workflow merges batch outputs and commits updated search state automatically when generation runs succeed.
+- **PR expectation:** For normal contributor PRs, leave this file alone. Only include changes when your work specifically targets the generator or its state-management behavior.
+
+### Regenerating these files
+
+If you are working on the generation pipeline itself:
+
+```bash
+cd scripts
+npm install
+cd ..
+node scripts/generate-cncf-missions.mjs
+```
+
+Run the generator from the **repository root** so it updates the tracked root-level files (`generation-report.md`, `search-state.json`) and the generated mission directories in the correct locations.
+
+### CI enforcement status
+
+- Normal contribution PR checks do **not** require contributors to regenerate these files.
+- The CNCF mission generation workflow is the automation that updates them.
+- `search-state.json` is the file that the workflow currently persists back to the repository; reports are also used as workflow artifacts and summaries.
+
 ### 4. Add Your Fix to the Repository
 
 1. **Fork this repository**
