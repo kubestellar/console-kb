@@ -165,6 +165,16 @@ const SAFE_CLI_COMMANDS = new Set([
   'age', 'sops', 'systemd-run',  // encryption/secret management tools in CNCF docs
 ]);
 
+// Markdown code fence language identifiers — these appear after backticks
+// in fenced code blocks and are not commands.
+const CODE_FENCE_LANGS = new Set([
+  'yaml', 'yml', 'json', 'console', 'bash', 'sh', 'shell', 'zsh',
+  'powershell', 'ps1', 'python', 'py', 'go', 'javascript', 'js',
+  'typescript', 'ts', 'ruby', 'java', 'c', 'cpp', 'rust', 'toml',
+  'ini', 'xml', 'html', 'css', 'sql', 'dockerfile', 'makefile',
+  'text', 'plain', 'diff', 'log', 'output',
+]);
+
 /**
  * Checks if a matched string only contains safe CLI tool invocations.
  * Returns true if the match should be skipped (is safe).
@@ -176,6 +186,11 @@ function isSafeCLIMatch(value) {
     // For backtick pattern: check all command invocations
     // Remove backticks and normalize whitespace (handles multi-line code blocks)
     const content = value.replace(/^`|`$/g, '').trim();
+
+    // If the content starts with a markdown code fence language identifier
+    // followed by a newline, it's a fenced code block — not injection.
+    const firstLine = content.split(/\n/)[0].trim().toLowerCase();
+    if (CODE_FENCE_LANGS.has(firstLine)) return true;
     
     // Split by command separators (; && ||) to get individual commands
     const segments = content.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
@@ -189,8 +204,11 @@ function isSafeCLIMatch(value) {
     });
   }
   
-  // For $() subshells
+  // For $() subshells — skip PowerShell variable access patterns like $variable.Property
   return subshells.every(inner => {
+    // PowerShell $variable or $variable.Property is not command injection
+    if (/^\$\w+/.test(inner)) return true;
+
     // Split by command separators to get all commands in the pipeline
     const segments = inner.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
     return segments.every(seg => {
