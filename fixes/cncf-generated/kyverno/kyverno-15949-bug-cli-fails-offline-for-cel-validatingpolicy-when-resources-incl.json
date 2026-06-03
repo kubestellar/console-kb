@@ -1,0 +1,81 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-15949-bug-cli-fails-offline-for-cel-validatingpolicy-when-resources-incl",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: [Bug] [CLI] Fails offline for CEL/ValidatingPolicy when resources include CRDs",
+    "description": "[Bug] [CLI] Fails offline for CEL/ValidatingPolicy when resources include CRDs. This issue affects 12+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kyverno troubleshoot symptoms",
+        "description": "Check for the issue in your kyverno deployment:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\nWe run `kyverno apply` in offline mode against rendered manifests (YAML file) as part of a CI linter."
+      },
+      {
+        "title": "Apply the fix for [Bug] [CLI] Fails offline for CEL/ValidatingPolicy when…",
+        "description": "*: If this PR results in new or altered behavior which is user facing, you\n\nread and follow the steps outlined in the [PR documentation guide](pr_documentation.md) and add Proof Manifests as defined below.\n-->\n\nMost of the logic introduced by #13565 was already capably of handling multiple CRDs,\n```yaml\napiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata:\n  labels:\n    argocd.argoproj.io/instance: test-staging\n  name: mtest-secrets\n  namespace: test\nspec:\n  dataFrom:\n  - extract:\n      key: /test\n  refreshInterval: 5m\n  secretStoreRef:\n    kind: ClusterSecretStore\n    name: ssm-secret-store\n  target:\n    name: test-secrets\n    template:\n      metadata:\n        annotations:\n          konghq.com/basic-auth-credential: \"true\"\n        labels:\n          konghq.com/credential: basic-auth\n```"
+      },
+      {
+        "title": "Confirm [Bug] [CLI] Fails offline for… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=50 --since=5m\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "*: If this PR results in new or altered behavior which is user facing, you\n\nread and follow the steps outlined in the [PR documentation guide](pr_documentation.md) and add Proof Manifests as defined below.\n-->\n\nMost of the logic introduced by #13565 was already capably of handling multiple CRDs, but the YAML parser wasn't.",
+      "codeSnippets": [
+        "apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata:\n  labels:\n    argocd.argoproj.io/instance: test-staging\n  name: mtest-secrets\n  namespace: test\nspec:\n  dataFrom:\n  - extract:\n      key: /test\n  refreshInterval: 5m\n  secretStoreRef:\n    kind: ClusterSecretStore\n    name: ssm-secret-store\n  target:\n    name: test-secrets\n    template:\n      metadata:\n        annotations:\n          konghq.com/basic-auth-credential: \"true\"\n        labels:\n          konghq.com/credential: basic-auth",
+        "apiVersion: policies.kyverno.io/v1\nkind: ValidatingPolicy\nmetadata:\n  name: require-requests-limits\n  annotations:\n    policies.kyverno.io/title: Require Limits and Requests\n    policies.kyverno.io/category: Best Practices\n    policies.kyverno.io/description: >-\n      As application workloads share cluster resources, it is important to limit resources\n      requested and consumed by each pod. It is recommended to require 'resources.requests'\n      and 'resources.limits.memory' per pod. If a namespace level request or limit is specified,\n      defaults will automatically be applied to each pod based on the 'LimitRange' configuration.\nspec:\n  failurePolicy: Ignore\n  validationActions:\n    - Deny\n  autogen:\n    podControllers:\n      controllers:\n        - deployments\n        - daemonsets\n    ",
+        "╰─ kyverno apply ./policies/require-requests-limits.yaml --resource=helm-manifest.yaml --detailed-results                                                                                                                ─╯\n\nApplying 1 policy rule(s) to 1 resource(s)...\nError: failed to apply policies on resource mtest-secrets (failed to map gvk to gvr external-secrets.io/v1, Kind=ExternalSecret (no matches for kind \"ExternalSecret\" in version \"external-secrets.io/v1\")\n)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Statefulset"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/15949",
+      "repo": "https://github.com/kyverno/kyverno",
+      "pr": "https://github.com/kyverno/kyverno/pull/16161"
+    },
+    "reactions": 12,
+    "comments": 4,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-06-03T07:50:36.639Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
