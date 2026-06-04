@@ -13,7 +13,7 @@
     "steps": [
       {
         "title": "Install the Google Cloud SDK",
-        "description": "This step installs the Google Cloud SDK, which includes the gcloud command-line tool necessary for managing GKE.\n\n```bash\n\ncurl https://sdk.cloud.google.com | bash\n\nexec -l $SHELL\n\n```\n\n> Follow the on-screen instructions to complete the installation.\n> Reload the shell to access gcloud commands.",
+        "description": "This step installs the Google Cloud SDK, which includes the gcloud command-line tool necessary for interacting with GKE.\n\n```bash\n\ncurl https://sdk.cloud.google.com | bash\n\nexec -l $SHELL\n\n```\n\n> Follow the on-screen instructions to complete the installation.\n> Reload the shell to access gcloud commands.",
         "commands": [
           "curl https://sdk.cloud.google.com | bash",
           "exec -l $SHELL"
@@ -21,96 +21,92 @@
       },
       {
         "title": "Create a GKE Cluster",
-        "description": "This command creates a GKE cluster with the specified Kubernetes version, node count, and region.\n\n```bash\n\ngcloud container clusters create my-gke-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1\n\n```\n\n> Replace 'my-gke-cluster' with your desired cluster name.",
+        "description": "This step creates a GKE cluster with the specified Kubernetes version, node count, and region.\n\n```bash\n\ngcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31\n\n```\n\n> Adjust the zone and node count as needed.",
         "commands": [
-          "gcloud container clusters create my-gke-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1"
+          "gcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31"
         ]
       },
       {
-        "title": "Set Up Kubeconfig",
-        "description": "This command configures kubectl to use the credentials for the newly created GKE cluster.\n\n```bash\n\ngcloud container clusters get-credentials my-gke-cluster --region=us-central1\n\n```\n\n> Ensure the cluster name matches the one created in the previous step.",
+        "title": "Set Up kubeconfig",
+        "description": "This step configures kubectl to use the credentials for the newly created GKE cluster.\n\n```bash\n\ngcloud container clusters get-credentials my-gke-cluster --zone us-central1-a\n\n```\n\n> This command updates your kubeconfig file.",
         "commands": [
-          "gcloud container clusters get-credentials my-gke-cluster --region=us-central1"
+          "gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a"
         ]
       },
       {
         "title": "Verify Cluster Nodes",
-        "description": "This command checks the status of the nodes in the GKE cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a status of 'Ready'.",
+        "description": "This step checks the status of the nodes in the GKE cluster to ensure they are running.\n\n```bash\n\nkubectl get nodes\n\n```\n\n> You should see the nodes listed with a 'Ready' status.",
         "commands": [
           "kubectl get nodes"
         ]
       },
       {
         "title": "Post-Install Configuration",
-        "description": "This step enables monitoring and autoscaling for your GKE cluster.\n\n```bash\n\ngcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes=1 --max-nodes=5 --region=us-central1\n\ngcloud services enable monitoring.googleapis.com\n\n```\n\n> Adjust min/max nodes as needed.\n> Enables Google Cloud Monitoring for your cluster.",
+        "description": "This step enables autoscaling and sets up monitoring and RBAC for your GKE cluster.\n\n```bash\n\ngcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a\n\ngcloud services enable monitoring.googleapis.com\n\nkubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud config get-value account)\n\n```\n\n> Enables cluster autoscaling.\n> Enables Google Cloud Monitoring.\n> Grants cluster admin permissions.",
         "commands": [
-          "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes=1 --max-nodes=5 --region=us-central1",
-          "gcloud services enable monitoring.googleapis.com"
+          "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a",
+          "gcloud services enable monitoring.googleapis.com",
+          "kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud config get-value account)"
         ]
       }
     ],
     "uninstall": [
       {
         "title": "Delete the GKE Cluster",
-        "description": "This command deletes the GKE cluster and all associated resources, which may result in data loss.\n\n```bash\n\ngcloud container clusters delete my-gke-cluster --region=us-central1 --quiet\n\n```\n\n> Use --quiet to skip confirmation prompts.",
+        "description": "This step deletes the GKE cluster and all associated resources. Be aware that this will result in data loss and orphaned resources like load balancers and PVCs.\n\n```bash\n\ngcloud container clusters delete my-gke-cluster --zone us-central1-a --quiet\n\n```",
         "commands": [
-          "gcloud container clusters delete my-gke-cluster --region=us-central1 --quiet"
-        ]
-      },
-      {
-        "title": "Clean Up Orphaned Resources",
-        "description": "This command checks for and removes any orphaned resources such as load balancers and persistent disks.\n\n```bash\n\ngcloud compute addresses delete my-gke-cluster --region=us-central1 --quiet\n\n```\n\n> Replace with any orphaned resources you may have.",
-        "commands": [
-          "gcloud compute addresses delete my-gke-cluster --region=us-central1 --quiet"
+          "gcloud container clusters delete my-gke-cluster --zone us-central1-a --quiet"
         ]
       }
     ],
     "upgrade": [
       {
         "title": "Upgrade the GKE Cluster",
-        "description": "Before upgrading, ensure you back up any important data. This command upgrades the cluster to the specified version.\n\n```bash\n\ngcloud container clusters upgrade my-gke-cluster --cluster-version=1.31 --region=us-central1\n\nkubectl get nodes\n\n```\n\n> Check for any deprecated features before upgrading.\n> Verify that all nodes are updated and in 'Ready' status.",
+        "description": "Before upgrading, ensure you back up your workloads and configurations. This step upgrades the GKE cluster to the latest version.\n\n```bash\n\ngcloud container clusters upgrade my-gke-cluster --master --cluster-version 1.31 --zone us-central1-a\n\ngcloud container clusters upgrade my-gke-cluster --cluster-version 1.31 --zone us-central1-a\n\nkubectl get nodes\n\n```\n\n> Upgrade the master node.\n> Upgrade the worker nodes.\n> Verify that all nodes are updated and in 'Ready' state.",
         "commands": [
-          "gcloud container clusters upgrade my-gke-cluster --cluster-version=1.31 --region=us-central1",
+          "gcloud container clusters upgrade my-gke-cluster --master --cluster-version 1.31 --zone us-central1-a",
+          "gcloud container clusters upgrade my-gke-cluster --cluster-version 1.31 --zone us-central1-a",
           "kubectl get nodes"
         ]
       }
     ],
     "troubleshooting": [
       {
-        "title": "Error: 'Unable to connect to the server: dial tcp 35.185.XXX.XXX:443: i/o timeout'",
-        "description": "**Cause:** This may occur if the cluster is not running or if there are network issues.\n\n**Fix:**\nCheck the status of the cluster with 'gcloud container clusters list' and ensure your network allows access."
+        "title": "Error: 'Unable to connect to the server: x.x.x.x'",
+        "description": "**Cause:** This usually indicates that the kubeconfig is not set up correctly or the cluster is not reachable.\n\n**Fix:**\nRun 'gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a' to update kubeconfig."
       },
       {
-        "title": "Error: 'The cluster is not ready yet'",
-        "description": "**Cause:** This indicates that the cluster is still initializing.\n\n**Fix:**\nWait a few minutes and check the status again with 'gcloud container clusters describe my-gke-cluster --region=us-central1'."
+        "title": "Error: 'Insufficient permissions'",
+        "description": "**Cause:** The user does not have the necessary permissions to perform the action.\n\n**Fix:**\nEnsure the user has the correct IAM roles assigned, such as 'Kubernetes Engine Admin'."
       },
       {
-        "title": "Error: 'Insufficient permissions to perform this operation'",
-        "description": "**Cause:** This may happen if the user account lacks the necessary IAM permissions.\n\n**Fix:**\nEnsure your account has the 'Kubernetes Engine Admin' role or equivalent permissions."
+        "title": "Nodes are in 'NotReady' state",
+        "description": "**Cause:** This can occur if the nodes are still initializing or if there are resource constraints.\n\n**Fix:**\nCheck the node status with 'kubectl describe nodes' and ensure there are enough resources available."
       },
       {
-        "title": "Error: 'Failed to create cluster: Quota exceeded for region'",
-        "description": "**Cause:** This indicates that your Google Cloud project has hit its resource quota limits.\n\n**Fix:**\nCheck your quotas in the Google Cloud Console and request an increase if necessary."
+        "title": "Error: 'Failed to create load balancer'",
+        "description": "**Cause:** This can happen if there are insufficient quotas for the project.\n\n**Fix:**\nCheck your Google Cloud quotas and increase them if necessary."
       }
     ],
     "versionNotes": [
       {
         "version": "v1.31",
-        "changes": "Added support for the new Kubernetes features such as PodSecurity admission and improved workload identity.",
-        "deprecations": "Deprecation of legacy network policies in favor of the new network policy API.",
-        "migrationSteps": "Review and update any configurations that rely on deprecated features before upgrading."
+        "changes": "Added support for new GKE features such as Autopilot mode and enhanced workload identity.",
+        "deprecations": "Deprecated legacy cluster autoscaler; use the new autoscaler instead.",
+        "migrationSteps": "If upgrading from v1.30, ensure that your workloads are compatible with the new autoscaler."
       }
     ],
     "resolution": {
-      "summary": "You should see output from 'kubectl get nodes' showing all nodes in 'Ready' status, indicating that your GKE cluster is operational.",
+      "summary": "You should see output similar to the following when everything is working: 'NAME                 STATUS   ROLES    AGE   VERSION\nmy-gke-cluster   Ready    control-plane   10m   v1.31.0'",
       "codeSnippets": [
         "curl https://sdk.cloud.google.com | bash",
         "exec -l $SHELL",
-        "gcloud container clusters create my-gke-cluster --cluster-version=1.31 --num-nodes=3 --region=us-central1",
-        "gcloud container clusters get-credentials my-gke-cluster --region=us-central1",
+        "gcloud container clusters create my-gke-cluster --zone us-central1-a --num-nodes 3 --cluster-version 1.31",
+        "gcloud container clusters get-credentials my-gke-cluster --zone us-central1-a",
         "kubectl get nodes",
-        "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes=1 --max-nodes=5 --region=us-central1",
-        "gcloud services enable monitoring.googleapis.com"
+        "gcloud container clusters update my-gke-cluster --enable-autoscaling --min-nodes 1 --max-nodes 5 --zone us-central1-a",
+        "gcloud services enable monitoring.googleapis.com",
+        "kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud config get-value account)"
       ]
     }
   },
@@ -159,17 +155,17 @@
     "qualityScore": 100
   },
   "prerequisites": {
-    "kubernetes": ">=1.28",
+    "kubernetes": ">=1.25",
     "tools": [
       "kubectl",
-      "gcloud >= 450.0"
+      "helm 3.x"
     ],
     "cloudCLI": "gcloud >= 450.0",
     "resources": "Minimum 2 vCPU, 4GB RAM per node",
-    "description": "Ensure you have the Google Cloud SDK installed and configured before proceeding."
+    "description": "Ensure you have the Google Cloud SDK installed and configured with billing enabled."
   },
   "security": {
-    "scannedAt": "2026-05-21T18:33:04.077Z",
+    "scannedAt": "2026-06-04T18:40:20.168Z",
     "scannerVersion": "platform-install-gen-2.0.0",
     "sanitized": true,
     "findings": []
