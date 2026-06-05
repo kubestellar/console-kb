@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kgateway-5962-client-load-balancing-in-extauth-server",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kgateway: Client Load Balancing in ExtAuth server",
+    "description": "Client Load Balancing in ExtAuth server. Requested by 5+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current kgateway deployment",
+        "description": "Verify your kgateway version and configuration:\n```bash\nkubectl get pods -n kgateway -l app.kubernetes.io/name=kgateway\nhelm list -n kgateway 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working kgateway installation."
+      },
+      {
+        "title": "Review kgateway configuration",
+        "description": "Inspect the relevant kgateway configuration:\n```bash\nkubectl get all -n kgateway -l app.kubernetes.io/name=kgateway\nkubectl get configmap -n kgateway -l app.kubernetes.io/part-of=kgateway\n```\n### Version\n\n1.10.x (latest stable)\n\n### Is your feature request related to a problem? Please describe.\n\nCurrently if you configure passthrough auth with 10x replicas, the server chooses one and attaches to it, so the solution does not scale well."
+      },
+      {
+        "title": "Apply the fix for Client Load Balancing in ExtAuth server",
+        "description": "A possible solution suggested by  \nAs outlined [here](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md) configuring _MAX_CONNECTION_AGE_ will close the connection after some time and allow the client to re-resolve the destination.\n\nI've tested it with my little\n```yaml\nopts := []grpc.ServerOption{\n\t\tgrpc.KeepaliveParams(keepalive.ServerParameters{\n\t\t\tMaxConnectionAge: 1 * time.Second,\n\t\t}),\n\t}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n kgateway -l app.kubernetes.io/name=kgateway\nkubectl get events -n kgateway --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Client Load Balancing in ExtAuth server\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "A possible solution suggested by  \nAs outlined [here](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md) configuring _MAX_CONNECTION_AGE_ will close the connection after some time and allow the client to re-resolve the destination.\n\nI've tested it with my little [server](https://github.com/solo-io/gloo/files/9432109/src.zip) and a low value (1 second).",
+      "codeSnippets": [
+        "opts := []grpc.ServerOption{\n\t\tgrpc.KeepaliveParams(keepalive.ServerParameters{\n\t\t\tMaxConnectionAge: 1 * time.Second,\n\t\t}),\n\t}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kgateway",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "kgateway"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/kgateway-dev/kgateway/issues/5962",
+      "repo": "https://github.com/kgateway-dev/kgateway"
+    },
+    "reactions": 5,
+    "comments": 11,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kgateway installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-06-05T07:44:22.991Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
