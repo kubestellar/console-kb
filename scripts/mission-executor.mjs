@@ -269,7 +269,8 @@ async function executeMission(missionPath) {
 
   const title = mission.mission?.title || mission.name || missionPath
   const steps = mission.mission?.steps || []
-  const namespace = `test-${mission.name || 'mission'}-${Date.now() % 10000}`
+  const safeName = (mission.name || 'mission').toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40)
+  const namespace = `test-${safeName}-${Date.now() % 10000}`
 
   console.log(`\n${'═'.repeat(70)}`)
   console.log(`  🚀 Executing: ${title}`)
