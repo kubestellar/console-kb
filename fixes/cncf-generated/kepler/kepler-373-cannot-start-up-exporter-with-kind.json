@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kepler-373-cannot-start-up-exporter-with-kind",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kepler: Cannot start up exporter with Kind",
+    "description": "Cannot start up exporter with Kind. Users encounter: \"runtime error: index out of range [16] with length 16\".",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kepler troubleshoot symptoms",
+        "description": "Check for the issue in your kepler deployment:\n```bash\nkubectl get pods -n kepler -l app.kubernetes.io/name=kepler\nkubectl logs -l app.kubernetes.io/name=kepler -n kepler --tail=100 | grep -i error\n```\nLook for error: `runtime error: index out of range [16] with length 16`"
+      },
+      {
+        "title": "Review kepler configuration",
+        "description": "Inspect the relevant kepler configuration:\n```bash\nkubectl get all -n kepler -l app.kubernetes.io/name=kepler\nkubectl get configmap -n kepler -l app.kubernetes.io/part-of=kepler\n```\nTry `kepler` with Kind, but the exporter cannot startup, get below errors in logs:\nnot sure if the Kind is not in the support list."
+      },
+      {
+        "title": "Apply the fix for Cannot start up exporter with Kind",
+        "description": "I checked the code again, I think the VM has the MSR support at least, since I can find `/dev/cpu/%d/msr`.\nand for the problem of `physical_package_id`, here is the explained from official：\n```\nphysical package id of cpuX. Typically corresponds to a physical socket number, \nbut the actual value is\n```yaml\n[root@experimental kepler]# k -n kepler logs -f kepler-exporter-kgvdl\npanic: runtime error: index out of range [16] with length 16\n\ngoroutine 1 [running]:\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.mapPackageAndCore()\n\t/opt/app-root/src/github.com/sustainable-computing-io/kepler/pkg/power/rapl/source/msr_util.go:88 +0x234\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.InitUnits()\n\t/opt/app-root/src/github.com/sustainable-computing-io/kepler/pkg/power/rapl/source/msr_util.go:147 +0x1d\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.(*Powe\n```"
+      },
+      {
+        "title": "Confirm Cannot start up exporter with Kind is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kepler -n kepler --tail=50 --since=5m\nkubectl get events -n kepler --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that `runtime error: index out of range [16] with length 16` no longer appears in logs."
+      }
+    ],
+    "resolution": {
+      "summary": "I checked the code again, I think the VM has the MSR support at least, since I can find `/dev/cpu/%d/msr`.\nand for the problem of `physical_package_id`, here is the explained from official：\n```\nphysical package id of cpuX. Typically corresponds to a physical socket number, \nbut the actual value is architecture and platform dependent.",
+      "codeSnippets": [
+        "[root@experimental kepler]# k -n kepler logs -f kepler-exporter-kgvdl\npanic: runtime error: index out of range [16] with length 16\n\ngoroutine 1 [running]:\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.mapPackageAndCore()\n\t/opt/app-root/src/github.com/sustainable-computing-io/kepler/pkg/power/rapl/source/msr_util.go:88 +0x234\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.InitUnits()\n\t/opt/app-root/src/github.com/sustainable-computing-io/kepler/pkg/power/rapl/source/msr_util.go:147 +0x1d\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl/source.(*PowerMSR).IsSupported(...)\n\t/opt/app-root/src/github.com/sustainable-computing-io/kepler/pkg/power/rapl/source/msr.go:22\ngithub.com/sustainable-computing-io/kepler/pkg/power/rapl.init.0()\n\t/opt/app-root/s",
+        "[root@experimental data-adapter]# ss -s\nTotal: 752\nTCP:   455 (estab 151, closed 281, orphaned 0, timewait 104)\n\nTransport Total     IP        IPv6\nRAW\t  1         0         1\nUDP\t  8         5         3\nTCP\t  174       171       3\nINET\t  183       176       7\nFRAG\t  0         0         0",
+        "[root@experimental kepler]# k -n kepler logs -f kepler-exporter-jkg2z\nI1116 05:44:41.353773       1 exporter.go:81] Kepler running on version: v0.3-151-g2789a22-dirty\nI1116 05:44:41.353888       1 config.go:89] using gCgroup ID in the BPF program: true\nI1116 05:44:41.353943       1 config.go:90] kernel version: 4.18\nI1116 05:44:41.354033       1 exporter.go:106] Initializing the Model Server\nI1116 05:44:41.519725       1 slice_handler.go:189] Not able to find any valid .scope file in /sys/fs/cgroup/cpu, this likely cause all cgroup metrics to be 0\nI1116 05:44:41.558784       1 exporter.go:114] Initializing the GPU collector\nperf_event_open: No such file or directory\nI1116 05:44:45.118640       1 bcc_attacher.go:90] failed to attach perf event cache_miss: failed to open bpf perf event: no s"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kepler",
+      "sandbox",
+      "observability",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kepler"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/sustainable-computing-io/kepler/issues/373",
+      "repo": "https://github.com/sustainable-computing-io/kepler"
+    },
+    "reactions": 0,
+    "comments": 28,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kepler installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-06-07T07:37:47.129Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
