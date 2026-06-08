@@ -3,7 +3,11 @@ on:
   pull_request:
     paths:
       - 'fixes/**/*.json'
+      - 'fixes/**/*.yaml'
+      - 'fixes/**/*.yml'
       - 'runbooks/**/*.json'
+      - 'runbooks/**/*.yaml'
+      - 'runbooks/**/*.yml'
 
 permissions:
   contents: read
@@ -19,8 +23,8 @@ jobs:
         run: |
           ERRORS=0
 
-          # Get changed JSON files
-          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 2>/dev/null || find fixes -name '*.json' -newer .git/index)
+          # Get changed JSON/YAML files
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 2>/dev/null || find fixes -name '*.json' -o -name '*.yaml' -o -name '*.yml' -newer .git/index)
 
           for f in $FILES; do
             [ -f "$f" ] || continue
@@ -52,8 +56,14 @@ jobs:
             # Check for empty install steps (no actual commands)
             if python3 -c "
           import json, sys
+          def load_mission(path):
+              with open(path) as fh:
+                  if path.endswith(('.yaml', '.yml')):
+                      import yaml
+                      return yaml.safe_load(fh)
+                  return json.load(fh)
           try:
-            d = json.load(open('$f'))
+            d = load_mission('$f')
             steps = d.get('mission', {}).get('steps', [])
             has_cmd = any('kubectl' in str(s) or 'helm' in str(s) or 'curl' in str(s) or 'apt' in str(s) or 'pip' in str(s) for s in steps)
             if d.get('missionClass') == 'install' and not has_cmd:

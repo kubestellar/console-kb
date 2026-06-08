@@ -3,7 +3,11 @@ on:
   pull_request:
     paths:
       - 'fixes/**/*.json'
+      - 'fixes/**/*.yaml'
+      - 'fixes/**/*.yml'
       - 'runbooks/**/*.json'
+      - 'runbooks/**/*.yaml'
+      - 'runbooks/**/*.yml'
 
 permissions:
   contents: read
@@ -33,17 +37,22 @@ jobs:
           ERRORS=0
           WARNINGS=0
 
-          # Get changed install mission JSON files
-          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/cncf-install/install-*.json' 2>/dev/null || echo "")
+          # Get changed install mission JSON/YAML files
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/cncf-install/install-*.json' 'fixes/cncf-install/install-*.yaml' 'fixes/cncf-install/install-*.yml' 2>/dev/null || echo "")
           [ -z "$FILES" ] && echo "No install missions changed" && exit 0
 
           for f in $FILES; do
             [ -f "$f" ] || continue
 
             python3 -c "
-          import json, re, sys
-          with open('$f') as fh:
-              d = json.load(fh)
+          import json, re, sys, os
+          def load_mission(path):
+              with open(path) as fh:
+                  if path.endswith(('.yaml', '.yml')):
+                      import yaml
+                      return yaml.safe_load(fh)
+                  return json.load(fh)
+          d = load_mission('$f')
           steps = d.get('mission', {}).get('steps', [])
           errors = []
           warnings = []
@@ -97,8 +106,8 @@ jobs:
           ERRORS=0
           WARNINGS=0
 
-          # Get changed JSON files in fixes/
-          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 2>/dev/null || echo "")
+          # Get changed JSON/YAML files in fixes/
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 2>/dev/null || echo "")
           [ -z "$FILES" ] && echo "No solution files changed" && exit 0
 
           for f in $FILES; do
@@ -106,11 +115,17 @@ jobs:
 
             echo "Validating: $f"
 
-            # Extract URLs, Helm repos, container images from the JSON
+            # Extract URLs, Helm repos, container images from the JSON/YAML
             HELM_REPOS=$(python3 -c "
           import json, re, sys
+          def load_mission(path):
+              with open(path) as fh:
+                  if path.endswith(('.yaml', '.yml')):
+                      import yaml
+                      return yaml.safe_load(fh)
+                  return json.load(fh)
           try:
-            d = json.load(open('$f'))
+            d = load_mission('$f')
             text = json.dumps(d)
             # Find helm repo add commands
             for m in re.finditer(r'helm repo add \S+ (https?://[^\s\"\\\\]+)', text):
@@ -126,8 +141,14 @@ jobs:
 
             CONTAINER_IMAGES=$(python3 -c "
           import json, re, sys
+          def load_mission(path):
+              with open(path) as fh:
+                  if path.endswith(('.yaml', '.yml')):
+                      import yaml
+                      return yaml.safe_load(fh)
+                  return json.load(fh)
           try:
-            d = json.load(open('$f'))
+            d = load_mission('$f')
             for img in d.get('metadata', {}).get('containerImages', []):
               if img and 'registry/org' not in img and 'your-docker' not in img:
                 print(img)
@@ -136,8 +157,14 @@ jobs:
 
             URLS=$(python3 -c "
           import json, re, sys
+          def load_mission(path):
+              with open(path) as fh:
+                  if path.endswith(('.yaml', '.yml')):
+                      import yaml
+                      return yaml.safe_load(fh)
+                  return json.load(fh)
           try:
-            d = json.load(open('$f'))
+            d = load_mission('$f')
             text = json.dumps(d)
             for m in re.finditer(r'https?://[^\s\"\\\\]+', text):
               url = m.group(0).rstrip('.,;)')
