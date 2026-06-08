@@ -41,9 +41,11 @@ jobs:
           FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/cncf-install/install-*.json' 'fixes/cncf-install/install-*.yaml' 'fixes/cncf-install/install-*.yml' 2>/dev/null || echo "")
           [ -z "$FILES" ] && echo "No install missions changed" && exit 0
 
-          for f in $FILES; do
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
             [ -f "$f" ] || continue
 
+            export MISSION_FILE="$f"
             python3 -c "
           import json, re, sys, os
           def load_mission(path):
@@ -52,7 +54,9 @@ jobs:
                       import yaml
                       return yaml.safe_load(fh)
                   return json.load(fh)
-          d = load_mission('$f')
+          import os
+          f = os.environ['MISSION_FILE']
+          d = load_mission(f)
           steps = d.get('mission', {}).get('steps', [])
           errors = []
           warnings = []
@@ -93,7 +97,7 @@ jobs:
             if [ $? -ne 0 ]; then
               ERRORS=$((ERRORS + 1))
             fi
-          done
+          done <<< "$FILES"
 
           if [ $ERRORS -gt 0 ]; then
             echo "::error::$ERRORS mission(s) failed quality checks"
@@ -110,12 +114,14 @@ jobs:
           FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 2>/dev/null || echo "")
           [ -z "$FILES" ] && echo "No solution files changed" && exit 0
 
-          for f in $FILES; do
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
             [ -f "$f" ] || continue
 
             echo "Validating: $f"
 
             # Extract URLs, Helm repos, container images from the JSON/YAML
+            export MISSION_FILE="$f"
             HELM_REPOS=$(python3 -c "
           import json, re, sys
           def load_mission(path):
@@ -125,7 +131,9 @@ jobs:
                       return yaml.safe_load(fh)
                   return json.load(fh)
           try:
-            d = load_mission('$f')
+            import os
+            f = os.environ['MISSION_FILE']
+            d = load_mission(f)
             text = json.dumps(d)
             # Find helm repo add commands
             for m in re.finditer(r'helm repo add \S+ (https?://[^\s\"\\\\]+)', text):
@@ -148,7 +156,9 @@ jobs:
                       return yaml.safe_load(fh)
                   return json.load(fh)
           try:
-            d = load_mission('$f')
+            import os
+            f = os.environ['MISSION_FILE']
+            d = load_mission(f)
             for img in d.get('metadata', {}).get('containerImages', []):
               if img and 'registry/org' not in img and 'your-docker' not in img:
                 print(img)
@@ -164,7 +174,9 @@ jobs:
                       return yaml.safe_load(fh)
                   return json.load(fh)
           try:
-            d = load_mission('$f')
+            import os
+            f = os.environ['MISSION_FILE']
+            d = load_mission(f)
             text = json.dumps(d)
             for m in re.finditer(r'https?://[^\s\"\\\\]+', text):
               url = m.group(0).rstrip('.,;)')
@@ -214,7 +226,7 @@ jobs:
               done <<< "$URLS"
             fi
 
-          done
+          done <<< "$FILES"
 
           echo ""
           echo "=== Validation Summary ==="
