@@ -147,7 +147,10 @@ const MALICIOUS_PATTERNS = [
   { name: 'RBAC wildcard verbs', pattern: /verbs\s*:\s*\[?\s*["']?\*["']?\s*\]?/gi },
 
   // Command injection (safe CLI tools like kubectl/helm/jq are allowlisted)
-  { name: 'Command injection: backtick', pattern: /`[^`]*(?:\$\(|;|&&|\|\|)[^`]*`/g, allowSafeCLI: true },
+  // Use [^`\n] to avoid matching across line boundaries, which causes false positives
+  // when markdown inline-code spans in natural-language descriptions happen to contain
+  // ; or || somewhere between two backticks in the joined text.
+  { name: 'Command injection: backtick', pattern: /`[^`\n]*(?:\$\(|;|&&|\|\|)[^`\n]*`/g, allowSafeCLI: true },
   { name: 'Command injection: $() in string', pattern: /\$\([^)]{4,}\)/g, allowSafeCLI: true },
   { name: 'Suspicious curl pipe', pattern: /curl\s[^|]*\|\s*(?:ba)?sh/gi },
   { name: 'Suspicious wget pipe', pattern: /wget\s[^|]*\|\s*(?:ba)?sh/gi },
