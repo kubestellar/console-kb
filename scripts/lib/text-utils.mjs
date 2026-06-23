@@ -13,12 +13,41 @@ const ENGLISH_STOPWORDS = new Set([
 const MIN_ENGLISH_STOPWORD_RATIO = 0.08
 
 /**
+ * Remove HTML comments idempotently to prevent nested-comment injection bypasses
+ * such as `<!!----!-- malicious -->` re-forming `<!--` after a single pass.
+ */
+function removeHtmlComments(text) {
+  let prev
+  do {
+    prev = text
+    text = text.replace(/<!--[\s\S]*?-->/g, '')
+  } while (text !== prev)
+  return text
+}
+
+/**
+ * Check if `text` contains a URL whose hostname exactly matches `hostname`.
+ * Avoids false positives from substring checks (e.g. `api.github.com.evil.net`
+ * or `?x=api.github.com` in a query string).
+ */
+function containsHostname(text, hostname) {
+  const urlPattern = /https?:\/\/[^\s)>"]+/g
+  let match
+  while ((match = urlPattern.exec(text)) !== null) {
+    try {
+      if (new URL(match[0]).hostname === hostname) return true
+    } catch { /* not a valid URL, skip */ }
+  }
+  return false
+}
+
+/**
  * Strip PR template boilerplate, HTML comments, image markdown, email reply
  * headers, emoji shortcodes, and other non-content noise from issue/PR text.
  */
 export function cleanText(text) {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, '')
+  const withoutComments = removeHtmlComments(text)
+  return withoutComments
     .replace(/# \[?Codecov\]?[\s\S]*?(?=\n#{1,4}\s|\n---|\n\n\n|$)/gi, '')
     .replace(/!\[.*?\]\(https?:\/\/[^)]+\)/g, '')
     .replace(/<img\s+[^>]*>/gi, '')
@@ -71,7 +100,8 @@ export function isGarbageSnippet(snippet) {
   if (lower.includes('for first time contributors') || lower.includes('please ensure your pull request')) return true
   if (lower.includes('query performance') && lower.includes('![image]')) return true
   if (lower.includes('"tag_name"') || lower.includes('"html_url"') || lower.includes('"created_at"')) return true
-  if (lower.includes('api.github.com')) return true
+  // Use proper URL hostname check to prevent substring-based bypass
+  if (containsHostname(snippet, 'api.github.com')) return true
   const words = snippet.split(/\s+/)
   const englishWords = words.filter(w => ENGLISH_STOPWORDS.has(w.toLowerCase()))
   const PROSE_THRESHOLD = 0.25
@@ -160,7 +190,7 @@ export function extractFromBoldTemplate(text) {
 export function stripPRTemplate(text) {
   if (!text) return ''
   let cleaned = text
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '')
+  cleaned = removeHtmlComments(cleaned)
   const templateHeaders = [
     /#{1,4}\s*What type of PR[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
     /#{1,4}\s*What this PR does[\s\S]*?(?=\n#{1,4}\s|\n---|\Z)/gi,
