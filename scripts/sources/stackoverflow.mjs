@@ -174,13 +174,19 @@ function stripHtml(html) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&')
-  
-  // Now strip all tags from fully-decoded text
-  return decoded
-    .replace(/<pre><code[^>]*>[\s\S]*?<\/code><\/pre>/g, '[code block]')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+
+  // Remove code blocks first (preserve as placeholder)
+  let stripped = decoded.replace(/<pre><code[^>]*>[\s\S]*?<\/code><\/pre>/g, '[code block]')
+
+  // Loop until no more tags are removed — prevents nested/split-tag injection bypass
+  // e.g. <scr<b>ipt> becomes <script> after first pass; loop eliminates it.
+  let prev
+  do {
+    prev = stripped
+    stripped = stripped.replace(/<[^>]+>/g, '')
+  } while (stripped !== prev)
+
+  return stripped.replace(/\s+/g, ' ').trim()
 }
 
 function cleanHtmlEntities(text) {
