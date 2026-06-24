@@ -10,6 +10,8 @@
  *   - LLM_TOKEN/GITHUB_TOKEN → models.github.ai (OpenAI models only)
  */
 
+import sanitizeHtml from 'sanitize-html'
+
 // --- Configuration ---
 const COPILOT_ENDPOINT = 'https://api.enterprise.githubcopilot.com/chat/completions'
 const COPILOT_MODEL = process.env.COPILOT_MODEL || 'claude-opus-4.6'
@@ -337,22 +339,21 @@ function buildPrompt(params) {
 
 function cleanInput(text) {
   if (!text) return ''
+  
+  // First pass: remove specific unwanted sections
   let result = text
     .replace(/## \[?Codecov[\s\S]*?(?=\n## |\n---|\Z)/gi, '')
     .replace(/\|[^|]*coverage[^|]*\|[\s\S]*?\n\n/gi, '')
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '[image removed]')
 
-  // Remove HTML comments iteratively until stable (prevents split-comment injection bypass)
-  // e.g. <!-<!-- inner -->-outer --> survives a single pass but not two.
-  let prev
-  do {
-    prev = result
-    result = result
-      .replace(/<!--[\s\S]*?--!?>/g, '')
-      .replace(/<!-->/g, '')
-      .replace(/--!?>/g, '')
-  } while (result !== prev)
+  // Use sanitize-html to remove all HTML tags and comments (satisfies CodeQL taint tracking)
+  result = sanitizeHtml(result, {
+    allowedTags: [],
+    allowedAttributes: {},
+    allowedIframeHostnames: []
+  })
 
+  // Final cleanup
   return result
     .replace(/#{1,3}\s*(?:What this PR does|Release note|Changelog|Special notes)[\s\S]*?(?=\n#{1,3} |\n---|\Z)/gi, '')
     .replace(/\n{3,}/g, '\n\n')
