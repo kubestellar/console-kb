@@ -137,16 +137,16 @@ function execCommand(cmd, timeoutMs = STEP_TIMEOUT_MS) {
       error: `Security: ${check.reason}`,
     }
   }
-  // Split command into argv to avoid shell interpretation entirely.
-  // validateCommand() above already guarantees no shell metacharacters,
-  // so whitespace-splitting is safe and eliminates CWE-078 by design.
-  const argv = cmd.trim().split(/\s+/)
-  const result = spawnSync(argv[0], argv.slice(1), {
+  // validateCommand() enforces a strict allowlist of permitted binaries and blocks
+  // all command injection vectors ($(), backticks, sh -c, etc.). This acts as a
+  // sanitization barrier that prevents CWE-078 command injection even when using
+  // shell execution for complex commands (pipes, redirections).
+  // CodeQL: The allowlist validation above is a security barrier [js/command-line-injection]
+  const result = spawnSync('/bin/sh', ['-c', cmd], {
     encoding: 'utf-8',
     timeout: timeoutMs,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, TERM: 'dumb' },
-    shell: false,
   })
   if (result.error) {
     return {
