@@ -95,6 +95,36 @@ function validateCommand(cmd) {
   return { safe: true }
 }
 
+/**
+ * Executes a trusted internal command with shell support.
+ * ONLY use for hardcoded commands in this script — NEVER for LLM-provided commands.
+ */
+function execInternalCommand(cmd, timeoutMs = STEP_TIMEOUT_MS) {
+  const result = spawnSync('/bin/sh', ['-c', cmd], {
+    encoding: 'utf-8',
+    timeout: timeoutMs,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, TERM: 'dumb' },
+  })
+  if (result.error) {
+    return {
+      success: false,
+      output: (result.stdout || '') + '\n' + (result.stderr || ''),
+      exitCode: result.status ?? 1,
+      error: result.error.message,
+    }
+  }
+  if (result.status !== 0) {
+    return {
+      success: false,
+      output: (result.stdout || '') + '\n' + (result.stderr || ''),
+      exitCode: result.status ?? 1,
+      error: `exited ${result.status}`,
+    }
+  }
+  return { success: true, output: (result.stdout || '').trim(), exitCode: 0 }
+}
+
 function execCommand(cmd, timeoutMs = STEP_TIMEOUT_MS) {
   const check = validateCommand(cmd)
   if (!check.safe) {
@@ -371,13 +401,13 @@ async function executeMission(missionPath) {
 
   // Create isolated namespace
   if (!DRY_RUN) {
-    execCommand(`kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -`)
+    execInternalCommand(`kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -`)
   }
 
   const missionContext = {
     namespace,
     cluster_type: 'kind',
-    kubernetes_version: execCommand('kubectl version --client -o json 2>/dev/null | grep gitVersion || echo "unknown"').output,
+    kubernetes_version: execInternalCommand('kubectl version --client -o json 2>/dev/null | grep gitVersion || echo "unknown"').output,
     available_tools: ['kubectl', 'helm', 'curl'],
     note: 'This is a Kind cluster — no LoadBalancer, no cloud storage. Use NodePort or port-forward.',
   }
@@ -413,8 +443,8 @@ async function executeMission(missionPath) {
   // Final verification: ask LLM to confirm overall status
   console.log(`\n  🔍 Final verification...`)
   if (!DRY_RUN) {
-    const podsResult = execCommand(`kubectl get pods -n ${namespace} --no-headers 2>/dev/null || echo "no pods"`)
-    const svcsResult = execCommand(`kubectl get svc -n ${namespace} --no-headers 2>/dev/null || echo "no services"`)
+    const podsResult = execInternalCommand(`kubectl get pods -n ${namespace} --no-headers 2>/dev/null || echo "no pods"`)
+    const svcsResult = execInternalCommand(`kubectl get svc -n ${namespace} --no-headers 2>/dev/null || echo "no services"`)
 
     conversationHistory.push({
       role: 'user',
@@ -446,7 +476,7 @@ async function executeMission(missionPath) {
   // Cleanup
   console.log(`  🧹 Cleaning up namespace ${namespace}...`)
   if (!DRY_RUN) {
-    execCommand(`kubectl delete namespace ${namespace} --wait=false 2>/dev/null || true`)
+    execInternalCommand(`kubectl delete namespace ${namespace} --wait=false 2>/dev/null || true`)
   }
 
   report.duration_ms = Date.now() - startTime
@@ -479,7 +509,7 @@ async function main() {
 
   // Verify cluster connectivity
   console.log('🔌 Checking cluster connectivity...')
-  const clusterCheck = execCommand('kubectl cluster-info --request-timeout=10s 2>&1 | head -3')
+  const clusterCheck = execInternalCommand('kubectl cluster-info --request-timeout=10s 2>&1 | head -3')
   if (!clusterCheck.success) {
     console.error('❌ Cannot connect to cluster:', clusterCheck.output)
     process.exit(1)
@@ -487,7 +517,7 @@ async function main() {
   console.log(`✅ Connected: ${clusterCheck.output.split('\n')[0]}`)
 
   // Verify helm is available
-  const helmCheck = execCommand('helm version --short 2>/dev/null')
+  const helmCheck = execInternalCommand('helm version --short 2>/dev/null')
   console.log(`✅ Helm: ${helmCheck.success ? helmCheck.output : 'not available'}`)
 
   const results = []
