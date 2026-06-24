@@ -107,15 +107,16 @@ function execCommand(cmd, timeoutMs = STEP_TIMEOUT_MS) {
       error: `Security: ${check.reason}`,
     }
   }
-  // Use spawnSync with an explicit shell path rather than execSync, so that
-  // static analysis (CodeQL js/command-line-injection) can confirm the shell
-  // binary is a trusted constant.  validateCommand() above is the primary
-  // security barrier; this change makes the intent explicit.
-  const result = spawnSync('/bin/sh', ['-c', cmd], {
+  // Split command into argv to avoid shell interpretation entirely.
+  // validateCommand() above already guarantees no shell metacharacters,
+  // so whitespace-splitting is safe and eliminates CWE-078 by design.
+  const argv = cmd.trim().split(/\s+/)
+  const result = spawnSync(argv[0], argv.slice(1), {
     encoding: 'utf-8',
     timeout: timeoutMs,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, TERM: 'dumb' },
+    shell: false,
   })
   if (result.error) {
     return {
