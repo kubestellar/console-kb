@@ -337,13 +337,23 @@ function buildPrompt(params) {
 
 function cleanInput(text) {
   if (!text) return ''
-  return text
+  let result = text
     .replace(/## \[?Codecov[\s\S]*?(?=\n## |\n---|\Z)/gi, '')
     .replace(/\|[^|]*coverage[^|]*\|[\s\S]*?\n\n/gi, '')
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '[image removed]')
-    .replace(/<!--[\s\S]*?--!?>/g, '') // Remove all HTML comments (standard --> and variant --!>)
-    .replace(/<!-->/g, '')              // Remove malformed <!--> opener
-    .replace(/--!?>/g, '')              // Remove any orphaned --> or --!> closers
+
+  // Remove HTML comments iteratively until stable (prevents split-comment injection bypass)
+  // e.g. <!-<!-- inner -->-outer --> survives a single pass but not two.
+  let prev
+  do {
+    prev = result
+    result = result
+      .replace(/<!--[\s\S]*?--!?>/g, '')
+      .replace(/<!-->/g, '')
+      .replace(/--!?>/g, '')
+  } while (result !== prev)
+
+  return result
     .replace(/#{1,3}\s*(?:What this PR does|Release note|Changelog|Special notes)[\s\S]*?(?=\n#{1,3} |\n---|\Z)/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -351,7 +361,7 @@ function cleanInput(text) {
 
 function isGarbageSnippet(snippet) {
   const lower = snippet.toLowerCase()
-  if (lower.includes('codecov') || lower.includes('coverage δ') || lower.includes('impacted files')) return true
+  if (lower.includes('codecov') || lower.includes('coverage \u03b4') || lower.includes('impacted files')) return true
   if (snippet.startsWith('diff --git') || /^[+-]{3} [ab]\//.test(snippet)) return true
   if (lower.includes('invalid pr title') || lower.includes('has been automatically marked as stale')) return true
   if ((snippet.match(/!\[.*?\]\(https?:\/\//g) || []).length > 2) return true
