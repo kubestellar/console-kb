@@ -152,8 +152,8 @@ const MALICIOUS_PATTERNS = [
   // ; or || somewhere between two backticks in the joined text.
   { name: 'Command injection: backtick', pattern: /`[^`\n]*(?:\$\(|;|&&|\|\|)[^`\n]*`/g, allowSafeCLI: true },
   { name: 'Command injection: $() in string', pattern: /\$\([^)]{4,}\)/g, allowSafeCLI: true },
-  { name: 'Suspicious curl pipe', pattern: /curl\s[^|]*\|\s*(?:ba)?sh/gi },
-  { name: 'Suspicious wget pipe', pattern: /wget\s[^|]*\|\s*(?:ba)?sh/gi },
+  { name: 'Suspicious curl pipe', pattern: /curl\s[^|\n]*\|\s*(?:ba)?sh/gi },
+  { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:ba)?sh/gi },
   // env / xargs / find shell-interpreter escapes
   // `env bash -c '...'` bypasses binary allowlists even when shell:false is set.
   { name: 'Allowlist escape via env', pattern: /\benv\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node)\b/gi },
@@ -183,6 +183,7 @@ const SAFE_CLI_COMMANDS = new Set([
   'uniq', 'wc', 'head', 'tail', 'cat', 'echo', 'date', 'basename',
   'dirname', 'xargs', 'find', 'ls', 'yq', 'kustomize', 'istioctl',
   'age', 'sops', 'systemd-run',  // encryption/secret management tools in CNCF docs
+  'curl', 'wget', 'podman', 'docker', 'openssl', 'sha256sum', 'md5sum',  // common CNCF doc CLI tools
 ]);
 
 // Markdown code fence language identifiers — these appear after backticks
