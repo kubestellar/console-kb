@@ -73,7 +73,7 @@ function loadInstallSourcesConfig() {
   return parseYaml(readFileSync(configPath, 'utf-8'))
 }
 
-// ─── GitHub API helpers ──────────────────────────────────────────────
+// ─── GitHub API helpers ───────────────────────────────────────────────
 async function waitForRateLimit() {
   if (rateLimitRemaining < 10) {
     const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
@@ -119,7 +119,7 @@ async function fetchRawFile(owner, repo, path) {
   return data.content || null
 }
 
-// ─── Knowledge source fetchers ───────────────────────────────────────
+// ─── Knowledge source fetchers ─────────────────────────────────────────────
 
 async function fetchReadme(owner, repo) {
   const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}/readme`)
@@ -264,7 +264,7 @@ async function fetchArtifactHubIndexForRepo(helmRepoUrl) {
   }
 }
 
-// ─── Context builder ─────────────────────────────────────────────────
+// ─── Context builder ──────────────────────────────────────────────────
 
 async function gatherProjectContext(project) {
   const [owner, repo] = (project.repo || '').split('/')
@@ -291,7 +291,7 @@ async function gatherProjectContext(project) {
   }
 }
 
-// ─── Prompt builder ──────────────────────────────────────────────────
+// ─── Prompt builder ───────────────────────────────────────────────────
 
 const INSTALL_SYSTEM_PROMPT = `You are an expert Kubernetes DevOps engineer. Your task is to generate a complete, accurate, and practical install mission for a CNCF project.
 
@@ -384,7 +384,7 @@ function buildInstallPrompt(project, context) {
   return sections.join('\n')
 }
 
-// ─── LLM call ────────────────────────────────────────────────────────
+// ─── LLM call ───────────────────────────────────────────────────────
 
 async function synthesizeInstallMission(project, context) {
   const token = process.env.LLM_TOKEN || GITHUB_TOKEN
@@ -449,7 +449,7 @@ async function synthesizeInstallMission(project, context) {
   return null
 }
 
-// ─── Quality Gate ────────────────────────────────────────────────────
+// ─── Quality Gate ─────────────────────────────────────────────────────
 
 const INSTALL_CMD_RE = /helm install|helm upgrade|kubectl apply|kubectl create|docker run|operator-sdk|kustomize build|kubectl kustomize/i
 const VERIFY_CMD_RE = /kubectl get|kubectl describe|kubectl logs|curl.*health|curl.*ready|kubectl port-forward|kubectl rollout status/i
@@ -505,7 +505,7 @@ function applyQualityGate(mission, config) {
   return { tier, score, gates }
 }
 
-// ─── Path + slug helpers ─────────────────────────────────────────────
+// ─── Path + slug helpers ────────────────────────────────────────────────
 
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -523,7 +523,7 @@ export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
   }
 }
 
-// ─── Helm URL validation ─────────────────────────────────────────────
+// ─── Helm URL validation ────────────────────────────────────────────────
 
 async function validateAndFixHelmUrl(helmUrl, projectName) {
   const isValid = await checkHelmRepoUrl(helmUrl)
@@ -552,7 +552,7 @@ function isMissionStale(filePath) {
   }
 }
 
-// ─── Report ──────────────────────────────────────────────────────────
+// ─── Report ────────────────────────────────────────────────────────
 
 function formatReport(report) {
   const lines = [
@@ -786,8 +786,10 @@ async function main() {
         // Loop until no more changes (handles nested/overlapping tags)
         while (sanitized !== prev) {
           prev = sanitized
-          // Remove script tags (including content)
-          sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+          // Remove script tags (including content). `\b` after `script` avoids matching
+          // e.g. `<scripter>`; `\s*` in the closing tag handles variants like
+          // `</script >`, `</\nscript\n>` (js/bad-tag-filter — CWE-20/80/116).
+          sanitized = sanitized.replace(/<script\b[\s\S]*?<\/\s*script\s*>/gi, '')
           // Remove other HTML tags
           sanitized = sanitized.replace(/<[^>]+>/g, '')
         }
