@@ -787,7 +787,7 @@ async function main() {
         while (sanitized !== prev) {
           prev = sanitized
           // Remove script tags (including content)
-          sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+          sanitized = sanitized.replace(/<script\b[\s\S]*?<\/script\s*[^>]*>/gi, '')
           // Remove other HTML tags
           sanitized = sanitized.replace(/<[^>]+>/g, '')
         }

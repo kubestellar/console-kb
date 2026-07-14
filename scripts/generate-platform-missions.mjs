@@ -359,7 +359,7 @@ function sanitizeHtml(text) {
   while (sanitized !== prev) {
     prev = sanitized
     // Remove script tags (including content)
-    sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+    sanitized = sanitized.replace(/<script\b[\s\S]*?<\/script\s*[^>]*>/gi, '')
     // Remove event handlers
     sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
     // Remove javascript: URIs
