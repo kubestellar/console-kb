@@ -358,8 +358,11 @@ function sanitizeHtml(text) {
   // Loop until no more changes (handles nested/overlapping tags)
   while (sanitized !== prev) {
     prev = sanitized
-    // Remove script tags (including content)
-    sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+    // Remove script tags (including content). The `\b` after `script` avoids matching
+    // e.g. `<scripter>`, and `\s*` before/after `script` in the closing tag ensures
+    // variants like `</script >`, `</\nscript\n>`, `</  script>` are caught in the
+    // first pass (js/bad-tag-filter — CWE-20/80/116, alerts #158, #159).
+    sanitized = sanitized.replace(/<script\b[\s\S]*?<\/\s*script\s*>/gi, '')
     // Remove event handlers
     sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
     // Remove javascript: URIs
