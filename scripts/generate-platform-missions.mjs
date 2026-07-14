@@ -478,7 +478,10 @@ async function checkVersionFreshness(helmRepoUrl, chartName, version) {
     const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS) })
     if (!res.ok) return true
     const text = await res.text()
-    const versionRe = new RegExp(`version:\\s+${version.replace(/\./g, '\\.')}`, 'm')
+    // Escape ALL regex metacharacters in the HTTP-derived version string before
+    // interpolating into a RegExp (js/incomplete-sanitization — CWE-116/20).
+    const escapeRegExpChars = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const versionRe = new RegExp(`version:\\s+${escapeRegExpChars(version)}`, 'm')
     return versionRe.test(text)
   } catch {
     return true
@@ -679,12 +682,22 @@ async function main() {
     if (!gateResult.pass) continue
 
     // 4. Sanitize the mission text after LLM synthesis
-    const sanitizeMissionText = (obj) => {
-      if (typeof obj === 'string') return sanitizeInfraDetails(obj)
-      if (Array.isArray(obj)) return obj.map(sanitizeMissionText)
+    const sanitizeMissionText = (obj, maxLen = 5000) => {
+      if (typeof obj === 'string') {
+        // Redact infra details, HTML-encode angle brackets (js/bad-tag-filter,
+        // js/incomplete-multi-character-sanitization — CWE-80/79), strip control
+        // chars, and cap length (CWE-434, fixes #2896).
+        return sanitizeInfraDetails(obj)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+          .slice(0, maxLen)
+      }
+      if (Array.isArray(obj)) return obj.map(item => sanitizeMissionText(item, maxLen))
       if (obj && typeof obj === 'object') {
         const result = {}
-        for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v)
+        for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v, maxLen)
         return result
       }
       return obj
@@ -714,7 +727,7 @@ async function main() {
     assertSafePath(resolvedPath, resolvedSolutionsDir)
 
     if (!DRY_RUN) {
-      writeFileSync(finalPath, JSON.stringify(mission, null, 2))
+      writeFileSync(finalPath, JSON.stringify(mission, null, 2)) // CodeQL[js/http-to-file-access] mission.mission sanitized via sanitizeMissionText() (strips script/HTML/controls, caps length); path validated via basename allowlist and assertSafePath() above
       console.log(`  Wrote: ${finalPath}`)
     } else {
       console.log(`  [DRY RUN] Would write: ${finalPath}`)
