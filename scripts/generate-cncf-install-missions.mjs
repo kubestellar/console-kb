@@ -770,7 +770,29 @@ async function main() {
     const sanitizeMissionText = (obj) => {
       if (typeof obj === 'string') {
         // Strip HTML tags and script content to prevent prompt injection in MDX output
-        return obj.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '')
+        // Use loop-until-stable to handle overlapping/nested patterns (CWE-80, CWE-79)
+        let sanitized = obj
+        let prev = ''
+        
+        // Decode HTML entities first to catch entity-encoded attacks
+        sanitized = sanitized
+          .replace(/&lt;/gi, '<')
+          .replace(/&gt;/gi, '>')
+          .replace(/&quot;/gi, '"')
+          .replace(/&#x27;/gi, "'")
+          .replace(/&#x2F;/gi, '/')
+          .replace(/&amp;/gi, '&')
+        
+        // Loop until no more changes (handles nested/overlapping tags)
+        while (sanitized !== prev) {
+          prev = sanitized
+          // Remove script tags (including content)
+          sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+          // Remove other HTML tags
+          sanitized = sanitized.replace(/<[^>]+>/g, '')
+        }
+        
+        return sanitized
       }
       if (Array.isArray(obj)) return obj.map(sanitizeMissionText)
       if (obj && typeof obj === 'object') {
