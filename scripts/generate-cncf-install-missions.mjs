@@ -786,10 +786,12 @@ async function main() {
         // Loop until no more changes (handles nested/overlapping tags)
         while (sanitized !== prev) {
           prev = sanitized
-          // Remove script tags (including content). `\b` after `script` avoids matching
-          // e.g. `<scripter>`; `\s*` in the closing tag handles variants like
-          // `</script >`, `</\nscript\n>` (js/bad-tag-filter — CWE-20/80/116).
-          sanitized = sanitized.replace(/<script\b[\s\S]*?<\/\s*script\s*>/gi, '')
+          // Remove script tags (including content).
+          // `(?:\s[^>]*)?` properly closes the opening tag (attributes may not contain `>`),
+          // preventing the lazy `[\s\S]*?` from stopping at a fake `</script>` inside an
+          // attribute value (js/bad-tag-filter CWE-116, fix for alerts #158/#159).
+          // `\s*` in the closing tag handles `</script >`, `</ script>`, etc.
+          sanitized = sanitized.replace(/<script(?:\s[^>]*)?>[\s\S]*?<\/\s*script\s*>/gi, '')
           // Remove other HTML tags
           sanitized = sanitized.replace(/<[^>]+>/g, '')
         }
