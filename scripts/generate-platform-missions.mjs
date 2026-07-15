@@ -365,7 +365,8 @@ function sanitizeHtml(text) {
     .replace(/&amp;/gi, '&')
   
   // Loop each multi-character sanitizer to a fixed point (CWE-80/116).
-  sanitized = replaceUntilStable(sanitized, /<script[\s\S]*?<\/script>/gi)
+  // Match closing </script> with optional whitespace to cover variants like </script > (js/bad-tag-filter).
+  sanitized = replaceUntilStable(sanitized, /<script[\s\S]*?<\/\s*script\s*>/gi)
   sanitized = replaceUntilStable(sanitized, /\bon\w+[\s\u0000-\u001F\u007F]*=[\s\u0000-\u001F\u007F]*(?:["'][^"']*["']|[^\s>]+)/gi)
   sanitized = replaceUntilStable(sanitized, /javascript[\s\u0000-\u001F\u007F]*:/gi)
   sanitized = replaceUntilStable(sanitized, /<[^>]+>/g)
@@ -741,6 +742,9 @@ async function main() {
     const missionJson = serializeSanitizedMissionForFile(mission)
 
     if (!DRY_RUN) {
+      // codeql[js/http-to-file-access] mission.mission is sanitized by sanitizeMissionText() above;
+      // path validated via basename allowlist and assertSafePath(); serializeSanitizedMissionForFile()
+      // applies a final integrity check before the bytes reach disk (fixes #2909).
       writeFileSync(resolvedPath, missionJson)
       console.log(`  Wrote: ${finalPath}`)
     } else {

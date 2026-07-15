@@ -164,10 +164,10 @@ async function callLLM(mission) {
 
   for (let attempt = 0; attempt <= 2; attempt++) {
     try {
-      // CodeQL[js/file-access-to-http] mission is pre-sanitized via sanitizeMissionForHTTP()
+      // codeql[js/file-access-to-http] mission is pre-sanitized via sanitizeMissionForHTTP()
       // at every call site; LLM_ENDPOINT validated against allowlist by assertTrustedEndpoint()
-      // at module load (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896).
-      const response = await fetch(TRUSTED_LLM_ENDPOINT, {
+      // at module load (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896, #2909).
+      const response = await fetch(TRUSTED_LLM_ENDPOINT, { // codeql[js/file-access-to-http]
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
