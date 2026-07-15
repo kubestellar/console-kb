@@ -1,0 +1,48 @@
+# CodeQL data-extension model for kubestellar/console-kb (JavaScript/TypeScript)
+#
+# Declares project-specific sanitizer functions as taint-tracking barriers so
+# CodeQL does not raise false-positive alerts for already-sanitized code.
+#
+# Covered alerts
+#   #143  js/http-to-file-access  scripts/generate-platform-missions.mjs:748
+#   #186  js/http-to-file-access  scripts/generate-cncf-install-missions.mjs:848
+#   #187  js/file-access-to-http  scripts/enrich-install-missions.mjs:174
+#
+# Format: [package, type, subtypes, name, signature, ext, input, kind, provenance]
+#   package   — "" for project-local (non-npm) functions
+#   type      — "" for module-level / locally-scoped functions
+#   subtypes  — false
+#   name      — JavaScript function name
+#   signature — "" (untyped JS)
+#   ext       — ""
+#   input     — which argument/return value acts as the sanitized barrier output
+#   kind      — CodeQL barrier kind recognised by the relevant query family
+#   provenance — "manual"
+
+extensions:
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: barrierModel
+    data:
+      # ── js/http-to-file-access barriers (path-injection kind) ──────────────
+      # sanitizeMissionText strips HTML/metacharacters and control characters from
+      # LLM-generated text; its return value is safe to write to disk.
+      - ["", "", false, "sanitizeMissionText", "", "", "ReturnValue", "path-injection", "manual"]
+
+      # serializeSanitizedMissionForFile JSON-serialises an already-sanitized
+      # mission object; only its return value is passed to writeFileSync.
+      - ["", "", false, "serializeSanitizedMissionForFile", "", "", "ReturnValue", "path-injection", "manual"]
+
+      # assertSafePath throws if the resolved path escapes the allowed directory
+      # (CWE-22 / path traversal); its first argument is safe after the call returns.
+      - ["", "", false, "assertSafePath", "", "", "Argument[0]", "path-injection", "manual"]
+
+      # ── js/file-access-to-http barriers (request-forgery kind) ────────────
+      # sanitizeMissionForHTTP redacts embedded URLs, e-mails, and secret patterns
+      # from file-derived mission data before it is placed in an HTTP request body.
+      - ["", "", false, "sanitizeMissionForHTTP", "", "", "ReturnValue", "request-forgery", "manual"]
+
+      # assertTrustedEndpoint validates the LLM endpoint URL against an explicit
+      # allowlist of approved prefixes (CWE-441 / SSRF); its return value is a
+      # trusted destination for outgoing HTTP requests.
+      - ["", "", false, "assertTrustedEndpoint", "", "", "ReturnValue", "request-forgery", "manual"]
