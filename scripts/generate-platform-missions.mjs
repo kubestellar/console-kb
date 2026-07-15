@@ -362,8 +362,8 @@ function sanitizeHtml(text) {
     // `(?:\s[^>]*)?` properly closes the opening tag (attributes may not contain `>`),
     // preventing the lazy `[\s\S]*?` from stopping at a fake `</script>` inside an
     // attribute value (js/bad-tag-filter CWE-116, fix for alerts #158/#159).
-    // `\s*` in the closing tag handles `</script >`, `</ script>`, etc.
-    sanitized = sanitized.replace(/<script(?:\s[^>]*)?>[\s\S]*?<\/\s*script\s*>/gi, '')
+    // `\b[^>]*` in the closing tag handles `</script\t\n bar>` and similar forms.
+    sanitized = sanitized.replace(/<script\b[^>]*>[\s\S]*?<\/\s*script\b[^>]*>/gi, '')
     // Remove event handlers
     sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
     // Remove javascript: URIs
