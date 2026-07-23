@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-15344-bug-policy-namespaceselector-is-applied-to-webhooks",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: [Bug] Policy namespaceSelector is applied to Webhooks",
+    "description": "[Bug] Policy namespaceSelector is applied to Webhooks. This issue affects 11+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kyverno troubleshoot symptoms",
+        "description": "Check for the issue in your kyverno deployment:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\nWhen creating a mutating policy, the spec.matchConstraints.namespaceSelector are used to also set the webhooks.namespaceSelector of the MutatingWebhookConfiguration (kyverno-resource-mutating-webhook-cfg) object, effectivelly limiting the webhook to"
+      },
+      {
+        "title": "Apply the fix for [Bug] Policy namespaceSelector is applied to Webhooks",
+        "description": "we are expreiencing same issue but for us its intermittent and its due to `objectSelector`\n\nKyverno Version: v1.18.0\nKubernetes Version: v1.35.0\n\nFor us its merging 2 policies and overriding `objectSelector` which is only used in one of the policy\n1.\n```yaml\napiVersion: admissionregistration.k8s.io/v1\nkind: MutatingWebhookConfiguration\nmetadata:\n  annotations:\n    admissions.enforcer/disabled: \"true\"\n  creationTimestamp: \"2026-02-23T08:03:25Z\"\n  generation: 24\n  labels:\n    webhook.kyverno.io/managed-by: kyverno\n  name: kyverno-resource-mutating-webhook-cfg\nwebhooks:\n- admissionReviewVersions:\n  - v1\n  clientConfig:\n    caBundle: redacted\n    service:\n      name: kyverno-svc\n      namespace: governance-cluster01\n      path: /mpol/set-resources-product1-quota/set-resources-product2-quota\n      port: 443\n  failurePolicy: Fail\n  matchPolicy: Equivale\n```"
+      },
+      {
+        "title": "Confirm [Bug] Policy namespaceSelector is applied to… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=50 --since=5m\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "we are expreiencing same issue but for us its intermittent and its due to `objectSelector`\n\nKyverno Version: v1.18.0\nKubernetes Version: v1.35.0\n\nFor us its merging 2 policies and overriding `objectSelector` which is only used in one of the policy\n1.",
+      "codeSnippets": [
+        "apiVersion: admissionregistration.k8s.io/v1\nkind: MutatingWebhookConfiguration\nmetadata:\n  annotations:\n    admissions.enforcer/disabled: \"true\"\n  creationTimestamp: \"2026-02-23T08:03:25Z\"\n  generation: 24\n  labels:\n    webhook.kyverno.io/managed-by: kyverno\n  name: kyverno-resource-mutating-webhook-cfg\nwebhooks:\n- admissionReviewVersions:\n  - v1\n  clientConfig:\n    caBundle: redacted\n    service:\n      name: kyverno-svc\n      namespace: governance-cluster01\n      path: /mpol/set-resources-product1-quota/set-resources-product2-quota\n      port: 443\n  failurePolicy: Fail\n  matchPolicy: Equivalent\n  name: mpol.validate.kyverno.svc-fail\n  namespaceSelector:\n    matchExpressions:\n    - key: kubernetes.io/metadata.name\n      operator: NotIn\n      values:\n      - kube-system\n    - key: kubernete",
+        "kind: MutatingWebhookConfiguration\napiVersion: admissionregistration.k8s.io/v1\nmetadata:\n  name: kyverno-resource-mutating-webhook-cfg\n  generation: 3\n  creationTimestamp: '2026-02-23T11:07:24Z'\n  labels:\n    webhook.kyverno.io/managed-by: kyverno\n  annotations:\n    admissions.enforcer/disabled: 'true'\nwebhooks:\n  - name: mpol.validate.kyverno.svc-fail\n    sideEffects: NoneOnDryRun\n    clientConfig:\n      service:\n        namespace: governance-cluster01\n        name: kyverno-svc\n        path: /mpol/set-resources-product1-quota/set-resources-product2-quota\n        port: 443\n      caBundle: redacted\n    reinvocationPolicy: Never\n    rules:\n      - operations:\n          - CREATE\n          - UPDATE\n        apiGroups:\n          - ''\n        apiVersions:\n          - v1\n        resources:\n       "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Namespace",
+      "Mutatingwebhookconfiguration"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/15344",
+      "repo": "https://github.com/kyverno/kyverno"
+    },
+    "reactions": 11,
+    "comments": 5,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-07-23T06:58:03.195Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
