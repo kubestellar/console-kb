@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "litellm-26395-bug-deepseek-v4-pro-deepseek-v4-pro-fails-in-multi-turn-conversati",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "litellm: [Bug]: DeepSeek V4 Pro (deepseek-v4-pro) fails in multi-turn conversations - reasoning_content stripped from assistant messages",
+    "description": "[Bug]: DeepSeek V4 Pro (deepseek-v4-pro) fails in multi-turn conversations - reasoning_content stripped from assistant messages. This issue affects 25+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify litellm troubleshoot symptoms",
+        "description": "Check for the issue in your litellm deployment:\n```bash\nkubectl get pods -n litellm -l app.kubernetes.io/name=litellm\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review litellm configuration",
+        "description": "Inspect the relevant litellm configuration:\n```bash\nkubectl get all -n litellm -l app.kubernetes.io/name=litellm\nkubectl get configmap -n litellm -l app.kubernetes.io/part-of=litellm\n```\n## What Happened?\n\nWhen using `deepseek/deepseek-v4-pro` (or the Anthropic-compatible endpoint `anthropic/deepseek-v4-pro` with `api_base: https://api.deepseek.com/anthropic`) through LiteLLM proxy, the **first turn succeeds** but **every subsequent"
+      },
+      {
+        "title": "Apply the fix for [Bug]: DeepSeek V4 Pro (deepseek-v4-pro) fails in…",
+        "description": "Hit the same 400 with `deepseek-v4-flash` on multi-turn tool-use through `litellm 1.81.1`. While waiting for #26660 to land, I worked around it without touching litellm internals or business code by patching at our LLM client boundary. Sharing the approach in case it helps others.\n\n## Why patching\n```yaml\nmodel_list:\n  - model_name: deepseek-v4-pro\n    litellm_params:\n      model: deepseek/deepseek-v4-pro\n      api_key: os.environ/DEEPSEEK_API_KEY\n```"
+      },
+      {
+        "title": "Confirm [Bug]: DeepSeek V4 Pro (deepseek-v4-pro) fails in… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=litellm -n litellm --tail=50 --since=5m\nkubectl get events -n litellm --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Hit the same 400 with `deepseek-v4-flash` on multi-turn tool-use through `litellm 1.81.1`. While waiting for #26660 to land, I worked around it without touching litellm internals or business code by patching at our LLM client boundary. Sharing the approach in case it helps others.",
+      "codeSnippets": [
+        "model_list:\n  - model_name: deepseek-v4-pro\n    litellm_params:\n      model: deepseek/deepseek-v4-pro\n      api_key: <REDACTED>",
+        "curl http://localhost:4000/v1/chat/completions \\\n  -H \"Authorization: Bearer $LITELLM_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"deepseek-v4-pro\",\n    \"messages\": [{\"role\": \"user\", \"content\": \"What is 1+1?\"}]\n  }'",
+        "curl http://localhost:4000/v1/chat/completions \\\n  -H \"Authorization: Bearer $LITELLM_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"deepseek-v4-pro\",\n    \"messages\": [\n      {\"role\": \"user\", \"content\": \"What is 1+1?\"},\n      {\"role\": \"assistant\", \"content\": \"2\"},\n      {\"role\": \"user\", \"content\": \"And 2+2?\"}\n    ]\n  }'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "litellm",
+      "community",
+      "llm-gateway",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "litellm"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/BerriAI/litellm/issues/26395",
+      "repo": "https://github.com/BerriAI/litellm"
+    },
+    "reactions": 25,
+    "comments": 22,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with litellm installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-07-26T07:20:05.269Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
