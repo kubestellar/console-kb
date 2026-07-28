@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentelemetry-collector-6046-batchprocessor-send-batch-max-size-bytes-limit",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentelemetry-collector: batchprocessor: send_batch_max_size_bytes limit",
+    "description": "batchprocessor: send_batch_max_size_bytes limit. Requested by 46+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current opentelemetry-collector deployment",
+        "description": "Verify your opentelemetry-collector version and configuration:\n```bash\nkubectl get pods -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nhelm list -n opentelemetry-collector 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working opentelemetry-collector installation."
+      },
+      {
+        "title": "Review opentelemetry-collector configuration",
+        "description": "Inspect the relevant opentelemetry-collector configuration:\n```bash\nkubectl get all -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl get configmap -n opentelemetry-collector -l app.kubernetes.io/part-of=opentelemetry-collector\n```\nGolang GRPC server has default message limit 4MB. Batch processor can generate bigger message size, so receiver will reject batch and whole batch can be dropped:\n```\n\"msg\": \"Exporting failed. The error is not retryable."
+      },
+      {
+        "title": "Apply the fix for batchprocessor: send_batch_max_size_bytes limit",
+        "description": "Adds the new `queuebatchprocessor` described in the [batching-migration RFC](https://github.com/open-telemetry/opentelemetry-collector/blob/main/docs/rfcs/batching-migration.md).\n```yaml\n\"msg\": \"Exporting failed. The error is not retryable. Dropping data.\",\n\"kind\": \"exporter\",\n\"data_type\": \"traces\",\n\"name\": \"otlp\",\n\"error\": \"Permanent error: rpc error: code = ResourceExhausted desc = grpc: received message after decompression larger than max (5297928 vs. 4194304)\",\n\"dropped_items\": 4725,\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n opentelemetry-collector -l app.kubernetes.io/name=opentelemetry-collector\nkubectl get events -n opentelemetry-collector --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"batchprocessor: send_batch_max_size_bytes limit\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Adds the new `queuebatchprocessor` described in the [batching-migration RFC](https://github.com/open-telemetry/opentelemetry-collector/blob/main/docs/rfcs/batching-migration.md).",
+      "codeSnippets": [
+        "\"msg\": \"Exporting failed. The error is not retryable. Dropping data.\",\n\"kind\": \"exporter\",\n\"data_type\": \"traces\",\n\"name\": \"otlp\",\n\"error\": \"Permanent error: rpc error: code = ResourceExhausted desc = grpc: received message after decompression larger than max (5297928 vs. 4194304)\",\n\"dropped_items\": 4725,",
+        "exporters:\n  debug:\n    # verbosity: detailed\n    verbosity: normal\n  otlp/tempo:\n    max_recv_msg_size_mib: 200\n    endpoint: tempo:4317\n    tls:\n      insecure: true\n    auth:\n      authenticator: headers_setter",
+        "2023/10/31 09:43:11 collector server run finished with error: failed to get config: cannot unmarshal the configuration: 1 error(s) decoding:\n\n* error decoding 'exporters': error reading configuration for \"otlp/tempo\": 1 error(s) decoding:\n\n* '' has invalid keys: max_recv_msg_size_mib"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentelemetry-collector",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "opentelemetry-collector"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/open-telemetry/opentelemetry-collector/issues/6046",
+      "repo": "https://github.com/open-telemetry/opentelemetry-collector",
+      "pr": "https://github.com/open-telemetry/opentelemetry-collector/pull/15500"
+    },
+    "reactions": 46,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentelemetry-collector installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-07-28T07:04:36.530Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
