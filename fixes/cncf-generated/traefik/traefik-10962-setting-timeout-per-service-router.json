@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "traefik-10962-setting-timeout-per-service-router",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "traefik: Setting timeout per service/router",
+    "description": "Setting timeout per service/router. This issue affects 71+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify traefik troubleshoot symptoms",
+        "description": "Check for the issue in your traefik deployment:\n```bash\nkubectl get pods -n traefik -l app.kubernetes.io/name=traefik\nkubectl logs -l app.kubernetes.io/name=traefik -n traefik --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review traefik configuration",
+        "description": "Inspect the relevant traefik configuration:\n```bash\nkubectl get all -n traefik -l app.kubernetes.io/name=traefik\nkubectl get configmap -n traefik -l app.kubernetes.io/part-of=traefik\n```\n### Welcome!\n\n- [X] Yes, I've searched similar issues on [GitHub](https://github.com/traefik/traefik/issues) and didn't find any."
+      },
+      {
+        "title": "Apply the fix for Setting timeout per service/router",
+        "description": "In the meantime, depending on the setup, if you are using Kubernetes with a load balancer like MetalLB, you can also try creating a second port for the increased timeouts. I did something similar to the following.\n\nOne thing to note with this config, is it will need to be domain based, so that DNS\n```yaml\nports:\n  web:\n    asDefault: true\n    expose:\n      default: true\n    exposedPort: 80\n    port: 8080\n    protocol: TCP\n  webbig:\n    expose:\n      default: false\n      bigingress: true\n    exposedPort: 80\n    port: 9080\n    protocol: TCP\n    transport:\n      respondingTimeouts:\n        readTimeout: \"1800s\"\n\nservice:\n  annotations:\n    metallb.universe.tf/address-pool: static\n    metallb.universe.tf/loadBalancerIPs: 10.0.0.2,fd::10:0:0:2\n  enabled: true\n  single: true\n  spec:\n    externalTrafficPolicy: Local\n  type: LoadBalancer\n  ipFamilyPolicy: PreferDualStack\n\n  additionalServices:\n    bigin\n```"
+      },
+      {
+        "title": "Confirm Setting timeout per service/router is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=traefik -n traefik --tail=50 --since=5m\nkubectl get events -n traefik --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "In the meantime, depending on the setup, if you are using Kubernetes with a load balancer like MetalLB, you can also try creating a second port for the increased timeouts. I did something similar to the following.\n\nOne thing to note with this config, is it will need to be domain based, so that DNS can route connections to the separate IPs used by the new service.",
+      "codeSnippets": [
+        "ports:\n  web:\n    asDefault: true\n    expose:\n      default: true\n    exposedPort: 80\n    port: 8080\n    protocol: TCP\n  webbig:\n    expose:\n      default: false\n      bigingress: true\n    exposedPort: 80\n    port: 9080\n    protocol: TCP\n    transport:\n      respondingTimeouts:\n        readTimeout: \"1800s\"\n\nservice:\n  annotations:\n    metallb.universe.tf/address-pool: static\n    metallb.universe.tf/loadBalancerIPs: 10.0.0.2,fd::10:0:0:2\n  enabled: true\n  single: true\n  spec:\n    externalTrafficPolicy: Local\n  type: LoadBalancer\n  ipFamilyPolicy: PreferDualStack\n\n  additionalServices:\n    bigingress:\n      annotations:\n        metallb.universe.tf/address-pool: static\n        metallb.universe.tf/loadBalancerIPs: 10.0.0.3,fd::10:0:0:3\n      enabled: true\n      single: true\n      spec:\n       ",
+        "annotations:\n  external-dns.alpha.kubernetes.io/target: 10.0.0.3,fd::10:0:0:3\n  traefik.ingress.kubernetes.io/router.entrypoints: webbig,websecurebig"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "traefik",
+      "community",
+      "ingress",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "traefik"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/traefik/traefik/issues/10962",
+      "repo": "https://github.com/traefik/traefik"
+    },
+    "reactions": 71,
+    "comments": 24,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with traefik installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-08-21T06:37:46.283Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
