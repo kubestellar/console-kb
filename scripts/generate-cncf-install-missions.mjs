@@ -508,12 +508,12 @@ function applyQualityGate(mission, config) {
 
 // ─── Path + slug helpers ─────────────────────────────────────────────
 
-function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+export function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 }
 
 export function assertSafeSlug(slug, source = 'unknown') {
-  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(slug)) {
+  if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(slug)) {
     throw new Error(`Unsafe slug derived from ${source}: ${JSON.stringify(slug)}`)
   }
 }
@@ -865,7 +865,9 @@ async function main() {
   console.log(`Average score: ${report.avgScore.toFixed(1)}`)
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err)
-  process.exit(1)
-})
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error('Fatal error:', err)
+    process.exit(1)
+  })
+}
