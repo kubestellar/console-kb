@@ -126,7 +126,7 @@ Based on the above install mission, generate the uninstall, upgrade, and trouble
  * explicit length limits and allowlist checks prevent exfiltration of unexpected
  * data and SSRF via embedded URLs (CWE-441 / file-access-to-http).
  */
-function sanitizeMissionForHTTP(mission) {
+export function sanitizeMissionForHTTP(mission) {
   const redactFileText = (s) => (typeof s === 'string'
     ? s
       .replace(/\b(?:https?:\/\/|git@)[^\s`"'<>]+/gi, '[redacted-url]')
@@ -224,12 +224,12 @@ async function callLLM(mission) {
 
 // ─── Validation ──────────────────────────────────────────────────────
 
-function validateSection(steps, name, minCount) {
+export function validateSection(steps, name, minCount) {
   if (!Array.isArray(steps) || steps.length < minCount) return false
   return steps.every(s => s.title && typeof s.title === 'string' && s.description && typeof s.description === 'string')
 }
 
-function sanitizeSteps(steps, maxTitle = 120, maxDesc = 3000) {
+export function sanitizeSteps(steps, maxTitle = 120, maxDesc = 3000) {
   return steps.map(s => ({
     title: s.title.slice(0, maxTitle),
     description: s.description.slice(0, maxDesc),
