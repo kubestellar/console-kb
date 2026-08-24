@@ -32,6 +32,21 @@ const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 const MISSION_TIMEOUT_MS = parseInt(process.env.MISSION_TIMEOUT_MS || '300000', 10)
 const DRY_RUN = process.env.DRY_RUN === 'true'
 
+const ALLOWED_ENDPOINT_PREFIXES = [
+  'https://models.inference.ai.azure.com/',
+  'https://api.openai.com/',
+  'https://api.githubcopilot.com/',
+]
+
+function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREFIXES) {
+  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
+    throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
+  }
+  return endpoint
+}
+
+const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
+
 function getToken() {
   return process.env.LLM_TOKEN || process.env.GITHUB_TOKEN
 }
@@ -291,7 +306,7 @@ async function llmChat(messages) {
   const token = getToken()
   if (!token) throw new Error('No GITHUB_TOKEN set for LLM API')
 
-  const resp = await fetch(LLM_ENDPOINT, {
+  const resp = await fetch(TRUSTED_LLM_ENDPOINT, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
