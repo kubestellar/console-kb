@@ -1,0 +1,79 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-16302-application-applicationset-add-support-for-templated-helm-value-files",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: Application/ApplicationSet: add support for templated helm value files",
+    "description": "Application/ApplicationSet: add support for templated helm value files. Requested by 66+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo deployment",
+        "description": "Verify your argo version and configuration:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nhelm list -n argo 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo installation."
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\n# Summary / Motivation\n\nOne annoying thing with helm values in values files is that they can't refer to other helm values."
+      },
+      {
+        "title": "Apply the fix for Application/ApplicationSet: add support for templated helm…",
+        "description": "This PR introduces a [helm-like tpl](https://helm.sh/docs/howto/charts_tips_and_tricks/#using-the-tpl-function) function to the ApplicationSets go-templating that allows users to make use of ad-hoc templates.\nAn example of how this function could be used and why it is useful can be found here:\n```yaml\nkind: ApplicationSet\nspec:\n  generators:\n  - matrix:\n      generators:\n      - git:\n          repoURL: https://example.com\n          files:\n            - path: \"apps/*.yaml\"\n      - list:\n          elements:\n            - domainname: example1.com\n            - domainname: example2.com\n\n  goTemplate: true\n  template:\n    metadata:\n      name: {{ .appname }}\n    spec:\n      project: myproject\n      sources:\n        - repoURL: https://example.com\n          path: app/{{ .appname }}\n          helm:\n            valueFilesTemplates:\n              - app/{{ .appname }}/values.yaml.gotmpl\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Application/ApplicationSet: add support for templated helm…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "This PR introduces a [helm-like tpl](https://helm.sh/docs/howto/charts_tips_and_tricks/#using-the-tpl-function) function to the ApplicationSets go-templating that allows users to make use of ad-hoc templates.",
+      "codeSnippets": [
+        "kind: ApplicationSet\nspec:\n  generators:\n  - matrix:\n      generators:\n      - git:\n          repoURL: https://example.com\n          files:\n            - path: \"apps/*.yaml\"\n      - list:\n          elements:\n            - domainname: example1.com\n            - domainname: example2.com\n\n  goTemplate: true\n  template:\n    metadata:\n      name: {{ .appname }}\n    spec:\n      project: myproject\n      sources:\n        - repoURL: https://example.com\n          path: app/{{ .appname }}\n          helm:\n            valueFilesTemplates:\n              - app/{{ .appname }}/values.yaml.gotmpl",
+        "appname: app01\nhostname: foo",
+        "ingress:\n  tls:\n    - hosts:\n      - '{{ .hostname }}.{{ .domainname }}'\n  hosts:\n    - '{{ .hostname }}.{{ .domainname }}'"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Ingress"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/16302",
+      "repo": "https://github.com/argoproj/argo-cd",
+      "pr": "https://github.com/argoproj/argo-cd/pull/26614"
+    },
+    "reactions": 66,
+    "comments": 13,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-08-25T06:09:51.838Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
