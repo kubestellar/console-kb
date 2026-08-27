@@ -199,7 +199,8 @@ function extractHtmlCodeBlocks(html) {
   const regex = /<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi
   let match
   while ((match = regex.exec(html)) !== null) {
-    const block = stripHtml(match[1]).trim()
+    // Decode HTML entities but preserve whitespace (do not use stripHtml which collapses newlines)
+    const block = decodeHtmlEntities(match[1]).trim()
     // Only include blocks that look like YAML or kubectl commands
     if (block.length > 20 && block.length < 5000) {
       if (block.includes('apiVersion:') || block.includes('kind:') || block.includes('kubectl') || block.includes('helm')) {
@@ -208,6 +209,15 @@ function extractHtmlCodeBlocks(html) {
     }
   }
   return blocks
+}
+
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
 }
 
 function extractStepsFromHtml(html) {
