@@ -378,8 +378,13 @@ function extractJSON(text) {
   if (!text) return text
   const trimmed = text.trim()
   if (trimmed.startsWith('{')) return trimmed
-  const match = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
-  if (match) return match[1].trim()
+  // Use last closing fence so embedded code blocks inside the JSON don't truncate it
+  const openMatch = trimmed.match(/```(?:json)?\s*\n?/)
+  if (openMatch) {
+    const contentStart = openMatch.index + openMatch[0].length
+    const closingFence = trimmed.lastIndexOf('```')
+    if (closingFence > contentStart) return trimmed.slice(contentStart, closingFence).trim()
+  }
   const start = trimmed.indexOf('{')
   const end = trimmed.lastIndexOf('}')
   if (start !== -1 && end > start) return trimmed.slice(start, end + 1)

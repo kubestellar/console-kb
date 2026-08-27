@@ -44,7 +44,7 @@ describe('synthesizeMission', () => {
               steps: [
                 { title: 'Check pod status', description: 'Run ```bash\nkubectl get pods -n kube-system\n``` to find the failing pod.' },
                 { title: 'Inspect pod logs', description: 'Run ```bash\nkubectl logs deploy/coredns -n kube-system\n``` to confirm the ConfigMap error.' },
-                { title: 'Apply the fix', description: 'Apply ```yaml\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: coredns\n``` and restart the deployment.' },
+                { title: 'Restart the CoreDNS deployment', description: 'Apply ```yaml\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: coredns\n``` and restart the deployment.' },
               ],
               resolution: 'The ConfigMap contained an invalid option, so restarting after correcting the manifest restores a valid CoreDNS configuration.',
               difficulty: 'advanced',
@@ -58,7 +58,7 @@ describe('synthesizeMission', () => {
 
     const result = await synthesizeMission({
       projectName: 'CoreDNS',
-      issueTitle: 'Codecov noise should be removed from prompts',
+      issueTitle: 'CoreDNS pods fail after ConfigMap rollout',
       issueBody: 'Pods fail after rollout.\n\n## Codecov\ncoverage delta here\n\n## Root cause\nConfigMap contains an invalid option.',
       labels: ['bug', 'dns'],
       solution: 'Update the ConfigMap and restart the deployment.',
