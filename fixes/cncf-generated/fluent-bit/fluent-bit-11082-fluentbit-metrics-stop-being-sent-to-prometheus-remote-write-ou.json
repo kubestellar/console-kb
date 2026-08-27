@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "fluent-bit-11082-fluentbit-metrics-stop-being-sent-to-prometheus-remote-write-ou",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "fluent-bit: fluentbit_ metrics stop being sent to prometheus_remote_write output about 1 hour after start",
+    "description": "fluentbit_ metrics stop being sent to prometheus_remote_write output about 1 hour after start. Requested by 13+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current fluent-bit deployment",
+        "description": "Verify your fluent-bit version and configuration:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nhelm list -n fluent-bit 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working fluent-bit installation."
+      },
+      {
+        "title": "Review fluent-bit configuration",
+        "description": "Inspect the relevant fluent-bit configuration:\n```bash\nkubectl get all -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get configmap -n fluent-bit -l app.kubernetes.io/part-of=fluent-bit\n```\nApproximately one hour after fluentbit starts, all `fluentbit_` internal metrics begin to be omitted from what is written with the `prometheus_remote_write` output.  These are all of the metrics from the `fluentbit_metrics` input."
+      },
+      {
+        "title": "Apply the fix for fluentbit_ metrics stop being sent to…",
+        "description": "```\n2025-10-29T1228.806Z        warn    VictoriaMetrics/app/vmselect/promql/rollup_result_cache.go:77   resetting rollup result cache because the metric fluentbit_logger_logs_total{job=\"fluentbit2\",message_type=\"error\"} (Timestamp=1761737727519, Value=0.000000) has a timestamp older than\n```yaml\n---\nservice:\n  flush: 1\n  daemon: Off\n  log_level: debug\n  # Enable/Disable the built-in HTTP Server for metrics\n  http_server: Off\n  http_listen: 127.0.0.1\n  http_port: 2020\n\npipeline:\n  inputs:\n    - name: fluentbit_metrics\n      tag: metrics_fluentbit\n      scrape_interval: 60s\n\n  outputs:\n    - name: prometheus_remote_write\n      match: 'metrics_*'\n      host: localhost\n      port: 8428\n      uri: /api/v1/write\n      retry_limit: 2\n      log_response_payload: True\n      tls: Off\n      add_label: job fluentbit2\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n fluent-bit -l app.kubernetes.io/name=fluent-bit\nkubectl get events -n fluent-bit --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"fluentbit_ metrics stop being sent to…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "```\n2025-10-29T1228.806Z        warn    VictoriaMetrics/app/vmselect/promql/rollup_result_cache.go:77   resetting rollup result cache because the metric fluentbit_logger_logs_total{job=\"fluentbit2\",message_type=\"error\"} (Timestamp=1761737727519, Value=0.000000) has a timestamp older than -search.cacheTimestampOffset=5m0s by 3240.481s\n```\n\nThis log is _surely_ related to",
+      "codeSnippets": [
+        "---\nservice:\n  flush: 1\n  daemon: Off\n  log_level: debug\n  # Enable/Disable the built-in HTTP Server for metrics\n  http_server: Off\n  http_listen: 127.0.0.1\n  http_port: 2020\n\npipeline:\n  inputs:\n    - name: fluentbit_metrics\n      tag: metrics_fluentbit\n      scrape_interval: 60s\n\n  outputs:\n    - name: prometheus_remote_write\n      match: 'metrics_*'\n      host: localhost\n      port: 8428\n      uri: /api/v1/write\n      retry_limit: 2\n      log_response_payload: True\n      tls: Off\n      add_label: job fluentbit2",
+        "- name: prometheus_textfile\n      tag: metrics_textfile\n      path: /tmp/node_info.prom\n      scrape_interval: 60s",
+        "2025-10-29T12:34:28.806Z        warn    VictoriaMetrics/app/vmselect/promql/rollup_result_cache.go:77   resetting rollup result cache because the metric fluentbit_logger_logs_total{job=\"fluentbit2\",message_type=\"error\"} (Timestamp=1761737727519, Value=0.000000) has a timestamp older than -search.cacheTimestampOffset=5m0s by 3240.481s"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "fluent-bit",
+      "graduated",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "fluent-bit"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/fluent/fluent-bit/issues/11082",
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "reactions": 13,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with fluent-bit installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-08-27T09:11:45.833Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
