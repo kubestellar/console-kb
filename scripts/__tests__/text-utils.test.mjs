@@ -400,3 +400,191 @@ describe('stripPRTemplate', () => {
     expect(result).toContain('refactors the authentication middleware')
   })
 })
+
+describe('truncateAtWordBoundary — MIN_TRUNCATION_POINT branch', () => {
+  it('returns the raw slice when the last space falls before position 20', () => {
+    const input = 'supercalifragilisticexpialidocious tail words'
+    const result = truncateAtWordBoundary(input, 15)
+    expect(result).toBe('supercalifragil')
+    expect(result).not.toContain(' ')
+  })
+
+  it('appends ellipsis to the raw slice when ellipsis is requested', () => {
+    const input = 'supercalifragilisticexpialidocious tail'
+    const result = truncateAtWordBoundary(input, 15, { ellipsis: true })
+    expect(result).toBe('supercalifragil…')
+  })
+})
+
+describe('truncateAtSentenceBoundary — sentence-boundary branch', () => {
+  it('truncates at ". " past the min-truncation-point', () => {
+    const input =
+      'This sentence must be longer than fifty characters so we clear the min. ' +
+      'And a follow-up sentence continues on after the period so the truncation lands cleanly here.'
+    const result = truncateAtSentenceBoundary(input, 120)
+    expect(result.endsWith('.')).toBe(true)
+    expect(result).toContain('clear the min.')
+    expect(result).not.toContain('follow-up sentence continues')
+  })
+
+  it('truncates at ".\\n" past the min-truncation-point', () => {
+    const input =
+      'This first sentence is long enough to clear the fifty-char guard.\n' +
+      'Second sentence that should get cut off entirely.'
+    const result = truncateAtSentenceBoundary(input, 100)
+    expect(result.endsWith('.')).toBe(true)
+    expect(result).toContain('fifty-char guard.')
+    expect(result).not.toContain('Second sentence')
+  })
+})
+
+describe('extractFromNumberedTemplate — filter branches', () => {
+  it('drops short parts, plain issue refs, github URLs, and one-word answers', () => {
+    const input =
+      '### 1. Why is this needed\n' +
+      '#123\n' +
+      '### 2. Which issue does this fix\n' +
+      'https://github.com/foo/bar/issues/9\n' +
+      '### 3. Additional context\n' +
+      'yes\n' +
+      '### 4. Anything else\n' +
+      'This is the substantive content that describes the actual change made here in enough detail.'
+    const result = extractFromNumberedTemplate(input)
+    expect(result).toContain('substantive content')
+    expect(result).not.toContain('#123')
+    expect(result).not.toMatch(/^yes$/m)
+    expect(result).not.toContain('https://github.com/foo/bar/issues/9')
+  })
+
+  it('drops short affirming phrases like "sure" / "thanks"', () => {
+    const input =
+      '### 1. Why is this needed\n' +
+      'sure, this works fine\n' +
+      '### 2. Which issue does this fix\n' +
+      'The substantive body explaining the entire architectural change and its motivation across services.'
+    const result = extractFromNumberedTemplate(input)
+    expect(result).toContain('substantive body')
+    expect(result).not.toMatch(/^sure, this works fine$/m)
+  })
+
+  it('returns text unchanged when fewer than 2 numbered sections are present', () => {
+    const input = '### 1. Only one section\nSome body content.'
+    expect(extractFromNumberedTemplate(input)).toBe(input)
+  })
+
+  it('returns empty string for null/empty input', () => {
+    expect(extractFromNumberedTemplate(null)).toBe('')
+    expect(extractFromNumberedTemplate('')).toBe('')
+  })
+})
+
+describe('extractFromBoldTemplate — filter branches', () => {
+  it('drops short "/kind" and "> Uncomment" boilerplate parts', () => {
+    const input =
+      '**What type of PR**\n' +
+      '> Uncomment one of the following\n' +
+      '/kind bug\n' +
+      '**What this PR does**\n' +
+      'The real body explains the actual behavior change in depth so downstream readers understand it.'
+    const result = extractFromBoldTemplate(input)
+    expect(result).toContain('real body explains')
+    expect(result).not.toContain('Uncomment')
+    expect(result).not.toMatch(/^\/kind bug$/m)
+  })
+
+  it('returns text unchanged when fewer than 2 bold headers are present', () => {
+    const input = '**Only one header**\nBody content.'
+    expect(extractFromBoldTemplate(input)).toBe(input)
+  })
+
+  it('returns empty string for null/empty input', () => {
+    expect(extractFromBoldTemplate(null)).toBe('')
+    expect(extractFromBoldTemplate('')).toBe('')
+  })
+})
+
+describe('isLikelyEnglish — short-circuit branches', () => {
+  it('returns true when text is null / empty / shorter than 50 chars', () => {
+    expect(isLikelyEnglish(null)).toBe(true)
+    expect(isLikelyEnglish('')).toBe(true)
+    expect(isLikelyEnglish('short text')).toBe(true)
+  })
+
+  it('returns true when there are fewer than 10 usable words even past 50 chars', () => {
+    const input = 'aaaaaaaaaa bbbbbbbbbb cccccccccc dddddddddd eeeeeeeeeeeee'
+    expect(input.length).toBeGreaterThanOrEqual(50)
+    expect(isLikelyEnglish(input)).toBe(true)
+  })
+
+  it('returns false for non-English prose above the length threshold', () => {
+    const input = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua'
+    expect(isLikelyEnglish(input)).toBe(false)
+  })
+})
+
+describe('slugify', () => {
+  it('lowercases and collapses non-alnum runs into single hyphens', () => {
+    expect(slugify('Hello World!!  Foo/Bar')).toBe('hello-world-foo-bar')
+  })
+
+  it('trims leading and trailing hyphens', () => {
+    expect(slugify('---Hello World---')).toBe('hello-world')
+  })
+
+  it('truncates to 80 characters', () => {
+    const long = 'a'.repeat(200)
+    expect(slugify(long).length).toBe(80)
+  })
+})
+
+describe('sanitizeInfraDetails', () => {
+  it('replaces public IPs but leaves private/loopback IPs alone', () => {
+    const input = 'public 8.8.8.8 private 10.0.0.5 loopback 127.0.0.1 rfc1918 192.168.1.1 rfc1918 172.16.0.1'
+    const result = sanitizeInfraDetails(input)
+    expect(result).toContain('192.0.2.1')
+    expect(result).not.toContain('8.8.8.8')
+    expect(result).toContain('10.0.0.5')
+    expect(result).toContain('127.0.0.1')
+    expect(result).toContain('192.168.1.1')
+    expect(result).toContain('172.16.0.1')
+  })
+
+  it('replaces AWS internal EC2 hostnames with the documentation example', () => {
+    const input = 'node ip-172-31-4-12.us-west-2.compute.internal joined'
+    expect(sanitizeInfraDetails(input)).toContain('ip-10-0-1-100.us-east-1.compute.internal')
+  })
+
+  it('replaces AWS public EC2 hostnames with the documentation example', () => {
+    // NOTE: the source regex uses \w+ which matches [A-Za-z0-9_] only, so
+    // real AWS region names like "us-west-2" (with hyphens) never match.
+    // A hyphen-free label like "useast1" is the only shape actually exercised.
+    const input = 'ssh ec2-54-201-3-4.useast1.compute.amazonaws.com'
+    expect(sanitizeInfraDetails(input)).toContain('ec2-192-0-2-1.us-east-1.compute.amazonaws.com')
+  })
+
+  it('replaces GCE internal hostnames with the documentation example', () => {
+    const input = 'gce vm-1.us-central1-a.c.my-real-project.internal ready'
+    expect(sanitizeInfraDetails(input)).toContain('instance-1.us-central1-a.c.project-id.internal')
+  })
+})
+
+describe('redactCredentials', () => {
+  it('redacts a password assignment', () => {
+    expect(redactCredentials('password: hunter2secret')).toBe('password: <REDACTED>')
+  })
+
+  it('redacts a token assignment written with =', () => {
+    expect(redactCredentials('api_key = "abcdef1234567890"')).toContain('<REDACTED>')
+  })
+
+  it('leaves obvious placeholders untouched', () => {
+    expect(redactCredentials('password: <YOUR_PASSWORD>')).toBe('password: <YOUR_PASSWORD>')
+    expect(redactCredentials('password: changeme')).toBe('password: changeme')
+    expect(redactCredentials('password: xxx')).toBe('password: xxx')
+    expect(redactCredentials('password: ${MY_VAR}')).toBe('password: ${MY_VAR}')
+  })
+
+  it('leaves short secret-like values (fewer than 4 chars) alone', () => {
+    expect(redactCredentials('token: ab')).toBe('token: ab')
+  })
+})
