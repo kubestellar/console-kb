@@ -95,4 +95,31 @@ describe('search-state', () => {
     expect(computeSinceDate({ lastSearched: null }, '30d')).toBe('2024-04-10T12:00:00.000Z')
     expect(computeSinceDate({ lastSearched: null }, 'not-a-window')).toBeNull()
   })
+
+  it('returns null from computeSinceDate when no lastSearched and no searchWindow', () => {
+    expect(computeSinceDate({ lastSearched: null }, null)).toBeNull()
+    expect(computeSinceDate({ lastSearched: null }, undefined)).toBeNull()
+    expect(computeSinceDate({ lastSearched: null }, '')).toBeNull()
+  })
+
+  it('backfills missing version/projects fields when reading a legacy state file', () => {
+    writeFileSync(join(fixtureDir, STATE_FILE), JSON.stringify({ lastUpdated: '2024-01-01T00:00:00.000Z' }))
+
+    const state = loadSearchState(fixtureDir)
+
+    expect(state.version).toBe(1)
+    expect(state.projects).toEqual({})
+    expect(state.lastUpdated).toBe('2024-01-01T00:00:00.000Z')
+  })
+
+  it('fills in defaults from getSourceState when a source row is missing fields', () => {
+    const state = loadSearchState(fixtureDir)
+    state.projects['kubernetes/kubernetes'] = { reddit: {} }
+
+    expect(getSourceState(state, 'kubernetes/kubernetes', 'reddit')).toEqual({
+      lastSearched: null,
+      processedIds: [],
+      cursor: null,
+    })
+  })
 })
