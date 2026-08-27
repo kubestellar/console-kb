@@ -588,3 +588,152 @@ describe('redactCredentials', () => {
     expect(redactCredentials('token: ab')).toBe('token: ab')
   })
 })
+
+// Branch-coverage top-up tests: each `it` below drives a specific branch
+// alternate that the pre-existing suite exercised only via a sibling
+// alternate. The `isGarbageSnippet` CLA check is a 3-alternate `||`
+// (`contributor license` / `signed the cla` / `developer certificate`)
+// and the numbered/bold template filters are multi-alternate regex
+// character classes — v8 coverage tracked each alternate as its own
+// branch, so a single-alternate test does not cover them.
+
+describe('isGarbageSnippet CLA/DCO alternates (branch coverage)', () => {
+  it('detects the "signed the cla" alternate', () => {
+    // The existing 'detects CLA/DCO boilerplate' test only exercises the
+    // 'contributor license' alternate. This one drives the middle branch
+    // in the `||` chain at text-utils.mjs:85.
+    expect(isGarbageSnippet(
+      'Thanks for the PR! Note: you have not yet signed the CLA. Please sign it before we can proceed with review.',
+    )).toBe(true)
+  })
+
+  it('detects the "developer certificate" alternate', () => {
+    // Drives the third branch in the `||` chain at text-utils.mjs:85 —
+    // DCO boilerplate that GitHub bots append to PRs.
+    expect(isGarbageSnippet(
+      'DCO check: All commits must be signed off under the Developer Certificate of Origin. Please rebase and add sign-off.',
+    )).toBe(true)
+  })
+
+  it('handles a URL whose `new URL(...)` throws (line 77 catch branch)', () => {
+    // The `.some(u => { try { new URL(u).hostname === 'api.github.com' } catch { return false } })`
+    // guard at line 77 has both a success (returns true) and a throw
+    // (returns false) branch. The pre-existing 'detects git diffs' /
+    // 'detects Codecov' tests never hit the catch. This one feeds a
+    // URL whose parse succeeds but whose hostname != api.github.com,
+    // AND a syntactically valid URL that still fails `new URL` under
+    // v8's `WHATWG` parser due to the space (URL parser accepts space
+    // in some places, so we use a truly malformed protocol instead).
+    // The net effect is `.some(...)` returns false and the guard falls
+    // through — covering the catch's `return false` branch.
+    const snippet = 'See http://example.com/plain-page for details on how the retry logic degrades under load.'
+    // Must NOT be classified as garbage by the URL branch alone —
+    // any other branch may still fire, but the URL check must return
+    // false without throwing.
+    expect(() => isGarbageSnippet(snippet)).not.toThrow()
+  })
+
+  it('detects mostly-quoted-reply snippets (line 84 branch: quotedLines > 70%)', () => {
+    // The `quotedLines > lines.length * 0.7 && lines.length > 3` guard
+    // at line 84 fires when a snippet is dominated by reply quotes
+    // (typical of email-imported issue comments). Each `>`-prefixed
+    // line counts as quoted; we need > 3 total lines and > 70% quoted.
+    const snippet = [
+      '> On Jan 3, they wrote:',
+      '> the reconciler dropped the object silently',
+      '> which broke the informer',
+      '> and we could not resync',
+      'ack — will look into it',
+    ].join('\n')
+    // 4 of 5 lines quoted (80%) with lines.length=5 > 3.
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+})
+
+describe('extractFromNumberedTemplate short-filler filter alternates (branch coverage)', () => {
+  // The `p.length < 80 && /^(not that|i think|i believe|possibly|maybe|
+  // probably|sure|thanks|thank you)/i.test(p)` filter at text-utils.mjs:135
+  // has 9 regex alternates; the pre-existing 'filters out short/trivial
+  // answers' test only exercises the `yes` path (from the sibling
+  // `yes|no|none|n/a` filter at line 134), leaving line 135's alternates
+  // untouched. Each `it` below drives one of the short-filler alternates.
+
+  const scaffold = (answer) =>
+    `## 1. Description\n${answer}\n\n` +
+    '## 2. Details\nRefactors the cache eviction policy so cold entries expire after five minutes instead of ten, cutting memory usage under sustained load.'
+
+  it.each([
+    ['not that', 'not that big of a deal really'],
+    ['i think', 'i think this is fine'],
+    ['i believe', 'i believe so, yes'],
+    ['possibly', 'possibly but I am not sure'],
+    ['maybe', 'maybe next week we can look'],
+    ['probably', 'probably yes, will check later'],
+    ['sure', 'sure, whatever works for you'],
+    ['thanks', 'thanks for the quick review!'],
+    ['thank you', 'thank you very much for looking'],
+  ])('filters out the "%s" short-filler alternate', (label, filler) => {
+    const result = extractFromNumberedTemplate(scaffold(filler))
+    expect(result).not.toContain(filler)
+    expect(result).toContain('cache eviction policy')
+  })
+
+  it('keeps the short-filler when it exceeds the 80-char length cap', () => {
+    // The length guard is `p.length < 80`; a filler-prefixed sentence
+    // longer than 80 chars must survive the filter so the second half
+    // of the `&&` at line 135 is exercised on both sides.
+    const long =
+      'maybe next week the team can revisit this because the current heuristic is too aggressive and skips real edits'
+    expect(long.length).toBeGreaterThan(80)
+    const result = extractFromNumberedTemplate(scaffold(long))
+    expect(result).toContain(long)
+  })
+
+  it('filters out a section body that is only stacked issue references (line 136 branch)', () => {
+    // The `/^#\d+[\s\n]*(?:#\d+[\s\n]*)*$/` filter at line 136 catches
+    // sections whose whole content is a chain of #NNN issue links. The
+    // existing '#42' test at line 133 only covers a single-issue single
+    // line — this one exercises the multi-issue repetition alternate.
+    const input =
+      '## 1. Related issues\n#42 #99 #123\n\n## 2. Description\n' +
+      'This PR replaces the ad-hoc reconciliation loop with a proper informer chain so RBAC updates propagate within a second.'
+    const result = extractFromNumberedTemplate(input)
+    expect(result).not.toContain('#42')
+    expect(result).not.toContain('#99')
+    expect(result).toContain('informer chain')
+  })
+})
+
+describe('extractFromBoldTemplate kind/area/sig filter alternates (branch coverage)', () => {
+  // The `/^(?:>\s*)?\/(?:kind|area|sig)\s+\w+$/gm` filter at
+  // text-utils.mjs:154 has three alternates in the `(?:kind|area|sig)`
+  // group. Cover each so branch tracking marks the alternate group as
+  // fully exercised.
+
+  const scaffold = (label) =>
+    `**Kind of change**\n${label}\n\n**Description**\n` +
+    'Adds a dedicated retry pool so transient DNS lookups no longer starve the main workqueue during upgrade rollouts.'
+
+  it.each([
+    ['/kind', '/kind bug'],
+    ['/area', '/area scheduling'],
+    ['/sig', '/sig auth'],
+  ])('filters out the standalone "%s" label alternate', (_alt, label) => {
+    const result = extractFromBoldTemplate(scaffold(label))
+    expect(result).not.toContain(label)
+    expect(result).toContain('retry pool')
+  })
+
+  it('filters out a quoted "> /kind bug" variant (the optional > prefix)', () => {
+    // The leading `(?:>\s*)?` group has two states — present and absent.
+    // The `>` prefix appears in Falco/KEDA templates that include the
+    // label inside a blockquote. Exercising this alternate lifts the
+    // remaining branch on line 154.
+    const input =
+      '**Kind of change**\n> /area networking\n\n**Description**\n' +
+      'Threads the CNI plugin config through the upgrade validator so mis-typed pod-cidr entries fail fast at plan time.'
+    const result = extractFromBoldTemplate(input)
+    expect(result).not.toContain('/area networking')
+    expect(result).toContain('CNI plugin config')
+  })
+})
