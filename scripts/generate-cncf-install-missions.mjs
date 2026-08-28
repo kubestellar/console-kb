@@ -573,8 +573,6 @@ function isMissionStale(filePath) {
   }
 }
 
-// ─── Report ──────────────────────────────────────────────────────────
-
 function formatReport(report) {
   const lines = [
     '# CNCF Install Mission Generation Report',
@@ -870,4 +868,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error('Fatal error:', err)
     process.exit(1)
   })
+}
+
+// ─── Test exports (pure helpers) ─────────────────────────────────────
+// Exported for unit testing. These are pure functions with no network I/O.
+export {
+  buildInstallPrompt,
+  formatReport,
+  isMissionStale,
+  replaceUntilStable,
+  serializeSanitizedMissionForFile,
+  loadInstallSourcesConfig,
 }
