@@ -6,32 +6,34 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "wasmedge-runtime: LFX Workspace: Memory alignment in WASM instructions",
-    "description": "LFX Workspace: Memory alignment in WASM instructions. Community-reported issue.",
+    "description": "LFX Workspace: Memory alignment in WASM instructions. Community-reported issue about misaligned typed pointers in WASI host functions.",
     "type": "analyze",
     "status": "completed",
     "steps": [
       {
-        "title": "Identify wasmedge-runtime analyze symptoms",
-        "description": "Check for the issue in your wasmedge-runtime installation:\n```bash\nwasmedge --version\n```\nLook for errors or warnings that may indicate the issue."
+        "title": "Reproduce the misaligned pointer trap",
+        "description": "Run the WasmEdge regression or local sample that triggers a misaligned typed pointer so you can capture the current failure mode.\n```bash\nwasmedge --version\nwasmedge tests/wasm/misaligned_pointer.wasm\n```\nThe bad behavior to confirm is `__WASI_ERRNO_ADDRNOTAVAIL` instead of `ErrCode::UnalignedAtomicAccess`."
       },
       {
-        "title": "Review wasmedge-runtime configuration",
-        "description": "Review the relevant wasmedge-runtime configuration:\n### Project Title\n\nMemory alignment in WASM instructions\n\n### Motivation\n\nWASM memory instructions can compute addresses that violate the alignment expected by pointer-sized data in WASM32."
+        "title": "Inspect the affected host functions",
+        "description": "Search the runtime sources for the typed-pointer handling in the args/env and clock host functions.\n```bash\ngit grep -n 'ADDRNOTAVAIL\\|UnalignedAtomicAccess\\|typed pointer' .\n```\nUse the matches to verify where the misalignment trap is being downgraded."
       },
       {
         "title": "Apply the fix for LFX Workspace: Memory alignment in WASM instructions",
-        "description": "This is a follow-up to #5089.\n\nThis PR extends the same WASI typed pointer misalignment trap behavior to args/env and clock host functions. Misaligned typed pointers now trap with `ErrCode::UnalignedAtomicAccess` instead of returning `__WASI_ERRNO_ADDRNOTAVAIL`.\n\nUpdated checks:\n- `args_si\n```yaml\nLocal lint checks:\n```"
+        "description": "This is a follow-up to #5089.\n\nExtend the same WASI typed pointer misalignment trap behavior to args/env and clock host functions. Misaligned typed pointers should trap with `ErrCode::UnalignedAtomicAccess` instead of returning `__WASI_ERRNO_ADDRNOTAVAIL`.\n```cpp\nif (isMisaligned(ptr)) {\n  return WasmEdge::ErrCode::UnalignedAtomicAccess;\n}\n```\nKeep the check consistent across all affected imports."
       },
       {
-        "title": "Confirm LFX Workspace: Memory alignment in WASM… is resolved",
-        "description": "Verify the fix by checking that the original error no longer occurs:\nTest wasmedge-runtime to confirm the issue is resolved.\nConfirm that the issue symptoms are gone."
+        "title": "Verify the misalignment fix",
+        "description": "Run the targeted regression tests and confirm the misaligned-pointer case now traps with the expected error.\n```bash\ncargo test -p wasmedge-wasi\nwasmedge tests/wasm/misaligned_pointer.wasm\n```\nCheck that the old `__WASI_ERRNO_ADDRNOTAVAIL` path no longer appears."
       }
     ],
     "resolution": {
-      "summary": "This is a follow-up to #5089.\n\nThis PR extends the same WASI typed pointer misalignment trap behavior to args/env and clock host functions. Misaligned typed pointers now trap with `ErrCode::UnalignedAtomicAccess` instead of returning `__WASI_ERRNO_ADDRNOTAVAIL`.\n\nUpdated checks:\n- `args_si",
+      "summary": "This is a follow-up to #5089. The fix extends the same WASI typed pointer misalignment trap behavior to the args/env and clock host functions, so misaligned pointers now fail fast with `ErrCode::UnalignedAtomicAccess` instead of being misreported as `__WASI_ERRNO_ADDRNOTAVAIL`. That keeps the runtime behavior consistent across WASI imports and avoids masking alignment bugs.",
       "codeSnippets": [
-        "Local lint checks:",
-        "CLI smoke tests:"
+        "wasmedge --version",
+        "git grep -n 'ADDRNOTAVAIL\\|UnalignedAtomicAccess\\|typed pointer' .",
+        "if (isMisaligned(ptr)) {\n  return WasmEdge::ErrCode::UnalignedAtomicAccess;\n}",
+        "cargo test -p wasmedge-wasi"
       ]
     }
   },
