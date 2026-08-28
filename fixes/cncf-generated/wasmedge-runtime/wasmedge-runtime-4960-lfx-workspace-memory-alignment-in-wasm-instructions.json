@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "wasmedge-runtime-4960-lfx-workspace-memory-alignment-in-wasm-instructions",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "wasmedge-runtime: LFX Workspace: Memory alignment in WASM instructions",
+    "description": "LFX Workspace: Memory alignment in WASM instructions. Community-reported issue about misaligned typed pointers in WASI host functions.",
+    "type": "analyze",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Reproduce the misaligned pointer trap",
+        "description": "Run the WasmEdge regression or local sample that triggers a misaligned typed pointer so you can capture the current failure mode.\n```bash\nwasmedge --version\nwasmedge tests/wasm/misaligned_pointer.wasm\n```\nThe bad behavior to confirm is `__WASI_ERRNO_ADDRNOTAVAIL` instead of `ErrCode::UnalignedAtomicAccess`."
+      },
+      {
+        "title": "Inspect the affected host functions",
+        "description": "Search the runtime sources for the typed-pointer handling in the args/env and clock host functions.\n```bash\ngit grep -n 'ADDRNOTAVAIL\\|UnalignedAtomicAccess\\|typed pointer' .\n```\nUse the matches to verify where the misalignment trap is being downgraded."
+      },
+      {
+        "title": "Apply the fix for LFX Workspace: Memory alignment in WASM instructions",
+        "description": "This is a follow-up to #5089.\n\nExtend the same WASI typed pointer misalignment trap behavior to args/env and clock host functions. Misaligned typed pointers should trap with `ErrCode::UnalignedAtomicAccess` instead of returning `__WASI_ERRNO_ADDRNOTAVAIL`.\n```cpp\nif (isMisaligned(ptr)) {\n  return WasmEdge::ErrCode::UnalignedAtomicAccess;\n}\n```\nKeep the check consistent across all affected imports."
+      },
+      {
+        "title": "Verify the misalignment fix",
+        "description": "Run the targeted regression tests and confirm the misaligned-pointer case now traps with the expected error.\n```bash\ncargo test -p wasmedge-wasi\nwasmedge tests/wasm/misaligned_pointer.wasm\n```\nCheck that the old `__WASI_ERRNO_ADDRNOTAVAIL` path no longer appears."
+      }
+    ],
+    "resolution": {
+      "summary": "This is a follow-up to #5089. The fix extends the same WASI typed pointer misalignment trap behavior to the args/env and clock host functions, so misaligned pointers now fail fast with `ErrCode::UnalignedAtomicAccess` instead of being misreported as `__WASI_ERRNO_ADDRNOTAVAIL`. That keeps the runtime behavior consistent across WASI imports and avoids masking alignment bugs.",
+      "codeSnippets": [
+        "wasmedge --version",
+        "git grep -n 'ADDRNOTAVAIL\\|UnalignedAtomicAccess\\|typed pointer' .",
+        "if (isMisaligned(ptr)) {\n  return WasmEdge::ErrCode::UnalignedAtomicAccess;\n}",
+        "cargo test -p wasmedge-wasi"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "wasmedge-runtime",
+      "sandbox",
+      "runtime",
+      "analyze"
+    ],
+    "cncfProjects": [
+      "wasmedge-runtime"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "analyze"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/WasmEdge/WasmEdge/issues/4960",
+      "repo": "https://github.com/WasmEdge/WasmEdge",
+      "pr": "https://github.com/WasmEdge/WasmEdge/pull/5229"
+    },
+    "reactions": 2,
+    "comments": 18,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "wasmedge"
+    ],
+    "description": "A working wasmedge-runtime installation or development environment."
+  },
+  "security": {
+    "scannedAt": "2026-08-28T09:30:35.932Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
