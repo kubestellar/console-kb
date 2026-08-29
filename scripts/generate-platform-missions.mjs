@@ -445,7 +445,7 @@ function applyQualityGate(mission) {
     issues.push(`Malicious content detected: ${maliciousFindings.findings.map(f => f.type).join(', ')}`)
   }
 
-  const score = scoreMission(mission)
+  const { score } = scoreMission(mission)
   const pass = issues.length === 0 && score >= QUALITY_THRESHOLD
   const verdict = !pass
     ? (score >= DRAFT_THRESHOLD ? 'draft' : 'rejected')

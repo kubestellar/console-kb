@@ -9,6 +9,7 @@ import {
   replaceUntilStable,
   serializeSanitizedMissionForFile,
   loadInstallSourcesConfig,
+  applyQualityGate,
 } from '../generate-cncf-install-missions.mjs'
 
 // ─── buildInstallPrompt ──────────────────────────────────────────────
@@ -283,5 +284,154 @@ describe('loadInstallSourcesConfig', () => {
     // Values from install-sources.yaml
     expect(config.quality.minScore).toBe(60)
     expect(config.quality.draftMinScore).toBe(40)
+  })
+})
+
+// ─── applyQualityGate ─────────────────────────────────────────────────
+
+describe('applyQualityGate', () => {
+  const config = { quality: { minScore: 60, draftMinScore: 40 } }
+
+  const highQualityMission = {
+    metadata: {
+      tags: ['argo-cd', 'gitops', 'install'],
+      targetResourceKinds: ['Deployment'],
+      difficulty: 'advanced',
+      sourceUrls: { issue: 'https://github.com/x/y/issues/1' },
+      reactions: 25,
+      cncfProjects: ['argo-cd'],
+    },
+    mission: {
+      description: 'Argo CD server pods crash with CrashLoopBackOff because the admin secret is missing after a fresh Helm install in the argocd namespace.',
+      steps: [
+        { title: 'Install Argo CD via Helm', description: 'Run `helm install argocd argo/argo-cd -n argocd --create-namespace` to deploy the chart.\n```yaml\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: argocd\n```' },
+        { title: 'Check pod status for CrashLoopBackOff', description: 'Run `kubectl get pods -n argocd` to confirm the argocd-server pod is failing.' },
+        { title: 'Inspect server logs for the missing secret', description: 'Run `kubectl logs deployment/argocd-server -n argocd` to see the missing argocd-secret error.' },
+        { title: 'Recreate the admin secret', description: 'Apply `kubectl create secret generic argocd-secret -n argocd --from-literal=admin.password=changeme` to restore the required secret at /manifests/secret.yaml.' },
+        { title: 'Confirm the deployment is healthy', description: 'Run `kubectl rollout status deployment/argocd-server -n argocd` to verify the rollout completed successfully.' },
+      ],
+      resolution: {
+        summary: 'The root cause is that the Helm chart does not auto-generate argocd-secret when installed with custom values, so the server pod fails because it cannot read the admin password. Recreating the secret manually resolves this because argocd-server watches for it at startup.',
+        codeSnippets: ['apiVersion: v1\nkind: Secret\nmetadata:\n  name: argocd-secret\n  namespace: argocd\ntype: Opaque'],
+      },
+    },
+  }
+
+  it('returns tier="published" with a numeric score when the mission passes every gate and scores above minScore', () => {
+    const result = applyQualityGate(highQualityMission, config)
+    expect(result.tier).toBe('published')
+    expect(typeof result.score).toBe('number')
+    expect(Number.isNaN(result.score)).toBe(false)
+    expect(result.score).toBeGreaterThanOrEqual(config.quality.minScore)
+    expect(result.gates.every(g => g.pass)).toBe(true)
+  })
+
+  it('returns tier="rejected" with a single "security" gate when sensitive data is found', () => {
+    const mission = {
+      metadata: {},
+      mission: {
+        description: 'Contains an AWS key AKIAABCDEFGHIJKLMNOP embedded in the steps.',
+        steps: [{ title: 'Step', description: 'x' }],
+        resolution: { summary: 'x' },
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    expect(result.tier).toBe('rejected')
+    expect(result.gates).toHaveLength(1)
+    expect(result.gates[0].gate).toBe('security')
+    expect(result.gates[0].pass).toBe(false)
+  })
+
+  it('returns tier="rejected" with a single "malicious" gate when malicious content is found', () => {
+    const mission = {
+      metadata: {},
+      mission: {
+        description: 'Injects a payload <script>alert(1)</script> into the page.',
+        steps: [{ title: 'Step', description: 'x' }],
+        resolution: { summary: 'x' },
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    expect(result.tier).toBe('rejected')
+    expect(result.gates).toHaveLength(1)
+    expect(result.gates[0].gate).toBe('malicious')
+    expect(result.gates[0].pass).toBe(false)
+  })
+
+  it('fails the "install-cmd" gate when no step contains a recognized install command', () => {
+    const mission = {
+      ...highQualityMission,
+      mission: {
+        ...highQualityMission.mission,
+        steps: highQualityMission.mission.steps.filter(s => !/helm install/.test(s.description)),
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    const installGate = result.gates.find(g => g.gate === 'install-cmd')
+    expect(installGate.pass).toBe(false)
+  })
+
+  it('fails the "verification" gate when no step contains a recognized verification command', () => {
+    const mission = {
+      ...highQualityMission,
+      mission: {
+        ...highQualityMission.mission,
+        steps: highQualityMission.mission.steps.filter(s => !/kubectl (get|logs|rollout)/.test(s.description)),
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    const verifyGate = result.gates.find(g => g.gate === 'verification')
+    expect(verifyGate.pass).toBe(false)
+  })
+
+  it('fails the "step-count" gate when the mission has fewer than 3 steps', () => {
+    const mission = {
+      ...highQualityMission,
+      mission: {
+        ...highQualityMission.mission,
+        steps: highQualityMission.mission.steps.slice(0, 2),
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    const stepGate = result.gates.find(g => g.gate === 'step-count')
+    expect(stepGate.pass).toBe(false)
+  })
+
+  it('returns tier="draft" when the score is between draftMinScore and minScore and a gate fails', () => {
+    const mission = {
+      metadata: { tags: ['argo-cd'], reactions: 3 },
+      mission: {
+        description: 'Argo CD server pods crash with CrashLoopBackOff because the admin secret is missing after a fresh install in the argocd namespace.',
+        steps: [
+          { title: 'Check pod status for CrashLoopBackOff', description: 'Run `kubectl get pods -n argocd` to confirm the argocd-server pod is failing.' },
+          { title: 'Inspect server logs for the missing secret', description: 'Run `kubectl logs deployment/argocd-server -n argocd` to see the missing argocd-secret error.' },
+          { title: 'Recreate the admin secret manually', description: 'Manually create the argocd-secret with the admin password at /manifests/secret.yaml so the server can authenticate.' },
+        ],
+        resolution: {
+          summary: 'The root cause is that the secret was deleted and never regenerated, so the server pod fails because it cannot read the admin password.',
+        },
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    expect(result.tier).toBe('draft')
+    expect(result.score).toBeGreaterThanOrEqual(config.quality.draftMinScore)
+    expect(result.gates.some(g => !g.pass)).toBe(true)
+  })
+
+  it('returns tier="rejected" when the score is below draftMinScore', () => {
+    const mission = {
+      metadata: {},
+      mission: {
+        description: 'Something is wrong.',
+        steps: [
+          { title: 'Understand the problem', description: 'Look at it.' },
+          { title: 'Apply the fix', description: 'Do the thing.' },
+        ],
+        resolution: { summary: 'Fixed it.' },
+      },
+    }
+    const result = applyQualityGate(mission, config)
+    expect(result.tier).toBe('rejected')
+    expect(result.score).toBeLessThan(config.quality.draftMinScore)
   })
 })
