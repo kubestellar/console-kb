@@ -566,6 +566,19 @@ describe('sanitizeInfraDetails', () => {
     const input = 'gce vm-1.us-central1-a.c.my-real-project.internal ready'
     expect(sanitizeInfraDetails(input)).toContain('instance-1.us-central1-a.c.project-id.internal')
   })
+
+  it('replaces GKE node names with the documentation placeholder', () => {
+    const input = 'node gke-my-cluster-default-pool-abc123 tainted'
+    expect(sanitizeInfraDetails(input)).toContain('gke-cluster-default-pool-node')
+    expect(sanitizeInfraDetails(input)).not.toContain('gke-my-cluster-default-pool-abc123')
+  })
+
+  it('redacts bare 12-digit cloud account IDs', () => {
+    const input = 'account 123456789012 billed'
+    expect(sanitizeInfraDetails(input)).toContain('123456789012')
+    const real = 'account 987654321098 billed'
+    expect(sanitizeInfraDetails(real)).not.toContain('987654321098')
+  })
 })
 
 describe('redactCredentials', () => {
