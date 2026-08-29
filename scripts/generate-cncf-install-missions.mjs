@@ -455,7 +455,7 @@ async function synthesizeInstallMission(project, context) {
 const INSTALL_CMD_RE = /helm install|helm upgrade|kubectl apply|kubectl create|docker run|operator-sdk|kustomize build|kubectl kustomize/i
 const VERIFY_CMD_RE = /kubectl get|kubectl describe|kubectl logs|curl.*health|curl.*ready|kubectl port-forward|kubectl rollout status/i
 
-function applyQualityGate(mission, config) {
+export function applyQualityGate(mission, config) {
   const gates = []
   const qualityConf = config.quality || {}
   const minScore = qualityConf.minScore || QUALITY_THRESHOLD
@@ -497,7 +497,7 @@ function applyQualityGate(mission, config) {
   gates.push({ gate: 'step-count', pass: steps.length >= 3, reason: steps.length < 3 ? `Only ${steps.length} steps` : null })
 
   // Gate 7: Quality score
-  const score = scoreMission(mission)
+  const { score } = scoreMission(mission)
   gates.push({ gate: 'quality-score', pass: score >= minScore, reason: score < minScore ? `Score ${score} < ${minScore}` : null })
 
   const allPass = gates.every(g => g.pass)
