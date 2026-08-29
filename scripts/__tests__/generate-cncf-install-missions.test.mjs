@@ -293,6 +293,8 @@ describe('applyQualityGate', () => {
   const config = { quality: { minScore: 60, draftMinScore: 40 } }
 
   const highQualityMission = {
+    version: 'kc-mission-v1',
+    name: 'argocd-missing-admin-secret',
     metadata: {
       tags: ['argo-cd', 'gitops', 'install'],
       targetResourceKinds: ['Deployment'],
@@ -302,6 +304,7 @@ describe('applyQualityGate', () => {
       cncfProjects: ['argo-cd'],
     },
     mission: {
+      title: 'Argo CD server crashes because admin secret is missing',
       description: 'Argo CD server pods crash with CrashLoopBackOff because the admin secret is missing after a fresh Helm install in the argocd namespace.',
       steps: [
         { title: 'Install Argo CD via Helm', description: 'Run `helm install argocd argo/argo-cd -n argocd --create-namespace` to deploy the chart.\n```yaml\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: argocd\n```' },
@@ -359,11 +362,12 @@ describe('applyQualityGate', () => {
   })
 
   it('fails the "install-cmd" gate when no step contains a recognized install command', () => {
+    const INSTALL_CMD_RE = /helm install|helm upgrade|kubectl apply|kubectl create|docker run|operator-sdk|kustomize build|kubectl kustomize/i
     const mission = {
       ...highQualityMission,
       mission: {
         ...highQualityMission.mission,
-        steps: highQualityMission.mission.steps.filter(s => !/helm install/.test(s.description)),
+        steps: highQualityMission.mission.steps.filter(s => !INSTALL_CMD_RE.test(`${s.title || ''} ${s.description || ''}`)),
       },
     }
     const result = applyQualityGate(mission, config)
