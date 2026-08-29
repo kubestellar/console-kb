@@ -251,6 +251,11 @@ export function sanitizeInfraDetails(text) {
     /\b[\w-]+\.[\w-]+\.c\.[\w-]+\.internal\b/g,
     'instance-1.us-central1-a.c.project-id.internal'
   )
+  sanitized = sanitized.replace(
+    /\bgke-[a-z0-9-]+-[a-z0-9]+-[a-z0-9]+\b/g,
+    'gke-cluster-default-pool-node'
+  )
+  sanitized = sanitized.replace(/\b\d{12}\b/g, '123456789012')
   return sanitized
 }
 

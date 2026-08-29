@@ -23,6 +23,7 @@ import { K8S_PLATFORMS, getPlatformByName } from './k8s-platforms.mjs'
 import { OTHER_PROJECTS } from './other-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
+import { sanitizeInfraDetails } from './lib/text-utils.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -335,76 +336,6 @@ async function synthesizePlatformMission(platform, context) {
     console.error(`  LLM error: ${err.message}`)
     return null
   }
-}
-
-// ─── Sanitization helpers ────────────────────────────────────────────
-
-/**
- * Sanitize HTML content to prevent XSS (CWE-79, CWE-80).
- * Uses loop-until-stable to handle nested/overlapping tags.
- */
-function replaceUntilStable(input, pattern, replacement = '') {
-  let previous
-  do {
-    previous = input
-    input = input.replace(pattern, replacement)
-  } while (input !== previous)
-  return input
-}
-
-function sanitizeHtml(text) {
-  let sanitized = text
-  
-  // Decode HTML entities first to catch entity-encoded attacks
-  sanitized = sanitized
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#x2F;/gi, '/')
-    .replace(/&amp;/gi, '&')
-  
-  // Loop each multi-character sanitizer to a fixed point (CWE-80/116).
-  // Match closing </script> with any content before > to cover variants like </script\t\n bar> (js/bad-tag-filter).
-  sanitized = replaceUntilStable(sanitized, /<script[\s\S]*?<\/\s*script[^>]*>/gi)
-  sanitized = replaceUntilStable(sanitized, /\bon\w+[\s\u0000-\u001F\u007F]*=[\s\u0000-\u001F\u007F]*(?:["'][^"']*["']|[^\s>]+)/gi)
-  sanitized = replaceUntilStable(sanitized, /javascript[\s\u0000-\u001F\u007F]*:/gi)
-  sanitized = replaceUntilStable(sanitized, /<[^>]+>/g)
-  
-  return sanitized
-}
-
-/** Sanitize real infrastructure details from scraped content */
-function sanitizeInfraDetails(text) {
-  // First sanitize HTML/XSS content
-  let sanitized = sanitizeHtml(text)
-  let prev = ''
-  
-  // Use loop-until-stable to handle overlapping patterns (defense-in-depth)
-  // Loop until no more changes to catch edge cases with overlapping patterns
-  while (sanitized !== prev) {
-    prev = sanitized
-    
-    // Replace real public IPs with RFC 5737 documentation IPs (preserve private ranges)
-    sanitized = sanitized.replace(
-      /\b(?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.0\.0\.)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
-      '192.0.2.1'
-    )
-    // Replace AWS EC2 internal hostnames
-    sanitized = sanitized.replace(
-      /\bip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal\b/g,
-      'ip-10-0-0-1.us-east-1.compute.internal'
-    )
-    // Replace GKE node names
-    sanitized = sanitized.replace(
-      /\bgke-[a-z0-9-]+-[a-z0-9]+-[a-z0-9]+\b/g,
-      'gke-cluster-default-pool-node'
-    )
-    // Redact cloud account IDs
-    sanitized = sanitized.replace(/\b\d{12}\b/g, '123456789012')
-  }
-  
-  return sanitized
 }
 
 // ─── Quality Gate ─────────────────────────────────────────────────────
