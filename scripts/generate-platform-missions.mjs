@@ -521,7 +521,7 @@ function isMissionStale(filePath) {
 
 function formatReport(results) {
   const lines = ['# Platform Mission Generation Report', `Generated: ${new Date().toISOString()}`, '']
-  const published = results.filter(r => r.verdict === 'publish')
+  const published = results.filter(r => r.verdict === 'pass')
   const drafted = results.filter(r => r.verdict === 'draft')
   const rejected = results.filter(r => r.verdict === 'rejected')
   const skipped = results.filter(r => r.verdict === 'skipped')
@@ -764,7 +764,7 @@ async function main() {
   }
 
   // Summary
-  const published = results.filter(r => r.verdict === 'publish').length
+  const published = results.filter(r => r.verdict === 'pass').length
   const drafted = results.filter(r => r.verdict === 'draft').length
   const rejected = results.filter(r => r.verdict === 'rejected').length
   const skipped = results.filter(r => r.verdict === 'skipped').length
