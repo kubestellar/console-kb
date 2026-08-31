@@ -108,6 +108,31 @@ describe('scanMissionFile YAML fallback path', () => {
     expect(result.parsed).toBeNull()
   })
 
+  it('swallows errors thrown inside the YAML parse loop via tryParseYamlSimple inner catch', () => {
+    // Previously-uncovered branch: tryParseYamlSimple has its own
+    // try/catch wrapping the split/for-of loop (scanner.mjs ~367-408).
+    // Its outer guards `content.trim().startsWith('{')` and
+    // `content.includes(':')` succeed if we supply a proxy object,
+    // then `content.split('\n')` throws INSIDE the try — hitting the
+    // helper's own `} catch { return null }` arm instead of the
+    // scanMissionFile-level catch exercised above.
+    //
+    // Externally the result matches the outer-catch case (null parsed,
+    // "Failed to parse" error), because scanMissionFile falls through
+    // to the `if (yamlLike)` else branch when the helper returns null.
+    const evilContent = {
+      toString: () => 'not-json-either',
+      trim: () => ({ startsWith: () => false }),
+      includes: () => true,
+      split() { throw new Error('boom inside YAML split') },
+    }
+    const result = scanMissionFile(evilContent)
+    expect(result.error).toBe('Failed to parse as JSON or YAML')
+    expect(result.parsed).toBeNull()
+    expect(result.schema).toBeNull()
+    expect(result.scan).toBeNull()
+  })
+
   it('returns the fallback error when tryParseYamlSimple itself throws (line 345 outer catch)', () => {
     // Previously-uncovered branch: the outer `catch` in scanMissionFile
     // (scanner.mjs:344-346) only fires when tryParseYamlSimple THROWS
