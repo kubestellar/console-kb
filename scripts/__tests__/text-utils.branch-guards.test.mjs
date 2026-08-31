@@ -45,6 +45,32 @@ describe('isGarbageSnippet — uncovered branch arms', () => {
     expect(isGarbageSnippet('I have signed the CLA for this project.')).toBe(true)
     expect(isGarbageSnippet('Developer Certificate of Origin attestation.')).toBe(true)
   })
+
+  it('swallows URL parse errors when a matched http(s) token is not a valid URL', () => {
+    // The api.github.com filter matches every http(s):// token in the
+    // snippet and calls `new URL(u)` on each. If the token is malformed
+    // (e.g. `http://[invalid_url`), `new URL` throws — the `catch`
+    // clause converts that to `false` so `.some()` keeps iterating and
+    // the outer function does not blow up. Without this branch, a
+    // hostile / broken URL literal embedded in a KB code snippet would
+    // crash the entire garbage-classifier and fail the ingest pipeline.
+    //
+    // Construct a code-like snippet (satisfies codeChars, low prose
+    // density, no bot markers) whose only http token is a malformed
+    // URL. Expect the classifier to return false — proving the catch
+    // arm executed and .some() saw a false element rather than
+    // propagating an exception.
+    const snippet = [
+      'apiVersion: v1',
+      'kind: ConfigMap',
+      'data:',
+      '  endpoint: "http://[invalid_url"',
+      '  port: 8080',
+      '  timeout: 30s',
+    ].join('\n')
+    expect(() => isGarbageSnippet(snippet)).not.toThrow()
+    expect(isGarbageSnippet(snippet)).toBe(false)
+  })
 })
 
 describe('extractFromNumberedTemplate — uncovered filter arms', () => {
