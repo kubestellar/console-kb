@@ -107,4 +107,20 @@ describe('scanMissionFile YAML fallback path', () => {
     expect(result.error).toBe('Failed to parse as JSON or YAML')
     expect(result.parsed).toBeNull()
   })
+
+  it('returns the fallback error when tryParseYamlSimple itself throws (line 345 outer catch)', () => {
+    // Previously-uncovered branch: the outer `catch` in scanMissionFile
+    // (scanner.mjs:344-346) only fires when tryParseYamlSimple THROWS
+    // rather than returning null. Its top-level guards call
+    // `content.trim()` and `content.includes(':')` OUTSIDE a try/catch,
+    // so passing a non-string (Symbol here) makes those method lookups
+    // throw synchronously — exercising the outer error arm that
+    // returns { error: 'Failed to parse as JSON or YAML', parsed: null }
+    // instead of a raw TypeError bubbling out to callers.
+    const result = scanMissionFile(Symbol('not-a-string'))
+    expect(result.error).toBe('Failed to parse as JSON or YAML')
+    expect(result.parsed).toBeNull()
+    expect(result.schema).toBeNull()
+    expect(result.scan).toBeNull()
+  })
 })
