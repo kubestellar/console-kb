@@ -38,6 +38,42 @@ describe('extractFromNumberedTemplate — issue-ref-only section filter', () => 
   })
 })
 
+describe('isGarbageSnippet — first-time-contributor PR template arm', () => {
+  it('flags snippets containing the "for first time contributors" phrase', () => {
+    // Include curly braces + colon so the `!codeChars.test(snippet) && length<200`
+    // guard on line 71 does NOT short-circuit; keep total words <= 10 so the
+    // prose-threshold guard on line 81 does not fire; keep @mentions to <2 and
+    // avoid every other earlier arm so line 73 is the only reachable return.
+    const snippet = '{ note: for first time contributors follow guide; }'
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+
+  it('flags snippets containing the "please ensure your pull request" phrase', () => {
+    const snippet = '{ note: please ensure your pull request follows spec; }'
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+})
+
+describe('isGarbageSnippet — GitHub REST JSON payload arm', () => {
+  it('flags snippets that look like a serialized GitHub release response', () => {
+    // JSON payload with the `"tag_name"` key: has {, }, : so codeChars is
+    // satisfied and the earlier short-non-code guard does not fire. All
+    // upstream arms miss and line 75 is the first true return.
+    const snippet = '{"tag_name": "v1.0.0", "id": 42}'
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+
+  it('flags snippets carrying the "html_url" JSON key', () => {
+    const snippet = '{"html_url": "example.invalid/r/1"}'
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+
+  it('flags snippets carrying the "created_at" JSON key', () => {
+    const snippet = '{"created_at": "2024-01-01T00:00:00Z"}'
+    expect(isGarbageSnippet(snippet)).toBe(true)
+  })
+})
+
 describe('extractFromBoldTemplate — /kind /area /sig marker filter', () => {
   it('drops short sections that are only Prow-style /kind /area /sig markers', () => {
     const text = [
