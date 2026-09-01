@@ -315,3 +315,144 @@ describe('StackOverflowSource — fetchAcceptedAnswer real fetch paths', () => {
     expect(ans).toBeNull()
   })
 })
+
+describe('StackOverflowSource — extractHtmlCodeBlocks length + keyword filters (issue #3130)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('drops a <pre><code> block shorter than 21 chars even when it contains apiVersion:', async () => {
+    // Guards the `block.length > 20` false arm at line 205. A block that
+    // is otherwise valid (has apiVersion:) but too short must NOT be
+    // pushed into yamlSnippets, so extractSnippetsFromSteps has nothing
+    // to add to codeSnippets from the HTML.
+    const source = new StackOverflowSource({ rateLimitDelay: 0 })
+    vi.spyOn(source, 'fetchAcceptedAnswer').mockResolvedValue({
+      body: '<pre><code>apiVersion: v1</code></pre>',
+      is_accepted: true,
+    })
+
+    const mission = await source.extractMission({
+      question_id: 2001,
+      title: 'too-short block',
+      body: '<p>problem</p>',
+      link: 'https://stackoverflow.com/q/2001',
+      tags: ['kubernetes'],
+      score: 5,
+    }, TEST_PROJECT)
+
+    expect(mission).not.toBeNull()
+    const snippets = mission.mission?.resolution?.codeSnippets ?? []
+    // Reject the 20-char block. Any other snippets (from step markdown
+    // fences) are unrelated — we only check the too-short one is not
+    // present verbatim.
+    expect(snippets.some(s => s === 'apiVersion: v1')).toBe(false)
+  })
+
+  it('drops a <pre><code> block that lacks every k8s keyword', async () => {
+    // Guards the false arm of the inner `apiVersion: || kind: || kubectl || helm`
+    // OR chain at line 206. A block that satisfies the length window
+    // but contains no k8s keyword must not be attached — otherwise SO
+    // JavaScript stack traces would poison KB YAML snippets.
+    const source = new StackOverflowSource({ rateLimitDelay: 0 })
+    const nonK8sBlock =
+      'function foo(bar) { throw new Error("no yaml here just javascript") }'
+    vi.spyOn(source, 'fetchAcceptedAnswer').mockResolvedValue({
+      body: `<pre><code>${nonK8sBlock}</code></pre>`,
+      is_accepted: true,
+    })
+
+    const mission = await source.extractMission({
+      question_id: 2002,
+      title: 'non-k8s code block',
+      body: '<p>problem</p>',
+      link: 'https://stackoverflow.com/q/2002',
+      tags: ['kubernetes'],
+      score: 5,
+    }, TEST_PROJECT)
+
+    expect(mission).not.toBeNull()
+    const snippets = mission.mission?.resolution?.codeSnippets ?? []
+    expect(snippets.some(s => s.includes('function foo'))).toBe(false)
+  })
+
+  it('drops a <pre><code> block longer than 5000 chars', async () => {
+    // Guards the false arm of the `block.length < 5000` upper bound at
+    // line 205. Removing or loosening the cap would let a giant SO
+    // paste through into KB storage; assert the guard fires.
+    const source = new StackOverflowSource({ rateLimitDelay: 0 })
+    const filler = 'a'.repeat(4990)
+    // Length ~5031 chars, still contains `apiVersion:` and `kind:`, so
+    // the only reason to reject is the length cap.
+    const oversized = `${filler} apiVersion: v1 kind: Deployment`
+    vi.spyOn(source, 'fetchAcceptedAnswer').mockResolvedValue({
+      body: `<pre><code>${oversized}</code></pre>`,
+      is_accepted: true,
+    })
+
+    const mission = await source.extractMission({
+      question_id: 2003,
+      title: 'oversized block',
+      body: '<p>problem</p>',
+      link: 'https://stackoverflow.com/q/2003',
+      tags: ['kubernetes'],
+      score: 5,
+    }, TEST_PROJECT)
+
+    expect(mission).not.toBeNull()
+    const snippets = mission.mission?.resolution?.codeSnippets ?? []
+    expect(snippets.some(s => s.includes(filler))).toBe(false)
+  })
+})
+
+describe('StackOverflowSource — extractStepsFromHtml 10-item cap (issue #3130)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('caps step extraction at 10 <li> items even when the answer supplies more', async () => {
+    // Guards the `steps.length >= 10` true arm at line 231. The
+    // extractor stops after 10 items to protect downstream mission
+    // storage from very long SO <ol> lists.
+    const source = new StackOverflowSource({ rateLimitDelay: 0 })
+    const items = Array.from({ length: 12 }, (_, i) =>
+      `<li>Step ${String(i + 1).padStart(2, '0')} inspect the resource carefully with kubectl</li>`,
+    ).join('')
+    vi.spyOn(source, 'fetchAcceptedAnswer').mockResolvedValue({
+      body: `<ol>${items}</ol>`,
+      is_accepted: true,
+    })
+
+    const mission = await source.extractMission({
+      question_id: 2004,
+      title: '>10 li items',
+      body: '<p>problem</p>',
+      link: 'https://stackoverflow.com/q/2004',
+      tags: ['kubernetes'],
+      score: 5,
+    }, TEST_PROJECT)
+
+    expect(mission).not.toBeNull()
+    const steps = mission.mission?.steps ?? []
+    // The 11th and 12th items must not be present. Their bodies contain
+    // "Step 11" / "Step 12" — assert neither appears anywhere in the
+    // final step objects. buildMission() may pass through fewer than 10
+    // (validation/dedup), but must not exceed the cap.
+    const combined = JSON.stringify(steps)
+    expect(combined).not.toContain('Step 11')
+    expect(combined).not.toContain('Step 12')
+    // At least Step 01 should have survived — sanity check that the
+    // extractor is actually populating steps, not returning [].
+    expect(combined).toContain('Step 01')
+  })
+})
