@@ -686,4 +686,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 // Exports for unit testing
-export { sanitizeArg, runBinary, validateCommand, parseCommand, execCommand, ALLOWED_BASE_COMMANDS }
+export {
+  sanitizeArg,
+  runBinary,
+  validateCommand,
+  parseCommand,
+  execCommand,
+  ALLOWED_BASE_COMMANDS,
+  llmChat,
+  executeStep,
+  executeMission,
+  main,
+}
