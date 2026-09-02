@@ -49,6 +49,7 @@ own publish pipeline**:
 |------|---------|
 | [`incident-response-index-publish-failure.md`](./incident-response-index-publish-failure.md) | Detect and recover from a bad `fixes/index.json` auto-publish (the `Build Mission Index` workflow pushes directly to `master`, bypassing PR review and safety/schema checks). |
 | [`POSTMORTEM_TEMPLATE.md`](./POSTMORTEM_TEMPLATE.md) | Template for writing up any repository-operations incident. |
+| [`../docs/slo.md`](../docs/slo.md) | SLIs/SLOs for the mission index publish/validation pipeline (publish integrity, content safety, time-to-detect, time-to-rollback). |
 
 ## Planned Runbooks
 
