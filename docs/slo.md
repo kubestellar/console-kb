@@ -29,8 +29,16 @@ No exporter or external data flow is added by this document — recommendations 
   `Mission Safety Scan` (`.github/workflows/mission-safety-scan.yml`) and
   `Validate Mission Schema` (`.github/workflows/validate-schema.yml`) on their
   introducing pull request.
-- **SLO**: 100% — these checks run `on: pull_request` only; nothing should reach
-  `master` through a path that bypasses both (see `docs/BRANCH_PROTECTION.md`).
+- **SLO**: 100% — these checks run `on: pull_request` only, and nothing merged by a
+  human reviewer should bypass both (see `docs/BRANCH_PROTECTION.md`). **Known
+  exception**: the `CNCF Mission Generation` workflow's `auto-merge` job
+  (`.github/workflows/cncf-mission-gen.yml`) merges `cncf-mission-gen`-labeled PRs
+  with `gh pr merge --admin`, which unconditionally bypasses branch protection and
+  any required status checks, based solely on a content-heuristic quality score
+  (`scripts/quality-scorer.mjs`, threshold 70) that never inspects `Mission Safety
+  Scan` or `Validate Mission Schema` results. A mission JSON can reach `master`
+  without either check having run or passed. Tracked as a follow-up (see below);
+  this document does not add the fix itself.
 
 ### 3. Time-to-detect a bad publish
 
@@ -62,6 +70,13 @@ maintainer noticing the Actions tab. Adding that alert requires editing
 `.github/workflows/*.yml`, which needs `workflows` permission this contribution's
 credentials do not have; filed separately as a `[operations]` issue instead of
 included in this docs-only change.
+
+Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
+`--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
+also requires editing that workflow to either drop `--admin` in favor of a
+mergeable-state/required-checks check, or gate the scorer step on those two checks
+having completed and passed first. Also filed separately as a `[operations]` issue
+for the same `workflows`-permission reason.
 
 ## References
 
