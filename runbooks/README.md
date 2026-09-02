@@ -39,6 +39,17 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 > actively maintained replacement. Runbooks that target the legacy chart should carry this notice
 > and link readers to the migration guide at <https://docs.kubestellar.io/main/direct/get-started/>.
 
+## Repository Incident Response
+
+Unlike the runbooks above (which target KubeStellar cluster/controller
+operations), the following documents cover incidents in **this repository's
+own publish pipeline**:
+
+| File | Purpose |
+|------|---------|
+| [`incident-response-index-publish-failure.md`](./incident-response-index-publish-failure.md) | Detect and recover from a bad `fixes/index.json` auto-publish (the `Build Mission Index` workflow pushes directly to `master`, bypassing PR review and safety/schema checks). |
+| [`POSTMORTEM_TEMPLATE.md`](./POSTMORTEM_TEMPLATE.md) | Template for writing up any repository-operations incident. |
+
 ## Planned Runbooks
 
 _All originally planned runbooks have been delivered. Future additions tracked via `runbooks/` directory contributions._
