@@ -48,6 +48,7 @@ own publish pipeline**:
 | File | Purpose |
 |------|---------|
 | [`incident-response-index-publish-failure.md`](./incident-response-index-publish-failure.md) | Detect and recover from a bad `fixes/index.json` auto-publish (the `Build Mission Index` workflow pushes directly to `master`, bypassing PR review and safety/schema checks). |
+| [`incident-response-search-state-corruption.md`](./incident-response-search-state-corruption.md) | Detect and recover from a corrupted `search-state.json` (the `CNCF Mission Generation` workflow pushes it directly to `master` daily, bypassing PR review and *all* content-validation gates, with a silent parse-failure fallback that can reset scan dedup state). |
 | [`POSTMORTEM_TEMPLATE.md`](./POSTMORTEM_TEMPLATE.md) | Template for writing up any repository-operations incident. |
 | [`../docs/slo.md`](../docs/slo.md) | SLIs/SLOs for the mission index publish/validation pipeline (publish integrity, content safety, time-to-detect, time-to-rollback). |
 
