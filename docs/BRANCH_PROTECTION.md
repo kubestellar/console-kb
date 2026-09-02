@@ -23,6 +23,16 @@ Without branch protection:
 - PRs can be merged without passing required status checks
 - PRs can be merged without required reviewer approvals
 
+**This is not theoretical here**: the `CNCF Mission Generation` workflow's
+`auto-merge` job (`.github/workflows/cncf-mission-gen.yml`) already merges
+`cncf-mission-gen`-labeled PRs with `gh pr merge --admin`, which unconditionally
+overrides branch protection (required status checks and required reviews alike)
+regardless of whether `Mission Safety Scan` or `Validate Mission Schema` have run
+or passed on that PR — the merge decision comes solely from a content-heuristic
+score in `scripts/quality-scorer.mjs`. See `docs/slo.md` section 2 for details.
+Enabling "Require status checks to pass before merging" does not close this gap
+on its own, because `--admin` bypasses it.
+
 See OpenSSF Scorecard findings #1 (BranchProtectionID) and #58 (CodeReviewID) for background.
 
 ## Code Review Policy
