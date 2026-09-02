@@ -75,6 +75,7 @@ Browse [`runbooks/`](runbooks/) or start with [`runbooks/README.md`](runbooks/RE
 | [`disaster-recovery.json`](runbooks/disaster-recovery.json) | Back up and restore kubeadm etcd state during disaster recovery for self-managed control planes. |
 | [`restore-etcd-snapshot.json`](runbooks/restore-etcd-snapshot.json) | Restore a Kubernetes control plane from an existing etcd snapshot with rollback safeguards. |
 | [`restore-velero-backup.json`](runbooks/restore-velero-backup.json) | Restore namespaces, volumes, and workloads from a completed Velero backup. |
+| [`incident-response-index-publish-failure.md`](runbooks/incident-response-index-publish-failure.md) | Detect and recover from a bad `fixes/index.json` auto-publish that broke the Console KB page. |
 
 You can import runbooks into KubeStellar Console the same way you import fixes: copy the mission file, open **AI Missions → Import**, and upload or paste the JSON payload.
 
