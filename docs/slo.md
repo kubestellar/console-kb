@@ -51,7 +51,9 @@ No exporter or external data flow is added by this document — recommendations 
   `Build Mission Index` job failure or on a passing-but-corrupt publish — detection
   today relies on a maintainer noticing a broken Console KB page or a failed
   scheduled workflow run. Tracked as a follow-up (see below); this document does not
-  add the alert itself.
+  add the alert itself. Until that alert exists, use
+  [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md)
+  to manually check for a silent job failure.
 
 ### 4. Time-to-rollback
 
@@ -85,5 +87,6 @@ for the same `workflows`-permission reason.
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
+- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the five scheduled/publish workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
