@@ -38,7 +38,9 @@ No exporter or external data flow is added by this document — recommendations 
   (`scripts/quality-scorer.mjs`, threshold 70) that never inspects `Mission Safety
   Scan` or `Validate Mission Schema` results. A mission JSON can reach `master`
   without either check having run or passed. Tracked as a follow-up (see below);
-  this document does not add the fix itself.
+  this document does not add the fix itself. Recovery steps for this scenario
+  are documented in
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -82,5 +84,6 @@ for the same `workflows`-permission reason.
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
+- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
