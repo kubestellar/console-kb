@@ -10,7 +10,7 @@ Enable these rules in **Settings → Branches → Branch protection rules** for 
 |---------|-------------------|
 | Require pull request reviews before merging | ✅ Enabled — at least 1 approving review |
 | Dismiss stale reviews on new commits | ✅ Enabled |
-| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint) |
+| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint, `Mission Safety Scan`, `Validate Mission Schema`) |
 | Require conversation resolution before merging | ✅ Enabled |
 | Restrict force pushes | ✅ Disabled for all non-admins |
 | Require signed commits | ⚠️ Recommended but optional |
@@ -32,6 +32,16 @@ or passed on that PR — the merge decision comes solely from a content-heuristi
 score in `scripts/quality-scorer.mjs`. See `docs/slo.md` section 2 for details.
 Enabling "Require status checks to pass before merging" does not close this gap
 on its own, because `--admin` bypasses it.
+
+Separately, for regular human-reviewed PRs (no `--admin` involved), the
+required-status-checks list above must actually include `Mission Safety Scan`
+and `Validate Mission Schema` — both trigger `on: pull_request` against
+`fixes/**`/`runbooks/**` changes. Without them configured as required checks,
+a reviewer can merge through the normal UI while one or both checks is still
+running, cancelled, or failing, since GitHub only blocks merges on checks
+explicitly marked required. This is the repo-configuration precondition
+`docs/slo.md` section 2's "100% ... nothing merged by a human reviewer should
+bypass both" SLO depends on.
 
 See OpenSSF Scorecard findings #1 (BranchProtectionID) and #58 (CodeReviewID) for background.
 
