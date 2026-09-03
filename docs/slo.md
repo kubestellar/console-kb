@@ -68,12 +68,15 @@ No exporter or external data flow is added by this document — recommendations 
 None of the scheduled workflows that publish or validate content on a cadence
 (`build-index.yml` on every qualifying push, `validate-schema.yml` weekly,
 `mission-safety-scan.yml` per-PR, `cncf-mission-gen.yml` daily, `cncf-install-gen.yml`
-weekly, `scan-missions.yml` weekly) alert anyone when the *job itself* fails — a red
-run there means the SLI in section 3 above cannot be measured at all beyond a
-maintainer noticing the Actions tab. Adding that alert requires editing
-`.github/workflows/*.yml`, which needs `workflows` permission this contribution's
-credentials do not have; filed separately as a `[operations]` issue instead of
-included in this docs-only change.
+weekly, `scan-missions.yml` weekly, `platform-install-gen.yml` 4x daily, `fuzz.yml`
+daily) alert anyone when the *job itself* fails — a red run there means the SLI in
+section 3 above cannot be measured at all beyond a maintainer noticing the Actions
+tab. `platform-install-gen.yml` writes directly to `fixes/platform-install/**` and
+`fixes/index.json` at the highest cadence of any workflow in this repo, so a silent
+failure there has the widest exposure window per day. Adding that alert requires
+editing `.github/workflows/*.yml`, which needs `workflows` permission this
+contribution's credentials do not have; filed separately as `[operations]` issues
+instead of included in this docs-only change.
 
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
@@ -87,6 +90,6 @@ for the same `workflows`-permission reason.
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
-- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the five scheduled/publish workflows above, pending the automated alert tracked as a follow-up
+- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the seven scheduled/publish workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
