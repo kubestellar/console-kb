@@ -15,6 +15,12 @@ published mission catalog:
 | `Scan Mission Files` (`.github/workflows/scan-missions.yml`) | weekly, Monday 06:00 UTC | Re-scans all mission files for safety issues |
 | `Platform Install Mission Generation` (`.github/workflows/platform-install-gen.yml`) | 4x daily, 00:00/06:00/12:00/18:00 UTC | Generates install missions, writes `fixes/platform-install/**` and `fixes/index.json` directly to `master` |
 | `Fuzzing` (`.github/workflows/fuzz.yml`) | daily, 06:00 UTC | Fuzzes the JSON parsers/schema/scanner that gate mission content safety |
+| `CodeQL Security Analysis` (`.github/workflows/codeql.yml`) | nightly, 05:30 UTC | Recurring JavaScript/TypeScript security scan of `master` |
+| `OpenSSF Scorecard` (`.github/workflows/scorecard.yml`) | weekly, Monday 06:00 UTC | Recurring supply-chain security posture scan of `master` |
+
+The same silent-failure gap applies to the two security-scan workflows above,
+even though they don't publish or gate mission content — a broken CodeQL or
+Scorecard run has no automated time-to-detect signal either.
 
 None of these workflows currently notify anyone when the job itself fails
 (no `if: failure()` step, issue/comment creation, or webhook — confirmed via
@@ -43,7 +49,8 @@ access, run from a checkout or via `gh`):
 
 ```bash
 for wf in build-index.yml validate-schema.yml cncf-mission-gen.yml \
-          cncf-install-gen.yml scan-missions.yml platform-install-gen.yml fuzz.yml; do
+          cncf-install-gen.yml scan-missions.yml platform-install-gen.yml fuzz.yml \
+          codeql.yml scorecard.yml; do
   echo "== $wf =="
   gh run list --repo kubestellar/console-kb --workflow "$wf" --limit 3 \
     --json status,conclusion,createdAt,url
@@ -53,8 +60,9 @@ done
 Treat any `conclusion` of `failure`, `cancelled`, or `timed_out` on the
 most recent scheduled run as a confirmed incident — as is a *missing* run
 past its expected cadence (e.g. no `cncf-mission-gen.yml` run in the last
-~30 hours, no `platform-install-gen.yml` run in the last ~8 hours, or no
-`validate-schema.yml`/`scan-missions.yml` run in the last ~8 days), which
+~30 hours, no `platform-install-gen.yml` run in the last ~8 hours, no
+`codeql.yml` run in the last ~30 hours, or no `validate-schema.yml`/
+`scan-missions.yml`/`scorecard.yml` run in the last ~8 days), which
 indicates the schedule trigger itself stopped firing.
 
 ## Immediate mitigation
