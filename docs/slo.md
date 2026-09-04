@@ -78,6 +78,13 @@ editing `.github/workflows/*.yml`, which needs `workflows` permission this
 contribution's credentials do not have; filed separately as `[operations]` issues
 instead of included in this docs-only change.
 
+The same gap also applies to this repo's two recurring security scans,
+`codeql.yml` (nightly, `30 5 * * *`) and `scorecard.yml` (weekly,
+`0 6 * * 1`): neither has an `if: failure()` step, issue/comment creation, or
+webhook, so a silently-broken CodeQL or Scorecard run has no automated
+time-to-detect signal either. Tracked as a follow-up alongside the workflows
+above (see below); this document does not add the alert itself.
+
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
 also requires editing that workflow to either drop `--admin` in favor of a
@@ -90,6 +97,6 @@ for the same `workflows`-permission reason.
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
-- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the seven scheduled/publish workflows above, pending the automated alert tracked as a follow-up
+- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
