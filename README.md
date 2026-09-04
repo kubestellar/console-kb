@@ -76,8 +76,14 @@ Browse [`runbooks/`](runbooks/) or start with [`runbooks/README.md`](runbooks/RE
 | [`restore-etcd-snapshot.json`](runbooks/restore-etcd-snapshot.json) | Restore a Kubernetes control plane from an existing etcd snapshot with rollback safeguards. |
 | [`restore-velero-backup.json`](runbooks/restore-velero-backup.json) | Restore namespaces, volumes, and workloads from a completed Velero backup. |
 | [`incident-response-index-publish-failure.md`](runbooks/incident-response-index-publish-failure.md) | Detect and recover from a bad `fixes/index.json` auto-publish that broke the Console KB page. |
+| [`incident-response-search-state-corruption.md`](runbooks/incident-response-search-state-corruption.md) | Detect and recover from a corrupted `search-state.json` pushed directly to `master` by the `CNCF Mission Generation` workflow. |
+| [`incident-response-unsafe-mission-merge.md`](runbooks/incident-response-unsafe-mission-merge.md) | Detect and recover from a mission merged via `--admin` auto-merge that bypassed `Mission Safety Scan`/`Validate Mission Schema`. |
+| [`incident-response-scheduled-workflow-failure.md`](runbooks/incident-response-scheduled-workflow-failure.md) | Manually detect and respond to a silent job failure (or missing run) in a scheduled/publish workflow. |
+| [`POSTMORTEM_TEMPLATE.md`](runbooks/POSTMORTEM_TEMPLATE.md) | Template for writing up any repository-operations incident. |
 
 You can import runbooks into KubeStellar Console the same way you import fixes: copy the mission file, open **AI Missions → Import**, and upload or paste the JSON payload.
+
+See [`docs/slo.md`](docs/slo.md) for the SLIs/SLOs behind the mission index publish/validation pipeline these incident-response runbooks protect.
 
 ## Fix Categories
 
