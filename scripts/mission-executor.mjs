@@ -24,6 +24,9 @@
 
 import { readFileSync, writeFileSync } from 'fs'
 import { spawnSync } from 'child_process'
+import { createLogger } from './lib/logger.mjs'
+
+const log = createLogger('mission-executor')
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
@@ -620,6 +623,7 @@ async function main() {
   const files = process.argv.slice(2)
   if (files.length === 0) {
     console.error('Usage: node mission-executor.mjs <mission.json> [mission2.json ...]')
+    log.error('no mission files provided', { argv_count: files.length })
     process.exit(1)
   }
 
@@ -628,6 +632,7 @@ async function main() {
   const clusterCheck = runBinary('kubectl', ['cluster-info', '--request-timeout=10s'])
   if (!clusterCheck.success) {
     console.error('❌ Cannot connect to cluster:', clusterCheck.output)
+    log.error('cluster connectivity check failed', { error_kind: 'cluster_unreachable' })
     process.exit(1)
   }
   console.log(`✅ Connected: ${(clusterCheck.output || '').split('\n').slice(0, 3)[0]}`)
@@ -643,6 +648,7 @@ async function main() {
       results.push(report)
     } catch (err) {
       console.error(`\n❌ Fatal error executing ${file}: ${err.message}`)
+      log.error('fatal error executing mission', { mission: file })
       results.push({ mission: file, verdict: 'error', error: err.message })
     }
   }
@@ -663,6 +669,7 @@ async function main() {
   }
 
   console.log(`\n  Total: ${results.length} | ✅ ${passed} | ⚠️ ${partial} | ❌ ${failed}`)
+  log.info('mission execution summary', { total: results.length, passed, partial, failed })
 
   // Write report
   const reportPath = process.env.REPORT_PATH || 'mission-execution-report.json'
@@ -681,6 +688,7 @@ import { fileURLToPath } from 'url'
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(err => {
     console.error('Fatal:', err)
+    log.error('unhandled fatal error in main', { error_message: err.message })
     process.exit(1)
   })
 }
