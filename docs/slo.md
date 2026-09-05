@@ -85,6 +85,14 @@ webhook, so a silently-broken CodeQL or Scorecard run has no automated
 time-to-detect signal either. Tracked as a follow-up alongside the workflows
 above (see below); this document does not add the alert itself.
 
+The same gap also applies to `stale.yml` (daily, `0 0 * * *`), which
+additionally has a real-world precedent: it previously failed silently with
+`startup_failure` due to an invalid `secrets:` token passed to
+`reusable-stale.yml` (#3057/#3071). A repeat of that failure mode today would
+again be visible only via the Actions tab. Tracked as a follow-up alongside
+the workflows above (see below); this document does not add the alert
+itself.
+
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
 also requires editing that workflow to either drop `--admin` in favor of a
