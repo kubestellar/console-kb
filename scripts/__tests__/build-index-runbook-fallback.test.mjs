@@ -48,7 +48,7 @@ describe('buildIndex() default-arg runbook fallback', () => {
     const index = await buildIndex(); // no arg → defaults to SOLUTIONS_DIR
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('No runbooks/ directory found'),
+      expect.stringContaining('"event":"runbooks-dir-missing"'),
     );
     expect(index.version).toBe(1);
     expect(index.count).toBe(1);

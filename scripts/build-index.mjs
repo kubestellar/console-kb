@@ -3,6 +3,7 @@ import { readdir, readFile, writeFile } from 'fs/promises';
 import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
+import { logEvent } from './lib/log.mjs';
 // Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
@@ -85,7 +86,7 @@ function extractMetadata(content, filePath) {
 
     return entry;
   } catch (e) {
-    console.warn(`Skipping ${relPath}: ${e.message}`);
+    logEvent('mission-skipped', { level: 'warn', path: relPath, reason: e.message });
     return null;
   }
 }
@@ -112,22 +113,25 @@ function extractIssueTypes(data) {
 }
 
 export async function buildIndex(targetDir = SOLUTIONS_DIR) {
+  const startedAt = Date.now();
   // Walk both the fixes/ and runbooks/ directories
   let allFiles = await walkDir(targetDir);
   
   if (targetDir === SOLUTIONS_DIR) {
     const runbookFiles = await walkDir(RUNBOOKS_DIR).catch(() => {
-      console.warn('No runbooks/ directory found — skipping.');
+      logEvent('runbooks-dir-missing', { level: 'warn', dir: RUNBOOKS_DIR });
       return [];
     });
     allFiles = [...allFiles, ...runbookFiles];
   }
   const missions = [];
+  let skippedCount = 0;
 
   for (const filePath of allFiles) {
     const content = await readFile(filePath, 'utf-8');
     const meta = extractMetadata(content, filePath);
     if (meta) missions.push(meta);
+    else skippedCount += 1;
   }
 
   const index = {
@@ -139,6 +143,12 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
   const targetIndexPath = targetDir === SOLUTIONS_DIR ? INDEX_PATH : join(targetDir, 'index.json');
   await writeFile(targetIndexPath, JSON.stringify(index, null, 2) + '\n');
   console.log(`Generated index with ${missions.length} missions at ${targetIndexPath}`);
+  logEvent('index-generated', {
+    missionCount: missions.length,
+    skippedCount,
+    targetIndexPath,
+    durationMs: Date.now() - startedAt,
+  });
   return index;
 }
 
