@@ -8,7 +8,9 @@
 import { writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { createLogger } from './lib/logger.mjs'
 
+const log = createLogger('fetch-cncf-landscape')
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const LANDSCAPE_URL = 'https://raw.githubusercontent.com/cncf/landscape/master/landscape.yml'
 const OUTPUT_PATH = join(__dirname, 'cncf-projects.mjs')
@@ -34,7 +36,10 @@ function detectCategory(name, repo) {
 async function main() {
   console.log(`Fetching CNCF landscape from ${LANDSCAPE_URL}...`)
   const resp = await fetch(LANDSCAPE_URL)
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
+  if (!resp.ok) {
+    log.error('landscape fetch returned non-ok response', { error_kind: 'landscape_fetch_failed', http_status: resp.status })
+    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
+  }
   const text = await resp.text()
 
   const projects = []
@@ -123,9 +128,17 @@ async function main() {
 
   writeFileSync(OUTPUT_PATH, out.join('\n'))
   console.log(`Written ${unique.length} projects to ${OUTPUT_PATH}`)
-  console.log(`  Graduated: ${unique.filter(p => p.maturity === 'graduated').length}`)
-  console.log(`  Incubating: ${unique.filter(p => p.maturity === 'incubating').length}`)
-  console.log(`  Sandbox: ${unique.filter(p => p.maturity === 'sandbox').length}`)
+  const graduated = unique.filter(p => p.maturity === 'graduated').length
+  const incubating = unique.filter(p => p.maturity === 'incubating').length
+  const sandbox = unique.filter(p => p.maturity === 'sandbox').length
+  console.log(`  Graduated: ${graduated}`)
+  console.log(`  Incubating: ${incubating}`)
+  console.log(`  Sandbox: ${sandbox}`)
+  log.info('landscape fetch summary', { total: unique.length, graduated, incubating, sandbox })
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+main().catch(err => {
+  console.error(err)
+  log.error('unhandled fatal error fetching cncf landscape', { error_kind: 'landscape_fetch_failed', error_message: err.message })
+  process.exit(1)
+})
