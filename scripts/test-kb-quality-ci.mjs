@@ -1,11 +1,15 @@
 import { readFileSync } from 'fs';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
+import { createLogger } from './lib/logger.mjs';
+
+const log = createLogger('kb-quality-ci');
 
 function main() {
   const files = process.argv.slice(2);
   
   if (files.length === 0) {
     console.log('No KB JSON files provided for scoring.');
+    log.summary('kb-quality-ci-summary', { total: 0, passed: 0, failed: 0 });
     process.exit(0);
   }
 
@@ -50,6 +54,8 @@ function main() {
       failed++;
     }
   }
+
+  log.summary('kb-quality-ci-summary', { total: files.length, passed: files.length - failed, failed });
 
   if (failed > 0) {
     console.error(`\nValidation Failed: ${failed} KB entries fell below the minimum quality threshold of ${MIN_SCORE}.`);
