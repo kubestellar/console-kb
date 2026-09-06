@@ -65,7 +65,7 @@ function loadSourcesConfig() {
 /**
  * Minimal YAML parser for our config format (no nested objects beyond 2 levels).
  */
-function parseSimpleYaml(yaml) {
+export function parseSimpleYaml(yaml) {
   const config = { sources: {} }
   let currentSource = null
   let lastArrayKey = null
@@ -1688,4 +1688,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary, loadSourcesConfig }
