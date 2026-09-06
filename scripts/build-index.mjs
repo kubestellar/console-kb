@@ -3,11 +3,13 @@ import { readdir, readFile, writeFile } from 'fs/promises';
 import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
+import { createLogger } from './lib/logger.mjs';
 // Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
 const RUNBOOKS_DIR = join(process.cwd(), 'runbooks');
 const INDEX_PATH = join(SOLUTIONS_DIR, 'index.json');
+const log = createLogger('build-index');
 
 async function walkDir(dir) {
   const entries = [];
@@ -112,6 +114,7 @@ function extractIssueTypes(data) {
 }
 
 export async function buildIndex(targetDir = SOLUTIONS_DIR) {
+  const startedAt = Date.now();
   // Walk both the fixes/ and runbooks/ directories
   let allFiles = await walkDir(targetDir);
   
@@ -123,11 +126,18 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
     allFiles = [...allFiles, ...runbookFiles];
   }
   const missions = [];
+  let skipped = 0;
+  let qualityFailures = 0;
 
   for (const filePath of allFiles) {
     const content = await readFile(filePath, 'utf-8');
     const meta = extractMetadata(content, filePath);
-    if (meta) missions.push(meta);
+    if (meta) {
+      missions.push(meta);
+      if (!meta.qualityPass) qualityFailures += 1;
+    } else {
+      skipped += 1;
+    }
   }
 
   const index = {
@@ -139,6 +149,17 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
   const targetIndexPath = targetDir === SOLUTIONS_DIR ? INDEX_PATH : join(targetDir, 'index.json');
   await writeFile(targetIndexPath, JSON.stringify(index, null, 2) + '\n');
   console.log(`Generated index with ${missions.length} missions at ${targetIndexPath}`);
+
+  // Bounded structured summary line for CI log parsing — mirrors the pattern
+  // already used by scripts/validate-schema.mjs's `log.summary()` call.
+  log.summary('build-index-summary', {
+    scanned: allFiles.length,
+    indexed: missions.length,
+    skipped,
+    qualityFailures,
+    durationMs: Date.now() - startedAt,
+  });
+
   return index;
 }
 
