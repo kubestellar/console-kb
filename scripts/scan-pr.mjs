@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
 
@@ -47,6 +47,7 @@ if (files.length === 0) {
 }
 
 let hasFailures = false;
+let filesFailed = 0;
 const sections = ['## 🔍 Mission Scan Results\n'];
 
 for (const file of files) {
@@ -56,29 +57,56 @@ for (const file of files) {
   } catch (err) {
     sections.push(`### 📄 \`${file}\`\n\n❌ **Error:** Could not read file: ${err.message}\n`);
     hasFailures = true;
+    filesFailed += 1;
     continue;
   }
 
   const result = scanMissionFile(content);
   sections.push(formatScanResultAsMarkdown(file, result));
 
+  let fileFailed = false;
   if (result.error) {
-    hasFailures = true;
+    fileFailed = true;
   } else {
-    if (!result.schema.valid) hasFailures = true;
+    if (!result.schema.valid) fileFailed = true;
     // Malicious content check only applies to PR scans (new/changed files).
     // Full scans (--all) on push/schedule/dispatch skip this check to avoid
     // false positives on legitimate installation commands (curl|bash, awk patterns, etc.)
     // in existing missions that have already been reviewed.
     if (!isFullScan && result.scan.malicious.findings.length > 0) {
-      hasFailures = true;
+      fileFailed = true;
     }
+  }
+  if (fileFailed) {
+    hasFailures = true;
+    filesFailed += 1;
   }
 }
 
 const report = sections.join('\n\n');
 writeFileSync('scan-results.md', report, 'utf8');
 console.log(report);
+
+// Bounded, fixed-cardinality CI-observability summary: mode, scanned/failed
+// counts, pass/fail verdict. Written for every trigger (push/schedule/
+// workflow_dispatch/pull_request), not just the PR-scan path that already
+// gets a `Post results` comment step. GITHUB_STEP_SUMMARY is set by the
+// Actions runner for every job, so no workflow YAML change is needed.
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const verdict = hasFailures ? '❌ fail' : '✅ pass';
+  const summary = [
+    '### 🔍 Mission Scan Summary',
+    '',
+    '| Metric | Value |',
+    '|--------|-------|',
+    `| Mode | ${isFullScan ? 'full scan' : 'pr scan'} |`,
+    `| Files scanned | ${files.length} |`,
+    `| Files failed | ${filesFailed} |`,
+    `| Verdict | ${verdict} |`,
+    '',
+  ].join('\n');
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n', 'utf8');
+}
 
 if (hasFailures) {
   console.error('\n❌ Scan completed with failures.');
