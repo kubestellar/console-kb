@@ -36,11 +36,15 @@ const VALID_MISSION = {
   },
 }
 
-function runScanPR(cwd, args = []) {
+function runScanPR(cwd, args = [], extraEnv = {}) {
+  // Explicitly unset GITHUB_STEP_SUMMARY unless a test opts in via extraEnv —
+  // otherwise, running these tests inside an actual GitHub Actions job would
+  // append test fixture output to the real job summary.
+  const { GITHUB_STEP_SUMMARY: _drop, ...envWithoutSummary } = process.env
   return spawnSync(process.execPath, [SCAN_PR, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1' },
+    env: { ...envWithoutSummary, NO_COLOR: '1', ...extraEnv },
   })
 }
 
@@ -160,6 +164,64 @@ describe('scan-pr.mjs CLI', () => {
         const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
         expect(report).not.toContain('README.md')
         expect(result.status).toBe(0)
+      })
+    })
+  })
+
+  describe('GITHUB_STEP_SUMMARY reporting', () => {
+    it('does not write a summary file when GITHUB_STEP_SUMMARY is unset', () => {
+      withTempDir(dir => {
+        writeFileSync(join(dir, 'valid.json'), JSON.stringify(VALID_MISSION))
+        runScanPR(dir, ['valid.json'])
+        expect(existsSync(join(dir, 'step-summary.md'))).toBe(false)
+      })
+    })
+
+    it('appends a bounded pass/fail summary table when GITHUB_STEP_SUMMARY is set', () => {
+      withTempDir(dir => {
+        const summaryPath = join(dir, 'step-summary.md')
+        writeFileSync(summaryPath, '')
+        writeFileSync(join(dir, 'valid.json'), JSON.stringify(VALID_MISSION))
+
+        const result = runScanPR(dir, ['valid.json'], { GITHUB_STEP_SUMMARY: summaryPath })
+
+        expect(result.status).toBe(0)
+        const summary = readFileSync(summaryPath, 'utf8')
+        expect(summary).toContain('## 🔍 Mission Scan Summary')
+        expect(summary).toContain('| Files scanned | 1 |')
+        expect(summary).toContain('| Files failed | 0 |')
+        expect(summary).toContain('| Result | ✅ Passed |')
+      })
+    })
+
+    it('reports the failed-file count and ❌ result on scan failures', () => {
+      withTempDir(dir => {
+        const summaryPath = join(dir, 'step-summary.md')
+        writeFileSync(summaryPath, '')
+        const bad = { name: 'no-version', mission: { title: 't', steps: [] } }
+        writeFileSync(join(dir, 'bad.json'), JSON.stringify(bad))
+
+        const result = runScanPR(dir, ['bad.json'], { GITHUB_STEP_SUMMARY: summaryPath })
+
+        expect(result.status).toBe(1)
+        const summary = readFileSync(summaryPath, 'utf8')
+        expect(summary).toContain('| Files scanned | 1 |')
+        expect(summary).toContain('| Files failed | 1 |')
+        expect(summary).toContain('| Result | ❌ Failed |')
+      })
+    })
+
+    it('labels the mode as "Full scan (all missions)" for --all runs', () => {
+      withTempDir(dir => {
+        const summaryPath = join(dir, 'step-summary.md')
+        writeFileSync(summaryPath, '')
+        mkdirSync(join(dir, 'fixes'), { recursive: true })
+        writeFileSync(join(dir, 'fixes', 'root.json'), JSON.stringify(VALID_MISSION))
+
+        runScanPR(dir, ['--all'], { GITHUB_STEP_SUMMARY: summaryPath })
+
+        const summary = readFileSync(summaryPath, 'utf8')
+        expect(summary).toContain('| Mode | Full scan (all missions) |')
       })
     })
   })

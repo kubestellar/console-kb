@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
 
@@ -47,6 +47,7 @@ if (files.length === 0) {
 }
 
 let hasFailures = false;
+let failedCount = 0;
 const sections = ['## 🔍 Mission Scan Results\n'];
 
 for (const file of files) {
@@ -56,29 +57,59 @@ for (const file of files) {
   } catch (err) {
     sections.push(`### 📄 \`${file}\`\n\n❌ **Error:** Could not read file: ${err.message}\n`);
     hasFailures = true;
+    failedCount += 1;
     continue;
   }
 
   const result = scanMissionFile(content);
   sections.push(formatScanResultAsMarkdown(file, result));
 
+  let fileFailed = false;
   if (result.error) {
-    hasFailures = true;
+    fileFailed = true;
   } else {
-    if (!result.schema.valid) hasFailures = true;
+    if (!result.schema.valid) fileFailed = true;
     // Malicious content check only applies to PR scans (new/changed files).
     // Full scans (--all) on push/schedule/dispatch skip this check to avoid
     // false positives on legitimate installation commands (curl|bash, awk patterns, etc.)
     // in existing missions that have already been reviewed.
     if (!isFullScan && result.scan.malicious.findings.length > 0) {
-      hasFailures = true;
+      fileFailed = true;
     }
+  }
+
+  if (fileFailed) {
+    hasFailures = true;
+    failedCount += 1;
   }
 }
 
 const report = sections.join('\n\n');
 writeFileSync('scan-results.md', report, 'utf8');
 console.log(report);
+
+// Bounded CI-observability summary: a handful of fixed-cardinality fields
+// (mode, file count, failure count, pass/fail) rather than the full
+// per-file report. This is the only signal visible for non-PR triggers
+// (push/schedule/workflow_dispatch), where the "Post results" PR-comment
+// step in scan-missions.yml never runs and the full report only reaches
+// job logs. Written directly via GITHUB_STEP_SUMMARY (no workflow changes
+// needed) so scheduled full scans get a run-summary entry, matching the
+// pattern already used by cncf-mission-gen.yml / cncf-install-gen.yml.
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const summary = [
+    '## 🔍 Mission Scan Summary',
+    '',
+    '| Metric | Value |',
+    '|--------|-------|',
+    `| Mode | ${isFullScan ? 'Full scan (all missions)' : 'Changed files'} |`,
+    `| Files scanned | ${files.length} |`,
+    `| Files failed | ${failedCount} |`,
+    `| Result | ${hasFailures ? '❌ Failed' : '✅ Passed'} |`,
+    '',
+  ].join('\n');
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`, 'utf8');
+}
 
 if (hasFailures) {
   console.error('\n❌ Scan completed with failures.');
