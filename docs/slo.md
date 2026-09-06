@@ -125,6 +125,28 @@ No exporter or external data flow is added by this document — recommendations 
   `git revert --no-edit <bad-commit-sha>` as documented in the incident-response
   runbook's "Immediate mitigation" section.
 
+### 5. CI gate integrity for `scripts/` tests
+
+- **SLI**: whether the `Scripts Tests / test` check (`.github/workflows/scripts-tests.yml`)
+  actually blocks a merge when `npm test` in `scripts/` fails, versus only displaying
+  green regardless of the suite's real outcome.
+- **SLO**: 100% — a check with this name and a green checkmark should mean the suite
+  passed, not "informational only." **Known gap**: the `Run tests` step in
+  `scripts-tests.yml` still has `continue-on-error: true`, which was added
+  intentionally while 4 tests were failing on `master` (#3023) with an explicit
+  follow-up to remove it once the suite went green. The suite has since been fully
+  green (75 test files, 1108 passing, 1 intentional negative-path fail, verified on
+  current `master`), but the flag was never removed — so a real regression in
+  `scripts/` (which builds `fixes/index.json` and gates mission content quality)
+  can merge to `master` behind a check that reports success either way. Removing
+  `continue-on-error: true` requires editing `.github/workflows/scripts-tests.yml`,
+  which needs `workflows` permission this contribution's credentials do not have;
+  filed separately as [operations] issue
+  [#3199](https://github.com/kubestellar/console-kb/issues/3199) rather than
+  included in this docs-only change.
+- **Source**: `.github/workflows/scripts-tests.yml`, `Scripts Tests / test` check
+  status on `master` and on pull requests.
+
 ## Follow-up not covered by this document
 
 None of the scheduled workflows that publish or validate content on a cadence
@@ -225,6 +247,11 @@ issue (#3292, closed not-planned — same `workflows`-permission constraint
 as the other exceptions above); recovery guidance in the same
 incident-response runbook stands until code changes.
 
+Separately, the section 5 gap above (`scripts-tests.yml`'s `Run tests` step still
+carrying `continue-on-error: true` after the suite went green) also requires
+editing that workflow, for the same `workflows`-permission reason; filed as
+[#3199](https://github.com/kubestellar/console-kb/issues/3199).
+
 ## References
 
 
@@ -232,5 +259,6 @@ incident-response runbook stands until code changes.
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
 - [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up; also now covers event-triggered reusable-workflow callers (`pr-verifier.yml`'s confirmed, currently-active #3336 incident) since the same silent-failure risk applies there too
+- [Issue #3199](https://github.com/kubestellar/console-kb/issues/3199) — `scripts-tests.yml`'s `Run tests` step still has `continue-on-error: true` despite the suite being green, so the check can report success even on a real regression
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
