@@ -46,6 +46,25 @@ fixing it requires editing `.github/workflows/mission-safety-scan.yml`
 (`workflows` permission). Use the manual scan in step 2 of Detection below
 for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
 
+### Related gap: `Mission Content Validation` never diffs `runbooks/**`, despite triggering on it
+
+A third, independent instance of the same scoping mismatch affects
+`Mission Content Validation` (`.github/workflows/mission-content-validation.yml`).
+Its `on.pull_request.paths` trigger includes `runbooks/**/*.json`,
+`runbooks/**/*.yaml`, and `runbooks/**/*.yml`, but neither of its two
+content-checking steps ("Validate mission quality", "Validate mission
+content") diffs against `runbooks/` — both `git diff` pathspecs are
+hardcoded to `fixes/...` globs. A `runbooks/**`-only PR resolves both
+`FILES` lists to empty, both steps print a "no files changed" message and
+`exit 0`, and the `validate-content` job reports green — without the
+skeleton-step check, the unsafe `kubectl edit deployment`/local-`kubectl
+apply -f` placeholder checks, or the Helm-repo/container-image/URL
+reachability checks ever running against the changed `runbooks/**` file.
+Tracked separately as a `[operations]` issue since fixing it requires
+editing `.github/workflows/mission-content-validation.yml` (`workflows`
+permission). Treat a merged `runbooks/**` file the same as an unscanned
+one for the purposes of this runbook's Detection/Mitigation steps below.
+
 ## Symptoms
 
 - A mission file merged via a `cncf-mission-gen`-labeled PR fails
@@ -137,3 +156,12 @@ Closing the separate false-green gap (`Mission Safety Scan` skipping
 logic in the "Scan for dangerous commands" step. Also requires `workflows`
 permission this contribution's credentials do not have — tracked in a
 separate open `[operations]` issue on this repo.
+
+Closing the third gap (`Mission Content Validation` skipping `runbooks/**`
+files in both of its content-checking steps) requires editing
+`.github/workflows/mission-content-validation.yml` to add the same
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in its
+`on.pull_request.paths` trigger to the `git diff` file-selection logic in
+the "Validate mission quality" and "Validate mission content" steps. Also
+requires `workflows` permission this contribution's credentials do not
+have — tracked in a separate open `[operations]` issue on this repo.
