@@ -1688,4 +1688,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary, parseSimpleYaml, loadSourcesConfig }
