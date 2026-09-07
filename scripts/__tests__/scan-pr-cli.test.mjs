@@ -114,6 +114,28 @@ describe('scan-pr.mjs CLI', () => {
     })
   })
 
+  it('emits a bounded mission-scan-summary JSON line to stderr', () => {
+    withTempDir(dir => {
+      writeFileSync(join(dir, 'valid.json'), JSON.stringify(VALID_MISSION));
+      const bad = { name: 'no-version', mission: { title: 't', steps: [] } };
+      writeFileSync(join(dir, 'bad.json'), JSON.stringify(bad));
+
+      const result = runScanPR(dir, ['valid.json bad.json']);
+      const line = result.stdout.trim().split('\n').find(l => l.startsWith('{"event":"mission-scan-summary"'));
+      expect(line).toBeTruthy();
+      const entry = JSON.parse(line);
+      expect(entry).toMatchObject({
+        event: 'mission-scan-summary',
+        filesScanned: 2,
+        readErrors: 0,
+        schemaInvalid: 1,
+        maliciousFindings: 0,
+        isFullScan: false,
+        hasFailures: true,
+      });
+    });
+  });
+
   describe('--all discovery', () => {
     function setupFixes(dir) {
       const fixes = join(dir, 'fixes')
