@@ -46,6 +46,36 @@ fixing it requires editing `.github/workflows/mission-safety-scan.yml`
 (`workflows` permission). Use the manual scan in step 2 of Detection below
 for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
 
+### Related gap: `Validate Mission Schema` never checks `runbooks/**`, on PRs *or* on its scheduled sweep
+
+A second, broader instance of the same false-green class affects
+`Validate Mission Schema` (`.github/workflows/validate-schema.yml`) itself.
+Its `on.pull_request.paths`/`on.push.paths` triggers include `runbooks/**`,
+but:
+
+- **PR mode**: the "Find changed files (PR only)" step's `git diff`
+  pathspec is `'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml'` only.
+  A `runbooks/**`-only PR resolves to an empty file list, so the
+  "Validate schema (PR — changed files only)" step's `if` condition
+  (`steps.changed.outputs.files != ''`) is false and the step is
+  **skipped** — not failed. The job reports green having validated
+  nothing.
+- **Scheduled/push mode** (`--all`, weekly Monday 05:30 UTC plus every
+  qualifying push to `master`): `scripts/validate-schema.mjs` calls
+  `discoverMissionFiles('fixes')` only — `runbooks/**` is never walked,
+  even in the full sweep.
+
+The result: the 10 `runbooks/*.json` mission files (same `kc-mission-v1`
+schema as `fixes/**`, per `runbooks/README.md`) have **no automated schema
+validation coverage at all**, on any trigger, while every run reports
+success. Confirmed via `node scripts/validate-schema.mjs $(ls
+runbooks/*.json)` (10/10 valid when given directly) vs.
+`node scripts/validate-schema.mjs --all` (validates only `fixes/**`, 0
+files under `runbooks/**`). Tracked separately as a `[operations]` issue
+since fixing it requires editing `.github/workflows/validate-schema.yml`
+and `scripts/validate-schema.mjs` (`workflows` permission). Use step 1 of
+Detection below manually against `runbooks/*.json` for the same reason.
+
 ## Symptoms
 
 - A mission file merged via a `cncf-mission-gen`-labeled PR fails
@@ -68,15 +98,23 @@ for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
   scan output for the changed `runbooks/**` file(s) — this is the false-green
   case described above, and applies whether or not the PR went through
   auto-merge.
+- A merged PR touched only `runbooks/**` files and `Validate Mission
+  Schema` shows green, but the job's log shows the "Validate schema (PR —
+  changed files only)" step was **skipped** (not run) — this is the
+  `runbooks/**`-omission gap described above, and also applies to the
+  weekly scheduled sweep, whose log never lists any `runbooks/*.json`
+  file among the files it discovered.
 
 ## Detection
 
 Run from a checkout of `master`:
 
 ```bash
-# 1. Confirm the file is valid per the schema validator
+# 1. Confirm the file is valid per the schema validator — `--all` only
+#    covers fixes/**, so runbooks/*.json must be passed explicitly too
 cd scripts && npm ci && cd ..
 node scripts/validate-schema.mjs --all
+node scripts/validate-schema.mjs $(ls runbooks/*.json)
 
 # 2. Scan merged mission files for the same dangerous patterns
 #    mission-safety-scan.yml checks for (adjust the file list to the
@@ -137,3 +175,13 @@ Closing the separate false-green gap (`Mission Safety Scan` skipping
 logic in the "Scan for dangerous commands" step. Also requires `workflows`
 permission this contribution's credentials do not have — tracked in a
 separate open `[operations]` issue on this repo.
+
+Closing the `Validate Mission Schema` gap (never checking `runbooks/**` on
+PRs or on its scheduled sweep) requires: (1) extending the PR-mode
+`git diff` pathspec in `.github/workflows/validate-schema.yml` to also
+include `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`,
+and (2) having `scripts/validate-schema.mjs`'s `--all` branch also call
+`discoverMissionFiles('runbooks')` alongside `discoverMissionFiles('fixes')`.
+Requires `workflows` permission this contribution's credentials do not
+have — tracked in a separate open `[operations]` issue on this repo
+(#3255).

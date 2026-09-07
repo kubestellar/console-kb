@@ -50,6 +50,18 @@ No exporter or external data flow is added by this document — recommendations 
   `runbooks/**`-only PR, independent of the auto-merge bypass above. Also tracked
   as a follow-up (see below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Third known exception**: `Validate Mission Schema` itself has a broader
+  version of this same gap — it never validates `runbooks/**` at all, on
+  *either* trigger. Its PR-mode `git diff` pathspec covers only
+  `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolves to
+  an empty file list and the validation step is skipped (job still reports
+  green). And its scheduled/push `--all` mode
+  (`scripts/validate-schema.mjs`) only calls `discoverMissionFiles('fixes')`
+  — the weekly cadence sweep never walks `runbooks/**` either. The 10
+  `runbooks/*.json` mission files therefore have zero automated schema
+  validation coverage on any trigger. Also tracked as a follow-up (see
+  below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -116,6 +128,13 @@ trigger watching it) also requires editing that workflow — adding the
 `on.pull_request.paths` to the `git diff`/`find` pathspecs in the "Scan for
 dangerous commands" step. Also filed separately as a `[operations]` issue
 for the same `workflows`-permission reason.
+
+The section 2 "third known exception" above (`validate-schema.yml` never
+validating `runbooks/**`, on PRs or on its scheduled/push `--all` sweep)
+also requires editing that workflow's PR-mode `git diff` pathspec and
+`scripts/validate-schema.mjs`'s `--all` branch to also discover files under
+`runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
+same `workflows`-permission reason.
 
 ## References
 
