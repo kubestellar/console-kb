@@ -17,10 +17,15 @@ published mission catalog:
 | `Fuzzing` (`.github/workflows/fuzz.yml`) | daily, 06:00 UTC | Fuzzes the JSON parsers/schema/scanner that gate mission content safety |
 | `CodeQL Security Analysis` (`.github/workflows/codeql.yml`) | nightly, 05:30 UTC | Recurring JavaScript/TypeScript security scan of `master` |
 | `OpenSSF Scorecard` (`.github/workflows/scorecard.yml`) | weekly, Monday 06:00 UTC | Recurring supply-chain security posture scan of `master` |
+| `Stale Issues` (`.github/workflows/stale.yml`) | daily, midnight UTC | Sweeps and labels/closes stale issues repo-wide |
 
 The same silent-failure gap applies to the two security-scan workflows above,
 even though they don't publish or gate mission content — a broken CodeQL or
-Scorecard run has no automated time-to-detect signal either.
+Scorecard run has no automated time-to-detect signal either. The same gap also
+applies to `stale.yml`, which has already had a confirmed real-world silent
+failure in this repo (`startup_failure` due to an invalid `secrets:` token
+passed to `reusable-stale.yml`, see #3057/#3071) — a repeat of that failure
+mode today would again go unnoticed beyond the Actions tab.
 
 None of these workflows currently notify anyone when the job itself fails
 (no `if: failure()` step, issue/comment creation, or webhook — confirmed via
@@ -41,6 +46,10 @@ to manually check for and respond to a silent failure.
   in the last 24h/7d despite open upstream CNCF activity.
 - `docs/slo.md` section 3 ("Time-to-detect a bad publish") cannot be
   evaluated because there is no signal that a run happened at all.
+- No `stale.yml` run has appeared in the last ~30 hours (expected daily),
+  or the workflow shows `startup_failure`/`failure` on its most recent
+  scheduled run — issues stop receiving the `stale` label/auto-close
+  treatment repo-wide with no automated signal.
 
 ## Detection
 
@@ -50,7 +59,7 @@ access, run from a checkout or via `gh`):
 ```bash
 for wf in build-index.yml validate-schema.yml cncf-mission-gen.yml \
           cncf-install-gen.yml scan-missions.yml platform-install-gen.yml fuzz.yml \
-          codeql.yml scorecard.yml; do
+          codeql.yml scorecard.yml stale.yml; do
   echo "== $wf =="
   gh run list --repo kubestellar/console-kb --workflow "$wf" --limit 3 \
     --json status,conclusion,createdAt,url
@@ -61,9 +70,12 @@ Treat any `conclusion` of `failure`, `cancelled`, or `timed_out` on the
 most recent scheduled run as a confirmed incident — as is a *missing* run
 past its expected cadence (e.g. no `cncf-mission-gen.yml` run in the last
 ~30 hours, no `platform-install-gen.yml` run in the last ~8 hours, no
-`codeql.yml` run in the last ~30 hours, or no `validate-schema.yml`/
-`scan-missions.yml`/`scorecard.yml` run in the last ~8 days), which
-indicates the schedule trigger itself stopped firing.
+`codeql.yml` run in the last ~30 hours, no `stale.yml` run in the last
+~30 hours, or no `validate-schema.yml`/`scan-missions.yml`/`scorecard.yml`
+run in the last ~8 days), which indicates the schedule trigger itself
+stopped firing. A `startup_failure` conclusion (not just `failure`) is
+also a confirmed incident — this is exactly how `stale.yml` failed
+previously (#3057).
 
 ## Immediate mitigation
 

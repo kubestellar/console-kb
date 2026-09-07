@@ -41,6 +41,15 @@ No exporter or external data flow is added by this document — recommendations 
   this document does not add the fix itself. Recovery steps for this scenario
   are documented in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Second known exception**: `Mission Safety Scan` itself has a script-level gap —
+  its `on.pull_request.paths` trigger watches `runbooks/**/*.json`/`*.yaml`/`*.yml`,
+  but the "Scan for dangerous commands" step's `git diff`/`find` file selection is
+  scoped only to `fixes/`. A PR that touches only `runbooks/**` files runs the job,
+  finds zero files to scan, and reports "Safety scan passed" without ever
+  evaluating the changed file's content — a false-green result that affects any
+  `runbooks/**`-only PR, independent of the auto-merge bypass above. Also tracked
+  as a follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
   **Separate known gap**: `KB Quality Enforcement`
   (`.github/workflows/kb-quality-enforcement.yml`) triggers on PRs touching
@@ -93,6 +102,14 @@ webhook, so a silently-broken CodeQL or Scorecard run has no automated
 time-to-detect signal either. Tracked as a follow-up alongside the workflows
 above (see below); this document does not add the alert itself.
 
+The same gap also applies to `stale.yml` (daily, `0 0 * * *`), which
+additionally has a real-world precedent: it previously failed silently with
+`startup_failure` due to an invalid `secrets:` token passed to
+`reusable-stale.yml` (#3057/#3071). A repeat of that failure mode today would
+again be visible only via the Actions tab. Tracked as a follow-up alongside
+the workflows above (see below); this document does not add the alert
+itself.
+
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
 also requires editing that workflow to either drop `--admin` in favor of a
@@ -106,11 +123,19 @@ diff pathspec to include `runbooks/**/*.json` alongside `fixes/**/*.json`. Also
 filed separately as a `[operations]` issue for the same `workflows`-permission
 reason.
 
+The section 2 "second known exception" above (`mission-safety-scan.yml`'s
+scan-step file selection omitting `runbooks/**` despite the workflow's own
+trigger watching it) also requires editing that workflow — adding the
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in
+`on.pull_request.paths` to the `git diff`/`find` pathspecs in the "Scan for
+dangerous commands" step. Also filed separately as a `[operations]` issue
+for the same `workflows`-permission reason.
+
 ## References
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
-- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
+- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
 - [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)

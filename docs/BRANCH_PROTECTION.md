@@ -10,7 +10,7 @@ Enable these rules in **Settings → Branches → Branch protection rules** for 
 |---------|-------------------|
 | Require pull request reviews before merging | ✅ Enabled — at least 1 approving review |
 | Dismiss stale reviews on new commits | ✅ Enabled |
-| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint, `Mission Safety Scan`, `Validate Mission Schema`) |
+| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint, `Mission Safety Scan`, `Validate Mission Schema`, `KB Quality Enforcement`, `Mission Content Validation`) |
 | Require conversation resolution before merging | ✅ Enabled |
 | Restrict force pushes | ✅ Disabled for all non-admins |
 | Require signed commits | ⚠️ Recommended but optional |
@@ -42,6 +42,23 @@ running, cancelled, or failing, since GitHub only blocks merges on checks
 explicitly marked required. This is the repo-configuration precondition
 `docs/slo.md` section 2's "100% ... nothing merged by a human reviewer should
 bypass both" SLO depends on.
+
+The same requirement applies to two more `pull_request`-triggered checks that
+also gate content safety on the same paths (`fixes/**/*.json`,
+`runbooks/**/*.json`, plus YAML for the latter): `KB Quality Enforcement`
+(`.github/workflows/kb-quality-enforcement.yml`, fails the job when
+`scripts/test-kb-quality-ci.mjs` scores a changed mission below threshold —
+note this only diffs `fixes/**/*.json` today, tracked separately in #3203)
+and `Mission Content Validation` (`.github/workflows/mission-content-validation.yml`,
+fails the job on skeleton steps, unreachable Helm repos, or missing inline
+manifests). Neither was listed here previously; without them configured as
+required, the same "merge while still running/cancelled/failing" gap applies
+to them as it does to `Mission Safety Scan` and `Validate Mission Schema`
+above. `Scripts Tests` (`.github/workflows/scripts-tests.yml`) is
+intentionally *not* added to this list: its `npm test` step currently runs
+with `continue-on-error: true`, so the job reports success even when tests
+fail — marking it required would give a false sense of coverage gating until
+that gap (tracked separately, see #3199) is closed.
 
 See OpenSSF Scorecard findings #1 (BranchProtectionID) and #58 (CodeReviewID) for background.
 

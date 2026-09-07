@@ -27,6 +27,25 @@ not a hypothetical.
 every KB page load. An unsafe or schema-invalid mission reaching `master`
 is a **user-facing incident**.
 
+### Related gap: `Mission Safety Scan` false-green on `runbooks/**`-only PRs
+
+Separately from the auto-merge bypass above, `Mission Safety Scan` itself
+has a script-level gap that affects **any** PR (not just `cncf-mission-gen`
+ones) that touches only `runbooks/**` files: its `on.pull_request.paths`
+trigger includes `runbooks/**/*.json`, `runbooks/**/*.yaml`, and
+`runbooks/**/*.yml`, but the "Scan for dangerous commands" step's file
+selection (`git diff --name-only ... -- 'fixes/**/*.json' 'fixes/**/*.yaml'
+'fixes/**/*.yml'`, with a `find fixes -name ...` fallback) is scoped only to
+`fixes/`. For a `runbooks/**`-only PR, this resolves to an empty file list,
+so the loop that checks for dangerous `kubectl`/`rm -rf`/credential/hostname
+patterns never runs against the changed file(s) — the job still reports
+"Safety scan passed" and shows green. A `runbooks/**` mission can reach
+`master` (via normal review, no `--admin` needed) without ever having its
+content actually scanned. Tracked separately as a `[operations]` issue since
+fixing it requires editing `.github/workflows/mission-safety-scan.yml`
+(`workflows` permission). Use the manual scan in step 2 of Detection below
+for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
+
 ## Symptoms
 
 - A mission file merged via a `cncf-mission-gen`-labeled PR fails
@@ -44,6 +63,11 @@ is a **user-facing incident**.
   checks are absent, pending, or red at merge time (visible via
   `gh pr view <pr-number> --json statusCheckRollup`, if the PR is still
   queryable, or the merge commit's associated checks in the GitHub UI).
+- A merged PR touched only `runbooks/**` files and `Mission Safety Scan`
+  shows green (`Safety scan passed`), but the job's log has no per-file
+  scan output for the changed `runbooks/**` file(s) — this is the false-green
+  case described above, and applies whether or not the PR went through
+  auto-merge.
 
 ## Detection
 
@@ -104,3 +128,12 @@ to drop `--admin` in favor of a mergeable-state check. This requires
 tracked in the open `[operations]` issue on this repo (auto-merge bypasses
 Mission Safety Scan and Validate Mission Schema via `--admin`) and in
 `docs/slo.md` section 2.
+
+Closing the separate false-green gap (`Mission Safety Scan` skipping
+`runbooks/**` files in its own scan logic) requires editing
+`.github/workflows/mission-safety-scan.yml` to add the same
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in its
+`on.pull_request.paths` trigger to the `git diff`/`find` file-selection
+logic in the "Scan for dangerous commands" step. Also requires `workflows`
+permission this contribution's credentials do not have — tracked in a
+separate open `[operations]` issue on this repo.
