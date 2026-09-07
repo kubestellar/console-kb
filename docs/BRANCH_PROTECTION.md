@@ -60,6 +60,16 @@ with `continue-on-error: true`, so the job reports success even when tests
 fail — marking it required would give a false sense of coverage gating until
 that gap (tracked separately, see #3199) is closed.
 
+**Caveat — marking `Validate Mission Schema` required does not gate
+`runbooks/**` content**: the check itself never validates any file under
+`runbooks/**`, on a PR or on its own scheduled sweep (its PR-mode file
+diff and its `--all` file-discovery both only cover `fixes/**`). A
+`runbooks/**`-only PR passes this required check having had zero files
+checked. Closing this requires editing
+`.github/workflows/validate-schema.yml` and
+`scripts/validate-schema.mjs`, which needs `workflows` permission this
+contribution's credentials do not have — tracked separately, see #3255.
+
 See OpenSSF Scorecard findings #1 (BranchProtectionID) and #58 (CodeReviewID) for background.
 
 ## Code Review Policy
