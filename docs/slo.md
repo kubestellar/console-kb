@@ -62,6 +62,19 @@ No exporter or external data flow is added by this document — recommendations 
   validation coverage on any trigger. Also tracked as a follow-up (see
   below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fourth known exception**: `KB Quality Enforcement`
+  (`.github/workflows/kb-quality-enforcement.yml`) has the same
+  false-green gap for a third workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`, but the "Detect Changed KB
+  Entries" step's `git diff` pathspec covers only `fixes/**/*.json`, so a
+  `runbooks/**`-only PR resolves to zero changed files and the "Run
+  Quality Scorer" step is skipped (job still reports green, having scored
+  nothing). Confirmed reproducible: `node scripts/test-kb-quality-ci.mjs`
+  with no args reports "No KB JSON files provided for scoring", while
+  `node scripts/test-kb-quality-ci.mjs runbooks/disaster-recovery.json`
+  scores it 100/100 when given the file directly. Also tracked as a
+  follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
