@@ -33,15 +33,13 @@ export function detectCategory(name, repo) {
   return 'app-definition'
 }
 
-async function main() {
-  console.log(`Fetching CNCF landscape from ${LANDSCAPE_URL}...`)
-  const resp = await fetch(LANDSCAPE_URL)
-  if (!resp.ok) {
-    log.error('landscape fetch returned non-ok response', { error_kind: 'landscape_fetch_failed', http_status: resp.status })
-    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
-  }
-  const text = await resp.text()
-
+/**
+ * Parse the raw landscape.yml text into a flat list of `{name, repo, project}`
+ * items. Only items with both a `name:` and a `repo_url:` are emitted; items
+ * without both are dropped so the caller can filter on `project` alone.
+ * Exported for unit testing.
+ */
+export function parseLandscapeItems(text) {
   const projects = []
   const lines = text.split('\n')
   let currentItem = {}
@@ -67,8 +65,17 @@ async function main() {
   if (currentItem.name && currentItem.repo) {
     projects.push({ ...currentItem })
   }
+  return projects
+}
 
-  const cncf = projects
+/**
+ * Filter parsed landscape items to CNCF graduated/incubating/sandbox
+ * projects, normalize the slug, extract `owner/repo` from the GitHub URL,
+ * dedupe by repo, and sort by (maturity order, name).
+ * Exported for unit testing.
+ */
+export function toCncfProjects(items) {
+  const cncf = items
     .filter(p => p.project && ['graduated', 'incubating', 'sandbox'].includes(p.project))
     .map(p => {
       const m = p.repo.match(/github\.com\/([^/]+\/[^/]+)/)
@@ -81,7 +88,6 @@ async function main() {
     })
     .filter(Boolean)
 
-  // Deduplicate by repo
   const seen = new Set()
   const unique = cncf.filter(p => {
     if (seen.has(p.repo)) return false
@@ -89,17 +95,24 @@ async function main() {
     return true
   })
 
-  // Sort by maturity then name
   const order = { graduated: 0, incubating: 1, sandbox: 2 }
   unique.sort((a, b) => (order[a.maturity] - order[b.maturity]) || a.name.localeCompare(b.name))
+  return unique
+}
 
-  // Generate output
+/**
+ * Render the cncf-projects.mjs source module from a deduped list produced
+ * by `toCncfProjects()`. `generatedAt` is injected so tests can pin the
+ * timestamp; production main() passes new Date().toISOString().
+ * Exported for unit testing.
+ */
+export function renderCncfProjectsModule(unique, generatedAt) {
   const out = [
     '/**',
     ' * CNCF Graduated, Incubating, and Sandbox projects with their GitHub repos.',
     ' * Auto-generated from https://landscape.cncf.io',
     ` * Total: ${unique.length} projects`,
-    ` * Generated: ${new Date().toISOString()}`,
+    ` * Generated: ${generatedAt}`,
     ' */',
     'export const CNCF_PROJECTS = [',
   ]
@@ -125,8 +138,23 @@ async function main() {
   out.push("  'app-definition': 'workloads',")
   out.push('}')
   out.push('')
+  return out.join('\n')
+}
 
-  writeFileSync(OUTPUT_PATH, out.join('\n'))
+async function main() {
+  console.log(`Fetching CNCF landscape from ${LANDSCAPE_URL}...`)
+  const resp = await fetch(LANDSCAPE_URL)
+  if (!resp.ok) {
+    log.error('landscape fetch returned non-ok response', { error_kind: 'landscape_fetch_failed', http_status: resp.status })
+    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
+  }
+  const text = await resp.text()
+
+  const items = parseLandscapeItems(text)
+  const unique = toCncfProjects(items)
+  const rendered = renderCncfProjectsModule(unique, new Date().toISOString())
+
+  writeFileSync(OUTPUT_PATH, rendered)
   console.log(`Written ${unique.length} projects to ${OUTPUT_PATH}`)
   const graduated = unique.filter(p => p.maturity === 'graduated').length
   const incubating = unique.filter(p => p.maturity === 'incubating').length
