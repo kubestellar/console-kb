@@ -3,6 +3,9 @@ import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import * as yaml from 'js-yaml';
 import { validateMissionExport } from './scanner.mjs';
+import { createLogger } from './lib/logger.mjs';
+
+const log = createLogger('validate-schema');
 
 /** Valid mission file extensions */
 const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
@@ -28,15 +31,6 @@ function discoverMissionFiles(dir) {
     }
   }
   return results;
-}
-
-/**
- * Emits a single-line JSON event to stdout for CI observability.
- * Kept local to this script (no shared dependency) so it can be adopted
- * independently of any other in-flight structured-logging change.
- */
-function logEvent(event, fields = {}) {
-  console.log(JSON.stringify({ event, ...fields }));
 }
 
 /**
@@ -114,7 +108,7 @@ function main() {
 
   if (files.length === 0) {
     console.log('No files to validate.');
-    logEvent('schema-validation-summary', {
+    log.summary('schema-validation-summary', {
       level: 'info',
       trigger,
       total: 0,
@@ -128,7 +122,7 @@ function main() {
   const { hasErrors, validCount, invalidCount, total } = runValidation(files);
   const durationMs = Date.now() - startedAt;
 
-  logEvent('schema-validation-summary', {
+  log.summary('schema-validation-summary', {
     level: hasErrors ? 'error' : 'info',
     trigger,
     total,

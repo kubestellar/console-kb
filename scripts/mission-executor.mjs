@@ -103,6 +103,45 @@ function validateCommand(cmd) {
     return { safe: false, reason: 'find/xargs -exec is not allowed (arbitrary command execution risk)' }
   }
 
+  // Block curl file-upload / config-file flags — these turn `curl` into a
+  // primitive for exfiltrating any locally-readable file to an attacker-
+  // controlled URL, and the per-arg sanitiser (`sanitizeArg`) permits `@`,
+  // `/`, `.`, `-`, `=`, `:` which are exactly the characters needed to write
+  // `-F file=@/home/runner/.docker/config.json`. Because LLM-synthesised
+  // missions are seeded from public sources (GitHub Discussions / Reddit /
+  // StackOverflow — see scripts/sources/*), an attacker can steer the LLM
+  // into emitting such a curl line even without touching this repo.
+  //
+  // Legitimate install flows use HTTPS-GET-only curl (`curl -fsSL <url>`,
+  // `curl -L -o <file> <url>`), so blocking the upload/config surface does
+  // not break the install path.
+  if (/\bcurl\b/.test(cmd)) {
+    const CURL_UNSAFE_FLAGS = [
+      /(?:^|\s)-F(?:\b|=|\s)/,          // multipart form (reads @<path>)
+      /(?:^|\s)--form(?:\b|=|\s)/,      // long form of -F
+      /(?:^|\s)--form-string(?:\b|=|\s)/,
+      /(?:^|\s)-T(?:\b|=|\s)/,          // upload-file
+      /(?:^|\s)--upload-file(?:\b|=|\s)/,
+      /(?:^|\s)-d(?:\b|=|\s)/,          // POST body (reads @<path>)
+      /(?:^|\s)--data(?:\b|=|\s)/,
+      /(?:^|\s)--data-binary(?:\b|=|\s)/,
+      /(?:^|\s)--data-raw(?:\b|=|\s)/,
+      /(?:^|\s)--data-urlencode(?:\b|=|\s)/,
+      /(?:^|\s)-K(?:\b|=|\s)/,          // read curl-options from file
+      /(?:^|\s)--config(?:\b|=|\s)/,    // long form of -K
+      /(?:^|\s)--netrc(?:\b|-file|-optional)?(?:\b|=|\s)/,
+    ]
+    for (const rx of CURL_UNSAFE_FLAGS) {
+      if (rx.test(cmd)) {
+        return {
+          safe: false,
+          reason:
+            'curl upload/config flags (-F/--form, -T/--upload-file, -d/--data*, -K/--config, --netrc*) are not allowed (data-exfiltration risk)',
+        }
+      }
+    }
+  }
+
   // Block pipes and redirections (require shell, cannot execute safely without shell)
   if (/[|><&]/.test(cmd)) {
     return { safe: false, reason: 'Pipes and redirections (|, >, <, &) are not allowed' }
@@ -163,6 +202,15 @@ function sanitizeArg(arg) {
   }
   if (/[$`|><&;]/.test(arg) || arg.includes('$(')) {
     throw new Error(`Unsafe argument rejected: ${arg}`)
+  }
+  // Defence-in-depth against curl-style file-read arguments: `@/<abs>` and
+  // `@./<rel>` are how curl's -F/-d/-T flags reference a local file for
+  // upload, and validateCommand already blocks those flags at the command
+  // string layer. Rejecting @-prefixed absolute/relative paths here means a
+  // future addition to ALLOWED_BASE_COMMANDS (or a bypass in the flag scan)
+  // cannot silently reintroduce the exfiltration primitive.
+  if (/^@[./]/.test(arg)) {
+    throw new Error(`Unsafe argument rejected (file-read @path): ${arg}`)
   }
   return `${arg}`
 }

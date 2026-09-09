@@ -41,6 +41,40 @@ No exporter or external data flow is added by this document — recommendations 
   this document does not add the fix itself. Recovery steps for this scenario
   are documented in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Second known exception**: `Mission Safety Scan` itself has a script-level gap —
+  its `on.pull_request.paths` trigger watches `runbooks/**/*.json`/`*.yaml`/`*.yml`,
+  but the "Scan for dangerous commands" step's `git diff`/`find` file selection is
+  scoped only to `fixes/`. A PR that touches only `runbooks/**` files runs the job,
+  finds zero files to scan, and reports "Safety scan passed" without ever
+  evaluating the changed file's content — a false-green result that affects any
+  `runbooks/**`-only PR, independent of the auto-merge bypass above. Also tracked
+  as a follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Third known exception**: `Validate Mission Schema` itself has a broader
+  version of this same gap — it never validates `runbooks/**` at all, on
+  *either* trigger. Its PR-mode `git diff` pathspec covers only
+  `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolves to
+  an empty file list and the validation step is skipped (job still reports
+  green). And its scheduled/push `--all` mode
+  (`scripts/validate-schema.mjs`) only calls `discoverMissionFiles('fixes')`
+  — the weekly cadence sweep never walks `runbooks/**` either. The 10
+  `runbooks/*.json` mission files therefore have zero automated schema
+  validation coverage on any trigger. Also tracked as a follow-up (see
+  below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fourth known exception**: `KB Quality Enforcement`
+  (`.github/workflows/kb-quality-enforcement.yml`) has the same
+  false-green gap for a third workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`, but the "Detect Changed KB
+  Entries" step's `git diff` pathspec covers only `fixes/**/*.json`, so a
+  `runbooks/**`-only PR resolves to zero changed files and the "Run
+  Quality Scorer" step is skipped (job still reports green, having scored
+  nothing). Confirmed reproducible: `node scripts/test-kb-quality-ci.mjs`
+  with no args reports "No KB JSON files provided for scoring", while
+  `node scripts/test-kb-quality-ci.mjs runbooks/disaster-recovery.json`
+  scores it 100/100 when given the file directly. Also tracked as a
+  follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -100,11 +134,26 @@ mergeable-state/required-checks check, or gate the scorer step on those two chec
 having completed and passed first. Also filed separately as a `[operations]` issue
 for the same `workflows`-permission reason.
 
+The section 2 "second known exception" above (`mission-safety-scan.yml`'s
+scan-step file selection omitting `runbooks/**` despite the workflow's own
+trigger watching it) also requires editing that workflow — adding the
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in
+`on.pull_request.paths` to the `git diff`/`find` pathspecs in the "Scan for
+dangerous commands" step. Also filed separately as a `[operations]` issue
+for the same `workflows`-permission reason.
+
+The section 2 "third known exception" above (`validate-schema.yml` never
+validating `runbooks/**`, on PRs or on its scheduled/push `--all` sweep)
+also requires editing that workflow's PR-mode `git diff` pathspec and
+`scripts/validate-schema.mjs`'s `--all` branch to also discover files under
+`runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
+same `workflows`-permission reason.
+
 ## References
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
-- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
+- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
 - [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
