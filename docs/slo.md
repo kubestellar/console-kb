@@ -51,15 +51,18 @@ No exporter or external data flow is added by this document — recommendations 
   as a follow-up (see below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Third known exception**: `Validate Mission Schema` itself has a broader
-  version of this same gap — it never validates `runbooks/**` at all, on
-  *either* trigger. Its PR-mode `git diff` pathspec covers only
-  `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolves to
-  an empty file list and the validation step is skipped (job still reports
-  green). And its scheduled/push `--all` mode
-  (`scripts/validate-schema.mjs`) only calls `discoverMissionFiles('fixes')`
-  — the weekly cadence sweep never walks `runbooks/**` either. The 10
-  `runbooks/*.json` mission files therefore have zero automated schema
-  validation coverage on any trigger. Also tracked as a follow-up (see
+  version of this same gap — it never validated `runbooks/**` at all, on
+  *either* trigger. Its PR-mode `git diff` pathspec covered only
+  `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolved to
+  an empty file list and the validation step was skipped (job still reported
+  green). The scheduled/push `--all` mode side of this gap
+  (`scripts/validate-schema.mjs` only walking `fixes/`) has been fixed — it
+  now also discovers mission files under `runbooks/`, so the weekly cadence
+  sweep validates all 10 `runbooks/*.json` files. The PR-mode pathspec still
+  needs the corresponding `runbooks/**/*.json`/`*.yaml`/`*.yml` globs added
+  to `.github/workflows/validate-schema.yml`'s "Find changed files (PR
+  only)" step; that edit is prepared but requires `workflows` permission
+  this contribution's credentials do not have. Tracked as a follow-up (see
   below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Fourth known exception**: `KB Quality Enforcement`
@@ -143,13 +146,18 @@ dangerous commands" step. Also filed separately as a `[operations]` issue
 for the same `workflows`-permission reason.
 
 The section 2 "third known exception" above (`validate-schema.yml` never
-validating `runbooks/**`, on PRs or on its scheduled/push `--all` sweep)
-also requires editing that workflow's PR-mode `git diff` pathspec and
-`scripts/validate-schema.mjs`'s `--all` branch to also discover files under
-`runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
-same `workflows`-permission reason.
+validating `runbooks/**`) is now partially resolved:
+`scripts/validate-schema.mjs`'s `--all` branch has been updated to also
+discover files under `runbooks/`, so the weekly/push sweep now covers all
+10 `runbooks/*.json` files. The remaining piece — extending
+`validate-schema.yml`'s PR-mode `git diff` pathspec with the same
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs so a `runbooks/**`-only PR is
+no longer skipped — still requires `workflows` permission this
+contribution's credentials do not have. Tracked in `[operations]` issue
+#3255 until that pathspec change lands.
 
 ## References
+
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
