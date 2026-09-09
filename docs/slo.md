@@ -75,6 +75,19 @@ No exporter or external data flow is added by this document — recommendations 
   scores it 100/100 when given the file directly. Also tracked as a
   follow-up (see below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fifth known exception**: `Mission Content Validation`
+  (`.github/workflows/mission-content-validation.yml`) has the same
+  false-green gap for a fourth workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`/`*.yaml`/`*.yml`, but neither of
+  its two validation steps' `git diff --name-only` file selections
+  (`fixes/cncf-install/install-*.{json,yaml,yml}` and
+  `fixes/**/*.{json,yaml,yml}` respectively) ever match a `runbooks/**`
+  path. A `runbooks/**`-only PR resolves both selections to an empty file
+  list, each step prints its "No … changed" message and exits 0, and the
+  job reports green having validated zero URLs, Helm repo reachability,
+  or container image existence for the changed file(s). Also tracked as a
+  follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -148,6 +161,13 @@ also requires editing that workflow's PR-mode `git diff` pathspec and
 `scripts/validate-schema.mjs`'s `--all` branch to also discover files under
 `runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
 same `workflows`-permission reason.
+
+The section 2 "fifth known exception" above (`mission-content-validation.yml`
+never validating `runbooks/**`, despite its own trigger watching it) also
+requires editing that workflow's two `git diff --name-only` pathspecs to
+also include `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`.
+Also filed separately as a `[operations]` issue (#3292) for the same
+`workflows`-permission reason.
 
 ## References
 
