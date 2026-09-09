@@ -149,6 +149,24 @@ also requires editing that workflow's PR-mode `git diff` pathspec and
 `runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
 same `workflows`-permission reason.
 
+Separately from the false-green gaps above, `mission-safety-scan.yml`'s
+"Scan for dangerous commands" step runs 15 distinct safety checks but only
+ever emits per-line `::error`/`::warning` annotations — there is no
+aggregate signal (files scanned, error/warning totals, per-check breakdown)
+without opening every annotation on a run, and no machine-parseable output
+for anyone building CI dashboards or scripted triage on top of this
+workflow. This is the same class of CI-observability gap already merged for
+`validate-schema.mjs` (#3209) and `test-kb-quality-ci.mjs` (#3247) in this
+repo, and separately proposed (not yet merged) for `scan-pr.mjs` and
+`build-index.mjs`. A ready-to-apply replacement for the step,
+adding a bounded `MISSION_SAFETY_SCAN_SUMMARY` log line and a
+`$GITHUB_STEP_SUMMARY` table with no change to the scan logic or its
+pass/fail exit code, is checked in at
+[`runbooks/proposed-mission-safety-scan-observability-summary.yml`](../runbooks/proposed-mission-safety-scan-observability-summary.yml),
+following the same `runbooks/proposed-*.yml` convention used in
+`kubestellar/homebrew-tap`'s `docs/slo.md`. Not applied directly for the
+same `workflows`-permission reason as the exceptions above.
+
 ## References
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
