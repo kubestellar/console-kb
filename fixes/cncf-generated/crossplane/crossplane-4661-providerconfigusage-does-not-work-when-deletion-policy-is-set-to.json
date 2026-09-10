@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-4661-providerconfigusage-does-not-work-when-deletion-policy-is-set-to",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: ProviderConfigUsage does not work when deletion policy is set to Foreground",
+    "description": "ProviderConfigUsage does not work when deletion policy is set to Foreground. This issue affects 20+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify crossplane troubleshoot symptoms",
+        "description": "Check for the issue in your crossplane deployment:\n```bash\nkubectl get pods -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review crossplane configuration",
+        "description": "Inspect the relevant crossplane configuration:\n```bash\nkubectl get all -n crossplane -l app.kubernetes.io/name=crossplane\nkubectl get configmap -n crossplane -l app.kubernetes.io/part-of=crossplane\n```\n### What happened?\n\nWhile testing my [function tee prototype](https://github.com/crossplane/crossplane/discussions/4639#discussioncomment-7079961) with a claim using `compositeDeletePolicy: Foreground`, I noticed that `ProviderConfigUsage` does not"
+      },
+      {
+        "title": "Apply the fix for ProviderConfigUsage does not work when deletion policy is…",
+        "description": "Just my two cents, It also happens to me as well when working in the following scenario:\nWe are creating a composition for `Azure` that creates a dynamic provider config (so each team uses its own credentials) and then creating the rest of the components (i.e, a ResourceGroup).\n\nWhen using the\n```yaml\napiVersion: pkg.crossplane.io/v1\nkind: Provider\nmetadata:\n  name: provider-nop\nspec:\n  package: xpkg.upbound.io/crossplane-contrib/provider-nop:v0.2.0\n  ignoreCrossplaneConstraints: true\n---\napiVersion: pkg.crossplane.io/v1beta1\nkind: Function\nmetadata:\n  name: function-dummy\nspec:\n  # NOTE(negz): This is currently manually pushed. See README.md at\n  # https://github.com/crossplane-contrib/function-dummy.\n  package: xpkg.upbound.io/crossplane-contrib/function-dummy:v0.2.0\n---\napiVersion: pkg.crossplane.io/v1beta1\nkind: Function\nmetadata:\n  name: function-tee\nspec:\n  package: turkenh/function-t\n```"
+      },
+      {
+        "title": "Confirm ProviderConfigUsage does not work when deletion… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=crossplane -n crossplane --tail=50 --since=5m\nkubectl get events -n crossplane --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "Just my two cents, It also happens to me as well when working in the following scenario:\nWe are creating a composition for `Azure` that creates a dynamic provider config (so each team uses its own credentials) and then creating the rest of the components (i.e, a ResourceGroup).",
+      "codeSnippets": [
+        "apiVersion: pkg.crossplane.io/v1\nkind: Provider\nmetadata:\n  name: provider-nop\nspec:\n  package: xpkg.upbound.io/crossplane-contrib/provider-nop:v0.2.0\n  ignoreCrossplaneConstraints: true\n---\napiVersion: pkg.crossplane.io/v1beta1\nkind: Function\nmetadata:\n  name: function-dummy\nspec:\n  # NOTE(negz): This is currently manually pushed. See README.md at\n  # https://github.com/crossplane-contrib/function-dummy.\n  package: xpkg.upbound.io/crossplane-contrib/function-dummy:v0.2.0\n---\napiVersion: pkg.crossplane.io/v1beta1\nkind: Function\nmetadata:\n  name: function-tee\nspec:\n  package: turkenh/function-tee:v0.1.0\n---\napiVersion: apiextensions.crossplane.io/v1\nkind: CompositeResourceDefinition\nmetadata:\n  name: xnopresources.nop.example.org\nspec:\n  group: nop.example.org\n  names:\n    kind: XNopResourc",
+        "apiVersion: nop.example.org/v1alpha1\nkind: NopResource\nmetadata:\n  namespace: default\n  name: apiextensions-composition-functions\nspec:\n  coolField: \"I'm cool!\"\n  # This is necessary to ensure the claim's MRs are actually gone before we\n  # delete the Provider - https://github.com/crossplane/crossplane/issues/4251\n  compositeDeletePolicy: Foreground",
+        "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: test-compo\n  labels:\n    crossplane.io/xrd: xtest.dummy.crossplane.io\n    team: testteam\nspec:\n  compositeTypeRef:\n    apiVersion: dummy.crossplane.io/v1alpha1\n    kind: XTest\n  resources:\n    - name: providerConfig\n      base:\n        apiVersion: azure.upbound.io/v1beta1\n        kind: ProviderConfig\n        metadata:\n          name: to-be-patched\n        spec:\n          credentials:\n            source: Secret\n            secretRef:\n              namespace: crossplane-system\n              name: to-be-patched\n              key: credentials\n      patches:\n        - type: CombineFromComposite\n          toFieldPath: metadata.name\n          combine:\n            variables:\n              - fromFieldPath: metadata.label"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [
+      "Configmap",
+      "Namespace",
+      "Secret"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/issues/4661",
+      "repo": "https://github.com/crossplane/crossplane"
+    },
+    "reactions": 20,
+    "comments": 38,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-09-10T06:19:01.400Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
