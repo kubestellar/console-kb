@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const LANDSCAPE_URL = 'https://raw.githubusercontent.com/cncf/landscape/master/landscape.yml'
 const OUTPUT_PATH = join(__dirname, 'cncf-projects.mjs')
 
-const CATEGORY_PATTERNS = [
+export const CATEGORY_PATTERNS = [
   [/prometheus|grafana|jaeger|fluentd|thanos|cortex|opentelemetry|loki|tempo|pixie|skooner|headlamp|trickster|opencost|inspektor|kepler|parseable|perses/i, 'observability'],
   [/envoy|istio|linkerd|cilium|coredns|nats|grpc|contour|emissary|network|service.mesh|meshery|merbridge|aeraki|bfe|easegress|pipy|kuma|nighthawk|submariner|antrea|cni/i, 'networking'],
   [/falco|harbor|opa|spiffe|spire|cert.manager|kyverno|notary|sigstore|keycloak|open.?fga|paralus|confidential|curiefense|dex|guard|athenz|teller|hexa|kubewarden|in-toto|tuf|external.secrets/i, 'security'],
@@ -25,7 +25,7 @@ const CATEGORY_PATTERNS = [
   [/kubernetes|kubestellar|etcd|karmada|clusterpedia|k3s|k0s|minikube|volcano|fluid|litmus|chaos/i, 'orchestration'],
 ]
 
-function detectCategory(name, repo) {
+export function detectCategory(name, repo) {
   const text = `${name} ${repo}`
   for (const [pattern, category] of CATEGORY_PATTERNS) {
     if (pattern.test(text)) return category
@@ -137,8 +137,12 @@ async function main() {
   log.info('landscape fetch summary', { total: unique.length, graduated, incubating, sandbox })
 }
 
-main().catch(err => {
-  console.error(err)
-  log.error('unhandled fatal error fetching cncf landscape', { error_kind: 'landscape_fetch_failed', error_message: err.message })
-  process.exit(1)
-})
+// Only auto-run when invoked as a script, not when imported for unit tests.
+const isMainModule = import.meta.url === `file://${process.argv[1]}`
+if (isMainModule) {
+  main().catch(err => {
+    console.error(err)
+    log.error('unhandled fatal error fetching cncf landscape', { error_kind: 'landscape_fetch_failed', error_message: err.message })
+    process.exit(1)
+  })
+}
