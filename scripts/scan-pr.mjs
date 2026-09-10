@@ -2,6 +2,9 @@
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
+import { createLogger } from './lib/logger.mjs';
+
+const log = createLogger('scan-pr');
 
 /** Valid mission file extensions */
 const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
@@ -43,11 +46,30 @@ if (isFullScan) {
 
 if (files.length === 0) {
   console.log('No mission files to scan.');
+  log.summary('mission-scan-summary', {
+    trigger: isFullScan ? 'all' : 'changed-files',
+    total: 0,
+    readErrors: 0,
+    parseErrors: 0,
+    schemaInvalid: 0,
+    maliciousFindings: 0,
+    sensitiveFindings: 0,
+    hasFailures: false,
+  });
   process.exit(0);
 }
 
 let hasFailures = false;
 const sections = ['## 🔍 Mission Scan Results\n'];
+
+// Bounded counters for the end-of-run structured summary (fixed set of
+// known outcome categories — never per-file — so cardinality stays
+// constant regardless of how many mission files are scanned).
+let readErrorCount = 0;
+let parseErrorCount = 0;
+let schemaInvalidCount = 0;
+let maliciousFindingCount = 0;
+let sensitiveFindingCount = 0;
 
 for (const file of files) {
   let content;
@@ -56,6 +78,7 @@ for (const file of files) {
   } catch (err) {
     sections.push(`### 📄 \`${file}\`\n\n❌ **Error:** Could not read file: ${err.message}\n`);
     hasFailures = true;
+    readErrorCount++;
     continue;
   }
 
@@ -64,14 +87,20 @@ for (const file of files) {
 
   if (result.error) {
     hasFailures = true;
+    parseErrorCount++;
   } else {
-    if (!result.schema.valid) hasFailures = true;
+    if (!result.schema.valid) {
+      hasFailures = true;
+      schemaInvalidCount++;
+    }
+    sensitiveFindingCount += result.scan.sensitive.findings.length;
     // Malicious content check only applies to PR scans (new/changed files).
     // Full scans (--all) on push/schedule/dispatch skip this check to avoid
     // false positives on legitimate installation commands (curl|bash, awk patterns, etc.)
     // in existing missions that have already been reviewed.
     if (!isFullScan && result.scan.malicious.findings.length > 0) {
       hasFailures = true;
+      maliciousFindingCount += result.scan.malicious.findings.length;
     }
   }
 }
@@ -79,6 +108,17 @@ for (const file of files) {
 const report = sections.join('\n\n');
 writeFileSync('scan-results.md', report, 'utf8');
 console.log(report);
+
+log.summary('mission-scan-summary', {
+  trigger: isFullScan ? 'all' : 'changed-files',
+  total: files.length,
+  readErrors: readErrorCount,
+  parseErrors: parseErrorCount,
+  schemaInvalid: schemaInvalidCount,
+  maliciousFindings: maliciousFindingCount,
+  sensitiveFindings: sensitiveFindingCount,
+  hasFailures,
+});
 
 if (hasFailures) {
   console.error('\n❌ Scan completed with failures.');
