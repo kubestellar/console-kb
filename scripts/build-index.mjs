@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 import { readdir, readFile, writeFile } from 'fs/promises';
+import { appendFileSync } from 'fs';
 import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
+import { createLogger } from './lib/logger.mjs';
 // Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
+
+const log = createLogger('build-index');
 
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes');
 const RUNBOOKS_DIR = join(process.cwd(), 'runbooks');
@@ -112,6 +116,7 @@ function extractIssueTypes(data) {
 }
 
 export async function buildIndex(targetDir = SOLUTIONS_DIR) {
+  const startedAt = Date.now();
   // Walk both the fixes/ and runbooks/ directories
   let allFiles = await walkDir(targetDir);
   
@@ -123,11 +128,13 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
     allFiles = [...allFiles, ...runbookFiles];
   }
   const missions = [];
+  let skipped = 0;
 
   for (const filePath of allFiles) {
     const content = await readFile(filePath, 'utf-8');
     const meta = extractMetadata(content, filePath);
     if (meta) missions.push(meta);
+    else skipped += 1;
   }
 
   const index = {
@@ -139,6 +146,36 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
   const targetIndexPath = targetDir === SOLUTIONS_DIR ? INDEX_PATH : join(targetDir, 'index.json');
   await writeFile(targetIndexPath, JSON.stringify(index, null, 2) + '\n');
   console.log(`Generated index with ${missions.length} missions at ${targetIndexPath}`);
+
+  const durationMs = Date.now() - startedAt;
+
+  // Surface a structured run summary in the GitHub Actions run summary so a
+  // push-triggered index rebuild (the only trigger this script runs under)
+  // shows scanned/indexed/skipped counts at a glance instead of requiring a
+  // raw log dig. GITHUB_STEP_SUMMARY is already set by the Actions runner
+  // for every job — no workflow YAML change is required to write to it.
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const summaryLines = [
+      '## 📇 Mission Index Build Summary',
+      '',
+      '| Metric | Value |',
+      '|--------|-------|',
+      `| Files scanned | ${allFiles.length} |`,
+      `| Missions indexed | ${missions.length} |`,
+      `| Skipped (no metadata / parse error) | ${skipped} |`,
+      `| Duration (ms) | ${durationMs} |`,
+      '',
+    ];
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summaryLines.join('\n')}\n`, 'utf8');
+  }
+
+  log.summary('build-index-summary', {
+    totalFiles: allFiles.length,
+    missions: missions.length,
+    skipped,
+    durationMs,
+  });
+
   return index;
 }
 

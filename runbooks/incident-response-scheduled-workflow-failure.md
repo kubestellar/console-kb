@@ -105,7 +105,11 @@ incident — this is exactly how `stale.yml` failed previously (#3057).
    completes successfully on its normal schedule.
 3. File a postmortem using
    [`runbooks/POSTMORTEM_TEMPLATE.md`](./POSTMORTEM_TEMPLATE.md) if the
-   silent failure persisted long enough to cause user-facing staleness.
+   silent failure persisted long enough to cause user-facing staleness. See
+   [`postmortem-2026-08-stale-workflow-startup-failure.md`](./postmortem-2026-08-stale-workflow-startup-failure.md)
+   for a worked example — a `stale.yml`/`add-help-wanted.yml`
+   `startup_failure` from an invalid `secrets:` block that went undetected
+   for 3 consecutive nightly runs before being filed as #3057.
 
 ## Prevention (tracked, not implemented by this runbook)
 

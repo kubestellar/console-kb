@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import * as yaml from 'js-yaml';
 import { validateMissionExport } from './scanner.mjs';
@@ -12,6 +12,14 @@ const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
 
 /** Files to skip when discovering all missions */
 const SKIP_FILENAMES = new Set(['index.json']);
+
+/**
+ * Directories scanned in `--all` mode. `runbooks/` holds the same
+ * `kc-mission-v1` schema format as `fixes/` (see runbooks/README.md) but was
+ * previously omitted here, leaving its mission files with no scheduled/push
+ * schema-validation coverage.
+ */
+const ALL_MODE_DIRS = ['fixes', 'runbooks'];
 
 /**
  * Recursively discovers all mission files under the given directory.
@@ -99,8 +107,11 @@ function main() {
 
   let files;
   if (args.includes('--all')) {
-    // Discover all mission files under fixes/ (used for push/schedule/dispatch)
-    files = discoverMissionFiles('fixes');
+    // Discover all mission files under fixes/ and runbooks/ (used for
+    // push/schedule/dispatch full sweeps).
+    files = ALL_MODE_DIRS
+      .filter(dir => existsSync(dir))
+      .flatMap(dir => discoverMissionFiles(dir));
     console.log(`Discovered ${files.length} mission files to validate.\n`);
   } else {
     files = args.flatMap(a => a.split(/\s+/)).filter(Boolean);
