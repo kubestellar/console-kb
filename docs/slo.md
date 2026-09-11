@@ -149,6 +149,15 @@ also requires editing that workflow's PR-mode `git diff` pathspec and
 `runbooks/`. Also filed separately as a `[operations]` issue (#3255) for the
 same `workflows`-permission reason.
 
+Separately, `fuzz.yml` (daily, `0 6 * * *`, plus every PR/push to `master`)
+has no structured CI-observability summary at all — its steps only print
+decorative free-text, with no `$GITHUB_STEP_SUMMARY` output, no step `id`s,
+and no `if: always()` summary step, so a mid-job failure leaves no
+structured record of what ran. Tracked as [#3316](https://github.com/kubestellar/console-kb/issues/3316),
+with the validated, ready-to-apply diff preserved in
+[`runbooks/fuzz-yml-ci-summary-gap.md`](../runbooks/fuzz-yml-ci-summary-gap.md)
+for the same `workflows`-permission reason as the follow-ups above.
+
 ## References
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
