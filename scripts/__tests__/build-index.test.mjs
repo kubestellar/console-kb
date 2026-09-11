@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdir, writeFile, rm, readFile } from 'fs/promises';
 import { join } from 'path';
 import { buildIndex } from '../build-index.mjs';
+import { readFileSync } from 'fs';
 
 const TEST_DIR = join(process.cwd(), 'solutions', '_test-build-index');
 
@@ -121,5 +122,33 @@ metadata:
     // Score is deterministic: five weighted dimensions on a fixed-content fixture = 58.
     expect(crash.qualityScore).toBe(58);
     expect(crash.qualityPass).toBe(false); // 58 < 60 (MIN_SCORE)
+  });
+
+  describe('CI-observability summary', () => {
+    const SUMMARY_FILE = join(TEST_DIR, '_step-summary.md');
+
+    afterAll(async () => {
+      await rm(SUMMARY_FILE, { force: true });
+      delete process.env.GITHUB_STEP_SUMMARY;
+    });
+
+    it('appends a markdown summary table to $GITHUB_STEP_SUMMARY when it is set', async () => {
+      await writeFile(SUMMARY_FILE, '');
+      process.env.GITHUB_STEP_SUMMARY = SUMMARY_FILE;
+
+      const index = await buildIndex(TEST_DIR);
+
+      const summaryContent = readFileSync(SUMMARY_FILE, 'utf8');
+      expect(summaryContent).toContain('Mission Index Build Summary');
+      expect(summaryContent).toContain('Files scanned');
+      expect(summaryContent).toContain('Missions indexed');
+      expect(summaryContent).toContain(`| Missions indexed | ${index.missions.length} |`);
+    });
+
+    it('does not touch $GITHUB_STEP_SUMMARY when it is unset', async () => {
+      delete process.env.GITHUB_STEP_SUMMARY;
+      // Should not throw even though no summary file is configured.
+      await expect(buildIndex(TEST_DIR)).resolves.toBeDefined();
+    });
   });
 });
