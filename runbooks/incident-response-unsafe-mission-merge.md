@@ -76,26 +76,43 @@ since fixing it requires editing `.github/workflows/validate-schema.yml`
 and `scripts/validate-schema.mjs` (`workflows` permission). Use step 1 of
 Detection below manually against `runbooks/*.json` for the same reason.
 
-### Related gap: `KB Quality Enforcement` false-green on `runbooks/**`-only PRs
+### Related gap: `KB Quality Enforcement` never scores `runbooks/**`-only PRs
 
-A third instance of the same false-green class affects
-`KB Quality Enforcement` (`.github/workflows/kb-quality-enforcement.yml`).
-Its `on.pull_request.paths` trigger includes `runbooks/**/*.json`, but the
-"Detect Changed KB Entries" step's file selection
-(`git diff --name-only --diff-filter=d ... -- 'fixes/**/*.json'`) is scoped
-only to `fixes/`. For a `runbooks/**`-only PR, this resolves to an empty
-file list (`files_changed=false`), so the "Run Quality Scorer" step's `if`
-condition is false and the step is **skipped**, not failed — the job
-reports green having scored zero files. Confirmed via
-`node scripts/test-kb-quality-ci.mjs` (no args → "No KB JSON files
-provided for scoring") vs. `node scripts/test-kb-quality-ci.mjs
-runbooks/disaster-recovery.json` (scores 100/100 when given the file
-directly) — `runbooks` does not otherwise appear in
-`scripts/test-kb-quality-ci.mjs` or `scripts/advanced-quality-scorer.mjs`.
-Tracked separately as a `[operations]` issue (#3268) since fixing it
-requires editing `.github/workflows/kb-quality-enforcement.yml`
-(`workflows` permission). Use the manual scoring command in step 3 of
-Detection below for any merged `runbooks/**` file.
+A third instance of the same false-green class affects `KB Quality
+Enforcement` (`.github/workflows/kb-quality-enforcement.yml`). Its
+`on.pull_request.paths` includes `runbooks/**/*.json`, but the "Detect
+Changed KB Entries" step's `git diff` pathspec is `'fixes/**/*.json'`
+only. A `runbooks/**`-only PR resolves to an empty file list,
+`files_changed=false`, and the subsequent `Run Quality Scorer` step
+(`if: steps.detect-files.outputs.files_changed == 'true'`) is skipped —
+the job still reports green. `scripts/advanced-quality-scorer.mjs` itself
+is not `fixes/`-specific and would score a `runbooks/*.json` file fine if
+given one; only the diff command that feeds it is scoped wrong. This
+appears to be a regression from #2243 ("Add runbooks/ directory to
+workflow triggers"), which added `runbooks/**/*.json` to the trigger's
+`paths:` without updating the diff filter in the same step. Tracked
+separately as a `[operations]` issue (#3203) since fixing it requires
+editing `.github/workflows/kb-quality-enforcement.yml` (`workflows`
+permission). Use step 3 of Detection below for any merged `runbooks/**`
+file.
+
+### Related gap: `Mission Content Validation` never checks `runbooks/**`-only PRs
+
+A fourth instance of the same false-green class affects `Mission Content
+Validation` (`.github/workflows/mission-content-validation.yml`). Its
+`on.pull_request.paths` includes `runbooks/**/*.json`/`*.yaml`/`*.yml`,
+but neither of its two content-checking steps diffs `runbooks/**`: the
+"Validate mission quality" step's `git diff` pathspec is scoped to
+`fixes/cncf-install/install-*`, and the "Validate mission content" step's
+pathspec is scoped to `fixes/**/*`. A `runbooks/**`-only PR produces empty
+file lists from both, so neither the skeleton-step check, the unsafe
+`kubectl edit deployment` placeholder check, nor the Helm-repo/container-
+image/URL reachability checks ever run against the changed file — the job
+still reports green. Tracked separately as a `[operations]` issue (#3241)
+since fixing it requires editing
+`.github/workflows/mission-content-validation.yml` (`workflows`
+permission). Use step 4 of Detection below for any merged `runbooks/**`
+file.
 
 ## Symptoms
 
@@ -126,9 +143,15 @@ Detection below for any merged `runbooks/**` file.
   weekly scheduled sweep, whose log never lists any `runbooks/*.json`
   file among the files it discovered.
 - A merged PR touched only `runbooks/**` files and `KB Quality
-  Enforcement` shows green, but the job's log shows "No KB JSON files
-  changed" and the "Run Quality Scorer" step was **skipped** (not run) —
-  this is the `KB Quality Enforcement` false-green gap described above.
+  Enforcement` shows green, but the job's log shows "No KB files
+  changed." / `files_changed=false` and the `Run Quality Scorer` step was
+  **skipped** — the changed `runbooks/*.json` file was never scored.
+- A merged PR touched only `runbooks/**` files and `Mission Content
+  Validation` shows green, but the job's log shows "No install missions
+  changed" and "No solution files changed" from both content-checking
+  steps — the changed `runbooks/**` file's skeleton steps, unsafe
+  placeholders, and Helm/container-image/URL references were never
+  evaluated.
 
 ## Detection
 
@@ -148,9 +171,17 @@ git log --oneline -10 --grep="cncf-mission-gen" -- fixes/ runbooks/
 grep -RPl 'kubectl delete (namespace|ns|all)\b.*--all' fixes/ runbooks/ || true
 grep -RPl 'rm\s+-rf?\s+(/|/\*|~|\$HOME)' fixes/ runbooks/ || true
 
-# 3. Confirm quality-scorer coverage — kb-quality-enforcement.yml only
-#    diffs fixes/**, so runbooks/*.json must be passed explicitly too
-node scripts/test-kb-quality-ci.mjs $(ls runbooks/*.json)
+# 3. Score a merged runbooks/*.json file the same way
+#    kb-quality-enforcement.yml's scorer would (adjust the file list to
+#    the suspect runbooks/*.json file(s))
+cd scripts && npm ci
+node test-kb-quality-ci.mjs ../runbooks/<suspect-file>.json
+cd ..
+
+# 4. Re-run the mission-content-validation.yml checks manually against a
+#    suspect runbooks/*.json file: confirm every step has a code block,
+#    no bare 'kubectl edit deployment' placeholders, and any helmRepoUrl/
+#    containerImages/URLs referenced actually resolve (curl -I <url>).
 ```
 
 If step 1 reports a schema failure, step 2 matches a merged file, or
@@ -216,10 +247,18 @@ Requires `workflows` permission this contribution's credentials do not
 have — tracked in a separate open `[operations]` issue on this repo
 (#3255).
 
-Closing the `KB Quality Enforcement` gap (never scoring `runbooks/**` on
-PRs) requires extending the `git diff` pathspec in the "Detect Changed KB
-Entries" step of `.github/workflows/kb-quality-enforcement.yml` to also
-include `'runbooks/**/*.json'`, matching the trigger's own
-`on.pull_request.paths`. Requires `workflows` permission this
-contribution's credentials do not have — tracked in a separate open
-`[operations]` issue on this repo (#3268).
+Closing the `KB Quality Enforcement` gap (never scoring `runbooks/**`-only
+PRs) requires editing `.github/workflows/kb-quality-enforcement.yml`'s
+"Detect Changed KB Entries" step to change its `git diff` pathspec from
+`'fixes/**/*.json'` to `'fixes/**/*.json' 'runbooks/**/*.json'`. Requires
+`workflows` permission this contribution's credentials do not have —
+tracked in a separate open `[operations]` issue on this repo (#3203).
+
+Closing the `Mission Content Validation` gap (never checking
+`runbooks/**`-only PRs in either content-checking step) requires editing
+`.github/workflows/mission-content-validation.yml` to add the
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in
+`on.pull_request.paths` to the "Validate mission quality" and "Validate
+mission content" steps' `git diff` pathspecs. Requires `workflows`
+permission this contribution's credentials do not have — tracked in a
+separate open `[operations]` issue on this repo (#3241).
