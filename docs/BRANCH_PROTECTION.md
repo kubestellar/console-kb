@@ -48,7 +48,10 @@ also gate content safety on the same paths (`fixes/**/*.json`,
 `runbooks/**/*.json`, plus YAML for the latter): `KB Quality Enforcement`
 (`.github/workflows/kb-quality-enforcement.yml`, fails the job when
 `scripts/test-kb-quality-ci.mjs` scores a changed mission below threshold —
-note this only diffs `fixes/**/*.json` today, tracked separately in #3203)
+note this only diffs `fixes/**/*.json` today — originally tracked in
+#3203, closed as a docs-only duplicate in #3268; both are now closed
+without a code fix, see `docs/slo.md` section 2's "fourth known
+exception" for the authoritative tracking)
 and `Mission Content Validation` (`.github/workflows/mission-content-validation.yml`,
 fails the job on skeleton steps, unreachable Helm repos, or missing inline
 manifests). Neither was listed here previously; without them configured as

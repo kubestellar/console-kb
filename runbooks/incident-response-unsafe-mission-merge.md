@@ -92,10 +92,14 @@ provided for scoring") vs. `node scripts/test-kb-quality-ci.mjs
 runbooks/disaster-recovery.json` (scores 100/100 when given the file
 directly) — `runbooks` does not otherwise appear in
 `scripts/test-kb-quality-ci.mjs` or `scripts/advanced-quality-scorer.mjs`.
-Tracked separately as a `[operations]` issue (#3268) since fixing it
-requires editing `.github/workflows/kb-quality-enforcement.yml`
-(`workflows` permission). Use the manual scoring command in step 3 of
-Detection below for any merged `runbooks/**` file.
+Confirmed still present as of this writing. Originally filed as
+`[operations]` issue #3203, then re-confirmed and closed as a
+docs-only duplicate in #3268 (both now closed, not fixed — the "fourth
+known exception" in `docs/slo.md` section 2 remains the authoritative
+tracking for this gap) since fixing it requires editing
+`.github/workflows/kb-quality-enforcement.yml` (`workflows` permission).
+Use the manual scoring command in step 3 of Detection below for any
+merged `runbooks/**` file.
 
 ## Symptoms
 
@@ -221,5 +225,7 @@ PRs) requires extending the `git diff` pathspec in the "Detect Changed KB
 Entries" step of `.github/workflows/kb-quality-enforcement.yml` to also
 include `'runbooks/**/*.json'`, matching the trigger's own
 `on.pull_request.paths`. Requires `workflows` permission this
-contribution's credentials do not have — tracked in a separate open
-`[operations]` issue on this repo (#3268).
+contribution's credentials do not have. Originally tracked in
+`[operations]` issue #3203, closed as a docs-only duplicate in #3268
+(both now closed, not fixed) — `docs/slo.md` section 2's "fourth known
+exception" remains the authoritative tracking for this gap.
