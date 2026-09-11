@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "coredns-8390-1-14-6-intermittent-noerror-empty-a-for-external-names-with-autopat",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "coredns: 1.14.6: intermittent NOERROR/empty-A for external names with autopath + cache (prefetch/serve_stale) on parallel A/AAAA lookups",
+    "description": "1.14.6: intermittent NOERROR/empty-A for external names with autopath + cache (prefetch/serve_stale) on parallel A/AAAA lookups. This issue affects 6+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify coredns troubleshoot symptoms",
+        "description": "Check for the issue in your coredns deployment:\n```bash\nkubectl get pods -n coredns -l app.kubernetes.io/name=coredns\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review coredns configuration",
+        "description": "Inspect the relevant coredns configuration:\n```bash\nkubectl get all -n coredns -l app.kubernetes.io/name=coredns\nkubectl get configmap -n coredns -l app.kubernetes.io/part-of=coredns\n```\n### What happened\n\nAfter upgrading CoreDNS **1.13.1 → 1.14.6** (helm chart 1.46.2 → 1.47.0, **Corefile unchanged — byte-identical**), clients across the cluster began intermittently receiving **NOERROR responses with an empty A answer section** for"
+      },
+      {
+        "title": "Apply the fix for 1.14.6: intermittent NOERROR/empty-A for external names…",
+        "description": "I now have a reproducer using the actual Kubernetes plugin with `pods verified`, its client-go informers and Pod index, backed by a local list/watch API fixture. My earlier harness used a static search path and missed the dependency on the client's IP.\n\nWith a healthy dual-stack upstream,\n```yaml\ndns://.:53 {\n    errors\n    health { lameduck 5s }\n    ready\n    log { class error }\n    prometheus 0.0.0.0:9153\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n        pods verified\n        fallthrough in-addr.arpa ip6.arpa\n    }\n    autopath @kubernetes\n    forward . /etc/resolv.conf\n    cache {\n        prefetch 20\n        serve_stale\n    }\n    loop\n    reload\n    loadbalance\n}\n```"
+      },
+      {
+        "title": "Upgrade coredns to include the fix",
+        "description": "If the fix is included in a newer release, upgrade coredns:\n```bash\nhelm repo update\nhelm upgrade coredns coredns/coredns --namespace coredns\n```\nVerify the upgrade:\n```bash\nkubectl get pods -n coredns\nhelm list -n coredns\n```"
+      },
+      {
+        "title": "Confirm 1.14.6: intermittent NOERROR/empty-A for external… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=coredns -n coredns --tail=50 --since=5m\nkubectl get events -n coredns --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "I now have a reproducer using the actual Kubernetes plugin with `pods verified`, its client-go informers and Pod index, backed by a local list/watch API fixture. My earlier harness used a static search path and missed the dependency on the client's IP.",
+      "codeSnippets": [
+        "dns://.:53 {\n    errors\n    health { lameduck 5s }\n    ready\n    log { class error }\n    prometheus 0.0.0.0:9153\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n        pods verified\n        fallthrough in-addr.arpa ip6.arpa\n    }\n    autopath @kubernetes\n    forward . /etc/resolv.conf\n    cache {\n        prefetch 20\n        serve_stale\n    }\n    loop\n    reload\n    loadbalance\n}",
+        "00:37:49 ANOMALY kind=no-A host=charts.goauthentik.io dur_ms=0 v6=3 addrs=[2606:4700:20::ac43:4aa8 ...]\n00:37:54 ANOMALY kind=no-A host=charts.goauthentik.io dur_ms=0 v6=3 ...\n...(every 5s tick)...\n00:39:14 ANOMALY kind=no-A host=helm.openwebui.com dur_ms=1 v6=4 addrs=[2606:50c0:8003::153 ...]\n00:39:19 ANOMALY kind=no-A host=charts.goauthentik.io dur_ms=1 v6=3 ...\n(clean afterwards)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "coredns",
+      "graduated",
+      "networking",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "coredns"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Node",
+      "Service"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/coredns/coredns/issues/8390",
+      "repo": "https://github.com/coredns/coredns"
+    },
+    "reactions": 6,
+    "comments": 7,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with coredns installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-09-11T06:17:05.404Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
