@@ -191,6 +191,49 @@ describe('validate-schema.mjs --all discovery', () => {
     })
   })
 
+  it('also discovers mission files under runbooks/, in addition to fixes/', () => {
+    // Guards against the false-green regression where --all only ever
+    // scanned fixes/: runbooks/*.json uses the same kc-mission-v1 schema
+    // (see runbooks/README.md) but previously had zero scheduled/push
+    // validation coverage because ALL_MODE_DIRS omitted it.
+    withTempDir(dir => {
+      mkdirSync(join(dir, 'fixes'), { recursive: true })
+      mkdirSync(join(dir, 'runbooks'), { recursive: true })
+      writeFileSync(join(dir, 'fixes', 'a.json'), JSON.stringify(VALID_MISSION))
+      writeFileSync(join(dir, 'runbooks', 'b.json'), JSON.stringify(VALID_MISSION))
+
+      const result = runCli(dir, ['--all'])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 2 mission files to validate\./)
+      expect(result.stdout).toContain('a.json')
+      expect(result.stdout).toContain('b.json')
+
+      const summary = parseSummary(result.stdout)
+      expect(summary).toMatchObject({
+        trigger: 'all',
+        total: 2,
+        validCount: 2,
+        invalidCount: 0,
+      })
+    })
+  })
+
+  it('--all mode still works when runbooks/ does not exist (no crash)', () => {
+    // ALL_MODE_DIRS must tolerate a missing runbooks/ directory rather than
+    // throwing ENOENT, so this doesn't regress environments/checkouts that
+    // don't have one.
+    withTempDir(dir => {
+      mkdirSync(join(dir, 'fixes'), { recursive: true })
+      writeFileSync(join(dir, 'fixes', 'a.json'), JSON.stringify(VALID_MISSION))
+
+      const result = runCli(dir, ['--all'])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 1 mission files to validate\./)
+    })
+  })
+
   it('sets summary trigger to "all" and level to "error" when a discovered file is invalid', () => {
     // Guards the trigger vs level distinction: trigger reflects the CLI
     // switch, level reflects the outcome. A regression that swapped them
