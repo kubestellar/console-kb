@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
 import { createLogger } from './lib/logger.mjs';
@@ -115,6 +115,15 @@ function main() {
 
   writeFileSync('scan-results.md', report, 'utf8');
   console.log(report);
+
+  // Surface the same report in the GitHub Actions run summary for every
+  // trigger (PR, push, schedule, workflow_dispatch) — not just the PR-comment
+  // path — so a scheduled/push scan regressing is visible without opening raw
+  // logs. GITHUB_STEP_SUMMARY is already set by the Actions runner for every
+  // job; no workflow YAML change is required to write to it.
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${report}\n`, 'utf8');
+  }
 
   log.summary('mission-scan-summary', {
     level: hasFailures ? 'error' : 'info',
