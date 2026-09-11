@@ -163,4 +163,77 @@ describe('scan-pr.mjs CLI', () => {
       })
     })
   })
+
+  describe('structured summary', () => {
+    function parseSummary(stdout) {
+      const line = stdout.split('\n').find(l => l.includes('"event":"scan-pr-summary"'))
+      expect(line).toBeTruthy()
+      return JSON.parse(line)
+    }
+
+    it('emits a bounded scan-pr-summary line with total=0 when no files are provided', () => {
+      withTempDir(dir => {
+        const result = runScanPR(dir, [])
+        const summary = parseSummary(result.stdout)
+        expect(summary).toEqual({ event: 'scan-pr-summary', mode: 'pr', total: 0, passed: 0, failed: 0 })
+      })
+    })
+
+    it('emits pass/fail counts for a mixed valid + invalid PR scan', () => {
+      withTempDir(dir => {
+        writeFileSync(join(dir, 'valid.json'), JSON.stringify(VALID_MISSION))
+        writeFileSync(join(dir, 'bad.json'), JSON.stringify({ name: 'missing-required-fields' }))
+
+        const result = runScanPR(dir, ['valid.json bad.json'])
+        expect(result.status).toBe(1)
+        const summary = parseSummary(result.stdout)
+        expect(summary.mode).toBe('pr')
+        expect(summary.total).toBe(2)
+        expect(summary.passed).toBe(1)
+        expect(summary.failed).toBe(1)
+      })
+    })
+
+    it('uses mode=full for --all scans', () => {
+      withTempDir(dir => {
+        mkdirSync(join(dir, 'fixes'), { recursive: true })
+        writeFileSync(join(dir, 'fixes', 'root.json'), JSON.stringify(VALID_MISSION))
+        const result = runScanPR(dir, ['--all'])
+        const summary = parseSummary(result.stdout)
+        expect(summary.mode).toBe('full')
+      })
+    })
+
+    it('appends the scan report to $GITHUB_STEP_SUMMARY when it is set', () => {
+      withTempDir(dir => {
+        const missionPath = join(dir, 'valid.json')
+        writeFileSync(missionPath, JSON.stringify(VALID_MISSION))
+        const summaryFile = join(dir, 'step-summary.md')
+        writeFileSync(summaryFile, '')
+
+        const result = spawnSync(process.execPath, [SCAN_PR, 'valid.json'], {
+          cwd: dir,
+          encoding: 'utf8',
+          env: { ...process.env, NO_COLOR: '1', GITHUB_STEP_SUMMARY: summaryFile },
+        })
+
+        expect(result.status).toBe(0)
+        const summaryContent = readFileSync(summaryFile, 'utf8')
+        expect(summaryContent).toContain('Mission Scan Results')
+        expect(summaryContent).toContain('valid.json')
+      })
+    })
+
+    it('does not touch $GITHUB_STEP_SUMMARY when it is unset', () => {
+      withTempDir(dir => {
+        const missionPath = join(dir, 'valid.json')
+        writeFileSync(missionPath, JSON.stringify(VALID_MISSION))
+        const env = { ...process.env, NO_COLOR: '1' }
+        delete env.GITHUB_STEP_SUMMARY
+
+        const result = spawnSync(process.execPath, [SCAN_PR, 'valid.json'], { cwd: dir, encoding: 'utf8', env })
+        expect(result.status).toBe(0)
+      })
+    })
+  })
 })

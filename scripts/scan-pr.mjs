@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
+import { createLogger } from './lib/logger.mjs';
+
+const log = createLogger('scan-pr');
 
 /** Valid mission file extensions */
 const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
@@ -41,12 +44,16 @@ if (isFullScan) {
   files = args.flatMap(a => a.split(/\s+/)).filter(Boolean);
 }
 
+/** Mode label used in the bounded summary line — fixed cardinality (2 values). */
+const mode = isFullScan ? 'full' : 'pr';
+
 if (files.length === 0) {
   console.log('No mission files to scan.');
+  log.summary('scan-pr-summary', { mode, total: 0, passed: 0, failed: 0 });
   process.exit(0);
 }
 
-let hasFailures = false;
+let failedCount = 0;
 const sections = ['## 🔍 Mission Scan Results\n'];
 
 for (const file of files) {
@@ -55,30 +62,47 @@ for (const file of files) {
     content = readFileSync(file, 'utf8');
   } catch (err) {
     sections.push(`### 📄 \`${file}\`\n\n❌ **Error:** Could not read file: ${err.message}\n`);
-    hasFailures = true;
+    failedCount += 1;
     continue;
   }
 
   const result = scanMissionFile(content);
   sections.push(formatScanResultAsMarkdown(file, result));
 
+  let fileFailed = false;
   if (result.error) {
-    hasFailures = true;
+    fileFailed = true;
   } else {
-    if (!result.schema.valid) hasFailures = true;
+    if (!result.schema.valid) fileFailed = true;
     // Malicious content check only applies to PR scans (new/changed files).
     // Full scans (--all) on push/schedule/dispatch skip this check to avoid
     // false positives on legitimate installation commands (curl|bash, awk patterns, etc.)
     // in existing missions that have already been reviewed.
-    if (!isFullScan && result.scan.malicious.findings.length > 0) {
-      hasFailures = true;
-    }
+    if (!isFullScan && result.scan.malicious.findings.length > 0) fileFailed = true;
   }
+  if (fileFailed) failedCount += 1;
 }
 
+const hasFailures = failedCount > 0;
 const report = sections.join('\n\n');
 writeFileSync('scan-results.md', report, 'utf8');
 console.log(report);
+
+// Surface the same report in the GitHub Actions run summary for every
+// trigger (PR, push, schedule, workflow_dispatch) — not just the PR-comment
+// path — so a scheduled/push scan regressing is visible without opening raw
+// logs. GITHUB_STEP_SUMMARY is already set by the Actions runner for every
+// job; no workflow YAML change is required to write to it.
+if (process.env.GITHUB_STEP_SUMMARY) {
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${report}\n`, 'utf8');
+}
+
+log.summary('scan-pr-summary', {
+  mode,
+  total: files.length,
+  passed: files.length - failedCount,
+  failed: failedCount,
+});
 
 if (hasFailures) {
   console.error('\n❌ Scan completed with failures.');
