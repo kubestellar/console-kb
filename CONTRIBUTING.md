@@ -205,6 +205,17 @@ Run the generator from the **repository root** so it updates the tracked root-le
 - The CNCF mission generation workflow is the automation that updates them.
 - `search-state.json` is the file that the workflow currently persists back to the repository; reports are also used as workflow artifacts and summaries.
 
+### Do not commit local scratch notes
+
+If you write a local scratch file while investigating or manually fixing a
+workflow, CI failure, or PR (e.g. `WORKFLOW_FIX.md`, `pr-body.txt`), do not
+commit it — it is not part of the tracked mission content or generated
+automation files above, and it stops being maintained the moment the PR
+merges, so it silently goes stale and misleads future readers. `.gitignore`
+excludes the common `WORKFLOW_FIX.md`/`pr-body.txt` patterns for this reason
+(see issue #3260, which removed one such stale file that had been
+accidentally committed in #3159).
+
 ### 4. Add Your Fix to the Repository
 
 1. **Fork this repository**

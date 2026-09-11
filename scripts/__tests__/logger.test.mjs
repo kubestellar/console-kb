@@ -72,4 +72,51 @@ describe('createLogger', () => {
     const entry = JSON.parse(writeSpy.mock.calls[0][0])
     expect(entry.message).toBe('hello')
   })
+
+  describe('summary', () => {
+    let stdoutSpy
+    beforeEach(() => {
+      stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    })
+    afterEach(() => {
+      stdoutSpy.mockRestore()
+    })
+
+    it('writes a single JSON line to stdout shaped as { event, ...fields } with no ts/component/message wrapper', () => {
+      const logger = createLogger('validate-schema')
+      logger.summary('schema-validation-summary', { level: 'info', total: 3, validCount: 3, invalidCount: 0 })
+
+      expect(stdoutSpy).toHaveBeenCalledTimes(1)
+      expect(writeSpy).not.toHaveBeenCalled()
+
+      const written = stdoutSpy.mock.calls[0][0]
+      expect(written.endsWith('\n')).toBe(true)
+      const entry = JSON.parse(written)
+      expect(entry).toEqual({
+        event: 'schema-validation-summary',
+        level: 'info',
+        total: 3,
+        validCount: 3,
+        invalidCount: 0,
+      })
+      expect(entry.ts).toBeUndefined()
+      expect(entry.component).toBeUndefined()
+    })
+
+    it('drops non-primitive field values like the per-event emit path', () => {
+      const logger = createLogger('validate-schema')
+      logger.summary('some-event', { keep: 1, dropped: { nested: true } })
+
+      const entry = JSON.parse(stdoutSpy.mock.calls[0][0])
+      expect(entry.keep).toBe(1)
+      expect(entry.dropped).toBeUndefined()
+    })
+
+    it('works with no fields argument', () => {
+      const logger = createLogger('validate-schema')
+      expect(() => logger.summary('bare-event')).not.toThrow()
+      const entry = JSON.parse(stdoutSpy.mock.calls[0][0])
+      expect(entry).toEqual({ event: 'bare-event' })
+    })
+  })
 })

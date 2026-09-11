@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "valkey-3361-cluster-bus-i-o-offload",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "valkey: Cluster Bus I/O Offload",
+    "description": "Cluster Bus I/O Offload. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current valkey setup",
+        "description": "Verify your valkey version and configuration:\n```bash\nvalkey-server --version\n```\nThis feature requires a working valkey installation."
+      },
+      {
+        "title": "Review valkey configuration",
+        "description": "Review the relevant valkey configuration:\nToday cluster bus packet semantics still have to run on the main thread because they mutate shared `clusterNode` / `clusterState` state that is also read by the command-processing path."
+      },
+      {
+        "title": "Apply the fix for Cluster Bus I/O Offload",
+        "description": "Cluster bus read, write, and **inbound** TLS accept work can run on the shared\nI/O thread pool, while all cluster state mutation stays on the main thread. The\noutbound TLS handshake (`SSL_connect`) is not offloaded — see Follow-Up.\n\nJobs flow through:\n- `io_shared_inbox` (SPMC): main thread -> I/O\n```yaml\n### Key Design Decisions\n\n1. Reuse the existing shared SPMC/MPSC queues; no cluster-specific threading primitives.\n2. I/O threads do transport work only: `connRead`, `connWrite`, `connAccept`, framing, and result publication.\n3. Main thread alone applies cluster packets and mutates cluster state.\n4. Write offload uses a single canonical `send_msg_queue` plus a snapshot boundary:\n   `io_last_send_block`, `io_head_offset`, and `io_nodes_sent`.\n5. Read offload publishes the complete-packet prefix via `io_complete_bytes` and\n   `io_complete_packets`.\n6. Read completion drains the framed prefix in \n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected.\nConfirm the feature described in \"Cluster Bus I/O Offload\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Cluster bus read, write, and **inbound** TLS accept work can run on the shared\nI/O thread pool, while all cluster state mutation stays on the main thread. The\noutbound TLS handshake (`SSL_connect`) is not offloaded — see Follow-Up.",
+      "codeSnippets": [
+        "### Key Design Decisions\n\n1. Reuse the existing shared SPMC/MPSC queues; no cluster-specific threading primitives.\n2. I/O threads do transport work only: `connRead`, `connWrite`, `connAccept`, framing, and result publication.\n3. Main thread alone applies cluster packets and mutates cluster state.\n4. Write offload uses a single canonical `send_msg_queue` plus a snapshot boundary:\n   `io_last_send_block`, `io_head_offset`, and `io_nodes_sent`.\n5. Read offload publishes the complete-packet prefix via `io_complete_bytes` and\n   `io_complete_packets`.\n6. Read completion drains the framed prefix in one pass, sliding each packet to the\n   front and compacting the tail once. Worker jobs themselves are bounded: reads at\n   `RCVBUF_MAX_PREALLOC`, writes at `NET_MAX_WRITES_PER_EVENT`.\n7. Link teardow",
+        "If dispatch returns `C_ERR`, the main thread falls back to `clusterReadHandler(conn)`.\n\n## Data Flow: Write Path",
+        "Important note:\n- New messages appended while a write job is in flight stay on `send_msg_queue`,\n  but the worker stops at `io_last_send_block`, so those new nodes are picked up\n  by a later dispatch. Dispatch happens only on the writable event, so messages\n  queued within one event-loop iteration are batched into a single job.\n\nIf dispatch returns `C_ERR`, `clusterWriteHandler(conn)` falls back to the synchronous `connWrite()` loop.\n\n### Data Flow: Accept Path (TLS)"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "valkey",
+      "community",
+      "cache",
+      "feature"
+    ],
+    "cncfProjects": [
+      "valkey"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/valkey-io/valkey/issues/3361",
+      "repo": "https://github.com/valkey-io/valkey",
+      "pr": "https://github.com/valkey-io/valkey/pull/3438"
+    },
+    "reactions": 12,
+    "comments": 2,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "valkey-server",
+      "valkey-cli"
+    ],
+    "description": "A working valkey installation or development environment."
+  },
+  "security": {
+    "scannedAt": "2026-09-11T06:40:14.456Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

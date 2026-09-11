@@ -8,12 +8,14 @@
 import { writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { createLogger } from './lib/logger.mjs'
 
+const log = createLogger('fetch-cncf-landscape')
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const LANDSCAPE_URL = 'https://raw.githubusercontent.com/cncf/landscape/master/landscape.yml'
 const OUTPUT_PATH = join(__dirname, 'cncf-projects.mjs')
 
-const CATEGORY_PATTERNS = [
+export const CATEGORY_PATTERNS = [
   [/prometheus|grafana|jaeger|fluentd|thanos|cortex|opentelemetry|loki|tempo|pixie|skooner|headlamp|trickster|opencost|inspektor|kepler|parseable|perses/i, 'observability'],
   [/envoy|istio|linkerd|cilium|coredns|nats|grpc|contour|emissary|network|service.mesh|meshery|merbridge|aeraki|bfe|easegress|pipy|kuma|nighthawk|submariner|antrea|cni/i, 'networking'],
   [/falco|harbor|opa|spiffe|spire|cert.manager|kyverno|notary|sigstore|keycloak|open.?fga|paralus|confidential|curiefense|dex|guard|athenz|teller|hexa|kubewarden|in-toto|tuf|external.secrets/i, 'security'],
@@ -23,7 +25,7 @@ const CATEGORY_PATTERNS = [
   [/kubernetes|kubestellar|etcd|karmada|clusterpedia|k3s|k0s|minikube|volcano|fluid|litmus|chaos/i, 'orchestration'],
 ]
 
-function detectCategory(name, repo) {
+export function detectCategory(name, repo) {
   const text = `${name} ${repo}`
   for (const [pattern, category] of CATEGORY_PATTERNS) {
     if (pattern.test(text)) return category
@@ -31,12 +33,13 @@ function detectCategory(name, repo) {
   return 'app-definition'
 }
 
-async function main() {
-  console.log(`Fetching CNCF landscape from ${LANDSCAPE_URL}...`)
-  const resp = await fetch(LANDSCAPE_URL)
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
-  const text = await resp.text()
-
+/**
+ * Parse the raw landscape.yml text into a flat list of `{name, repo, project}`
+ * items. Only items with both a `name:` and a `repo_url:` are emitted; items
+ * without both are dropped so the caller can filter on `project` alone.
+ * Exported for unit testing.
+ */
+export function parseLandscapeItems(text) {
   const projects = []
   const lines = text.split('\n')
   let currentItem = {}
@@ -62,8 +65,17 @@ async function main() {
   if (currentItem.name && currentItem.repo) {
     projects.push({ ...currentItem })
   }
+  return projects
+}
 
-  const cncf = projects
+/**
+ * Filter parsed landscape items to CNCF graduated/incubating/sandbox
+ * projects, normalize the slug, extract `owner/repo` from the GitHub URL,
+ * dedupe by repo, and sort by (maturity order, name).
+ * Exported for unit testing.
+ */
+export function toCncfProjects(items) {
+  const cncf = items
     .filter(p => p.project && ['graduated', 'incubating', 'sandbox'].includes(p.project))
     .map(p => {
       const m = p.repo.match(/github\.com\/([^/]+\/[^/]+)/)
@@ -76,7 +88,6 @@ async function main() {
     })
     .filter(Boolean)
 
-  // Deduplicate by repo
   const seen = new Set()
   const unique = cncf.filter(p => {
     if (seen.has(p.repo)) return false
@@ -84,17 +95,24 @@ async function main() {
     return true
   })
 
-  // Sort by maturity then name
   const order = { graduated: 0, incubating: 1, sandbox: 2 }
   unique.sort((a, b) => (order[a.maturity] - order[b.maturity]) || a.name.localeCompare(b.name))
+  return unique
+}
 
-  // Generate output
+/**
+ * Render the cncf-projects.mjs source module from a deduped list produced
+ * by `toCncfProjects()`. `generatedAt` is injected so tests can pin the
+ * timestamp; production main() passes new Date().toISOString().
+ * Exported for unit testing.
+ */
+export function renderCncfProjectsModule(unique, generatedAt) {
   const out = [
     '/**',
     ' * CNCF Graduated, Incubating, and Sandbox projects with their GitHub repos.',
     ' * Auto-generated from https://landscape.cncf.io',
     ` * Total: ${unique.length} projects`,
-    ` * Generated: ${new Date().toISOString()}`,
+    ` * Generated: ${generatedAt}`,
     ' */',
     'export const CNCF_PROJECTS = [',
   ]
@@ -120,12 +138,39 @@ async function main() {
   out.push("  'app-definition': 'workloads',")
   out.push('}')
   out.push('')
-
-  writeFileSync(OUTPUT_PATH, out.join('\n'))
-  console.log(`Written ${unique.length} projects to ${OUTPUT_PATH}`)
-  console.log(`  Graduated: ${unique.filter(p => p.maturity === 'graduated').length}`)
-  console.log(`  Incubating: ${unique.filter(p => p.maturity === 'incubating').length}`)
-  console.log(`  Sandbox: ${unique.filter(p => p.maturity === 'sandbox').length}`)
+  return out.join('\n')
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+async function main() {
+  console.log(`Fetching CNCF landscape from ${LANDSCAPE_URL}...`)
+  const resp = await fetch(LANDSCAPE_URL)
+  if (!resp.ok) {
+    log.error('landscape fetch returned non-ok response', { error_kind: 'landscape_fetch_failed', http_status: resp.status })
+    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
+  }
+  const text = await resp.text()
+
+  const items = parseLandscapeItems(text)
+  const unique = toCncfProjects(items)
+  const rendered = renderCncfProjectsModule(unique, new Date().toISOString())
+
+  writeFileSync(OUTPUT_PATH, rendered)
+  console.log(`Written ${unique.length} projects to ${OUTPUT_PATH}`)
+  const graduated = unique.filter(p => p.maturity === 'graduated').length
+  const incubating = unique.filter(p => p.maturity === 'incubating').length
+  const sandbox = unique.filter(p => p.maturity === 'sandbox').length
+  console.log(`  Graduated: ${graduated}`)
+  console.log(`  Incubating: ${incubating}`)
+  console.log(`  Sandbox: ${sandbox}`)
+  log.info('landscape fetch summary', { total: unique.length, graduated, incubating, sandbox })
+}
+
+// Only auto-run when invoked as a script, not when imported for unit tests.
+const isMainModule = import.meta.url === `file://${process.argv[1]}`
+if (isMainModule) {
+  main().catch(err => {
+    console.error(err)
+    log.error('unhandled fatal error fetching cncf landscape', { error_kind: 'landscape_fetch_failed', error_message: err.message })
+    process.exit(1)
+  })
+}

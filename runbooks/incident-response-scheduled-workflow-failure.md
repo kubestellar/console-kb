@@ -70,12 +70,13 @@ Treat any `conclusion` of `failure`, `cancelled`, or `timed_out` on the
 most recent scheduled run as a confirmed incident — as is a *missing* run
 past its expected cadence (e.g. no `cncf-mission-gen.yml` run in the last
 ~30 hours, no `platform-install-gen.yml` run in the last ~8 hours, no
-`codeql.yml` run in the last ~30 hours, no `stale.yml` run in the last
-~30 hours, or no `validate-schema.yml`/`scan-missions.yml`/`scorecard.yml`
-run in the last ~8 days), which indicates the schedule trigger itself
-stopped firing. A `startup_failure` conclusion (not just `failure`) is
-also a confirmed incident — this is exactly how `stale.yml` failed
-previously (#3057).
+`codeql.yml` run in the last ~30 hours, no `fuzz.yml` run in the last
+~30 hours, no `stale.yml` run in the last ~30 hours, no
+`cncf-install-gen.yml` run in the last ~8 days, or no
+`validate-schema.yml`/`scan-missions.yml`/`scorecard.yml` run in the last
+~8 days), which indicates the schedule trigger itself stopped firing. A
+`startup_failure` conclusion (not just `failure`) is also a confirmed
+incident — this is exactly how `stale.yml` failed previously (#3057).
 
 ## Immediate mitigation
 
@@ -104,7 +105,11 @@ previously (#3057).
    completes successfully on its normal schedule.
 3. File a postmortem using
    [`runbooks/POSTMORTEM_TEMPLATE.md`](./POSTMORTEM_TEMPLATE.md) if the
-   silent failure persisted long enough to cause user-facing staleness.
+   silent failure persisted long enough to cause user-facing staleness. See
+   [`postmortem-2026-08-stale-workflow-startup-failure.md`](./postmortem-2026-08-stale-workflow-startup-failure.md)
+   for a worked example — a `stale.yml`/`add-help-wanted.yml`
+   `startup_failure` from an invalid `secrets:` block that went undetected
+   for 3 consecutive nightly runs before being filed as #3057.
 
 ## Prevention (tracked, not implemented by this runbook)
 

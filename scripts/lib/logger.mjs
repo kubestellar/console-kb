@@ -11,6 +11,14 @@
  * Field values are not free-form: callers pass primitives (strings,
  * numbers, booleans) as fields, keeping cardinality bounded and avoiding
  * accidental high-cardinality or sensitive data in log output.
+ *
+ * `summary()` is a second, narrower emit path for scripts (e.g.
+ * `validate-schema.mjs`) that need a single end-of-run JSON line on
+ * *stdout* rather than per-event lines on stderr, matching the shape
+ * already relied on by existing CI log parsing (`{ event, ...fields }`,
+ * no added `ts`/`component`/`message` wrapper). It exists so those
+ * scripts can share this helper instead of re-implementing their own
+ * one-line JSON emitter.
  */
 
 const LEVELS = ['debug', 'info', 'warn', 'error']
@@ -37,11 +45,16 @@ export function createLogger(component) {
     process.stderr.write(`${JSON.stringify(entry)}\n`)
   }
 
+  function summary(event, fields) {
+    process.stdout.write(`${JSON.stringify({ event, ...sanitizeFields(fields) })}\n`)
+  }
+
   return {
     debug: (message, fields) => emit('debug', message, fields),
     info: (message, fields) => emit('info', message, fields),
     warn: (message, fields) => emit('warn', message, fields),
     error: (message, fields) => emit('error', message, fields),
+    summary,
   }
 }
 

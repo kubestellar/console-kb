@@ -41,6 +41,60 @@ No exporter or external data flow is added by this document — recommendations 
   this document does not add the fix itself. Recovery steps for this scenario
   are documented in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Second known exception**: `Mission Safety Scan` itself has a script-level gap —
+  its `on.pull_request.paths` trigger watches `runbooks/**/*.json`/`*.yaml`/`*.yml`,
+  but the "Scan for dangerous commands" step's `git diff`/`find` file selection is
+  scoped only to `fixes/`. A PR that touches only `runbooks/**` files runs the job,
+  finds zero files to scan, and reports "Safety scan passed" without ever
+  evaluating the changed file's content — a false-green result that affects any
+  `runbooks/**`-only PR, independent of the auto-merge bypass above. Also tracked
+  as a follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Third known exception**: `Validate Mission Schema` itself has a broader
+  version of this same gap — it never validated `runbooks/**` at all, on
+  *either* trigger. Its PR-mode `git diff` pathspec covered only
+  `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolved to
+  an empty file list and the validation step was skipped (job still reported
+  green). The scheduled/push `--all` mode side of this gap
+  (`scripts/validate-schema.mjs` only walking `fixes/`) has been fixed — it
+  now also discovers mission files under `runbooks/`, so the weekly cadence
+  sweep validates all 10 `runbooks/*.json` files. The PR-mode pathspec still
+  needs the corresponding `runbooks/**/*.json`/`*.yaml`/`*.yml` globs added
+  to `.github/workflows/validate-schema.yml`'s "Find changed files (PR
+  only)" step; that edit is prepared but requires `workflows` permission
+  this contribution's credentials do not have. Tracked as a follow-up (see
+  below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fourth known exception**: `KB Quality Enforcement`
+  (`.github/workflows/kb-quality-enforcement.yml`) has the same
+  false-green gap for a third workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`, but the "Detect Changed KB
+  Entries" step's `git diff` pathspec covers only `fixes/**/*.json`, so a
+  `runbooks/**`-only PR resolves to zero changed files and the "Run
+  Quality Scorer" step is skipped (job still reports green, having scored
+  nothing). Confirmed reproducible: `node scripts/test-kb-quality-ci.mjs`
+  with no args reports "No KB JSON files provided for scoring", while
+  `node scripts/test-kb-quality-ci.mjs runbooks/disaster-recovery.json`
+  scores it 100/100 when given the file directly. Also tracked as a
+  follow-up (see below); recovery guidance is in the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fifth known exception**: `Mission Content Validation`
+  (`.github/workflows/mission-content-validation.yml`) has the same
+  false-green gap for a fourth workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`/`*.yaml`/`*.yml`, but neither of
+  its two validation steps' `git diff` pathspecs (`fixes/cncf-install/
+  install-*.{json,yaml,yml}` for "Validate mission quality"; `fixes/**/
+  *.{json,yaml,yml}` for "Validate mission content") ever selects a
+  `runbooks/**` file. A `runbooks/**`-only PR resolves both steps to an
+  empty file list, prints "No install missions changed" / "No solution
+  files changed", and `exit 0` — the job reports green having validated
+  nothing. Confirmed via direct inspection of
+  `.github/workflows/mission-content-validation.yml` (both pathspecs omit
+  `runbooks/**` despite the trigger watching it; closed not-planned as
+  #3292, same `workflows`-permission constraint as the other exceptions
+  above). Also tracked as a follow-up (see below); recovery guidance is in
+  the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -100,11 +154,48 @@ mergeable-state/required-checks check, or gate the scorer step on those two chec
 having completed and passed first. Also filed separately as a `[operations]` issue
 for the same `workflows`-permission reason.
 
+The section 2 "second known exception" above (`mission-safety-scan.yml`'s
+scan-step file selection omitting `runbooks/**` despite the workflow's own
+trigger watching it) also requires editing that workflow — adding the
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in
+`on.pull_request.paths` to the `git diff`/`find` pathspecs in the "Scan for
+dangerous commands" step. Also filed separately as a `[operations]` issue
+for the same `workflows`-permission reason.
+
+The section 2 "third known exception" above (`validate-schema.yml` never
+validating `runbooks/**`) is now partially resolved:
+`scripts/validate-schema.mjs`'s `--all` branch has been updated to also
+discover files under `runbooks/`, so the weekly/push sweep now covers all
+10 `runbooks/*.json` files. The remaining piece — extending
+`validate-schema.yml`'s PR-mode `git diff` pathspec with the same
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs so a `runbooks/**`-only PR is
+no longer skipped — still requires `workflows` permission this
+contribution's credentials do not have. Tracked in `[operations]` issue
+#3255 until that pathspec change lands.
+
+Separately, `fuzz.yml` (daily, `0 6 * * *`, plus every PR/push to `master`)
+has no structured CI-observability summary at all — its steps only print
+decorative free-text, with no `$GITHUB_STEP_SUMMARY` output, no step `id`s,
+and no `if: always()` summary step, so a mid-job failure leaves no
+structured record of what ran. Tracked as [#3316](https://github.com/kubestellar/console-kb/issues/3316),
+with the validated, ready-to-apply diff preserved in
+[`runbooks/fuzz-yml-ci-summary-gap.md`](../runbooks/fuzz-yml-ci-summary-gap.md)
+for the same `workflows`-permission reason as the follow-ups above.
+
+The section 2 "fifth known exception" above (`mission-content-validation.yml`
+never validating `runbooks/**` on PRs, despite triggering on it) also
+requires editing that workflow's two `git diff` pathspecs to include
+`runbooks/**/*.json`/`*.yaml`/`*.yml`. Filed separately as a `[operations]`
+issue (#3292, closed not-planned — same `workflows`-permission constraint
+as the other exceptions above); recovery guidance in the same
+incident-response runbook stands until code changes.
+
 ## References
+
 
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
-- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`
+- [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
 - [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
