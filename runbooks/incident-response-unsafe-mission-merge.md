@@ -101,6 +101,33 @@ tracking for this gap) since fixing it requires editing
 Use the manual scoring command in step 3 of Detection below for any
 merged `runbooks/**` file.
 
+### Related gap: `Mission Content Validation` false-green on `runbooks/**`-only PRs
+
+A fourth instance of the same false-green class affects
+`Mission Content Validation` (`.github/workflows/mission-content-validation.yml`).
+Its `on.pull_request.paths` trigger includes `runbooks/**/*.json`,
+`runbooks/**/*.yaml`, and `runbooks/**/*.yml`, but neither of its two
+validation steps ever selects a `runbooks/**` file: the "Validate mission
+quality" step's `git diff` pathspec is scoped to
+`fixes/cncf-install/install-*.{json,yaml,yml}` only, and the "Validate
+mission content" step's `git diff` pathspec is
+`'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml'` only. For a
+`runbooks/**`-only PR, both steps resolve to an empty file list, print
+"No install missions changed" / "No solution files changed", and `exit 0`
+— the job reports green having validated nothing. Confirmed via direct
+inspection of `.github/workflows/mission-content-validation.yml` (both
+`git diff` pathspecs omit `runbooks/**` despite the trigger watching it).
+Tracked separately as a `[operations]` issue (#3292, closed not-planned —
+same `workflows`-permission constraint as the other three gaps above) since
+fixing it requires editing `.github/workflows/mission-content-validation.yml`
+to add matching `runbooks/**/*.json`/`*.yaml`/`*.yml` globs to both
+`git diff` pathspecs. There is no manual-equivalent check script for this
+workflow's quality/reachability heuristics (URL/Helm-repo/container-image
+extraction and skeleton-step/placeholder detection are inline in the
+workflow, not in `scripts/`), so review any merged `runbooks/**` file by
+hand against the checks listed in the "Validate mission quality" and
+"Validate mission content" step names in that workflow file.
+
 ## Symptoms
 
 - A mission file merged via a `cncf-mission-gen`-labeled PR fails
@@ -133,6 +160,10 @@ merged `runbooks/**` file.
   Enforcement` shows green, but the job's log shows "No KB JSON files
   changed" and the "Run Quality Scorer" step was **skipped** (not run) —
   this is the `KB Quality Enforcement` false-green gap described above.
+- A merged PR touched only `runbooks/**` files and `Mission Content
+  Validation` shows green, but the job's log shows "No install missions
+  changed" and "No solution files changed" on both validation steps — this
+  is the `Mission Content Validation` false-green gap described above.
 
 ## Detection
 
@@ -229,3 +260,14 @@ contribution's credentials do not have. Originally tracked in
 `[operations]` issue #3203, closed as a docs-only duplicate in #3268
 (both now closed, not fixed) — `docs/slo.md` section 2's "fourth known
 exception" remains the authoritative tracking for this gap.
+
+Closing the `Mission Content Validation` gap (never validating
+`runbooks/**` on PRs, despite triggering on it) requires extending the
+`git diff` pathspecs in both the "Validate mission quality" and "Validate
+mission content" steps of
+`.github/workflows/mission-content-validation.yml` to also include
+`'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`. Requires
+`workflows` permission this contribution's credentials do not have —
+tracked in a separate `[operations]` issue on this repo (#3292, closed
+not-planned) — `docs/slo.md` section 2's "fifth known exception" is the
+authoritative tracking for this gap.

@@ -78,6 +78,23 @@ No exporter or external data flow is added by this document — recommendations 
   scores it 100/100 when given the file directly. Also tracked as a
   follow-up (see below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
+  **Fifth known exception**: `Mission Content Validation`
+  (`.github/workflows/mission-content-validation.yml`) has the same
+  false-green gap for a fourth workflow — its `on.pull_request.paths`
+  trigger includes `runbooks/**/*.json`/`*.yaml`/`*.yml`, but neither of
+  its two validation steps' `git diff` pathspecs (`fixes/cncf-install/
+  install-*.{json,yaml,yml}` for "Validate mission quality"; `fixes/**/
+  *.{json,yaml,yml}` for "Validate mission content") ever selects a
+  `runbooks/**` file. A `runbooks/**`-only PR resolves both steps to an
+  empty file list, prints "No install missions changed" / "No solution
+  files changed", and `exit 0` — the job reports green having validated
+  nothing. Confirmed via direct inspection of
+  `.github/workflows/mission-content-validation.yml` (both pathspecs omit
+  `runbooks/**` despite the trigger watching it; closed not-planned as
+  #3292, same `workflows`-permission constraint as the other exceptions
+  above). Also tracked as a follow-up (see below); recovery guidance is in
+  the same
+  [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
 ### 3. Time-to-detect a bad publish
 
@@ -164,6 +181,14 @@ structured record of what ran. Tracked as [#3316](https://github.com/kubestellar
 with the validated, ready-to-apply diff preserved in
 [`runbooks/fuzz-yml-ci-summary-gap.md`](../runbooks/fuzz-yml-ci-summary-gap.md)
 for the same `workflows`-permission reason as the follow-ups above.
+
+The section 2 "fifth known exception" above (`mission-content-validation.yml`
+never validating `runbooks/**` on PRs, despite triggering on it) also
+requires editing that workflow's two `git diff` pathspecs to include
+`runbooks/**/*.json`/`*.yaml`/`*.yml`. Filed separately as a `[operations]`
+issue (#3292, closed not-planned — same `workflows`-permission constraint
+as the other exceptions above); recovery guidance in the same
+incident-response runbook stands until code changes.
 
 ## References
 
