@@ -114,6 +114,53 @@ describe('scan-pr.mjs CLI', () => {
     })
   })
 
+  it('emits a bounded mission-scan-summary JSON line on stdout', () => {
+    withTempDir(dir => {
+      const missionPath = join(dir, 'valid.json')
+      writeFileSync(missionPath, JSON.stringify(VALID_MISSION))
+
+      const result = runScanPR(dir, ['valid.json'])
+      const summaryLine = result.stdout.split('\n').find(line => {
+        try {
+          return JSON.parse(line).event === 'mission-scan-summary'
+        } catch {
+          return false
+        }
+      })
+      expect(summaryLine).toBeDefined()
+      const summary = JSON.parse(summaryLine)
+      expect(summary).toEqual({
+        event: 'mission-scan-summary',
+        isFullScan: false,
+        filesScanned: 1,
+        readErrors: 0,
+        schemaInvalid: 0,
+        maliciousFindings: 0,
+        hasFailures: false,
+      })
+    })
+  })
+
+  it('counts read errors and schema-invalid files in the summary', () => {
+    withTempDir(dir => {
+      const bad = { name: 'no-version', mission: { title: 't', steps: [] } }
+      writeFileSync(join(dir, 'bad.json'), JSON.stringify(bad))
+      const result = runScanPR(dir, ['bad.json', 'missing.json'])
+      const summaryLine = result.stdout.split('\n').find(line => {
+        try {
+          return JSON.parse(line).event === 'mission-scan-summary'
+        } catch {
+          return false
+        }
+      })
+      const summary = JSON.parse(summaryLine)
+      expect(summary.filesScanned).toBe(2)
+      expect(summary.readErrors).toBe(1)
+      expect(summary.schemaInvalid).toBe(1)
+      expect(summary.hasFailures).toBe(true)
+    })
+  })
+
   describe('--all discovery', () => {
     function setupFixes(dir) {
       const fixes = join(dir, 'fixes')
