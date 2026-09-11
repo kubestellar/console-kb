@@ -51,7 +51,7 @@ export function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOI
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
-function assertSafePath(resolvedTarget, resolvedAllowedDir) {
+export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
   if (!resolvedTarget.startsWith(resolvedAllowedDir + '/') && resolvedTarget !== resolvedAllowedDir) {
     throw new Error(`Path traversal detected: ${resolvedTarget} is outside ${resolvedAllowedDir}`)
   }
@@ -95,7 +95,7 @@ Rules:
 - Pin versions where possible
 - Do NOT repeat install steps — only generate the 3 new sections`
 
-function buildEnrichPrompt(mission) {
+export function buildEnrichPrompt(mission) {
   const title = mission.mission?.title || 'Unknown'
   const description = mission.mission?.description || ''
   const steps = (mission.mission?.steps || [])
