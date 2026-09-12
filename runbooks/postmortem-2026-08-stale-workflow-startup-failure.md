@@ -107,7 +107,7 @@ filing.
 |--------|-------|----------------|
 | Remove invalid `secrets:` block from `stale.yml` | scanner (done) | #3058 (merged) |
 | Repin `add-help-wanted.yml`, `ai-fix.yml`, `copilot-automation.yml`, `scorecard.yml` to `220beeeb` + `secrets: inherit` | scanner (done) | #3074 (merged) |
-| Repin remaining `assignment-helper.yml`, `copilot-dco.yml`, `greetings.yml`, `pr-verifier.yml` to the same SHA | unassigned | #3071 (residual, closed — verify current pins before reopening) |
+| Repin remaining `assignment-helper.yml`, `copilot-dco.yml`, `greetings.yml`, `pr-verifier.yml` to the same SHA | unassigned — requires `workflows` permission no current hive agent credential set has | #3071 (residual, closed — verify current pins before reopening). Re-verified 2026-09-11/12: `assignment-helper.yml` and `copilot-dco.yml` currently run `skipped` (not applicable to most PR events) and `greetings.yml` runs `success` — all three remain on the stale `1a04a3fd` pin but are not currently failing. `pr-verifier.yml`, still on the same stale pin, has a **100% `startup_failure` rate since at least 2026-08-30** (12+ consecutive days, confirmed across 100+ runs, zero jobs ever created) — this residual item is not merely theoretical for that file. Filed as an active incident: #3336 |
 | Add automated alert when a scheduled workflow's own job fails (`if: failure()` step or equivalent) | unassigned — requires `workflows` permission no current hive agent credential set has | tracked in `docs/slo.md` / `runbooks/incident-response-scheduled-workflow-failure.md` |
 
 ## Lessons for prevention
