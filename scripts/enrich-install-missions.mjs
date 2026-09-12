@@ -156,7 +156,10 @@ export function sanitizeMissionForHTTP(mission) {
 
 // ─── LLM Call ────────────────────────────────────────────────────────
 
-async function callLLM(mission) {
+// Exported for regression tests targeting the runtime branches
+// (429/retry-after, oversize body, Content-Type gate, HTTP error, JSON-parse
+// failure, missing content, abort/timeout, missing token). No behavior change.
+export async function callLLM(mission) {
   // codeql[js/file-access-to-http] - mission is pre-sanitized via sanitizeMissionForHTTP() at every call site; prompt derived from sanitized fields only
   const token = process.env.LLM_TOKEN || GITHUB_TOKEN
   if (!token) return null
