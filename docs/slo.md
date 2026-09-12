@@ -147,6 +147,20 @@ again be visible only via the Actions tab. Tracked as a follow-up alongside
 the workflows above (see below); this document does not add the alert
 itself.
 
+This silent-failure gap is not limited to cron-triggered workflows: `PR
+Verifier` (`.github/workflows/pr-verifier.yml`, triggered on
+`pull_request_target`) has had a **confirmed, currently-active** 100%
+`startup_failure` rate since at least 2026-08-30 (12+ consecutive days,
+zero jobs ever created on any run) — the same residual stale-pin issue
+`#3071` left open for this file specifically (see
+[`runbooks/postmortem-2026-08-stale-workflow-startup-failure.md`](../runbooks/postmortem-2026-08-stale-workflow-startup-failure.md)'s
+action-item table). Every PR opened, edited, synced, or reopened in this
+period has received zero verifier feedback, with no alert distinguishing
+this from a healthy "no issues found" result. Filed as an active incident:
+[#3336](https://github.com/kubestellar/console-kb/issues/3336); fixing it
+requires repinning the `uses:` SHA in `pr-verifier.yml`, which needs
+`workflows` permission this contribution's credentials do not have.
+
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
 also requires editing that workflow to either drop `--admin` in favor of a
