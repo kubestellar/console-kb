@@ -127,6 +127,40 @@ describe('applyQualityGate — issue detection', () => {
     expect(result.issues.some(i => /Only 0 steps/.test(i))).toBe(true)
     expect(result.pass).toBe(false)
   })
+
+  it('flags a mission that embeds sensitive data (AWS Access Key) in a step', () => {
+    const mission = {
+      mission: {
+        steps: [
+          { title: 's1', description: 'helm install foo AKIAIOSFODNN7EXAMPLE' },
+          { title: 's2', description: 'kubectl get pods' },
+          { title: 's3', description: 'done' },
+        ],
+        resolution: { summary: 'ok' },
+      },
+    }
+    const result = applyQualityGate(mission)
+    expect(result.issues.some(i => /Sensitive data detected/.test(i))).toBe(true)
+    expect(result.issues.some(i => /AWS Access Key/.test(i))).toBe(true)
+    expect(result.pass).toBe(false)
+  })
+
+  it('flags a mission that embeds malicious content (XSS script tag) in resolution', () => {
+    const mission = {
+      mission: {
+        steps: [
+          { title: 's1', description: 'helm install foo' },
+          { title: 's2', description: 'kubectl get pods' },
+          { title: 's3', description: 'done' },
+        ],
+        resolution: { summary: 'ok <script>alert(1)</script>' },
+      },
+    }
+    const result = applyQualityGate(mission)
+    expect(result.issues.some(i => /Malicious content detected/.test(i))).toBe(true)
+    expect(result.issues.some(i => /XSS: script tag/.test(i))).toBe(true)
+    expect(result.pass).toBe(false)
+  })
 })
 
 // ─── buildPlatformPrompt ─────────────────────────────────────────────
