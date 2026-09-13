@@ -4,7 +4,8 @@
  *
  *   scripts/generate-platform-missions.mjs      (exported, tested)
  *   scripts/generate-cncf-install-missions.mjs  (exported, not directly tested)
- *   scripts/enrich-install-missions.mjs         (module-local, not testable)
+ *   scripts/enrich-install-missions.mjs         (exported, tested via
+ *                                                enrich-install-missions-pure-helpers.test.mjs)
  *
  * The three copies MUST stay behaviourally identical. If a future security
  * hardening (symlink check, boundary-comparison tightening, etc.) is applied
@@ -32,6 +33,9 @@ import {
 import {
   assertSafePath as assertSafePathCncf,
 } from '../generate-cncf-install-missions.mjs'
+import {
+  assertSafePath as assertSafePathEnrich,
+} from '../enrich-install-missions.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPTS_DIR = join(HERE, '..')
@@ -47,7 +51,7 @@ const COPIES = [
   },
   {
     file: 'enrich-install-missions.mjs',
-    expectedExport: false,
+    expectedExport: true,
   },
 ]
 
@@ -111,7 +115,7 @@ describe('assertSafePath drift', () => {
   it('rejects a path that only shares a prefix with the allowed dir', () => {
     // e.g. resolvedTarget "/tmp/allowed-evil/x" vs allowedDir "/tmp/allowed"
     // must throw — the `+ '/'` boundary check is the critical part of the guard.
-    for (const guard of [assertSafePathPlatform, assertSafePathCncf]) {
+    for (const guard of [assertSafePathPlatform, assertSafePathCncf, assertSafePathEnrich]) {
       expect(() => guard('/tmp/allowed-evil/x', '/tmp/allowed')).toThrow(
         /Path traversal detected/,
       )
@@ -119,7 +123,7 @@ describe('assertSafePath drift', () => {
   })
 
   it('rejects a path escaping via `..`', () => {
-    for (const guard of [assertSafePathPlatform, assertSafePathCncf]) {
+    for (const guard of [assertSafePathPlatform, assertSafePathCncf, assertSafePathEnrich]) {
       // Callers pre-resolve paths, so a `..`-containing target would already
       // have been normalised. Emulate the post-resolve form.
       expect(() => guard('/tmp/other/etc/passwd', '/tmp/allowed')).toThrow(
@@ -129,7 +133,7 @@ describe('assertSafePath drift', () => {
   })
 
   it('accepts the allowed dir itself and any path strictly inside it', () => {
-    for (const guard of [assertSafePathPlatform, assertSafePathCncf]) {
+    for (const guard of [assertSafePathPlatform, assertSafePathCncf, assertSafePathEnrich]) {
       expect(() => guard('/tmp/allowed', '/tmp/allowed')).not.toThrow()
       expect(() => guard('/tmp/allowed/child.json', '/tmp/allowed')).not.toThrow()
       expect(() =>
@@ -139,7 +143,7 @@ describe('assertSafePath drift', () => {
   })
 
   it('embeds both the target and the allowed dir in the error message (diagnostic contract)', () => {
-    for (const guard of [assertSafePathPlatform, assertSafePathCncf]) {
+    for (const guard of [assertSafePathPlatform, assertSafePathCncf, assertSafePathEnrich]) {
       try {
         guard('/tmp/other/x', '/tmp/allowed')
         throw new Error('expected guard to throw')
