@@ -159,7 +159,12 @@ period has received zero verifier feedback, with no alert distinguishing
 this from a healthy "no issues found" result. Filed as an active incident:
 [#3336](https://github.com/kubestellar/console-kb/issues/3336); fixing it
 requires repinning the `uses:` SHA in `pr-verifier.yml`, which needs
-`workflows` permission this contribution's credentials do not have.
+`workflows` permission this contribution's credentials do not have. This is
+in fact the fifth recorded `startup_failure` incident for this workflow
+since 2026-06-29 (#2704, #2780, #2883, #2975, #3336) — see
+[`runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md`](../runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md)
+for the retrospective on why none of the first four incidents produced a
+safeguard against this recurring failure class.
 
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
