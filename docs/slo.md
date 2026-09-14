@@ -147,6 +147,25 @@ again be visible only via the Actions tab. Tracked as a follow-up alongside
 the workflows above (see below); this document does not add the alert
 itself.
 
+This silent-failure gap is not limited to cron-triggered workflows: `PR
+Verifier` (`.github/workflows/pr-verifier.yml`, triggered on
+`pull_request_target`) has had a **confirmed, currently-active** 100%
+`startup_failure` rate since at least 2026-08-30 (12+ consecutive days,
+zero jobs ever created on any run) — the same residual stale-pin issue
+`#3071` left open for this file specifically (see
+[`runbooks/postmortem-2026-08-stale-workflow-startup-failure.md`](../runbooks/postmortem-2026-08-stale-workflow-startup-failure.md)'s
+action-item table). Every PR opened, edited, synced, or reopened in this
+period has received zero verifier feedback, with no alert distinguishing
+this from a healthy "no issues found" result. Filed as an active incident:
+[#3336](https://github.com/kubestellar/console-kb/issues/3336); fixing it
+requires repinning the `uses:` SHA in `pr-verifier.yml`, which needs
+`workflows` permission this contribution's credentials do not have. This is
+in fact the fifth recorded `startup_failure` incident for this workflow
+since 2026-06-29 (#2704, #2780, #2883, #2975, #3336) — see
+[`runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md`](../runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md)
+for the retrospective on why none of the first four incidents produced a
+safeguard against this recurring failure class.
+
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
 also requires editing that workflow to either drop `--admin` in favor of a
@@ -177,8 +196,10 @@ Separately, `fuzz.yml` (daily, `0 6 * * *`, plus every PR/push to `master`)
 has no structured CI-observability summary at all — its steps only print
 decorative free-text, with no `$GITHUB_STEP_SUMMARY` output, no step `id`s,
 and no `if: always()` summary step, so a mid-job failure leaves no
-structured record of what ran. Tracked as [#3316](https://github.com/kubestellar/console-kb/issues/3316),
-with the validated, ready-to-apply diff preserved in
+structured record of what ran. Tracked as [#3316](https://github.com/kubestellar/console-kb/issues/3316)
+(closed, but the underlying `fuzz.yml` fix was never applied — the closing
+commit only added the runbook and this SLO entry), with the validated,
+ready-to-apply diff preserved in
 [`runbooks/fuzz-yml-ci-summary-gap.md`](../runbooks/fuzz-yml-ci-summary-gap.md)
 for the same `workflows`-permission reason as the follow-ups above.
 
@@ -196,6 +217,6 @@ incident-response runbook stands until code changes.
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
-- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up
+- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up; also now covers event-triggered reusable-workflow callers (`pr-verifier.yml`'s confirmed, currently-active #3336 incident) since the same silent-failure risk applies there too
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)

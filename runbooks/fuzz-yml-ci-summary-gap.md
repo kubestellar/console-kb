@@ -2,7 +2,10 @@
 
 ## Status: blocked on GitHub App token permission (`workflows` scope)
 
-Tracked in [#3316](https://github.com/kubestellar/console-kb/issues/3316).
+Tracked in [#3316](https://github.com/kubestellar/console-kb/issues/3316)
+(closed, but the underlying `fuzz.yml` fix was never applied — the closing
+commit only added this runbook and the `docs/slo.md` follow-up entry, so
+this "blocked" status is still accurate).
 
 ## Gap
 

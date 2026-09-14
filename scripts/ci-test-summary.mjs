@@ -29,16 +29,41 @@ import { buildSummary, buildStepSummaryMarkdown } from './lib/ci-test-summary.mj
 const log = createLogger('ci-test-summary');
 const REPORT_PATH = join(tmpdir(), `vitest-report-${randomUUID()}.json`);
 
+// coverageEnabled decides whether the wrapped vitest run should also
+// emit v8 coverage. We turn it on automatically under GitHub Actions
+// so the CI job actually enforces vitest.config.mjs's coverage
+// thresholds (61/61/65/66) and produces lcov + json-summary artifacts
+// that a follow-up workflow edit can upload — without slowing down
+// day-to-day local `npm test` runs. #3287 tracks the workflow-side
+// artifact upload half; the config + wiring halves land here.
+//
+// Override via CI_COVERAGE=1 (force on) or CI_COVERAGE=0 (force off)
+// so a maintainer can bisect a suspected coverage-collector-only
+// failure without needing a local env inspection.
+export function coverageEnabled(env = process.env) {
+  const override = env.CI_COVERAGE;
+  if (override === '1' || override === 'true') return true;
+  if (override === '0' || override === 'false') return false;
+  return env.GITHUB_ACTIONS === 'true';
+}
+
 function runVitest() {
+  const args = [
+    join('node_modules', 'vitest', 'vitest.mjs'),
+    'run',
+    '--reporter=default',
+    '--reporter=json',
+    `--outputFile.json=${REPORT_PATH}`,
+  ];
+  if (coverageEnabled()) {
+    // vitest.config.mjs already configures the v8 provider, reporters
+    // (text + lcov + json-summary), include/exclude, and thresholds.
+    // A bare --coverage flips the collector on with that config.
+    args.push('--coverage');
+  }
   const result = spawnSync(
     process.execPath,
-    [
-      join('node_modules', 'vitest', 'vitest.mjs'),
-      'run',
-      '--reporter=default',
-      '--reporter=json',
-      `--outputFile.json=${REPORT_PATH}`,
-    ],
+    args,
     { stdio: 'inherit', env: process.env },
   );
   return result.status ?? 1;
@@ -78,4 +103,9 @@ function main() {
   process.exit(exitCode);
 }
 
-main();
+// When invoked as a script (node ci-test-summary.mjs), run main().
+// Skip main() on import so unit tests can exercise coverageEnabled
+// without kicking off vitest.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

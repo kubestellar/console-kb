@@ -80,6 +80,7 @@ Browse [`runbooks/`](runbooks/) or start with [`runbooks/README.md`](runbooks/RE
 | [`incident-response-unsafe-mission-merge.md`](runbooks/incident-response-unsafe-mission-merge.md) | Detect and recover from a mission merged via `--admin` auto-merge that bypassed `Mission Safety Scan`/`Validate Mission Schema`. |
 | [`incident-response-scheduled-workflow-failure.md`](runbooks/incident-response-scheduled-workflow-failure.md) | Manually detect and respond to a silent job failure (or missing run) in a scheduled/publish workflow. |
 | [`fuzz-yml-ci-summary-gap.md`](runbooks/fuzz-yml-ci-summary-gap.md) | Preserved diff and rationale for adding a structured `$GITHUB_STEP_SUMMARY` to `fuzz.yml` (blocked on `workflows` token permission; tracked in #3316). |
+| [`postmortem-2026-09-pr-verifier-chronic-startup-failure.md`](runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md) | Retrospective covering `pr-verifier.yml`'s five recorded `startup_failure` incidents since June 2026 (current outage ongoing since 2026-08-30) and why no safeguard against recurrence has been added. |
 | [`POSTMORTEM_TEMPLATE.md`](runbooks/POSTMORTEM_TEMPLATE.md) | Template for writing up any repository-operations incident. |
 
 You can import runbooks into KubeStellar Console the same way you import fixes: copy the mission file, open **AI Missions → Import**, and upload or paste the JSON payload.

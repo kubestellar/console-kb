@@ -205,7 +205,7 @@ Rules:
 
 IMPORTANT: Return ONLY the JSON object, no markdown fences.`
 
-function buildPlatformPrompt(platform, context) {
+export function buildPlatformPrompt(platform, context) {
   const sections = []
 
   sections.push(`## Platform: ${platform.name}`)
@@ -343,7 +343,7 @@ async function synthesizePlatformMission(platform, context) {
 const INSTALL_CMD_RE = /helm install|helm upgrade|kubectl apply|kubectl create|docker run|operator-sdk|kustomize build|kubectl kustomize/i
 const VERIFY_CMD_RE = /kubectl get|kubectl describe|kubectl logs|curl.*health|curl.*ready|kubectl port-forward|kubectl rollout status/i
 
-function applyQualityGate(mission) {
+export function applyQualityGate(mission) {
   const issues = []
   const steps = mission.mission?.steps || []
 
@@ -418,7 +418,7 @@ function serializeSanitizedMissionForFile(mission) {
 
 const HELM_VALIDATE_TIMEOUT_MS = 10000
 
-async function checkVersionFreshness(helmRepoUrl, chartName, version) {
+export async function checkVersionFreshness(helmRepoUrl, chartName, version) {
   try {
     const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS) })
     if (!res.ok) return true
@@ -435,7 +435,7 @@ async function checkVersionFreshness(helmRepoUrl, chartName, version) {
 
 // ─── Staleness check ─────────────────────────────────────────────────
 
-function isMissionStale(filePath) {
+export function isMissionStale(filePath) {
   if (FORCE_REGENERATE) return true
   try {
     const mission = JSON.parse(readFileSync(filePath, 'utf-8'))

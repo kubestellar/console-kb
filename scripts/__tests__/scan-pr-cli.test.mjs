@@ -163,4 +163,38 @@ describe('scan-pr.mjs CLI', () => {
       })
     })
   })
+
+  describe('GitHub Actions step summary', () => {
+    it('appends the scan report to $GITHUB_STEP_SUMMARY when it is set', () => {
+      withTempDir(dir => {
+        const missionPath = join(dir, 'valid.json')
+        writeFileSync(missionPath, JSON.stringify(VALID_MISSION))
+        const summaryFile = join(dir, 'step-summary.md')
+        writeFileSync(summaryFile, '')
+
+        const result = spawnSync(process.execPath, [SCAN_PR, 'valid.json'], {
+          cwd: dir,
+          encoding: 'utf8',
+          env: { ...process.env, NO_COLOR: '1', GITHUB_STEP_SUMMARY: summaryFile },
+        })
+
+        expect(result.status).toBe(0)
+        const summaryContent = readFileSync(summaryFile, 'utf8')
+        expect(summaryContent).toContain('Mission Scan Results')
+        expect(summaryContent).toContain('valid.json')
+      })
+    })
+
+    it('does not touch $GITHUB_STEP_SUMMARY when it is unset', () => {
+      withTempDir(dir => {
+        const missionPath = join(dir, 'valid.json')
+        writeFileSync(missionPath, JSON.stringify(VALID_MISSION))
+        const env = { ...process.env, NO_COLOR: '1' }
+        delete env.GITHUB_STEP_SUMMARY
+
+        const result = spawnSync(process.execPath, [SCAN_PR, 'valid.json'], { cwd: dir, encoding: 'utf8', env })
+        expect(result.status).toBe(0)
+      })
+    })
+  })
 })

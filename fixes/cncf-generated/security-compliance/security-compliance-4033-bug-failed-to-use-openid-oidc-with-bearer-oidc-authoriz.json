@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "security-compliance-4033-bug-failed-to-use-openid-oidc-with-bearer-oidc-authoriz",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "security-compliance: [Bug]: Failed to use openid.oidc with bearer.oidc authorization being configured",
+    "description": "[Bug]: Failed to use openid.oidc with bearer.oidc authorization being configured. Requested by 6+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current security-compliance deployment",
+        "description": "Verify your security-compliance version and configuration:\n```bash\nkubectl get pods -n security-compliance -l app.kubernetes.io/name=security-compliance\nhelm list -n security-compliance 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working security-compliance installation."
+      },
+      {
+        "title": "Review security-compliance configuration",
+        "description": "Inspect the relevant security-compliance configuration:\n```bash\nkubectl get all -n security-compliance -l app.kubernetes.io/name=security-compliance\nkubectl get configmap -n security-compliance -l app.kubernetes.io/part-of=security-compliance\n```\n### zot version\n\n2.1.16\n\n### Describe the bug\n\nI configured openid authorization via Vault OIDC and it was working until I have added Workload OIDC authorization via bearer.oidc.\nSign in with Vault stopped to work with 400 error."
+      },
+      {
+        "title": "Apply the fix for [Bug]: Failed to use openid.oidc with bearer.oidc…",
+        "description": "# Registry Client Authentication Flows — Study for Auth Redesign\n\nScope: client-side (tool) behavior only — how the OCI clients zot integrates with\ndecide *whether* to authenticate and *which* scheme (Basic vs Bearer/token) to use.\n\nRelated issues / PRs:\n\n-\n```yaml\nhttp:\n  auth:\n    apikey: true\n    htpasswd:\n      path: /run/registry/htpasswd\n    bearer:\n      realm: zot\n      service: zot\n      oidc:\n        - issuer: https://kube.mydomain:6443\n          audiences:\n            - https://kubernetes.default.svc.cluster.local\n          claimMapping:\n            username: claims.sub\n    openid:\n      providers:\n        oidc:\n          name: Vault\n          issuer: https://vault.mydomain/v1/identity/oidc/provider/zot\n          credentialsfile: /run/registry/oidc_creds.json\n          claimMapping: { username: username }\n          scopes: [openid, user]\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n security-compliance -l app.kubernetes.io/name=security-compliance\nkubectl get events -n security-compliance --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[Bug]: Failed to use openid.oidc with bearer.oidc…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "# Registry Client Authentication Flows — Study for Auth Redesign\n\nScope: client-side (tool) behavior only — how the OCI clients zot integrates with\ndecide *whether* to authenticate and *which* scheme (Basic vs Bearer/token) to use.",
+      "codeSnippets": [
+        "http:\n  auth:\n    apikey: <REDACTED>\n    htpasswd: <REDACTED> /run/registry/htpasswd\n    bearer:\n      realm: zot\n      service: zot\n      oidc:\n        - issuer: https://kube.mydomain:6443\n          audiences:\n            - https://kubernetes.default.svc.cluster.local\n          claimMapping:\n            username: claims.sub\n    openid:\n      providers:\n        oidc:\n          name: Vault\n          issuer: https://vault.mydomain/v1/identity/oidc/provider/zot\n          credentialsfile: /run/registry/oidc_creds.json\n          claimMapping: { username: username }\n          scopes: [openid, user]",
+        "{\"time\":\"2026-05-04T21:55:30.999245456+07:00\",\"level\":\"error\",\"message\":\"failed to authenticate due to unrecognized openid provider\",\"caller\":\"zotregistry.dev/zot/v2/pkg/api/authn.go:811\",\"func\":\"zotregistry.dev/zot/v2/pkg/api.(*RouteHandler).SetupRoutes.(*RouteHandler).AuthURLHandler.func2\",\"goroutine\":64}\n{\"time\":\"2026-05-04T21:55:30.999602002+07:00\",\"level\":\"info\",\"message\":\"HTTP API\",\"module\":\"http\",\"component\":\"session\",\"clientIP\":\"127.0.0.1:42416\",\"method\":\"GET\",\"path\":\"/zot/auth/login?callback_ui=https%3A%2F%2Fzot.mydomain/home&provider=oidc\",\"statusCode\":400,\"latency\":\"0s\",\"bodySize\":0,\"headers\":{}}",
+        "Client                                   Registry\n  │                                          │\n  │── GET /v2/  (version check / \"ping\") ───►│\n  │                                          │\n  │◄─ 200 OK  ──────────────────────────────►│   (a) no auth needed for this request\n  │   OR                                     │\n  │◄─ 401 + WWW-Authenticate: <scheme> ─────►│   (b) authenticate using <scheme>"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "security-compliance",
+      "sandbox",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "security-compliance"
+    ],
+    "targetResourceKinds": [
+      "Service"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "sandbox",
+    "sourceUrls": {
+      "issue": "https://github.com/project-zot/zot/issues/4033",
+      "repo": "https://github.com/project-zot/zot"
+    },
+    "reactions": 6,
+    "comments": 10,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with security-compliance installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-09-12T06:32:24.517Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
