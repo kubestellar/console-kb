@@ -4,7 +4,9 @@
 
 This runbook covers the case where the *job itself* fails outright (not a
 bad-but-green publish) in one of the workflows that generate or gate the
-published mission catalog:
+published mission catalog, plus (see the dedicated section below) the same
+failure mode in event-triggered reusable-workflow callers like
+`pr-verifier.yml`:
 
 | Workflow | Schedule | Role |
 |----------|----------|------|
@@ -35,6 +37,53 @@ GitHub notification email. Adding an automated alert requires editing
 `.github/workflows/*.yml` (tracked separately as a `[operations]` issue,
 since it needs `workflows` permission). Until that lands, use this runbook
 to manually check for and respond to a silent failure.
+
+## Event-triggered reusable-workflow callers (same gap, different trigger)
+
+The silent-failure gap above is not limited to cron-triggered workflows.
+`PR Verifier` (`.github/workflows/pr-verifier.yml`, `on: pull_request_target`)
+calls a reusable workflow via a pinned `uses:` SHA
+(`kubestellar/infra/.github/workflows/reusable-pr-verifier.yml@1a04a3fd...`)
+and has had a **100% `startup_failure`/`failure` rate on every run since at
+least 2026-08-30** — still failing as of this writing (2026-09-14, 30/30 most
+recent runs `conclusion: failure`, `0` jobs ever created on any of them).
+This is a currently-active, confirmed incident, tracked in
+[#3336](https://github.com/kubestellar/console-kb/issues/3336), not a
+theoretical gap: every PR opened, edited, synced, or reopened in this window
+has received zero verifier feedback, with nothing distinguishing that from a
+healthy "no issues found" result.
+
+Three sibling callers pinned to the *same* SHA —
+`assignment-helper.yml`/`reusable-assignment-helper.yml`,
+`copilot-dco.yml`/`reusable-copilot-dco.yml`, and
+`greetings.yml`/`reusable-greetings.yml` — currently run successfully
+(`skipped`/`success`, not `failure`) on that identical pin, so the stale pin
+alone does not explain `pr-verifier.yml`'s failure; the reusable file's
+interface at that exact commit appears to specifically mismatch this one
+caller. Repinning to `220beeeb8dae67e2fd8e89338ada8144609fc6ef` (the SHA
+already used successfully in this repo by `add-help-wanted.yml`, `ai-fix.yml`,
+`copilot-automation.yml`, `scorecard.yml`, and `stale.yml`) is the suggested
+fix — see #3336 for the full evidence and diff. That edit requires
+`workflows` permission this runbook's authoring credentials do not have.
+
+Detection for this class of failure differs from the scheduled table above
+because there is no fixed cadence to check against — instead, check the
+*failure rate* across the workflow's own run history:
+
+```bash
+gh api repos/kubestellar/console-kb/actions/workflows/pr-verifier.yml/runs \
+  --jq '.workflow_runs[:10] | .[] | {id,created_at,conclusion}'
+```
+
+A `conclusion` of `failure` or `startup_failure` with `0` jobs created
+(check via `gh api repos/kubestellar/console-kb/actions/runs/<id>/jobs
+--jq '.total_count'`) on **every recent run regardless of PR/commit** is the
+same parse-time-rejection signature as the scheduled-workflow case above —
+treat it as a confirmed incident the same way. Any other `pull_request`/
+`pull_request_target`-triggered reusable-workflow caller in this repo should
+be spot-checked the same way after any change to its pinned `uses:` SHA,
+since a green check elsewhere in the repo does not imply this one still
+works.
 
 ## Symptoms
 
