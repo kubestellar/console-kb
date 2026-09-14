@@ -237,7 +237,13 @@ describe('runbooks/ mission body', () => {
 // fixes/index.json ↔ shipped catalog integrity
 // ---------------------------------------------------------------------------
 
-describe('fixes/index.json integrity', () => {
+// Widen the default 5s testTimeout for this describe block: several
+// tests here iterate all ~1700 entries of fixes/index.json (or walk the
+// full fixes/ tree) doing sync stat calls, and reliably time out at 5s
+// when the full test-suite runs 100+ vitest workers in parallel and the
+// FS is under contention. 30s gives ~6x headroom without slowing the
+// happy path (the timeout is a ceiling, not a wait). See #3387.
+describe('fixes/index.json integrity', { timeout: 30_000 }, () => {
   if (!fs.existsSync(FIXES_INDEX)) {
     it.skip('fixes/index.json not present', () => {})
     return
