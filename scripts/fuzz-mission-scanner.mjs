@@ -55,14 +55,29 @@ export function fuzzMissionScanner(inputs = MALFORMED_INPUTS) {
   return { total: inputs.length, handled }
 }
 
-function main() {
-  const startedAt = Date.now()
-  console.log('Fuzzing scanner with malformed inputs...')
+/**
+ * In-process CLI entry point. Runs the fuzz suite, emits the same
+ * human-readable console output and structured summary line as the
+ * previous inline `main()`, and returns a POSIX exit code (0 = success,
+ * 1 = at least one input caused the scanner to throw). Exported so
+ * tests can drive the CLI path in-process; the tail `process.exit`
+ * guard below is the only caller that turns the return value into
+ * a real process exit code.
+ *
+ * `stdout`/`clock` are injectable so tests can capture console output
+ * and produce a deterministic `durationMs`.
+ */
+export function runCli({
+  stdout = console.log,
+  clock = Date.now,
+} = {}) {
+  const startedAt = clock()
+  stdout('Fuzzing scanner with malformed inputs...')
 
   const { total, handled } = fuzzMissionScanner()
-  const durationMs = Date.now() - startedAt
+  const durationMs = clock() - startedAt
 
-  console.log(`✓ Handled ${handled}/${total} malformed inputs gracefully`)
+  stdout(`✓ Handled ${handled}/${total} malformed inputs gracefully`)
 
   log.summary('fuzz-mission-scanner-summary', {
     level: handled === total ? 'info' : 'error',
@@ -71,11 +86,9 @@ function main() {
     durationMs,
   })
 
-  if (handled !== total) {
-    process.exit(1)
-  }
+  return handled === total ? 0 : 1
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  process.exit(runCli())
 }
