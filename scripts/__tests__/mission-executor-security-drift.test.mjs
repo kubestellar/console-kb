@@ -37,7 +37,15 @@ import { fileURLToPath } from 'url'
 // weakens one, this test fails and forces an explicit review.
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SRC = readFileSync(join(__dirname, '..', 'mission-executor.mjs'), 'utf8')
+// The command-sandbox reject arms (validateCommand/sanitizeArg/execCommand)
+// and the endpoint-trust gate (assertTrustedEndpoint) were split out of
+// mission-executor.mjs into ./lib/command-sandbox.mjs and
+// ./lib/executor-llm.mjs respectively (console-kb#3151). mission-executor.mjs
+// re-exports the sandbox primitives unchanged, so we anchor the literals in
+// their new home.
+const SANDBOX_SRC = readFileSync(join(__dirname, '..', 'lib', 'command-sandbox.mjs'), 'utf8')
+const LLM_SRC = readFileSync(join(__dirname, '..', 'lib', 'executor-llm.mjs'), 'utf8')
+const SRC = SANDBOX_SRC
 
 describe('mission-executor.mjs security-gate literals (drift guard)', () => {
   describe('validateCommand reject arms', () => {
@@ -115,12 +123,12 @@ describe('mission-executor.mjs security-gate literals (drift guard)', () => {
 
   describe('assertTrustedEndpoint LLM prefix allowlist', () => {
     it('rejects endpoints not matching an allowed prefix', () => {
-      expect(SRC).toContain("if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {")
-      expect(SRC).toContain('throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(\', \')}`)')
+      expect(LLM_SRC).toContain("if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {")
+      expect(LLM_SRC).toContain('throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(\', \')}`)')
     })
 
     it('runs the check at module load against LLM_ENDPOINT', () => {
-      expect(SRC).toContain('const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)')
+      expect(LLM_SRC).toContain('const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)')
     })
   })
 })

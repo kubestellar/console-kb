@@ -7,7 +7,9 @@
  *   - enrich-install-missions.mjs      (exported, covered by security-guards.test.mjs)
  *   - generate-cncf-install-missions.mjs   (NOT exported)
  *   - generate-platform-missions.mjs   (NOT exported)
- *   - mission-executor.mjs             (NOT exported)
+ *   - lib/executor-llm.mjs             (NOT exported; extracted from
+ *                                        mission-executor.mjs by console-kb#3151,
+ *                                        re-exported unchanged from there)
  *
  * Only the first copy is currently exercised. A drift in any of the other
  * three copies — e.g. someone widens the allowlist for one script but not the
@@ -40,7 +42,7 @@ const FILES = [
   'enrich-install-missions.mjs',
   'generate-cncf-install-missions.mjs',
   'generate-platform-missions.mjs',
-  'mission-executor.mjs',
+  'lib/executor-llm.mjs',
 ]
 
 /**
