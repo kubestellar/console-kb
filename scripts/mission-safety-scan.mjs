@@ -44,8 +44,27 @@ const log = createLogger('mission-safety-scan')
  * Official curl|bash source hosts allow-listed by the original bash
  * check (only used to decide whether to emit a warning).
  */
-const OFFICIAL_CURL_BASH_HOSTS =
-  /(get\.k3s\.io|aka\.ms\/|sdk\.cloud\.google|clis\.cloud\.ibm|ollama\.com|get\.rke2\.io|raw\.githubusercontent\.com|cdn\.porter\.sh|istio\.io|oss\.kubeclipper\.io)/i
+// Note on the `raw.githubusercontent.com/...` entry: this host is only
+// allow-listed for the specific upstream orgs whose official installers are
+// referenced by shipped `fixes/**` today. A bare `raw.githubusercontent.com`
+// match would accept scripts from ANY GitHub account (issue #3392), giving
+// an attacker who seeds a public discussion source a trivial way to sneak
+// `curl … | bash` past the safety scan.
+const OFFICIAL_CURL_BASH_HOSTS = new RegExp(
+  [
+    'get\\.k3s\\.io',
+    'aka\\.ms\\/',
+    'sdk\\.cloud\\.google',
+    'clis\\.cloud\\.ibm',
+    'ollama\\.com',
+    'get\\.rke2\\.io',
+    'raw\\.githubusercontent\\.com\\/(wasmcloud|WasmEdge|kube-burner)\\/',
+    'cdn\\.porter\\.sh',
+    'istio\\.io',
+    'oss\\.kubeclipper\\.io',
+  ].join('|'),
+  'i',
+)
 
 /**
  * Attempts to parse `content` as a kc-mission-v1 document (JSON, falling

