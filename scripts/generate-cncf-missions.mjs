@@ -1688,4 +1688,4 @@ if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   })
 }
 
-export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary, loadSourcesConfig }
+export { detectMissionType, extractLabels, extractResourceKinds, estimateDifficulty, slugify, generateMission, createCopilotIssue, extractResolutionFromIssue, formatReport, truncateAtWordBoundary, buildDescription, buildResolutionSummary, loadSourcesConfig, isKubernetesNative, getProjectVersionCmd, getProjectStatusCmd, generatePrerequisites, passesQualityGate, K8S_NATIVE_CATEGORIES, NON_K8S_PROJECTS, PROJECT_CLI_MAP }
