@@ -242,23 +242,41 @@ export function runContentValidation(
   return { filesValidated, errors, warnings, findings }
 }
 
-function main() {
-  const startedAt = Date.now()
-  const files = process.argv
+/**
+ * CLI entry, exported for in-process testing (matches the runCli convention
+ * of the sibling scripts refactored in PRs #3401 and #3402). Returns a POSIX
+ * exit code; does not call process.exit directly. Every side-effect (argv,
+ * clock, logger, stdout/stderr, network probes) is injectable.
+ */
+export function runCli({
+  argv = process.argv,
+  now = () => Date.now(),
+  logger = log,
+  stdout = console.log,
+  stderr = console.error,
+  checkUrl = defaultCheckUrl,
+  checkImage = defaultCheckImage,
+} = {}) {
+  const startedAt = now()
+  const files = argv
     .slice(2)
     .flatMap(a => a.split(/\s+/))
     .filter(Boolean)
   const installFiles = files.filter(f => /fixes\/cncf-install\/install-.*\.(json|yaml|yml)$/.test(f))
 
-  const { filesValidated, errors, warnings, findings } = runContentValidation(files, installFiles)
+  const { filesValidated, errors, warnings, findings } = runContentValidation(
+    files,
+    installFiles,
+    { checkUrl, checkImage }
+  )
 
   for (const { level, filePath, message } of findings) {
-    console.log(`::${level} file=${filePath}::${message}`)
+    stdout(`::${level} file=${filePath}::${message}`)
   }
 
-  const durationMs = Date.now() - startedAt
+  const durationMs = now() - startedAt
 
-  log.summary('mission-content-validation-summary', {
+  logger.summary('mission-content-validation-summary', {
     level: errors > 0 ? 'error' : 'info',
     filesValidated,
     errors,
@@ -266,19 +284,20 @@ function main() {
     durationMs,
   })
 
-  console.log('')
-  console.log('=== Validation Summary ===')
-  console.log(`Errors: ${errors}`)
-  console.log(`Warnings: ${warnings}`)
+  stdout('')
+  stdout('=== Validation Summary ===')
+  stdout(`Errors: ${errors}`)
+  stdout(`Warnings: ${warnings}`)
 
   if (errors > 0) {
-    console.error(`::error::Found ${errors} validation errors. Fix before merging.`)
-    process.exit(1)
+    stderr(`::error::Found ${errors} validation errors. Fix before merging.`)
+    return 1
   }
 
-  console.log('Content validation passed')
+  stdout('Content validation passed')
+  return 0
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  process.exit(runCli())
 }
