@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-12686-support-ignoredifferences-as-a-resource-annotation",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: Support `ignoreDifferences` as a resource annotation",
+    "description": "Support `ignoreDifferences` as a resource annotation. Requested by 112+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo deployment",
+        "description": "Verify your argo version and configuration:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nhelm list -n argo 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo installation."
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\nIt would be great if the Application spec `ignoreDifferences` could be supported at the individual resource level, perhaps as an annotation."
+      },
+      {
+        "title": "Apply the fix for Support `ignoreDifferences` as a resource annotation",
+        "description": "I am in favor of closing this with the solution provided by . IMO, this proposal is adding a feature for a bad practice. Sometimes we use open-source charts and operator that function in a certain way and we have to deal with it.\n\nIn this case, there are already multiple ways to fix the issue, with\n```yaml\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: my-dynamic-config\n  annotations:\n    argocd.argoproj.io/ignore-differences: /data/config\ndata:\n  config: ''\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Support `ignoreDifferences` as a resource annotation\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I am in favor of closing this with the solution provided by . IMO, this proposal is adding a feature for a bad practice. Sometimes we use open-source charts and operator that function in a certain way and we have to deal with it.",
+      "codeSnippets": [
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: my-dynamic-config\n  annotations:\n    argocd.argoproj.io/ignore-differences: /data/config\ndata:\n  config: ''",
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: my-dynamic-config\n  annotations:\n    argocd.argoproj.io/ignore-differences: |-\n      jsonPointers:\n      - /data/config\ndata:\n  config: ''",
+        "# ignore changes to the spec when annotation is present\nignoreDifferences:\n  - group: \"*\"\n    kind: \"*\"\n    jqPathExpressions:\n    - .metadata?.annotations?[\"custom.argocd.argoproj.io/ignore-spec\"] as $ignoreSpec | if $ignoreSpec == \"true\" then .spec else {} end\n# don't forget\nsyncPolicy:\n  syncOptions:\n  - RespectIgnoreDifferences=true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Configmap"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/12686",
+      "repo": "https://github.com/argoproj/argo-cd"
+    },
+    "reactions": 112,
+    "comments": 17,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-09-15T06:14:56.186Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
