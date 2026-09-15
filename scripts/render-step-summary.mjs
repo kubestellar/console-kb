@@ -75,29 +75,49 @@ export function renderMarkdownTable(title, summary) {
   return lines.join('\n')
 }
 
-function main() {
-  const { event, title, log } = parseArgs(process.argv.slice(2))
+/**
+ * In-process CLI entry point. Parses argv, reads the requested log (or
+ * stdin), finds the last summary line matching `--event`, and writes
+ * the rendered markdown table to `stdout`. Returns a POSIX exit code
+ * (0 = rendered, either real summary or neutral fallback; 2 = missing
+ * required flag). Exported so tests can drive the CLI path in-process;
+ * the tail `process.exit(runCli())` guard below is the only caller
+ * that turns the return value into a real process exit code.
+ *
+ * `argv`, `stdout`, `stderr`, `readFile`, and `readStdin` are injectable
+ * so tests can drive the CLI deterministically without spawning a
+ * subprocess — v8 does not attribute subprocess coverage to the parent
+ * process (see console-kb#3398).
+ */
+export function runCli({
+  argv = process.argv.slice(2),
+  stdout = console.log,
+  stderr = console.error,
+  readFile = (path) => readFileSync(path, 'utf-8'),
+  readStdin = () => readFileSync(0, 'utf-8'),
+} = {}) {
+  const { event, title, log } = parseArgs(argv)
   if (!event || !title) {
-    console.error('Usage: render-step-summary.mjs --event <name> --title <title> [--log <file>]')
-    process.exit(2)
+    stderr('Usage: render-step-summary.mjs --event <name> --title <title> [--log <file>]')
+    return 2
   }
 
   let text
   try {
-    text = log ? readFileSync(log, 'utf-8') : readFileSync(0, 'utf-8')
+    text = log ? readFile(log) : readStdin()
   } catch {
     text = ''
   }
 
   const summary = findLastSummaryLine(text, event)
-  console.log(
+  stdout(
     summary
       ? renderMarkdownTable(title, summary)
       : renderMarkdownTable(title, null)
   )
-  process.exit(0)
+  return 0
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  process.exit(runCli())
 }
