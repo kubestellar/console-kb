@@ -241,7 +241,10 @@ export function sanitizeSteps(steps, maxTitle = 120, maxDesc = 3000) {
 
 // ─── Main ────────────────────────────────────────────────────────────
 
-async function enrichFile(filePath, fileName) {
+// Exported for tests covering the enrichFile branches (bad filename,
+// already-enriched short-circuit, null LLM, all-invalid sections, partial
+// merge, DRY_RUN write skip). No behavior change.
+export async function enrichFile(filePath, fileName) {
   const safeBasename = basename(fileName)
   if (!/^install-[a-z0-9-]+\.json$/.test(safeBasename)) {
     throw new Error(`Unexpected install mission filename: ${fileName}`)
