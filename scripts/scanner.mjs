@@ -156,9 +156,23 @@ const MALICIOUS_PATTERNS = [
   { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:ba)?sh/gi },
   // env / xargs / find shell-interpreter escapes
   // `env bash -c '...'` bypasses binary allowlists even when shell:false is set.
-  { name: 'Allowlist escape via env', pattern: /\benv\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node)\b/gi },
-  { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash)\b/gi },
-  { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash)\b/gi },
+  { name: 'Allowlist escape via env', pattern: /\benv\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  // awk / sed carry their own DSL execute primitives — the wrapper binaries
+  // are in SAFE_CLI_COMMANDS (they're used legitimately as text filters), so
+  // detection has to fire on the specific execute forms, not the invocation.
+  { name: 'Interpreter shell escape via awk system', pattern: /\bawk\s+[^\n]*['"][^'"\n]*\bsystem\s*\(/gi },
+  // sed's `e` command runs shell — both the `s/pat/repl/e` substitution flag
+  // and the `<addr>e <cmd>` standalone command. Match either form inside a
+  // quoted sed program.
+  { name: 'sed execute flag (arbitrary shell)', pattern: /\bsed\b[^\n]*(?:s\/[^\/\n]*\/[^\/\n]*\/[gI]*e\b|['"](?:\d+|\$|\/[^\/\n]+\/)?\s*e\s+\S)/g },
+  // Non-shell interpreters given `-c`/`-e` reach into the shell only when the
+  // script literal calls a shell-execution primitive. Narrowed so legitimate
+  // one-liners (`python -c 'import yaml; ...'`, `node -e 'console.log(...)'`)
+  // don't false-positive — the rule only fires when the script also contains
+  // os.system / child_process / IO::Socket / backticks / Ruby %x.
+  { name: 'Interpreter -c/-e invokes shell primitive', pattern: /\b(?:python\d*|ruby|perl|node|php|deno|bun)\s+(?:-\S+\s+)*-[ceE]\b[\s\S]{0,300}?(?:\bsystem\s*\(|\bos\.system\b|child_process|IO::Socket|TCPSocket|`[^`\n]+`|%x\s*[({])/gi },
 
   // Obfuscation bypass techniques (issue #2693)
   // Base64 decode piped to shell execution

