@@ -66,15 +66,35 @@ export function fuzzJsonFixtures(dirs = FIXES_DIRS) {
   return { scanned, errors, errorFiles }
 }
 
-function main() {
-  const startedAt = Date.now()
-  const { scanned, errors, errorFiles } = fuzzJsonFixtures()
+/**
+ * In-process CLI entry point. Runs the fuzz suite, emits the same
+ * human-readable console output and structured summary line as the
+ * previous inline `main()`, and returns a POSIX exit code (0 = every
+ * fixture parsed, 1 = at least one JSON parse error). Exported so tests
+ * can drive the CLI path in-process; the tail `process.exit` guard
+ * below is the only caller that turns the return value into a real
+ * process exit code.
+ *
+ * `dirs`, `stdout`, `stderr`, and `clock` are injectable so tests can
+ * point the walker at a temp fixture tree, capture console output, and
+ * produce a deterministic `durationMs` — v8 does not attribute
+ * subprocess coverage back to the parent, so an in-process drive is
+ * the only way this branch is measured (see console-kb#3398).
+ */
+export function runCli({
+  dirs = FIXES_DIRS,
+  stdout = console.log,
+  stderr = console.error,
+  clock = Date.now,
+} = {}) {
+  const startedAt = clock()
+  const { scanned, errors, errorFiles } = fuzzJsonFixtures(dirs)
 
   for (const { file, message } of errorFiles) {
-    console.error(`Parse error in ${file}:`, message)
+    stderr(`Parse error in ${file}:`, message)
   }
 
-  const durationMs = Date.now() - startedAt
+  const durationMs = clock() - startedAt
 
   log.summary('fuzz-json-fixtures-summary', {
     level: errors > 0 ? 'error' : 'info',
@@ -84,13 +104,14 @@ function main() {
   })
 
   if (errors > 0) {
-    console.error(`\nFuzzing found ${errors} JSON parsing errors`)
-    process.exit(1)
+    stderr(`\nFuzzing found ${errors} JSON parsing errors`)
+    return 1
   }
 
-  console.log('✓ All JSON files parsed successfully')
+  stdout('✓ All JSON files parsed successfully')
+  return 0
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  process.exit(runCli())
 }
