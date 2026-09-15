@@ -129,11 +129,28 @@ function readStdin() {
   })
 }
 
-async function main() {
-  const input = await readStdin()
-  process.stdout.write(renderSummary(input))
+/**
+ * In-process CLI entry point. Reads CI stdout from `readStdin`, renders
+ * any known summary line as markdown, writes it to `stdout`, and
+ * returns a POSIX exit code (always 0 — an unrecognised or empty input
+ * is a placeholder, not an error, so an `if: always()` step keeps
+ * working when the upstream script was skipped).
+ *
+ * Injectables are exposed so tests can drive the CLI in-process — v8
+ * does not attribute subprocess `spawnSync` coverage back to the parent
+ * process, which is why the sibling render-ci-step-summary-cli.test.mjs
+ * spawn tests leave `main()` and `readStdin()` reading as uncovered
+ * (see console-kb#3398).
+ */
+export async function runCli({
+  stdout = (s) => process.stdout.write(s),
+  readStdin: readStdinFn = readStdin,
+} = {}) {
+  const input = await readStdinFn()
+  stdout(renderSummary(input))
+  return 0
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  runCli().then((code) => process.exit(code))
 }
