@@ -111,17 +111,8 @@ export const OTHER_PROJECTS = [
     versions: ['1.2', '1.3'],
     k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
   },
-  {
-    name: 'kubeflow',
-    displayName: 'Kubeflow',
-    repo: 'kubeflow/kubeflow',
-    type: 'ai-platform',
-    category: 'ml-platform',
-    provider: 'Kubeflow',
-    docs: 'https://www.kubeflow.org/docs/',
-    versions: ['1.9', '1.10'],
-    k8sVersions: ['1.27', '1.28', '1.29', '1.30'],
-  },
+  // kubeflow is already tracked in cncf-projects.mjs (repo kubeflow/kubeflow)
+  // — removed here to avoid a duplicate crawl (kubestellar/console-kb#3277).
 
   // ── AI App Builders ──────────────────────────────────────────────────
   {
@@ -215,8 +206,11 @@ export const OTHER_PROJECTS = [
     k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
   },
   {
-    name: 'dragonfly',
-    displayName: 'Dragonfly',
+    // Renamed from 'dragonfly' to avoid colliding with the unrelated CNCF
+    // graduated project of the same name (dragonflyoss/dragonfly, a P2P
+    // file distribution system) — kubestellar/console-kb#3277.
+    name: 'dragonflydb',
+    displayName: 'DragonflyDB',
     repo: 'dragonflydb/dragonfly',
     type: 'database',
     category: 'cache',
@@ -260,17 +254,8 @@ export const OTHER_PROJECTS = [
     versions: ['24.x', '25.x'],
     k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
   },
-  {
-    name: 'nats',
-    displayName: 'NATS',
-    repo: 'nats-io/nats-server',
-    type: 'messaging',
-    category: 'messaging',
-    provider: 'Synadia',
-    docs: 'https://docs.nats.io/',
-    versions: ['2.10', '2.11'],
-    k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
-  },
+  // nats is already tracked in cncf-projects.mjs (repo nats-io/nats-server)
+  // — removed here to avoid a duplicate crawl (kubestellar/console-kb#3277).
 
   // ── API & Networking ─────────────────────────────────────────────────
   {
@@ -389,17 +374,8 @@ export const OTHER_PROJECTS = [
   },
 
   // ── Security ─────────────────────────────────────────────────────────
-  {
-    name: 'keycloak',
-    displayName: 'Keycloak',
-    repo: 'keycloak/keycloak',
-    type: 'security',
-    category: 'identity',
-    provider: 'CNCF / Red Hat',
-    docs: 'https://www.keycloak.org/documentation',
-    versions: ['25', '26'],
-    k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
-  },
+  // keycloak is already tracked in cncf-projects.mjs (repo keycloak/keycloak)
+  // — removed here to avoid a duplicate crawl (kubestellar/console-kb#3277).
   {
     name: 'vault',
     displayName: 'HashiCorp Vault',
@@ -485,28 +461,9 @@ export const OTHER_PROJECTS = [
   },
 
   // ── Dev Platforms ────────────────────────────────────────────────────
-  {
-    name: 'backstage',
-    displayName: 'Backstage',
-    repo: 'backstage/backstage',
-    type: 'devtools',
-    category: 'developer-portal',
-    provider: 'Spotify / CNCF',
-    docs: 'https://backstage.io/docs/',
-    versions: ['1.32', '1.33'],
-    k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
-  },
-  {
-    name: 'harbor',
-    displayName: 'Harbor',
-    repo: 'goharbor/harbor',
-    type: 'devtools',
-    category: 'container-registry',
-    provider: 'CNCF',
-    docs: 'https://goharbor.io/docs/',
-    versions: ['2.11', '2.12'],
-    k8sVersions: ['1.26', '1.27', '1.28', '1.29', '1.30'],
-  },
+  // backstage and harbor are already tracked in cncf-projects.mjs (repos
+  // backstage/backstage and goharbor/harbor) — removed here to avoid a
+  // duplicate crawl (kubestellar/console-kb#3277).
 ]
 
 export function getOtherProjectByName(name) {

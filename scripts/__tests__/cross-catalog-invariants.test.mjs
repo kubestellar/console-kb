@@ -44,17 +44,14 @@ import { OTHER_PROJECTS } from '../other-projects.mjs'
 // Shrink these lists as the catalogs are cleaned up; do NOT grow them.
 // ---------------------------------------------------------------------------
 
-// Names that appear in BOTH CNCF_PROJECTS and OTHER_PROJECTS. The second
-// merge wins in generate-cncf-missions.mjs's ALL_PROJECTS, so today
-// OTHER_PROJECTS silently clobbers the CNCF entry for these.
-const KNOWN_CNCF_OTHER_NAME_COLLISIONS = new Set([
-  'kubeflow',
-  'dragonfly',
-  'nats',
-  'keycloak',
-  'backstage',
-  'harbor',
-])
+// Names that appear in BOTH CNCF_PROJECTS and OTHER_PROJECTS. Historically
+// OTHER_PROJECTS carried its own duplicate entries for kubeflow, nats,
+// keycloak, backstage, and harbor (silently clobbered by the CNCF entry in
+// generate-cncf-missions.mjs's ALL_PROJECTS merge), and for dragonfly
+// coincidentally reused the name of an unrelated CNCF project. All six were
+// resolved in kubestellar/console-kb#3277: the five true duplicates were
+// removed from OTHER_PROJECTS, and dragonfly was renamed to dragonflydb.
+const KNOWN_CNCF_OTHER_NAME_COLLISIONS = new Set([])
 
 // Names that appear in BOTH CNCF_PROJECTS and K8S_PLATFORMS. No current
 // generator merges these two, but they are conflated frequently enough
@@ -69,37 +66,29 @@ const KNOWN_CNCF_K8S_NAME_COLLISIONS = new Set([
 
 // Repos that appear twice within CNCF_PROJECTS. fetch-cncf-landscape.mjs
 // dedupes by repo when regenerating, but cncf-projects.mjs is committed
-// source that accepts curation edits. Today linkerd/linkerd2 backs both
-// `linkerd` (top-level) and `linkerd-viz` (sub-project entry).
-const KNOWN_CNCF_INTERNAL_REPO_DUPES = new Set([
-  'linkerd/linkerd2',
-])
+// source that accepts curation edits. The linkerd/linkerd2 duplicate
+// (backing both `linkerd` and `linkerd-viz`) was resolved in
+// kubestellar/console-kb#3277 by removing the linkerd-viz sub-entry: viz
+// lives in the same repo/mission as linkerd, not a separately crawlable
+// upstream.
+const KNOWN_CNCF_INTERNAL_REPO_DUPES = new Set([])
 
-// Repos shared between CNCF_PROJECTS and OTHER_PROJECTS. These are the
-// same upstream projects with slightly different mission configs, which
-// double-crawls the same GitHub repo. Locking in current state.
-const KNOWN_CNCF_OTHER_REPO_COLLISIONS = new Set([
-  'kubeflow/kubeflow',
-  'nats-io/nats-server',
-  'keycloak/keycloak',
-  'backstage/backstage',
-  'goharbor/harbor',
-])
+// Repos shared between CNCF_PROJECTS and OTHER_PROJECTS. These used to be
+// the same upstream projects with slightly different mission configs,
+// double-crawling the same GitHub repo. Resolved in
+// kubestellar/console-kb#3277 by removing the OTHER_PROJECTS duplicates
+// (kubeflow, nats, keycloak, backstage, harbor are all already tracked by
+// CNCF_PROJECTS).
+const KNOWN_CNCF_OTHER_REPO_COLLISIONS = new Set([])
 
 // OTHER_PROJECTS category values that are NOT keys in CATEGORY_TO_DIR.
 // generate-cncf-missions.mjs merges OTHER_PROJECTS with the CNCF pipeline,
 // and downstream `dir = CATEGORY_TO_DIR[category]` returns undefined for
 // each of these, so any code that then does `join(FIXES_DIR, dir, ...)`
-// gets a broken path. Locking in current state; grow CATEGORY_TO_DIR (or
-// remap these to an existing key) to shrink the list.
-const KNOWN_UNMAPPED_OTHER_CATEGORIES = new Set([
-  'ai-agents', 'llm-serving', 'llm-gateway', 'ml-platform', 'ai-app',
-  'analytics-db', 'vector-db', 'cache', 'multi-model-db', 'streaming',
-  'messaging', 'api-gateway', 'ingress', 'web-server', 'git-hosting',
-  'ci-cd', 'apm', 'monitoring', 'identity', 'secrets', 'service-mesh',
-  'runtime-security', 'object-storage', 'distributed-storage', 'workflow',
-  'workflow-engine', 'developer-portal', 'container-registry',
-])
+// gets a broken path. Resolved in kubestellar/console-kb#3277 by extending
+// CATEGORY_TO_DIR with all 28 categories previously used by OTHER_PROJECTS
+// but missing from the map.
+const KNOWN_UNMAPPED_OTHER_CATEGORIES = new Set([])
 
 // ---------------------------------------------------------------------------
 // Name collisions across catalogs merged by generate-cncf-missions.mjs
