@@ -880,3 +880,28 @@ export {
   serializeSanitizedMissionForFile,
   loadInstallSourcesConfig,
 }
+
+// ─── Test exports (fetch-backed helpers) ──────────────────────────────
+// Exported test-only (no behavior change) so the GitHub/ArtifactHub/LLM
+// fetch wrappers can be exercised with `vi.stubGlobal('fetch', ...)`
+// instead of hitting the network. Mirrors the pattern already used for
+// `callLLM` in enrich-install-missions.mjs. Refs kubestellar/console-kb#3165,
+// kubestellar/console-kb#3174.
+export {
+  assertTrustedEndpoint,
+  githubApi,
+  fetchRawFile,
+  fetchReadme,
+  fetchRepoMeta,
+  fetchLatestRelease,
+  fetchHelmCharts,
+  fetchKustomizeManifests,
+  fetchDockerImages,
+  fetchOperatorManifests,
+  fetchArtifactHubChart,
+  checkHelmRepoUrl,
+  fetchArtifactHubIndexForRepo,
+  gatherProjectContext,
+  synthesizeInstallMission,
+  validateAndFixHelmUrl,
+}
