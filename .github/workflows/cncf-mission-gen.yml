@@ -330,6 +330,40 @@ jobs:
             const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10);
             const LABEL = 'cncf-mission-gen';
             const LOOKBACK_HOURS = 6;
+            const REQUIRED_CHECKS = ['Mission Safety Scan', 'Validate Mission Schema'];
+
+            // Require the mission safety scan and schema validation checks to have
+            // completed successfully before allowing an admin-override merge. This
+            // closes the gap where --admin bypasses branch protection regardless of
+            // status check outcome.
+            function requiredChecksPassed(prNumber) {
+              let checksJson;
+              try {
+                checksJson = execSync(
+                  \`gh pr checks \${prNumber} --json name,state,bucket\`,
+                  { encoding: 'utf8' }
+                );
+              } catch (err) {
+                // gh pr checks exits non-zero if any check failed or is pending;
+                // stdout still contains the JSON we need to inspect.
+                checksJson = err.stdout ? err.stdout.toString() : '';
+              }
+
+              let checks = [];
+              try {
+                checks = checksJson ? JSON.parse(checksJson) : [];
+              } catch {
+                checks = [];
+              }
+
+              for (const name of REQUIRED_CHECKS) {
+                const check = checks.find(c => c.name === name);
+                if (!check || check.bucket !== 'pass') {
+                  return { pass: false, name, state: check ? check.state : 'missing' };
+                }
+              }
+              return { pass: true };
+            }
 
             async function main() {
               // Find open PRs with the cncf-mission-gen label created recently
@@ -379,6 +413,20 @@ jobs:
                   console.log(\`  Breakdown: \${JSON.stringify(result.breakdown)}\`);
 
                   if (result.pass) {
+                    // Gate the merge on the mission safety scan and schema
+                    // validation checks — --admin bypasses branch protection,
+                    // so we must verify these ourselves before using it.
+                    const gate = requiredChecksPassed(pr.number);
+                    if (!gate.pass) {
+                      execSync(
+                        \`gh pr comment \${pr.number} --body \"Auto-merge blocked: quality score \${result.score}/100 passed, but required check '\${gate.name}' has not passed (state: \${gate.state}). Needs manual review.\"\`,
+                        { encoding: 'utf8' }
+                      );
+                      console.log(\`  -> Blocked: required check '\${gate.name}' not passed (state: \${gate.state})\`);
+                      failed++;
+                      continue;
+                    }
+
                     // Add score comment before merging
                     execSync(
                       \`gh pr comment \${pr.number} --body \"Auto-merge: quality score \${result.score}/100 (threshold: \${QUALITY_THRESHOLD}). Breakdown: \${JSON.stringify(result.breakdown)}\"\`,
