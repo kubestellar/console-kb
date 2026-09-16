@@ -32,4 +32,20 @@ jobs:
       - name: Run tests
         working-directory: scripts
         run: npm test
-        continue-on-error: true
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6e368710d005c46969823c3cea21d8 # v4.4.3
+        with:
+          name: scripts-coverage
+          path: scripts/coverage/
+          if-no-files-found: ignore
+
+      - name: Add coverage to step summary
+        if: always()
+        working-directory: scripts
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "## Scripts Test Coverage" >> $GITHUB_STEP_SUMMARY
+            node -e "const fs = require('fs'); const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json')); const totals = summary.total; console.log('| Metric | Coverage |'); console.log('|--------|----------|'); console.log(\`| Lines | \${totals.lines.pct}% |\`); console.log(\`| Statements | \${totals.statements.pct}% |\`); console.log(\`| Functions | \${totals.functions.pct}% |\`); console.log(\`| Branches | \${totals.branches.pct}% |\`)" >> $GITHUB_STEP_SUMMARY
+          fi
