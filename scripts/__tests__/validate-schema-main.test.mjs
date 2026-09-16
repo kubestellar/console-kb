@@ -12,13 +12,14 @@ const SCRIPT_PATH = join(__dirname, '..', 'validate-schema.mjs')
  * Copy validate-schema.mjs (and its ESM neighbors it imports from) into a
  * scratch working directory so we can run `node validate-schema.mjs --all`
  * against a controlled fixes/ tree without polluting the real repo.
- * The script imports from ./scanner.mjs (which imports lib/text-utils.mjs),
- * so we mirror those alongside.
+ * The script imports from ./scanner.mjs (a barrel shim over ./scanner/,
+ * which imports lib/text-utils.mjs), so we mirror those alongside.
  */
 function stageScript(dir) {
   const scriptsDir = join(__dirname, '..')
   cpSync(join(scriptsDir, 'validate-schema.mjs'), join(dir, 'validate-schema.mjs'))
   cpSync(join(scriptsDir, 'scanner.mjs'), join(dir, 'scanner.mjs'))
+  cpSync(join(scriptsDir, 'scanner'), join(dir, 'scanner'), { recursive: true })
   mkdirSync(join(dir, 'lib'), { recursive: true })
   cpSync(join(scriptsDir, 'lib'), join(dir, 'lib'), { recursive: true })
   // Symlink node_modules so `import 'js-yaml'` resolves. Symlinks avoid a

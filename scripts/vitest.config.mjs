@@ -41,7 +41,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
-      include: ['*.mjs', 'lib/**/*.mjs', 'sources/**/*.mjs', 'platform/**/*.mjs'],
+      include: ['*.mjs', 'lib/**/*.mjs', 'sources/**/*.mjs', 'platform/**/*.mjs', 'scanner/**/*.mjs'],
       exclude: [
         '__tests__/**',
         'node_modules/**',
