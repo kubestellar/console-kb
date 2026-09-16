@@ -24,12 +24,18 @@ import { OTHER_PROJECTS } from './other-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 import { sanitizeInfraDetails } from './lib/text-utils.mjs'
+import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
+import { synthesizePlatformMission } from './platform/synthesize.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ─── Config ──────────────────────────────────────────────────────────
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const LLM_TOKEN = process.env.LLM_TOKEN || GITHUB_TOKEN
+// GITHUB_TOKEN and the LLM_* constants below are exported so that
+// scripts/platform/github-context.mjs and scripts/platform/synthesize.mjs
+// (extracted from this file, console-kb#3163) can import them without
+// duplicating env parsing or the SSRF-allowlist check.
+export const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+export const LLM_TOKEN = process.env.LLM_TOKEN || GITHUB_TOKEN
 const TARGET_PLATFORMS = process.env.TARGET_PLATFORMS
   ? process.env.TARGET_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
   : null
@@ -45,8 +51,8 @@ const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
-const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
+export const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
 
 const ALLOWED_ENDPOINT_PREFIXES = [
   'https://models.inference.ai.azure.com/',
@@ -66,277 +72,14 @@ function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREF
 }
 
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
-const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
+export const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
-let rateLimitRemaining = 5000
-let rateLimitReset = 0
-
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
-
-// ─── GitHub API helpers ──────────────────────────────────────────────
-async function waitForRateLimit() {
-  if (rateLimitRemaining < 10) {
-    const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-    console.log(`  Rate limit low (${rateLimitRemaining}), waiting ${Math.round(waitMs / 1000)}s...`)
-    await sleep(waitMs)
-  }
-}
-
-async function githubFetch(url, options = {}) {
-  await waitForRateLimit()
-  const headers = {
-    Authorization: `Bearer ${GITHUB_TOKEN}`,
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  }
-  const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
-  rateLimitRemaining = parseInt(response.headers.get('x-ratelimit-remaining') || '5000', 10)
-  rateLimitReset = parseInt(response.headers.get('x-ratelimit-reset') || '0', 10)
-  return response
-}
-
-async function fetchRepoMeta(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}`)
-  if (!res.ok) return null
-  return res.json()
-}
-
-async function fetchReleases(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=10`)
-  if (!res.ok) return []
-  return res.json()
-}
-
-async function fetchReadme(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/readme`)
-  if (!res.ok) return null
-  const data = await res.json()
-  return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 8000)
-}
-
-async function fetchHelmChart(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}Chart.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
-}
-
-async function fetchHelmValues(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}values.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
-}
-
-async function fetchKustomize(owner, repo) {
-  for (const p of ['config/default/', 'deploy/', 'manifests/', '']) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}kustomization.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 3000)
-    }
-  }
-  return null
-}
-
-async function checkHelmRepoUrl(helmRepoUrl) {
-  if (!helmRepoUrl) return false
-  try {
-    const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(10000) })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-// ─── Platform Context Builder ────────────────────────────────────────
-
-async function gatherPlatformContext(platform) {
-  const context = {
-    readme: null,
-    helmChart: null,
-    helmValues: null,
-    kustomize: null,
-    releases: [],
-    repoMeta: null,
-  }
-
-  const [owner, repo] = (platform.repo || '').split('/')
-  if (!owner || !repo) return context
-
-  const [repoMeta, releases, readme, helmChart, helmValues, kustomize] = await Promise.all([
-    fetchRepoMeta(owner, repo),
-    fetchReleases(owner, repo),
-    fetchReadme(owner, repo),
-    fetchHelmChart(owner, repo),
-    fetchHelmValues(owner, repo),
-    fetchKustomize(owner, repo),
-  ])
-
-  return { repoMeta, releases: releases.slice(0, 5), readme, helmChart, helmValues, kustomize }
-}
-
-// ─── Prompt Builder ──────────────────────────────────────────────────
-
-const PLATFORM_SYSTEM_PROMPT = `You are an expert Kubernetes platform engineer. Your task is to generate a comprehensive, accurate, and practical install mission JSON for a specific Kubernetes platform or managed service.
-
-Rules:
-- Generate REAL install steps with actual CLI commands, not placeholders
-- Use the latest stable version from the releases provided
-- Include version-specific flags and options
-- Steps must be actionable — no "see documentation" or vague instructions
-- Include verification steps with kubectl commands
-- Follow the exact JSON schema provided
-- For cloud providers: include cloud-specific CLI commands (aws, gcloud, az)
-- For helm: include proper repo add, update, install commands with specific chart versions
-- For kubectl: include apply commands with specific manifest URLs or inline YAML
-- Include prerequisites: specific tool versions required
-- The "description" of each step must include the actual command in a code block
-
-IMPORTANT: Return ONLY the JSON object, no markdown fences.`
-
-export function buildPlatformPrompt(platform, context) {
-  const sections = []
-
-  sections.push(`## Platform: ${platform.name}`)
-  sections.push(`Category: ${platform.category || 'Kubernetes platform'}`)
-  sections.push(`Description: ${platform.description || ''}`)
-  if (platform.version) sections.push(`Latest Version: ${platform.version}`)
-  if (platform.provider) sections.push(`Provider: ${platform.provider}`)
-
-  if (context.releases?.length > 0) {
-    const latest = context.releases[0]
-    sections.push(`\nLatest Release: ${latest.tag_name} (${latest.published_at?.slice(0, 10) || 'unknown'})`)
-  }
-
-  if (context.repoMeta) {
-    sections.push(`\nRepository: ${context.repoMeta.full_name}`)
-    sections.push(`Stars: ${context.repoMeta.stargazers_count} | Language: ${context.repoMeta.language}`)
-  }
-
-  if (context.readme) {
-    sections.push(`\n## README (excerpt)\n${context.readme.slice(0, 3000)}`)
-  }
-
-  if (context.helmChart) {
-    sections.push(`\n## Chart.yaml\n\`\`\`yaml\n${context.helmChart}\n\`\`\``)
-  }
-
-  if (context.helmValues) {
-    sections.push(`\n## values.yaml (excerpt)\n\`\`\`yaml\n${context.helmValues.slice(0, 2000)}\n\`\`\``)
-  }
-
-  if (context.kustomize) {
-    sections.push(`\n## kustomization.yaml\n\`\`\`yaml\n${context.kustomize}\n\`\`\``)
-  }
-
-  const slug = slugify(platform.name)
-  const installMethods = platform.installMethods || ['kubectl']
-
-  sections.push(`\n## Required Output Schema\n\`\`\`json\n${JSON.stringify({
-    version: 'kc-mission-v1',
-    name: `platform-${slug}`,
-    missionClass: 'installer',
-    author: 'KubeStellar Bot',
-    authorGithub: 'kubestellar',
-    mission: {
-      title: `${platform.name}: Complete Install Guide`,
-      description: `Step-by-step installation guide for ${platform.name}.`,
-      type: 'configuration',
-      status: 'completed',
-      steps: [
-        { title: 'Step title', description: 'Step with actual commands' },
-      ],
-      resolution: {
-        summary: 'Summary of what was installed and how to verify.',
-        codeSnippets: ['key command or config snippet'],
-      },
-    },
-    metadata: {
-      category: platform.category || 'platform',
-      installMethods,
-      cncfProjects: platform.cncfProjects || [],
-      qualityScore: 0,
-    },
-    prerequisites: {
-      tools: platform.prerequisites?.tools || ['kubectl'],
-      permissions: ['cluster-admin'],
-    },
-    security: {
-      rbacRequired: true,
-      networkPolicies: false,
-    },
-  }, null, 2)}\n\`\`\``)
-
-  return sections.join('\n')
-}
-
-// ─── LLM Synthesis ───────────────────────────────────────────────────
-async function synthesizePlatformMission(platform, context) {
-  const prompt = buildPlatformPrompt(platform, context)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
-
-  try {
-    const response = await fetch(TRUSTED_LLM_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${LLM_TOKEN}`,
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 6000,
-        response_format: { type: 'json_object' },
-      }),
-    })
-
-    clearTimeout(timeout)
-    if (!response.ok) {
-      const err = await response.text()
-      console.error(`  LLM API error ${response.status}: ${err.slice(0, 200)}`)
-      return null
-    }
-
-    // Validate Content-Type and enforce a response size ceiling before parsing
-    // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
-    const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('application/json')) {
-      console.error(`  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)}`)
-      return null
-    }
-    const MAX_LLM_RESPONSE_BYTES = 1_000_000
-    const rawText = await response.text()
-    if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-      console.error(`  LLM response too large (${rawText.length} bytes), rejecting`)
-      return null
-    }
-    const data = JSON.parse(rawText)
-    const content = data.choices?.[0]?.message?.content
-    if (!content) return null
-    return JSON.parse(content)
-  } catch (err) {
-    clearTimeout(timeout)
-    console.error(`  LLM error: ${err.message}`)
-    return null
-  }
-}
+// GitHub context fetching (githubFetch, fetchRepoMeta, fetchReadme, helm/kustomize
+// fetchers, checkHelmRepoUrl, gatherPlatformContext) and LLM prompt building +
+// synthesis (buildPlatformPrompt, synthesizePlatformMission) are extracted to
+// ./platform/github-context.mjs and ./platform/synthesize.mjs respectively
+// (console-kb#3163) — imported at the top of this file and re-exported below
+// for callers/tests that still import them from here.
 
 // ─── Quality Gate ─────────────────────────────────────────────────────
 
@@ -711,4 +454,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   })
 }
 
+// Re-export helpers extracted to ./platform/*.mjs (console-kb#3163) so
+// existing imports of them from this file keep working unchanged.
+export { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
+export { buildPlatformPrompt, PLATFORM_SYSTEM_PROMPT } from './platform/synthesize.mjs'
 export { serializeSanitizedMissionForFile, formatReport }
