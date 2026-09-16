@@ -45,6 +45,13 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SOURCE_PATH = join(__dirname, '../generate-platform-missions.mjs')
 const SOURCE = readFileSync(SOURCE_PATH, 'utf8')
+// assertTrustedEndpoint / ALLOWED_ENDPOINT_PREFIXES and
+// serializeSanitizedMissionForFile were consolidated into
+// scripts/lib/llm-endpoint-guard.mjs and scripts/lib/mission-file.mjs
+// respectively (kubestellar/console-kb#3134, #3333); the security-critical
+// bodies now live there, re-exported unchanged from generate-platform-missions.mjs.
+const ENDPOINT_GUARD_SOURCE = readFileSync(join(__dirname, '../lib/llm-endpoint-guard.mjs'), 'utf8')
+const MISSION_FILE_SOURCE = readFileSync(join(__dirname, '../lib/mission-file.mjs'), 'utf8')
 
 function functionBody(src, header) {
   const idx = src.indexOf(header)
@@ -65,8 +72,8 @@ function functionBody(src, header) {
 
 describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
   it('ALLOWED_ENDPOINT_PREFIXES contains exactly the three approved backends', () => {
-    const m = SOURCE.match(
-      /const ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
+    const m = ENDPOINT_GUARD_SOURCE.match(
+      /ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
     )
     expect(m, 'ALLOWED_ENDPOINT_PREFIXES declaration must exist').toBeTruthy()
     const prefixes = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1])
@@ -82,8 +89,8 @@ describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
     //   allowed:  https://api.openai.com
     //   attacker: https://api.openai.com.evil.example/
     // startsWith would accept the attacker URL without the "/".
-    const m = SOURCE.match(
-      /const ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
+    const m = ENDPOINT_GUARD_SOURCE.match(
+      /ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
     )
     const prefixes = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1])
     for (const p of prefixes) {
@@ -104,7 +111,7 @@ describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
   })
 
   it('assertTrustedEndpoint throws (not warns) on a non-allowlisted endpoint', () => {
-    const body = functionBody(SOURCE, 'function assertTrustedEndpoint')
+    const body = functionBody(ENDPOINT_GUARD_SOURCE, 'function assertTrustedEndpoint')
     // The failure mode of this gate MUST be a thrown Error — silently
     // downgrading to console.warn / console.error would let an
     // untrusted URL through at module load.
@@ -113,7 +120,7 @@ describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
 })
 
 describe('generate-platform-missions.mjs — serializeSanitizedMissionForFile guards', () => {
-  const body = functionBody(SOURCE, 'function serializeSanitizedMissionForFile')
+  const body = functionBody(MISSION_FILE_SOURCE, 'function serializeSanitizedMissionForFile')
 
   it('enforces a 1_000_000-byte hard cap on serialized JSON', () => {
     // Guards against a runaway LLM emitting an oversized payload that

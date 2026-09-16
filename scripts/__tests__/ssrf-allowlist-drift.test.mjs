@@ -1,31 +1,35 @@
 /**
  * Drift-detection tests for the LLM SSRF-guard allowlist.
  *
- * `ALLOWED_ENDPOINT_PREFIXES` and `assertTrustedEndpoint()` are duplicated
- * verbatim in four scripts:
+ * `ALLOWED_ENDPOINT_PREFIXES` and `assertTrustedEndpoint()` used to be
+ * duplicated verbatim in four scripts. As of kubestellar/console-kb#3134 /
+ * #3333, `generate-cncf-install-missions.mjs` and
+ * `generate-platform-missions.mjs` were consolidated onto a single shared
+ * copy in `lib/llm-endpoint-guard.mjs` (imported + re-exported from both,
+ * so the module-load SSRF gate still runs at import time in each). The
+ * remaining two copies are out of scope for that refactor (see
+ * kubestellar/console-kb#3100) and still carry their own local declaration:
  *
  *   - enrich-install-missions.mjs      (exported, covered by security-guards.test.mjs)
- *   - generate-cncf-install-missions.mjs   (NOT exported)
- *   - generate-platform-missions.mjs   (NOT exported)
  *   - lib/executor-llm.mjs             (NOT exported; extracted from
  *                                        mission-executor.mjs by console-kb#3151,
  *                                        re-exported unchanged from there)
+ *   - lib/llm-endpoint-guard.mjs        (shared canonical copy, imported by
+ *                                        generate-cncf-install-missions.mjs and
+ *                                        generate-platform-missions.mjs)
  *
- * Only the first copy is currently exercised. A drift in any of the other
- * three copies — e.g. someone widens the allowlist for one script but not the
- * others — is a silent SSRF regression: the three unexported copies cannot
- * be imported without triggering their module-load side effects (each does
- * `const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)` at top
- * level, which throws if `LLM_ENDPOINT` is set to anything untrusted or
- * exercises rate-limit config parsing).
- *
- * These tests read all four files as text and enforce that:
- *   1. Each defines a single `ALLOWED_ENDPOINT_PREFIXES = [ ... ]` array literal.
- *   2. The parsed contents of that array are byte-equal across all four.
- *   3. Each defines an `assertTrustedEndpoint(endpoint, allowedPrefixes = ...)`
- *      function with the same body pattern (the `.some(prefix =>
- *      endpoint.startsWith(prefix))` check that is the actual SSRF gate).
- *   4. Each performs the module-load validation gate:
+ * These tests read the relevant files as text and enforce that:
+ *   1. Each of the three declaration sites defines a single
+ *      `ALLOWED_ENDPOINT_PREFIXES = [ ... ]` array literal.
+ *   2. The parsed contents of that array are byte-equal across all three,
+ *      AND the two consolidated generator scripts import the shared copy
+ *      rather than re-declaring it.
+ *   3. Each declaration site defines an `assertTrustedEndpoint(endpoint,
+ *      allowedPrefixes = ...)` function with the same body pattern (the
+ *      `.some(prefix => endpoint.startsWith(prefix))` check that is the
+ *      actual SSRF gate).
+ *   4. Every one of the four files (declaration sites + consolidated
+ *      importers) performs the module-load validation gate:
  *      `const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)`.
  *   5. All prefixes use HTTPS (defence-in-depth: catch anyone quietly adding
  *      an http:// entry).
@@ -38,11 +42,28 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const scriptsDir = join(__dirname, '..')
 
-const FILES = [
+// Files that must invoke the module-load SSRF gate on LLM_ENDPOINT.
+const GATE_FILES = [
   'enrich-install-missions.mjs',
   'generate-cncf-install-missions.mjs',
   'generate-platform-missions.mjs',
   'lib/executor-llm.mjs',
+]
+
+// Files that declare (own) ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint
+// locally. generate-cncf-install-missions.mjs and generate-platform-missions.mjs
+// import both from lib/llm-endpoint-guard.mjs instead (checked separately below).
+const DECLARATION_FILES = [
+  'enrich-install-missions.mjs',
+  'lib/executor-llm.mjs',
+  'lib/llm-endpoint-guard.mjs',
+]
+
+// generate-cncf-install-missions.mjs / generate-platform-missions.mjs must
+// import the shared guard rather than re-declaring it.
+const CONSOLIDATED_IMPORTER_FILES = [
+  'generate-cncf-install-missions.mjs',
+  'generate-platform-missions.mjs',
 ]
 
 /**
@@ -67,16 +88,25 @@ function extractPrefixes(source) {
   return prefixes
 }
 
-// Load every file's source and parsed prefix list once. Failures here mean
-// the test itself is broken; surface them clearly rather than as N cascading
+// Load every relevant file's source once. Failures here mean the test
+// itself is broken; surface them clearly rather than as N cascading
 // per-file failures.
+const ALL_FILES = [...new Set([...GATE_FILES, ...DECLARATION_FILES, ...CONSOLIDATED_IMPORTER_FILES])]
 const sources = new Map()
-const prefixesPerFile = new Map()
-for (const name of FILES) {
-  const source = readFileSync(join(scriptsDir, name), 'utf8')
-  sources.set(name, source)
-  prefixesPerFile.set(name, extractPrefixes(source))
+for (const name of ALL_FILES) {
+  sources.set(name, readFileSync(join(scriptsDir, name), 'utf8'))
 }
+
+const prefixesPerFile = new Map()
+for (const name of DECLARATION_FILES) {
+  prefixesPerFile.set(name, extractPrefixes(sources.get(name)))
+}
+// The consolidated files resolve to the shared lib's prefixes.
+for (const name of CONSOLIDATED_IMPORTER_FILES) {
+  prefixesPerFile.set(name, prefixesPerFile.get('lib/llm-endpoint-guard.mjs'))
+}
+
+const FILES = [...prefixesPerFile.keys()]
 
 // ─── 1. Every file defines the allowlist in a parseable form ─────────
 describe('SSRF allowlist declaration', () => {
@@ -137,9 +167,9 @@ describe('SSRF allowlist scheme', () => {
   }
 })
 
-// ─── 4. Every file has the assertTrustedEndpoint gate function ──────
+// ─── 4. Every declaration site has the assertTrustedEndpoint gate function ──
 describe('assertTrustedEndpoint function shape', () => {
-  for (const name of FILES) {
+  for (const name of DECLARATION_FILES) {
     it(`${name} defines assertTrustedEndpoint using a prefix startsWith check`, () => {
       const source = sources.get(name)
       // Match either `function assertTrustedEndpoint` or `export function ...`
@@ -154,11 +184,24 @@ describe('assertTrustedEndpoint function shape', () => {
       expect(source).toMatch(/throw\s+new\s+Error\(\s*[`'"]\s*Untrusted\s+LLM_ENDPOINT/i)
     })
   }
+
+  for (const name of CONSOLIDATED_IMPORTER_FILES) {
+    it(`${name} imports assertTrustedEndpoint / ALLOWED_ENDPOINT_PREFIXES from lib/llm-endpoint-guard.mjs (no local re-declaration)`, () => {
+      const source = sources.get(name)
+      expect(source).toMatch(
+        /import\s*\{[^}]*\bassertTrustedEndpoint\b[^}]*\}\s*from\s*['"]\.\/lib\/llm-endpoint-guard\.mjs['"]/,
+      )
+      expect(source).toMatch(
+        /import\s*\{[^}]*\bALLOWED_ENDPOINT_PREFIXES\b[^}]*\}\s*from\s*['"]\.\/lib\/llm-endpoint-guard\.mjs['"]/,
+      )
+      expect(source).not.toMatch(/function\s+assertTrustedEndpoint\s*\(/)
+    })
+  }
 })
 
-// ─── 5. Every file invokes the gate at module load ──────────────────
+// ─── 5. Every consumer invokes the gate at module load ───────────────
 describe('module-load validation gate', () => {
-  for (const name of FILES) {
+  for (const name of GATE_FILES) {
     it(`${name} calls assertTrustedEndpoint(LLM_ENDPOINT) at module load`, () => {
       const source = sources.get(name)
       // Prevent someone from silently removing the module-load gate — that

@@ -26,6 +26,8 @@ import { scoreMission } from './quality-scorer.mjs'
 import { sanitizeInfraDetails } from './lib/text-utils.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
+import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -54,24 +56,10 @@ const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.az
 export const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
 export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
 
-const ALLOWED_ENDPOINT_PREFIXES = [
-  'https://models.inference.ai.azure.com/',
-  'https://api.openai.com/',
-  'https://api.githubcopilot.com/',
-]
-
-/**
- * Asserts that an LLM endpoint URL starts with an approved prefix (CWE-441: prevent SSRF).
- * Throws if the endpoint is not trusted.
- */
-function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREFIXES) {
-  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
-    throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
-  }
-  return endpoint
-}
-
-// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
+// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).
+// ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint are shared with
+// generate-cncf-install-missions.mjs via ./lib/llm-endpoint-guard.mjs
+// (kubestellar/console-kb#3134, #3333).
 export const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
 // GitHub context fetching (githubFetch, fetchRepoMeta, fetchReadme, helm/kustomize
@@ -129,33 +117,9 @@ export function applyQualityGate(mission) {
 }
 
 // ─── Path helpers ─────────────────────────────────────────────────────
-
-export function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
-}
-
-export function assertSafeSlug(slug, source = 'unknown') {
-  if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(slug)) {
-    throw new Error(`Unsafe slug derived from ${source}: ${JSON.stringify(slug)}`)
-  }
-}
-
-export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
-  if (!resolvedTarget.startsWith(resolvedAllowedDir + '/') && resolvedTarget !== resolvedAllowedDir) {
-    throw new Error(`Path traversal detected: ${resolvedTarget} is outside ${resolvedAllowedDir}`)
-  }
-}
-
-function serializeSanitizedMissionForFile(mission) {
-  const missionJson = JSON.stringify(mission, null, 2)
-  if (missionJson.length > 1_000_000) {
-    throw new Error(`Refusing to write oversized mission (${missionJson.length} bytes)`)
-  }
-  if (/<\s*script\b/i.test(missionJson) || /\bon\w+\s*=/i.test(missionJson)) {
-    throw new Error('Refusing to write mission containing unsafe HTML after sanitization')
-  }
-  return missionJson
-}
+// slugify / assertSafeSlug / assertSafePath / serializeSanitizedMissionForFile
+// are shared with generate-cncf-install-missions.mjs via ./lib/mission-file.mjs
+// (kubestellar/console-kb#3134, #3333).
 
 // ─── Helm validation ─────────────────────────────────────────────────
 
@@ -458,4 +422,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 // existing imports of them from this file keep working unchanged.
 export { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 export { buildPlatformPrompt, PLATFORM_SYSTEM_PROMPT } from './platform/synthesize.mjs'
-export { serializeSanitizedMissionForFile, formatReport }
+// slugify / assertSafeSlug / assertSafePath / serializeSanitizedMissionForFile
+// live in ./lib/mission-file.mjs (shared with generate-cncf-install-missions.mjs,
+// kubestellar/console-kb#3134, #3333); re-exported here for existing callers.
+export { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, formatReport }

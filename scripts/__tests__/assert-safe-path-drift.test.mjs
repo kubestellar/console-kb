@@ -1,27 +1,28 @@
 /**
  * Source-drift invariant for `assertSafePath`, the path-traversal guard
- * that appears verbatim in three mission-generator scripts:
+ * that used to appear verbatim in three mission-generator scripts.
  *
- *   scripts/generate-platform-missions.mjs      (exported, tested)
- *   scripts/generate-cncf-install-missions.mjs  (exported, not directly tested)
- *   scripts/enrich-install-missions.mjs         (exported, tested via
- *                                                enrich-install-missions-pure-helpers.test.mjs)
+ * As of kubestellar/console-kb#3134 / #3333, `generate-platform-missions.mjs`
+ * and `generate-cncf-install-missions.mjs` were consolidated onto a single
+ * shared implementation in `scripts/lib/mission-file.mjs` (imported +
+ * re-exported from both, so existing imports of `assertSafePath` from either
+ * generator file keep working unchanged).
  *
- * The three copies MUST stay behaviourally identical. If a future security
- * hardening (symlink check, boundary-comparison tightening, etc.) is applied
- * to only one copy, the other two silently retain the old behaviour — a
- * classic drift regression on a security-critical guard that governs
- * write-to-disk paths for generated missions.
+ * `scripts/enrich-install-missions.mjs` keeps its own local copy for now
+ * (out of scope for this refactor — see kubestellar/console-kb#3100). This
+ * test now locks:
+ *   - the shared `lib/mission-file.mjs` copy and the remaining
+ *     `enrich-install-missions.mjs` copy stay behaviourally identical
+ *     (byte-equal function body), and
+ *   - the two consolidated generator scripts import (not re-declare)
+ *     `assertSafePath` from the shared lib.
  *
  * This test uses the same static-analysis approach as the sibling drift
  * checks (`sanitize-infra-details-drift.test.mjs`,
  * `ssrf-allowlist-drift.test.mjs`,
  * `generate-platform-missions-verdict-drift.test.mjs`).
  *
- * Follow-up (out of scope here): consolidate the guard into `scripts/lib/`
- * so there is one implementation. When that lands, delete this drift test.
- *
- * See: kubestellar/console-kb#3100
+ * See: kubestellar/console-kb#3100, kubestellar/console-kb#3134, #3333
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -40,19 +41,16 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPTS_DIR = join(HERE, '..')
 
-const COPIES = [
-  {
-    file: 'generate-platform-missions.mjs',
-    expectedExport: true,
-  },
-  {
-    file: 'generate-cncf-install-missions.mjs',
-    expectedExport: true,
-  },
-  {
-    file: 'enrich-install-missions.mjs',
-    expectedExport: true,
-  },
+// Files that still declare assertSafePath locally.
+const DECLARATION_COPIES = [
+  { file: 'lib/mission-file.mjs', expectedExport: true },
+  { file: 'enrich-install-missions.mjs', expectedExport: true },
+]
+
+// Files that import (and re-export) the shared lib/mission-file.mjs copy.
+const CONSOLIDATED_IMPORTER_FILES = [
+  'generate-platform-missions.mjs',
+  'generate-cncf-install-missions.mjs',
 ]
 
 // Extract the function body (from the opening `{` after the signature to
@@ -67,8 +65,8 @@ function extractAssertSafePath(source) {
 }
 
 describe('assertSafePath drift', () => {
-  it('appears exactly once in each of the three known scripts', () => {
-    for (const { file } of COPIES) {
+  it('appears exactly once in each of the two declaration sites', () => {
+    for (const { file } of DECLARATION_COPIES) {
       const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
       const matches = source.match(
         /function\s+assertSafePath\s*\(/g,
@@ -78,8 +76,8 @@ describe('assertSafePath drift', () => {
     }
   })
 
-  it('all three copies share the same function body', () => {
-    const bodies = COPIES.map(({ file }) => {
+  it('the shared lib copy and the remaining local copy share the same function body', () => {
+    const bodies = DECLARATION_COPIES.map(({ file }) => {
       const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
       const parsed = extractAssertSafePath(source)
       expect(parsed, `${file} must contain an assertSafePath declaration`).not.toBeNull()
@@ -91,13 +89,13 @@ describe('assertSafePath drift', () => {
       expect(
         body,
         `${file} assertSafePath body has drifted from ${bodies[0].file}. ` +
-          `Update every copy in lockstep or consolidate into scripts/lib/.`,
+          `Update both copies in lockstep, or consolidate enrich-install-missions.mjs too.`,
       ).toBe(reference)
     }
   })
 
   it('export vs. module-local status matches the documented inventory', () => {
-    for (const { file, expectedExport } of COPIES) {
+    for (const { file, expectedExport } of DECLARATION_COPIES) {
       const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
       const hasExport =
         /^\s*export\s+function\s+assertSafePath\b/m.test(source)
@@ -109,6 +107,16 @@ describe('assertSafePath drift', () => {
           : `${file} is expected to keep assertSafePath module-local (or, better, ` +
               `import it from scripts/lib/ — see #3100)`,
       ).toBe(expectedExport)
+    }
+  })
+
+  it('the consolidated generator scripts import (not re-declare) assertSafePath from lib/mission-file.mjs', () => {
+    for (const file of CONSOLIDATED_IMPORTER_FILES) {
+      const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
+      expect(source).toMatch(
+        /import\s*\{[^}]*\bassertSafePath\b[^}]*\}\s*from\s*['"]\.\/lib\/mission-file\.mjs['"]/,
+      )
+      expect(source).not.toMatch(/function\s+assertSafePath\s*\(/)
     }
   })
 

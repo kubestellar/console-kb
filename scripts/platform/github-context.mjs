@@ -11,6 +11,9 @@
  * and a single shared rate-limit budget across the generator run.
  */
 import { GITHUB_TOKEN } from '../generate-platform-missions.mjs'
+import { checkHelmRepoUrl } from '../lib/helm-sources.mjs'
+
+export { checkHelmRepoUrl }
 
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
@@ -92,16 +95,6 @@ export async function fetchKustomize(owner, repo) {
     }
   }
   return null
-}
-
-export async function checkHelmRepoUrl(helmRepoUrl) {
-  if (!helmRepoUrl) return false
-  try {
-    const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(10000) })
-    return res.ok
-  } catch {
-    return false
-  }
 }
 
 export async function gatherPlatformContext(platform) {

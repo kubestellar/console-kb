@@ -35,13 +35,16 @@ describe('serializeSanitizedMissionForFile — happy path', () => {
     expect(out).toContain('"title": "Install demo"')
     // Pretty-print uses 2-space indent
     expect(out).toMatch(/^\{\n  "platform"/)
+    // Ends with a trailing newline (console-kb#3333: reconciled with the
+    // install-missions copy of this guard, which already had one)
+    expect(out.endsWith('\n')).toBe(true)
     // Round-trips as valid JSON
     expect(JSON.parse(out)).toEqual(mission)
   })
 
   it('serializes an empty mission object without throwing', () => {
     expect(() => serializeSanitizedMissionForFile({})).not.toThrow()
-    expect(serializeSanitizedMissionForFile({})).toBe('{}')
+    expect(serializeSanitizedMissionForFile({})).toBe('{}\n')
   })
 })
 

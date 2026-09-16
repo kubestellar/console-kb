@@ -20,6 +20,9 @@ import { parse as parseYaml } from 'yaml'
 import { CNCF_PROJECTS } from './cncf-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
+import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
+import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -40,24 +43,10 @@ const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.az
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
 
-const ALLOWED_ENDPOINT_PREFIXES = [
-  'https://models.inference.ai.azure.com/',
-  'https://api.openai.com/',
-  'https://api.githubcopilot.com/',
-]
-
-/**
- * Asserts that an LLM endpoint URL starts with an approved prefix (CWE-441: prevent SSRF).
- * Throws if the endpoint is not trusted.
- */
-function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREFIXES) {
-  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
-    throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
-  }
-  return endpoint
-}
-
-// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
+// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).
+// ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint are shared with
+// generate-platform-missions.mjs via ./lib/llm-endpoint-guard.mjs
+// (kubestellar/console-kb#3134, #3333).
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
 let rateLimitRemaining = 5000
@@ -242,16 +231,8 @@ async function fetchArtifactHubChart(projectName) {
   }
 }
 
-async function checkHelmRepoUrl(url) {
-  try {
-    const response = await fetch(`${url}/index.yaml`, {
-      signal: AbortSignal.timeout(10000),
-    })
-    return response.ok
-  } catch {
-    return false
-  }
-}
+// checkHelmRepoUrl is shared with generate-platform-missions.mjs via
+// ./lib/helm-sources.mjs (kubestellar/console-kb#3134, #3333).
 
 async function fetchArtifactHubIndexForRepo(helmRepoUrl) {
   try {
@@ -507,22 +488,9 @@ export function applyQualityGate(mission, config) {
 }
 
 // ─── Path + slug helpers ─────────────────────────────────────────────
-
-export function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
-}
-
-export function assertSafeSlug(slug, source = 'unknown') {
-  if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(slug)) {
-    throw new Error(`Unsafe slug derived from ${source}: ${JSON.stringify(slug)}`)
-  }
-}
-
-export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
-  if (!resolvedTarget.startsWith(resolvedAllowedDir + '/') && resolvedTarget !== resolvedAllowedDir) {
-    throw new Error(`Path traversal detected: ${resolvedTarget} is outside ${resolvedAllowedDir}`)
-  }
-}
+// slugify / assertSafeSlug / assertSafePath / serializeSanitizedMissionForFile
+// are shared with generate-platform-missions.mjs via ./lib/mission-file.mjs
+// (kubestellar/console-kb#3134, #3333).
 
 function replaceUntilStable(input, pattern, replacement = '') {
   let previous
@@ -531,17 +499,6 @@ function replaceUntilStable(input, pattern, replacement = '') {
     input = input.replace(pattern, replacement)
   } while (input !== previous)
   return input
-}
-
-function serializeSanitizedMissionForFile(mission) {
-  const missionJson = JSON.stringify(mission, null, 2) + '\n'
-  if (missionJson.length > 1_000_000) {
-    throw new Error(`Refusing to write oversized mission (${missionJson.length} bytes)`)
-  }
-  if (/<\s*script\b/i.test(missionJson) || /\bon\w+\s*=/i.test(missionJson)) {
-    throw new Error('Refusing to write mission containing unsafe HTML after sanitization')
-  }
-  return missionJson
 }
 
 // ─── Helm URL validation ─────────────────────────────────────────────
@@ -877,9 +834,15 @@ export {
   formatReport,
   isMissionStale,
   replaceUntilStable,
-  serializeSanitizedMissionForFile,
   loadInstallSourcesConfig,
 }
+
+// ─── Shared lib re-exports ────────────────────────────────────────────
+// slugify / assertSafeSlug / assertSafePath / serializeSanitizedMissionForFile
+// live in ./lib/mission-file.mjs (shared with generate-platform-missions.mjs,
+// kubestellar/console-kb#3134, #3333); re-exported here so existing imports
+// of them from this file keep working unchanged.
+export { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile }
 
 // ─── Test exports (fetch-backed helpers) ──────────────────────────────
 // Exported test-only (no behavior change) so the GitHub/ArtifactHub/LLM
