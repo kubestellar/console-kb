@@ -44,5 +44,12 @@ jobs:
       - name: Run Quality Scorer
         if: steps.detect-files.outputs.files_changed == 'true'
         run: |
+          set -o pipefail
           mapfile -t FILES_ARR < changed_files.txt
-          node scripts/test-kb-quality-ci.mjs "${FILES_ARR[@]}"
+          node scripts/test-kb-quality-ci.mjs "${FILES_ARR[@]}" | tee kb-quality-ci-output.log
+      - name: Write KB quality summary
+        if: always()
+        run: |
+          node scripts/render-step-summary.mjs --event kb-quality-ci-summary \
+            --title 'KB Quality Enforcement Summary' --log kb-quality-ci-output.log \
+            >> "$GITHUB_STEP_SUMMARY"
