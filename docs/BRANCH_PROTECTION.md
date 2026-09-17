@@ -23,15 +23,19 @@ Without branch protection:
 - PRs can be merged without passing required status checks
 - PRs can be merged without required reviewer approvals
 
-**This is not theoretical here**: the `CNCF Mission Generation` workflow's
-`auto-merge` job (`.github/workflows/cncf-mission-gen.yml`) already merges
-`cncf-mission-gen`-labeled PRs with `gh pr merge --admin`, which unconditionally
-overrides branch protection (required status checks and required reviews alike)
-regardless of whether `Mission Safety Scan` or `Validate Mission Schema` have run
-or passed on that PR — the merge decision comes solely from a content-heuristic
-score in `scripts/quality-scorer.mjs`. See `docs/slo.md` section 2 for details.
-Enabling "Require status checks to pass before merging" does not close this gap
-on its own, because `--admin` bypasses it.
+**This was not theoretical here, but is now fixed**: the `CNCF Mission
+Generation` workflow's `auto-merge` job
+(`.github/workflows/cncf-mission-gen.yml`) used to merge
+`cncf-mission-gen`-labeled PRs with `gh pr merge --admin`, which
+unconditionally overrides branch protection (required status checks and
+required reviews alike) regardless of whether `Mission Safety Scan` or
+`Validate Mission Schema` had run or passed on that PR — the merge
+decision came solely from a content-heuristic score in
+`scripts/quality-scorer.mjs`. PR
+[#3418](https://github.com/kubestellar/console-kb/pull/3418) closed
+[#3157](https://github.com/kubestellar/console-kb/issues/3157) by adding a
+`requiredChecksPassed()` gate that queries both checks before allowing the
+`--admin` merge. See `docs/slo.md` section 2 for details.
 
 Separately, for regular human-reviewed PRs (no `--admin` involved), the
 required-status-checks list above must actually include `Mission Safety Scan`
@@ -63,15 +67,16 @@ with `continue-on-error: true`, so the job reports success even when tests
 fail — marking it required would give a false sense of coverage gating until
 that gap (tracked separately, see #3199) is closed.
 
-**Caveat — marking `Validate Mission Schema` required does not gate
-`runbooks/**` content**: the check itself never validates any file under
-`runbooks/**`, on a PR or on its own scheduled sweep (its PR-mode file
-diff and its `--all` file-discovery both only cover `fixes/**`). A
-`runbooks/**`-only PR passes this required check having had zero files
-checked. Closing this requires editing
-`.github/workflows/validate-schema.yml` and
-`scripts/validate-schema.mjs`, which needs `workflows` permission this
-contribution's credentials do not have — tracked separately, see #3255.
+**Caveat, now resolved — marking `Validate Mission Schema` required now
+does gate `runbooks/**` content**: the check used to never validate any
+file under `runbooks/**`, on a PR or on its own scheduled sweep. PR
+[#3410](https://github.com/kubestellar/console-kb/pull/3410) closed
+[#3255](https://github.com/kubestellar/console-kb/issues/3255) by
+extending the PR-mode `git diff` pathspec in
+`.github/workflows/validate-schema.yml` to also match `runbooks/**`; the
+`--all` scheduled-sweep side (`scripts/validate-schema.mjs`) was fixed
+separately. A `runbooks/**`-only PR is now actually validated by this
+required check.
 
 See OpenSSF Scorecard findings #1 (BranchProtectionID) and #58 (CodeReviewID) for background.
 

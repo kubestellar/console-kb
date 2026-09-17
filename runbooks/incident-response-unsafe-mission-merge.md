@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook covers incidents caused by the `auto-merge` job of the
+This runbook was written for incidents caused by the `auto-merge` job of the
 `CNCF Mission Generation` workflow (`.github/workflows/cncf-mission-gen.yml`),
 which merges `cncf-mission-gen`-labeled PRs to `master` using:
 
@@ -10,17 +10,22 @@ which merges `cncf-mission-gen`-labeled PRs to `master` using:
 gh pr merge <pr-number> --squash --admin --delete-branch
 ```
 
-`--admin` unconditionally overrides branch protection, including any
-required status checks and required reviews. The merge decision is based
-**solely** on `scripts/quality-scorer.mjs`'s content heuristic (threshold
-70/100); it never inspects the result of `Mission Safety Scan`
+**That specific gap is now fixed.** `--admin` unconditionally overrides
+branch protection, including any required status checks and required
+reviews, and the merge decision used to be based **solely** on
+`scripts/quality-scorer.mjs`'s content heuristic (threshold 70/100),
+never inspecting the result of `Mission Safety Scan`
 (`.github/workflows/mission-safety-scan.yml`) or `Validate Mission Schema`
-(`.github/workflows/validate-schema.yml`), both of which trigger
-`on: pull_request` against the same PR. A mission JSON that scores ≥70 on
-the heuristic can reach `master` even if one or both of those checks
-failed or never finished running. See `docs/slo.md` section 2 and
-`docs/BRANCH_PROTECTION.md` for background — this is a known, tracked gap,
-not a hypothetical.
+(`.github/workflows/validate-schema.yml`). PR
+[#3418](https://github.com/kubestellar/console-kb/pull/3418) closed
+[#3157](https://github.com/kubestellar/console-kb/issues/3157) by adding a
+`requiredChecksPassed()` gate to `scripts/score-and-merge-mission-prs.mjs`
+that queries `gh pr checks` for both checks before the `--admin` merge and
+leaves the PR open with an explanatory comment if either hasn't passed.
+This runbook is retained for historical incident recovery (a bad commit
+merged before the fix landed) and because three related false-green gaps
+below, affecting other workflows, are still open. See `docs/slo.md`
+section 2 and `docs/BRANCH_PROTECTION.md` for background.
 
 `fixes/**` and `runbooks/**` content merged this way feeds
 `fixes/index.json`, fetched live by the KubeStellar Console frontend on
@@ -46,35 +51,33 @@ fixing it requires editing `.github/workflows/mission-safety-scan.yml`
 (`workflows` permission). Use the manual scan in step 2 of Detection below
 for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
 
-### Related gap: `Validate Mission Schema` never checks `runbooks/**`, on PRs *or* on its scheduled sweep
+### Related gap: `Validate Mission Schema` never checked `runbooks/**` (now fixed)
 
-A second, broader instance of the same false-green class affects
-`Validate Mission Schema` (`.github/workflows/validate-schema.yml`) itself.
-Its `on.pull_request.paths`/`on.push.paths` triggers include `runbooks/**`,
-but:
+A second, broader instance of the same false-green class used to affect
+`Validate Mission Schema` (`.github/workflows/validate-schema.yml`). Its
+`on.pull_request.paths`/`on.push.paths` triggers include `runbooks/**`, but:
 
 - **PR mode**: the "Find changed files (PR only)" step's `git diff`
-  pathspec is `'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml'` only.
-  A `runbooks/**`-only PR resolves to an empty file list, so the
+  pathspec used to be `'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml'`
+  only. A `runbooks/**`-only PR resolved to an empty file list, so the
   "Validate schema (PR — changed files only)" step's `if` condition
-  (`steps.changed.outputs.files != ''`) is false and the step is
-  **skipped** — not failed. The job reports green having validated
+  (`steps.changed.outputs.files != ''`) was false and the step was
+  **skipped** — not failed. The job reported green having validated
   nothing.
 - **Scheduled/push mode** (`--all`, weekly Monday 05:30 UTC plus every
-  qualifying push to `master`): `scripts/validate-schema.mjs` calls
-  `discoverMissionFiles('fixes')` only — `runbooks/**` is never walked,
+  qualifying push to `master`): `scripts/validate-schema.mjs` used to call
+  `discoverMissionFiles('fixes')` only — `runbooks/**` was never walked,
   even in the full sweep.
 
-The result: the 10 `runbooks/*.json` mission files (same `kc-mission-v1`
-schema as `fixes/**`, per `runbooks/README.md`) have **no automated schema
-validation coverage at all**, on any trigger, while every run reports
-success. Confirmed via `node scripts/validate-schema.mjs $(ls
-runbooks/*.json)` (10/10 valid when given directly) vs.
-`node scripts/validate-schema.mjs --all` (validates only `fixes/**`, 0
-files under `runbooks/**`). Tracked separately as a `[operations]` issue
-since fixing it requires editing `.github/workflows/validate-schema.yml`
-and `scripts/validate-schema.mjs` (`workflows` permission). Use step 1 of
-Detection below manually against `runbooks/*.json` for the same reason.
+**Both sides are now fixed.** The `--all` branch was fixed first to also
+discover `runbooks/**` files. The remaining PR-mode gap was closed as
+[#3255](https://github.com/kubestellar/console-kb/issues/3255) and fixed
+in PR [#3410](https://github.com/kubestellar/console-kb/pull/3410), which
+extended the PR-mode `git diff` pathspec to also match
+`runbooks/**/*.json`/`*.yaml`/`*.yml`. The 10 `runbooks/*.json` mission
+files (same `kc-mission-v1` schema as `fixes/**`, per `runbooks/README.md`)
+now have automated schema validation coverage on both triggers. This
+section is retained for historical incident recovery only.
 
 ### Related gap: `KB Quality Enforcement` false-green on `runbooks/**`-only PRs
 
@@ -151,11 +154,12 @@ hand against the checks listed in the "Validate mission quality" and
   case described above, and applies whether or not the PR went through
   auto-merge.
 - A merged PR touched only `runbooks/**` files and `Validate Mission
-  Schema` shows green, but the job's log shows the "Validate schema (PR —
-  changed files only)" step was **skipped** (not run) — this is the
-  `runbooks/**`-omission gap described above, and also applies to the
-  weekly scheduled sweep, whose log never lists any `runbooks/*.json`
-  file among the files it discovered.
+  Schema` shows green — as of PR #3410, this is expected (the PR-mode
+  pathspec now covers `runbooks/**`, so a genuine failure here would show
+  the step actually ran and failed, not skipped). If the job's log instead
+  shows the "Validate schema (PR — changed files only)" step **skipped**
+  entirely, that indicates a regression of the fixed gap and should be
+  treated as a new incident.
 - A merged PR touched only `runbooks/**` files and `KB Quality
   Enforcement` shows green, but the job's log shows "No KB JSON files
   changed" and the "Run Quality Scorer" step was **skipped** (not run) —
@@ -170,8 +174,9 @@ hand against the checks listed in the "Validate mission quality" and
 Run from a checkout of `master`:
 
 ```bash
-# 1. Confirm the file is valid per the schema validator — `--all` only
-#    covers fixes/**, so runbooks/*.json must be passed explicitly too
+# 1. Confirm the file is valid per the schema validator. `--all` and the
+#    PR-mode pathspec both cover runbooks/** as of PR #3410/the --all fix,
+#    but re-check runbooks/*.json explicitly too as defense-in-depth.
 cd scripts && npm ci && cd ..
 node scripts/validate-schema.mjs --all
 node scripts/validate-schema.mjs $(ls runbooks/*.json)
@@ -222,15 +227,14 @@ unsafe/invalid merge.
 
 ## Prevention (tracked, not implemented by this runbook)
 
-Closing this gap requires editing `.github/workflows/cncf-mission-gen.yml`
-to query `gh pr checks <pr-number>` (or
-`gh pr view --json statusCheckRollup`) for `Mission Safety Scan` and
-`Validate Mission Schema` results before calling `gh pr merge --admin`, or
-to drop `--admin` in favor of a mergeable-state check. This requires
-`workflows` permission this contribution's credentials do not have —
-tracked in the open `[operations]` issue on this repo (auto-merge bypasses
-Mission Safety Scan and Validate Mission Schema via `--admin`) and in
-`docs/slo.md` section 2.
+The `cncf-mission-gen.yml` auto-merge gap is **fixed**: PR
+[#3418](https://github.com/kubestellar/console-kb/pull/3418) added a
+`requiredChecksPassed()` gate to `scripts/score-and-merge-mission-prs.mjs`
+that queries `gh pr checks <pr-number>` for `Mission Safety Scan` and
+`Validate Mission Schema` before calling `gh pr merge --admin`, skipping
+the merge (with an explanatory PR comment) if either hasn't passed. This
+closed [#3157](https://github.com/kubestellar/console-kb/issues/3157) and
+`docs/slo.md` section 2's original "known exception".
 
 Closing the separate false-green gap (`Mission Safety Scan` skipping
 `runbooks/**` files in its own scan logic) requires editing
@@ -241,15 +245,15 @@ logic in the "Scan for dangerous commands" step. Also requires `workflows`
 permission this contribution's credentials do not have — tracked in a
 separate open `[operations]` issue on this repo.
 
-Closing the `Validate Mission Schema` gap (never checking `runbooks/**` on
-PRs or on its scheduled sweep) requires: (1) extending the PR-mode
-`git diff` pathspec in `.github/workflows/validate-schema.yml` to also
-include `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`,
-and (2) having `scripts/validate-schema.mjs`'s `--all` branch also call
-`discoverMissionFiles('runbooks')` alongside `discoverMissionFiles('fixes')`.
-Requires `workflows` permission this contribution's credentials do not
-have — tracked in a separate open `[operations]` issue on this repo
-(#3255).
+The `Validate Mission Schema` gap (never checking `runbooks/**` on PRs or
+on its scheduled sweep) is **fixed**: the `--all` branch was updated first
+(`scripts/validate-schema.mjs`'s `discoverMissionFiles('runbooks')`), and
+the remaining PR-mode `git diff` pathspec gap in
+`.github/workflows/validate-schema.yml` was closed as
+[#3255](https://github.com/kubestellar/console-kb/issues/3255) and fixed
+in PR [#3410](https://github.com/kubestellar/console-kb/pull/3410), which
+extended the pathspec to also include
+`'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`.
 
 Closing the `KB Quality Enforcement` gap (never scoring `runbooks/**` on
 PRs) requires extending the `git diff` pathspec in the "Detect Changed KB

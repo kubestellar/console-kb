@@ -30,16 +30,18 @@ No exporter or external data flow is added by this document — recommendations 
   `Validate Mission Schema` (`.github/workflows/validate-schema.yml`) on their
   introducing pull request.
 - **SLO**: 100% — these checks run `on: pull_request` only, and nothing merged by a
-  human reviewer should bypass both (see `docs/BRANCH_PROTECTION.md`). **Known
-  exception**: the `CNCF Mission Generation` workflow's `auto-merge` job
-  (`.github/workflows/cncf-mission-gen.yml`) merges `cncf-mission-gen`-labeled PRs
-  with `gh pr merge --admin`, which unconditionally bypasses branch protection and
-  any required status checks, based solely on a content-heuristic quality score
-  (`scripts/quality-scorer.mjs`, threshold 70) that never inspects `Mission Safety
-  Scan` or `Validate Mission Schema` results. A mission JSON can reach `master`
-  without either check having run or passed. Tracked as a follow-up (see below);
-  this document does not add the fix itself. Recovery steps for this scenario
-  are documented in
+  human reviewer should bypass both (see `docs/BRANCH_PROTECTION.md`). **Formerly
+  known exception, now fixed**: the `CNCF Mission Generation` workflow's
+  `auto-merge` job (`.github/workflows/cncf-mission-gen.yml`) used to merge
+  `cncf-mission-gen`-labeled PRs with `gh pr merge --admin` based solely on a
+  content-heuristic quality score, without ever inspecting `Mission Safety Scan`
+  or `Validate Mission Schema` results — closed as
+  [#3157](https://github.com/kubestellar/console-kb/issues/3157) and fixed in
+  PR [#3418](https://github.com/kubestellar/console-kb/pull/3418), which added a
+  `requiredChecksPassed()` gate to `scripts/score-and-merge-mission-prs.mjs` that
+  queries `gh pr checks` for both checks before allowing the `--admin` merge, and
+  leaves the PR open with an explanatory comment if either check hasn't passed.
+  Recovery steps for the historical incident class remain documented in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Second known exception**: `Mission Safety Scan` itself has a script-level gap —
   its `on.pull_request.paths` trigger watches `runbooks/**/*.json`/`*.yaml`/`*.yml`,
@@ -51,19 +53,19 @@ No exporter or external data flow is added by this document — recommendations 
   as a follow-up (see below); recovery guidance is in the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Third known exception**: `Validate Mission Schema` itself has a broader
-  version of this same gap — it never validated `runbooks/**` at all, on
-  *either* trigger. Its PR-mode `git diff` pathspec covered only
+  version of this same gap, **now fixed** — it used to never validate
+  `runbooks/**` at all, on *either* trigger. The scheduled/push `--all` mode
+  side (`scripts/validate-schema.mjs` only walking `fixes/`) was fixed first,
+  so the weekly cadence sweep discovers mission files under `runbooks/` too.
+  The remaining PR-mode `git diff` pathspec gap — it covered only
   `fixes/**/*.json`/`*.yaml`/`*.yml`, so a `runbooks/**`-only PR resolved to
   an empty file list and the validation step was skipped (job still reported
-  green). The scheduled/push `--all` mode side of this gap
-  (`scripts/validate-schema.mjs` only walking `fixes/`) has been fixed — it
-  now also discovers mission files under `runbooks/`, so the weekly cadence
-  sweep validates all 10 `runbooks/*.json` files. The PR-mode pathspec still
-  needs the corresponding `runbooks/**/*.json`/`*.yaml`/`*.yml` globs added
-  to `.github/workflows/validate-schema.yml`'s "Find changed files (PR
-  only)" step; that edit is prepared but requires `workflows` permission
-  this contribution's credentials do not have. Tracked as a follow-up (see
-  below); recovery guidance is in the same
+  green) — was closed as
+  [#3255](https://github.com/kubestellar/console-kb/issues/3255) and fixed in
+  PR [#3410](https://github.com/kubestellar/console-kb/pull/3410), which
+  extended `.github/workflows/validate-schema.yml`'s "Find changed files (PR
+  only)" step to also match `runbooks/**/*.json`/`*.yaml`/`*.yml`. Recovery
+  guidance for the historical incident class remains in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Fourth known exception**: `KB Quality Enforcement`
   (`.github/workflows/kb-quality-enforcement.yml`) has the same
@@ -198,10 +200,11 @@ safeguard against this recurring failure class.
 
 Separately, the section 2 "known exception" above (`cncf-mission-gen.yml`'s
 `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`)
-also requires editing that workflow to either drop `--admin` in favor of a
-mergeable-state/required-checks check, or gate the scorer step on those two checks
-having completed and passed first. Also filed separately as a `[operations]` issue
-for the same `workflows`-permission reason.
+is now resolved: PR [#3418](https://github.com/kubestellar/console-kb/pull/3418)
+added a `requiredChecksPassed()` gate to `scripts/score-and-merge-mission-prs.mjs`
+that queries both checks before the `--admin` merge and leaves the PR open with
+an explanatory comment otherwise, closing
+[#3157](https://github.com/kubestellar/console-kb/issues/3157).
 
 Separately, the section 2 "separate known gap" above (`kb-quality-enforcement.yml`
 never scoring `runbooks/**/*.json`-only PRs) also requires editing that workflow's
@@ -218,15 +221,15 @@ dangerous commands" step. Also filed separately as a `[operations]` issue
 for the same `workflows`-permission reason.
 
 The section 2 "third known exception" above (`validate-schema.yml` never
-validating `runbooks/**`) is now partially resolved:
-`scripts/validate-schema.mjs`'s `--all` branch has been updated to also
-discover files under `runbooks/`, so the weekly/push sweep now covers all
-10 `runbooks/*.json` files. The remaining piece — extending
-`validate-schema.yml`'s PR-mode `git diff` pathspec with the same
-`runbooks/**/*.json`/`*.yaml`/`*.yml` globs so a `runbooks/**`-only PR is
-no longer skipped — still requires `workflows` permission this
-contribution's credentials do not have. Tracked in `[operations]` issue
-#3255 until that pathspec change lands.
+validating `runbooks/**`) is now fully resolved:
+`scripts/validate-schema.mjs`'s `--all` branch discovers files under
+`runbooks/` (weekly/push sweep covers all 10 `runbooks/*.json` files), and
+the remaining PR-mode gap was closed in PR
+[#3410](https://github.com/kubestellar/console-kb/pull/3410), which extended
+`validate-schema.yml`'s "Find changed files (PR only)" `git diff` pathspec
+with the `runbooks/**/*.json`/`*.yaml`/`*.yml` globs so a `runbooks/**`-only
+PR is no longer skipped, closing
+[#3255](https://github.com/kubestellar/console-kb/issues/3255).
 
 Separately, `fuzz.yml` (daily, `0 6 * * *`, plus every PR/push to `master`)
 has no structured CI-observability summary at all — its steps only print
