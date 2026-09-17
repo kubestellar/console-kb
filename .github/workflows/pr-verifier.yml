@@ -1,5 +1,17 @@
 name: PR Verifier
 
+# NOTE: this workflow previously called
+# `kubestellar/infra/.github/workflows/reusable-pr-verifier.yml`, which does
+# not exist in kubestellar/infra at any pin checked (confirmed 2026-09-17 —
+# see runbooks/postmortem-2026-09-pr-verifier-chronic-startup-failure.md and
+# issue #3336). GitHub Actions rejects a `workflow_call` to a non-existent
+# target at parse time with `startup_failure` (zero jobs created, no step
+# logs), which is why repinning the SHA alone never fixed this across five
+# recorded incidents — the callee simply isn't there to repin to. Until
+# kubestellar/infra adds a real `reusable-pr-verifier.yml`, this workflow
+# runs a minimal self-contained check instead of an external reusable call,
+# so PRs get real (if reduced) verifier feedback rather than a silent
+# 100% startup_failure.
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
@@ -9,7 +21,23 @@ permissions: {}
 jobs:
   verify:
     if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
     permissions:
       checks: write
       pull-requests: read
-    uses: kubestellar/infra/.github/workflows/reusable-pr-verifier.yml@1a04a3fd17771e78e5cf6d42a3fda84e3ba478f3
+    steps:
+      - name: Check PR has a non-empty title and body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PR_TITLE// /}" ]; then
+            echo "::error::PR title must not be empty."
+            exit 1
+          fi
+          if [ -z "${PR_BODY// /}" ]; then
+            echo "::error::PR description must not be empty. Please describe the change and, if applicable, link the issue it fixes."
+            exit 1
+          fi
+          echo "PR title and body are present." >> "$GITHUB_STEP_SUMMARY"

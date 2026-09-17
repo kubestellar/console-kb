@@ -12,6 +12,15 @@ on:
 permissions:
   contents: read
 
+# Only one Build Mission Index run should push to master at a time. Without
+# this, two mission ingests landing close together race each other's
+# "Commit and push index" step and the second one's bare `git push` is
+# rejected ("fetch first") because the first run's auto-index commit already
+# moved master out from under it (see #3189).
+concurrency:
+  group: build-mission-index-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-index:
     permissions:
@@ -39,9 +48,29 @@ jobs:
       - name: Commit and push index
         if: steps.changes.outputs.changed == 'true'
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add fixes/index.json
           git commit -s -m "🌱 Auto-update mission index"
-          git push
+
+          # The concurrency guard above serializes runs of this workflow,
+          # but master can still move between another workflow's push and
+          # this step (e.g. a human/bot commit unrelated to the index).
+          # Rebase onto the latest master and retry a few times with a
+          # short backoff before giving up, instead of failing outright on
+          # the first "fetch first" rejection (#3189).
+          attempt=1
+          max_attempts=5
+          until git push; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::git push failed after ${max_attempts} attempts"
+              exit 1
+            fi
+            echo "Push rejected (attempt ${attempt}/${max_attempts}); rebasing onto latest master and retrying..."
+            git fetch origin master
+            git rebase origin/master
+            attempt=$((attempt + 1))
+            sleep $((attempt * 3))
+          done
 
