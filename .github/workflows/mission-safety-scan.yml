@@ -19,143 +19,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd scripts && npm ci
       - name: Scan for dangerous commands
         run: |
-          ERRORS=0
-
-          # NUL-delimited changed-file list: a plain `$(...)` word-split (the
-          # previous approach) lets a mission file whose path contains a
-          # space or tab bypass every check below, since the split halves
-          # neither exist as files nor match any pattern (see #3280).
-          if ! git diff --name-only -z ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' > files.nul 2>/dev/null; then
-            find fixes \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) -newer .git/index -print0 > files.nul
-          fi
-
-          while IFS= read -r -d '' f; do
-            case "$f" in
-              *[[:space:]]*)
-                echo "::error file=$f::Mission file paths must not contain whitespace"
-                ERRORS=$((ERRORS + 1))
-                continue
-                ;;
-            esac
-
-            [ -f "$f" ] || continue
-
-            # Check for kubectl delete namespace/all patterns
-            if grep -qP 'kubectl delete (namespace|ns|all)\b.*--all' "$f"; then
-              echo "::error file=$f::Dangerous: kubectl delete all/namespace --all"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Check for rm -rf with dangerous paths
-            if grep -qP 'rm\s+-rf?\s+(/|/\*|~|\$HOME)' "$f"; then
-              echo "::error file=$f::Dangerous: rm -rf with root/home path"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Check for kubectl delete in protected namespaces
-            if grep -qiP 'kubectl delete.*(kube-system|kube-public|kube-node-lease|default)\b' "$f"; then
-              echo "::error file=$f::Dangerous: kubectl delete targeting protected namespace"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Check for placeholder container images (multiple patterns)
-            if grep -qP 'registry/org/image:tag|registry/[a-z]|your-docker-registry/' "$f"; then
-              echo "::error file=$f::Placeholder container image not replaced"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Check for empty install steps (no actual commands)
-            if MISSION_FILE="$f" python3 -c "
-          import json, sys, os
-          def load_mission(path):
-              with open(path) as fh:
-                  if path.endswith(('.yaml', '.yml')):
-                      import yaml
-                      return yaml.safe_load(fh)
-                  return json.load(fh)
-          try:
-            d = load_mission(os.environ['MISSION_FILE'])
-            steps = d.get('mission', {}).get('steps', [])
-            has_cmd = any('kubectl' in str(s) or 'helm' in str(s) or 'curl' in str(s) or 'apt' in str(s) or 'pip' in str(s) for s in steps)
-            if d.get('missionClass') == 'install' and not has_cmd:
-              print('empty')
-              sys.exit(0)
-          except: pass
-          sys.exit(1)
-          " 2>/dev/null; then
-              echo "::error file=$f::Install mission has no actual install commands"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Check for unverified curl|bash from non-official sources
-            if grep -qP 'curl.*\|\s*(ba)?sh' "$f"; then
-              if ! grep -qP 'curl.*(get\.k3s\.io|aka\.ms/|sdk\.cloud\.google|clis\.cloud\.ibm|ollama\.com|get\.rke2\.io|raw\.githubusercontent\.com|cdn\.porter\.sh|istio\.io|oss\.kubeclipper\.io).*\|\s*(ba)?sh' "$f"; then
-                echo "::warning file=$f::curl piped to shell from non-standard source — verify URL is official"
-              fi
-            fi
-
-            # Check for force delete without grace period
-            if grep -q '\-\-force.*grace-period=0' "$f"; then
-              echo "::warning file=$f::Force delete with grace-period=0 — ensure this is intentional"
-            fi
-
-            # Detect CLA boilerplate in resolutions
-            if grep -qi 'hereby agree to the terms of the CLA\|I hereby agree.*cla' "$f"; then
-              echo "::error file=$f::Resolution contains CLA boilerplate instead of actual content"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Detect unfilled PR templates in resolutions
-            if grep -qP 'What is the problem you.re trying to solve\?|Pre-Submission checklist|Does this PR introduce a user-facing change' "$f"; then
-              echo "::error file=$f::Resolution contains unfilled PR template"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Detect force delete without grace period (extended pattern)
-            if grep -qP '\-\-force.*grace-period[= ]*0' "$f"; then
-              echo "::warning file=$f::Contains --force --grace-period=0 pattern"
-            fi
-
-            # Detect pip install kubectl/helm (wrong install method)
-            if grep -qP 'pip install (kubectl|helm)\b' "$f"; then
-              echo "::error file=$f::Uses pip install kubectl/helm — these are not the real tools"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Detect nonexistent Kubernetes versions (>v1.33)
-            if grep -qP 'v1\.(3[4-9]|[4-9][0-9])' "$f"; then
-              echo "::error file=$f::References nonexistent Kubernetes version"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Detect :latest container image tags in install missions
-            if echo "$f" | grep -q 'install'; then
-              if grep -qP 'image:.*:latest' "$f"; then
-                echo "::warning file=$f::Uses :latest tag — pin to specific version"
-              fi
-            fi
-
-            # Detect hardcoded credentials (password/token/secret/apiKey with non-placeholder values)
-            if grep -qP '"(password|token|secret|apiKey|api_key|admin_password)":\s*"(?!<[A-Z_]+>|changeme|CHANGE_ME|your-|YOUR_|xxx|placeholder)[^"]{3,}"' "$f"; then
-              echo "::warning file=$f::Possible hardcoded credential detected — verify it's a safe example value"
-            fi
-
-            # Detect leaked cloud provider hostnames
-            if grep -qP '\b(ip-\d+-\d+-\d+-\d+\.\w+-\w+-\d+\.compute\.internal|ec2-\d+-\d+-\d+-\d+\.\w+\.compute\.amazonaws\.com|compute\.googleapis\.com|\.cloudapp\.azure\.com)\b' "$f"; then
-              echo "::error file=$f::Leaked cloud provider hostname detected — must be anonymized"
-              ERRORS=$((ERRORS + 1))
-            fi
-
-            # Detect deprecated container registries
-            if grep -qP 'k8s\.gcr\.io/' "$f"; then
-              echo "::warning file=$f::Uses deprecated k8s.gcr.io registry — should use registry.k8s.io"
-            fi
-          done < files.nul
-
-          if [ $ERRORS -gt 0 ]; then
-            echo "::error::Found $ERRORS safety issues. Fix before merging."
-            exit 1
-          fi
-          echo "Safety scan passed"
+          set -o pipefail
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml' 2>/dev/null || find fixes runbooks \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) -newer .git/index)
+          node scripts/mission-safety-scan.mjs "$FILES" | tee mission-safety-scan-output.log
+      - name: Write mission safety scan summary
+        if: always()
+        run: |
+          node scripts/render-step-summary.mjs --event mission-safety-scan-summary \
+            --title 'Mission Safety Scan Summary' --log mission-safety-scan-output.log \
+            >> "$GITHUB_STEP_SUMMARY"

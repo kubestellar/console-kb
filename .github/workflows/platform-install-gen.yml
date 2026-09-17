@@ -275,10 +275,12 @@ jobs:
           echo "" >> collect-report.md
 
           NEW_COUNT=$(ls fixes/platform-install/platform-*.json 2>/dev/null | wc -l | tr -d ' ')
+          SCHEMA_ERRORS="${{ steps.schema.outputs.schema_errors || '0' }}"
+          SECURITY_BLOCKED="${{ steps.security.outputs.security_blocked || '0' }}"
           echo "## Results" >> collect-report.md
           echo "- New platform missions: $NEW_COUNT" >> collect-report.md
-          echo "- Schema errors: ${{ steps.schema.outputs.schema_errors || '0' }}" >> collect-report.md
-          echo "- Security blocked: ${{ steps.security.outputs.security_blocked || '0' }}" >> collect-report.md
+          echo "- Schema errors: $SCHEMA_ERRORS" >> collect-report.md
+          echo "- Security blocked: $SECURITY_BLOCKED" >> collect-report.md
           echo "" >> collect-report.md
 
           # Append individual reports (use nullglob to handle no matches gracefully)
@@ -287,6 +289,20 @@ jobs:
             cat "$f" >> collect-report.md
           done
           shopt -u nullglob
+
+          # Always surface run health in the Actions UI, even when no PR is
+          # created (e.g. every generated mission was rejected by schema
+          # validation or the security scan). Without this, a 100%-rejection
+          # run is silently invisible outside raw job logs.
+          {
+            echo "### 🌱 Platform Install Generation Summary"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| New platform missions | $NEW_COUNT |"
+            echo "| Schema errors | $SCHEMA_ERRORS |"
+            echo "| Security blocked | $SECURITY_BLOCKED |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create PR
         env:
