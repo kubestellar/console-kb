@@ -5,23 +5,21 @@ import { scanMissionFile } from '../scanner.mjs'
 /**
  * Regression guard for #3295.
  *
- * `fuzz-mission-scanner.mjs::fuzzMissionScanner` currently counts every input
- * as "handled" regardless of whether the scanner actually rejected it. That
- * makes the `Fuzz mission scanner` step in `.github/workflows/fuzz.yml`
+ * `fuzz-mission-scanner.mjs::fuzzMissionScanner` used to count every input
+ * as "handled" regardless of whether the scanner actually rejected it,
+ * which made the `Fuzz mission scanner` step in `.github/workflows/fuzz.yml`
  * tautologically green — a regression that made `scanMissionFile` silently
- * return `{ schema: { valid: true } }` on garbage would go undetected.
+ * return `{ schema: { valid: true } }` on garbage would have gone
+ * undetected. `fuzzMissionScanner` now only counts an input as "handled"
+ * when it is actually rejected (see console-kb#3295, console-kb#3383), and
+ * the workflow calls it directly instead of an inline heredoc.
  *
- * This suite asserts the actual property the workflow step is *supposed* to
- * enforce: every entry in the module's own MALFORMED_INPUTS set must be
- * flagged by `scanMissionFile` (via `.error` truthy OR `.schema.valid ===
- * false`). If any input silently validates, this test fails — surfacing the
- * exact regression class the fuzz step should have caught.
- *
- * Scope note: this test intentionally does NOT modify
- * `fuzzMissionScanner`'s current tautological semantics or the workflow
- * itself. Fixing the counter and rewiring the workflow to call
- * `node scripts/fuzz-mission-scanner.mjs` are the workflow-write half of
- * #3295 and require a merge-tier agent.
+ * This suite asserts the underlying property directly against
+ * `scanMissionFile` (independent of `fuzzMissionScanner`'s own counting
+ * logic): every entry in the module's own MALFORMED_INPUTS set must be
+ * flagged (via `.error` truthy OR `.schema.valid === false`). If any input
+ * silently validates, this test fails — surfacing the exact regression
+ * class the fuzz step is supposed to catch.
  */
 describe('fuzz-mission-scanner MALFORMED_INPUTS regression guard (#3295)', () => {
   const isRejected = result =>

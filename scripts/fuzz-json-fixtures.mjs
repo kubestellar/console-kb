@@ -11,15 +11,11 @@
  * `validate-schema.mjs`'s `schema-validation-summary` event) in addition
  * to the existing human-readable console output.
  *
- * This is intentionally a STANDALONE, unit-tested script — it does not
- * modify `.github/workflows/fuzz.yml`. Creating/updating a workflow file
- * requires the GitHub App `workflows` permission, which this repo's
- * telemetry automation does not hold (see PR #3308 for the same
- * constraint). A maintainer with that permission can replace the inline
- * heredoc step with:
- *
- *   - name: Property-based testing for JSON schema
- *     run: node scripts/fuzz-json-fixtures.mjs
+ * `.github/workflows/fuzz.yml` now runs this script directly (`node
+ * scripts/fuzz-json-fixtures.mjs`) instead of the inline heredoc, and its
+ * structured `fuzz-json-fixtures-summary` line is rendered into
+ * `$GITHUB_STEP_SUMMARY` by `render-ci-step-summary.mjs` (see
+ * console-kb#3295, console-kb#3383).
  *
  * No new dependency, no network calls, no exporter — only formats
  * already-computed local counts for the Actions step log / a future

@@ -12,19 +12,13 @@
  * `validate-schema.mjs`) in addition to the existing human-readable
  * console output.
  *
- * This is intentionally a STANDALONE, unit-tested script — it does not
- * modify `.github/workflows/fuzz.yml`. Creating/updating a workflow file
- * requires the GitHub App `workflows` permission, which this repo's
- * telemetry automation does not hold (see PR #3308 for the same
- * constraint). A maintainer with that permission can replace the inline
- * heredoc step with:
- *
- *   - name: Fuzz mission scanner
- *     run: node scripts/fuzz-mission-scanner.mjs
- *
- * No new dependency, no network calls, no exporter — only formats
- * already-computed local counts for the Actions step log / a future
- * $GITHUB_STEP_SUMMARY consumer.
+ * `.github/workflows/fuzz.yml` now runs this script directly (`node
+ * scripts/fuzz-mission-scanner.mjs`) instead of the inline heredoc, and
+ * its structured `fuzz-mission-scanner-summary` line is rendered into
+ * `$GITHUB_STEP_SUMMARY` by `render-ci-step-summary.mjs` (see
+ * console-kb#3295, console-kb#3383). `fuzzMissionScanner()` below counts
+ * an input as "handled" only when the scanner actually rejects it — no
+ * new dependency, no network calls, no exporter.
  */
 import { scanMissionFile } from './scanner.mjs'
 import { createLogger } from './lib/logger.mjs'
@@ -41,16 +35,23 @@ export const MALFORMED_INPUTS = [
 
 /**
  * Runs `scanMissionFile` against each of `inputs` and counts how many are
- * "handled gracefully" (an error result, or an invalid-schema result,
- * counts the same as any other completed scan — the scanner must not
- * throw). Returns `{ total, handled }`. Exported for unit testing; does
- * not call process.exit or console.log.
+ * actually rejected by the scanner (`.error` truthy, or `.schema.valid ===
+ * false`). This is a real property assertion, not a tautology: an input
+ * that silently comes back as `{ schema: { valid: true } }` (or otherwise
+ * validates cleanly) is NOT counted as handled, so a regression that makes
+ * the scanner too permissive on malformed input shows up as
+ * `handled < total` instead of staying green (see console-kb#3295, and the
+ * matching unit-level regression guard in
+ * `__tests__/fuzz-mission-scanner-rejection.test.mjs`). Returns
+ * `{ total, handled }`. Exported for unit testing; does not call
+ * process.exit or console.log.
  */
 export function fuzzMissionScanner(inputs = MALFORMED_INPUTS) {
   let handled = 0
   for (const input of inputs) {
-    scanMissionFile(input)
-    handled += 1
+    const result = scanMissionFile(input)
+    const rejected = Boolean(result?.error) || result?.schema?.valid === false
+    if (rejected) handled += 1
   }
   return { total: inputs.length, handled }
 }

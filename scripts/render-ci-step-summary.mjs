@@ -6,15 +6,16 @@
  * plus one bounded structured summary JSON line emitted via
  * scripts/lib/logger.mjs's `summary()` helper — e.g.
  * `schema-validation-summary` from validate-schema.mjs,
- * `kb-quality-ci-summary` from test-kb-quality-ci.mjs) from stdin, and
- * renders that summary as a GitHub Actions job-summary markdown table
- * on stdout.
+ * `kb-quality-ci-summary` from test-kb-quality-ci.mjs,
+ * `fuzz-json-fixtures-summary` from fuzz-json-fixtures.mjs, and
+ * `fuzz-mission-scanner-summary` from fuzz-mission-scanner.mjs) from
+ * stdin, and renders that summary as a GitHub Actions job-summary
+ * markdown table on stdout.
  *
- * This is a STANDALONE, unit-tested script. It intentionally does not
- * modify any `.github/workflows/*.yml` file — creating/updating a
- * workflow file requires the GitHub App `workflows` permission, which
- * this repo's telemetry automation does not hold. A maintainer with
- * that permission can wire this in with a small `if: always()` step:
+ * This is a STANDALONE, unit-tested script, wired into
+ * `.github/workflows/fuzz.yml` (see console-kb#3383) with an
+ * `if: always()` step so a structured summary is posted even when an
+ * earlier fuzz step fails:
  *
  *   # .github/workflows/validate-schema.yml, after each existing
  *   # "Validate schema" run step (piped through `tee
@@ -62,6 +63,22 @@ const KNOWN_EVENTS = {
       ['failed', 'Failed'],
     ],
     result: s => ((s.failed ?? 0) > 0 ? '❌ fail' : '✅ pass'),
+  },
+  'fuzz-json-fixtures-summary': {
+    fields: [
+      ['scanned', 'Files scanned'],
+      ['errors', 'Parse errors'],
+      ['durationMs', 'Duration (ms)'],
+    ],
+    result: s => ((s.errors ?? 0) > 0 ? '❌ fail' : '✅ pass'),
+  },
+  'fuzz-mission-scanner-summary': {
+    fields: [
+      ['total', 'Malformed inputs'],
+      ['handled', 'Rejected by scanner'],
+      ['durationMs', 'Duration (ms)'],
+    ],
+    result: s => (s.handled === s.total ? '✅ pass' : '❌ fail'),
   },
 }
 

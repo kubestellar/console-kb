@@ -16,6 +16,9 @@ jobs:
     name: Fuzz JavaScript parsers
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,69 +32,44 @@ jobs:
         working-directory: scripts
         run: npm ci
 
-      - name: Run fuzz tests
+      - name: Run scanner regression test suite
+        id: unit-tests
         working-directory: scripts
         run: npm test
         env:
           NODE_ENV: test
-          FUZZ_ITERATIONS: 1000
 
       - name: Property-based testing for JSON schema
-        run: |
-          node --input-type=module <<'EOF'
-          import { readFileSync, readdirSync } from 'node:fs'
-          import { join } from 'node:path'
-
-          const fixesDirs = ['fixes/cncf-generated', 'fixes/cncf-install', 'fixes/llm-d', 'fixes/platform-install']
-          let errors = 0
-
-          for (const dir of fixesDirs) {
-            try {
-              const files = readdirSync(dir, { recursive: true }).filter(file => file.endsWith('.json'))
-              for (const file of files) {
-                try {
-                  JSON.parse(readFileSync(join(dir, file), 'utf-8'))
-                } catch (error) {
-                  console.error(`Parse error in ${dir}/${file}:`, error.message)
-                  errors += 1
-                }
-              }
-            } catch {
-              // Directory might not exist in smaller checkouts.
-            }
-          }
-
-          if (errors > 0) {
-            console.error(`\nFuzzing found ${errors} JSON parsing errors`)
-            process.exit(1)
-          }
-
-          console.log('✓ All JSON files parsed successfully')
-          EOF
+        id: json-schema
+        if: always()
+        run: node scripts/fuzz-json-fixtures.mjs | tee fuzz-json-fixtures-output.log
 
       - name: Fuzz mission scanner
+        id: mission-scanner
+        if: always()
+        run: node scripts/fuzz-mission-scanner.mjs | tee fuzz-mission-scanner-output.log
+
+      - name: Post fuzz summary
+        if: always()
         run: |
-          node --input-type=module <<'EOF'
-          import { scanMissionFile } from './scripts/scanner.mjs'
+          echo "### 🧪 Fuzzing Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          const malformedInputs = [
-            '{"version":"kc-mission-v1"}',
-            '{"name":null}',
-            '{"steps":[]}',
-            '{"metadata":{"tags":["'.repeat(1000) + '"]}}',
-          ]
+          echo "#### Scanner regression test suite" >> "$GITHUB_STEP_SUMMARY"
+          echo "Result: ${{ steps.unit-tests.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          console.log('Fuzzing scanner with malformed inputs...')
-          let handled = 0
+          echo "#### JSON fixture fuzzing" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fuzz-json-fixtures-output.log ]; then
+            node scripts/render-ci-step-summary.mjs < fuzz-json-fixtures-output.log >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No output captured (step skipped or produced no log)._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          for (const input of malformedInputs) {
-            const result = scanMissionFile(input)
-            if (result.error || (result.schema && !result.schema.valid)) {
-              handled += 1
-              continue
-            }
-            handled += 1
-          }
-
-          console.log(`✓ Handled ${handled}/${malformedInputs.length} malformed inputs gracefully`)
-          EOF
+          echo "#### Mission scanner fuzzing" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fuzz-mission-scanner-output.log ]; then
+            node scripts/render-ci-step-summary.mjs < fuzz-mission-scanner-output.log >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No output captured (step skipped or produced no log)._" >> "$GITHUB_STEP_SUMMARY"
+          fi
