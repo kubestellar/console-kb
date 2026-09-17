@@ -82,52 +82,72 @@ export function runScan(files, { isFullScan } = {}) {
   return { hasFailures, scannedCount, failedCount, total: files.length, report: sections.join('\n\n') };
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  const isFullScan = args.includes('--all');
+/**
+ * In-process CLI entry point. Runs the scan, writes `scan-results.md`,
+ * mirrors the report into `$GITHUB_STEP_SUMMARY` when set, emits the
+ * `mission-scan-summary` structured line, and returns a POSIX exit
+ * code (0 = clean scan, 1 = at least one failure).
+ *
+ * `argv`, `env`, `stdout`, `stderr`, `clock`, `writeFile`, `appendFile`,
+ * and `discoverFiles` are injectable so tests can drive the CLI path
+ * in-process — v8 does not attribute subprocess coverage back to the
+ * parent, so an in-process drive is the only way this branch is
+ * measured (see console-kb#3398).
+ */
+export function runCli({
+  argv = process.argv.slice(2),
+  env = process.env,
+  stdout = console.log,
+  stderr = console.error,
+  clock = Date.now,
+  writeFile = writeFileSync,
+  appendFile = appendFileSync,
+  discoverFiles = discoverMissionFiles,
+} = {}) {
+  const isFullScan = argv.includes('--all');
   const trigger = isFullScan ? 'all' : 'changed-files';
-  const startedAt = Date.now();
+  const startedAt = clock();
 
   let files;
   if (isFullScan) {
     // Discover all mission files under fixes/ (used for push/schedule/dispatch)
-    files = discoverMissionFiles('fixes');
-    console.log(`Discovered ${files.length} mission files to scan.\n`);
+    files = discoverFiles('fixes');
+    stdout(`Discovered ${files.length} mission files to scan.\n`);
   } else {
     // Each changed file is delivered as its own argv entry (see
     // scan-missions.yml, which uses `git diff -z ... | xargs -0` / `mapfile`
     // to build "${FILES[@]}"). Do NOT re-split on whitespace here: a mission
     // file whose path contains a space or tab would otherwise be silently
     // broken into two nonexistent paths, causing the scan to no-op on it.
-    files = args.filter(Boolean);
+    files = argv.filter(Boolean);
   }
 
   if (files.length === 0) {
-    console.log('No mission files to scan.');
+    stdout('No mission files to scan.');
     log.summary('mission-scan-summary', {
       level: 'info',
       trigger,
       total: 0,
       scannedCount: 0,
       failedCount: 0,
-      durationMs: Date.now() - startedAt,
+      durationMs: clock() - startedAt,
     });
-    process.exit(0);
+    return 0;
   }
 
   const { hasFailures, scannedCount, failedCount, total, report } = runScan(files, { isFullScan });
-  const durationMs = Date.now() - startedAt;
+  const durationMs = clock() - startedAt;
 
-  writeFileSync('scan-results.md', report, 'utf8');
-  console.log(report);
+  writeFile('scan-results.md', report, 'utf8');
+  stdout(report);
 
   // Surface the same report in the GitHub Actions run summary for every
   // trigger (PR, push, schedule, workflow_dispatch) — not just the PR-comment
   // path — so a scheduled/push scan regressing is visible without opening raw
   // logs. GITHUB_STEP_SUMMARY is already set by the Actions runner for every
   // job; no workflow YAML change is required to write to it.
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${report}\n`, 'utf8');
+  if (env.GITHUB_STEP_SUMMARY) {
+    appendFile(env.GITHUB_STEP_SUMMARY, `${report}\n`, 'utf8');
   }
 
   log.summary('mission-scan-summary', {
@@ -140,15 +160,14 @@ function main() {
   });
 
   if (hasFailures) {
-    console.error('\n❌ Scan completed with failures.');
-    process.exit(1);
-  } else {
-    console.log('\n✅ All missions passed scanning.');
-    process.exit(0);
+    stderr('\n❌ Scan completed with failures.');
+    return 1;
   }
+  stdout('\n✅ All missions passed scanning.');
+  return 0;
 }
 
 // CLI entry point
 if (process.argv[1] && process.argv[1].endsWith('scan-pr.mjs')) {
-  main();
+  process.exit(runCli());
 }
