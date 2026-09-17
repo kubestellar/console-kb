@@ -94,7 +94,12 @@ function main() {
     files = discoverMissionFiles('fixes');
     console.log(`Discovered ${files.length} mission files to scan.\n`);
   } else {
-    files = args.flatMap(a => a.split(/\s+/)).filter(Boolean);
+    // Each changed file is delivered as its own argv entry (see
+    // scan-missions.yml, which uses `git diff -z ... | xargs -0` / `mapfile`
+    // to build "${FILES[@]}"). Do NOT re-split on whitespace here: a mission
+    // file whose path contains a space or tab would otherwise be silently
+    // broken into two nonexistent paths, causing the scan to no-op on it.
+    files = args.filter(Boolean);
   }
 
   if (files.length === 0) {

@@ -99,18 +99,33 @@ describe('scan-pr.mjs CLI', () => {
     })
   })
 
-  it('splits whitespace-joined argv into multiple file paths', () => {
-    // scan-pr.mjs does `args.flatMap(a => a.split(/\s+/))` so callers can
-    // pass "a.json b.json" as one arg (a common shell-quoting outcome from
-    // GitHub Actions `steps.changed-files.outputs.all_changed_files`).
+  it('scans multiple files when each is passed as its own argv entry', () => {
+    // Callers (scan-missions.yml) must pass one path per argv entry, e.g.
+    // via `node scripts/scan-pr.mjs "${FILES[@]}"` after a NUL-delimited
+    // `git diff -z` + `mapfile -d ''`. scan-pr.mjs must NOT re-split argv on
+    // whitespace: doing so silently breaks any mission file whose path
+    // contains a space or tab into nonexistent paths (see #3280).
     withTempDir(dir => {
       writeFileSync(join(dir, 'a.json'), JSON.stringify(VALID_MISSION))
       writeFileSync(join(dir, 'b.json'), JSON.stringify(VALID_MISSION))
-      const result = runScanPR(dir, ['a.json b.json'])
+      const result = runScanPR(dir, ['a.json', 'b.json'])
       expect(result.status).toBe(0)
       const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
       expect(report).toContain('a.json')
       expect(report).toContain('b.json')
+    })
+  })
+
+  it('does not word-split a single argv entry whose path contains a space', () => {
+    // Regression test for #3280: a mission file path with a whitespace
+    // character must be treated as one path, not split into two (likely
+    // nonexistent) paths that silently skip the scan.
+    withTempDir(dir => {
+      writeFileSync(join(dir, 'my mission.json'), JSON.stringify(VALID_MISSION))
+      const result = runScanPR(dir, ['my mission.json'])
+      expect(result.status).toBe(0)
+      const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
+      expect(report).toContain('my mission.json')
     })
   })
 

@@ -23,10 +23,23 @@ jobs:
         run: |
           ERRORS=0
 
-          # Get changed JSON/YAML files
-          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 2>/dev/null || find fixes -name '*.json' -o -name '*.yaml' -o -name '*.yml' -newer .git/index)
+          # NUL-delimited changed-file list: a plain `$(...)` word-split (the
+          # previous approach) lets a mission file whose path contains a
+          # space or tab bypass every check below, since the split halves
+          # neither exist as files nor match any pattern (see #3280).
+          if ! git diff --name-only -z ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' > files.nul 2>/dev/null; then
+            find fixes \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) -newer .git/index -print0 > files.nul
+          fi
 
-          for f in $FILES; do
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              *[[:space:]]*)
+                echo "::error file=$f::Mission file paths must not contain whitespace"
+                ERRORS=$((ERRORS + 1))
+                continue
+                ;;
+            esac
+
             [ -f "$f" ] || continue
 
             # Check for kubectl delete namespace/all patterns
@@ -139,7 +152,7 @@ jobs:
             if grep -qP 'k8s\.gcr\.io/' "$f"; then
               echo "::warning file=$f::Uses deprecated k8s.gcr.io registry — should use registry.k8s.io"
             fi
-          done
+          done < files.nul
 
           if [ $ERRORS -gt 0 ]; then
             echo "::error::Found $ERRORS safety issues. Fix before merging."
