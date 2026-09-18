@@ -42,29 +42,27 @@ to manually check for and respond to a silent failure.
 
 The silent-failure gap above is not limited to cron-triggered workflows.
 `PR Verifier` (`.github/workflows/pr-verifier.yml`, `on: pull_request_target`)
-calls a reusable workflow via a pinned `uses:` SHA
+called a reusable workflow via a pinned `uses:` SHA
 (`kubestellar/infra/.github/workflows/reusable-pr-verifier.yml@1a04a3fd...`)
-and has had a **100% `startup_failure`/`failure` rate on every run since at
-least 2026-08-30** — still failing as of this writing (2026-09-14, 30/30 most
-recent runs `conclusion: failure`, `0` jobs ever created on any of them).
-This is a currently-active, confirmed incident, tracked in
-[#3336](https://github.com/kubestellar/console-kb/issues/3336), not a
-theoretical gap: every PR opened, edited, synced, or reopened in this window
-has received zero verifier feedback, with nothing distinguishing that from a
-healthy "no issues found" result.
+and had a **100% `startup_failure`/`failure` rate on every run from at least
+2026-08-30 through 2026-09-17** (100+ consecutive runs, `0` jobs ever created
+on any of them) — tracked in
+[#3336](https://github.com/kubestellar/console-kb/issues/3336). Every PR
+opened, edited, synced, or reopened in that window received zero verifier
+feedback, with nothing distinguishing that from a healthy "no issues found"
+result.
 
-Three sibling callers pinned to the *same* SHA —
-`assignment-helper.yml`/`reusable-assignment-helper.yml`,
-`copilot-dco.yml`/`reusable-copilot-dco.yml`, and
-`greetings.yml`/`reusable-greetings.yml` — currently run successfully
-(`skipped`/`success`, not `failure`) on that identical pin, so the stale pin
-alone does not explain `pr-verifier.yml`'s failure; the reusable file's
-interface at that exact commit appears to specifically mismatch this one
-caller. Repinning to `220beeeb8dae67e2fd8e89338ada8144609fc6ef` (the SHA
-already used successfully in this repo by `add-help-wanted.yml`, `ai-fix.yml`,
-`copilot-automation.yml`, `scorecard.yml`, and `stale.yml`) is the suggested
-fix — see #3336 for the full evidence and diff. That edit requires
-`workflows` permission this runbook's authoring credentials do not have.
+**Fixed**: the target `reusable-pr-verifier.yml` did not exist in
+`kubestellar/infra` at *any* pin (confirmed org-wide across several
+KubeStellar repos calling the same reusable workflow), so no SHA repin could
+have worked. PR [#3441](https://github.com/kubestellar/console-kb/pull/3441)
+(merged 2026-09-17) replaced the call with a minimal self-contained
+title/body check instead, closing #3336. Runs have created real jobs and
+returned `success`/`failure` based on actual PR content since
+2026-09-17T14:20 UTC. This history is kept here as a worked example of the
+detection technique below, and because the underlying gap it demonstrates —
+no alert distinguishing a `startup_failure` from a healthy run — is still
+open for event-triggered reusable-workflow callers generally.
 
 Detection for this class of failure differs from the scheduled table above
 because there is no fixed cadence to check against — instead, check the

@@ -40,7 +40,7 @@ first four fixes.
 | 2026-08-07 | Incident 4 filed as #2975: same failure signature again — reusable target missing, 100% failure rate. Closed same day. |
 | 2026-08-26 | A security-hardening PR (#3022) repins `pr-verifier.yml` and eight sibling reusable-workflow callers to `kubestellar/infra` SHA `1a04a3fd` (see the sibling postmortem, `postmortem-2026-08-stale-workflow-startup-failure.md`, for the `stale.yml`-specific consequences of this same repin). |
 | 2026-08-29 – 2026-08-30 | `stale.yml` incident (separate postmortem) triggers a repo-wide pin audit; #3071 finds 9 files still on the stale `1a04a3fd` SHA. 5 of 9 are repinned by #3074; `pr-verifier.yml` is one of 4 files left on the stale pin as a residual follow-up. |
-| 2026-08-30 onward | Incident 5 (current, ongoing): `pr-verifier.yml` begins failing `startup_failure` on the stale `1a04a3fd` pin. Confirmed still failing as of 2026-09-11/12 across 100+ consecutive runs, 0 jobs ever created. |
+| 2026-08-30 – 2026-09-17 | Incident 5: `pr-verifier.yml` begins failing `startup_failure` on the stale `1a04a3fd` pin. Confirmed still failing as of 2026-09-11/12 across 100+ consecutive runs, 0 jobs ever created. Fixed 2026-09-17 by PR #3441, which replaced the reusable-workflow call with a self-contained check, closing #3336. |
 | 2026-09-11 | Incident 5 filed as an active issue, #3336. |
 | 2026-09-12 | This retrospective filed (#3348) after noticing incidents 1–4 were each closed without a postmortem, despite sharing the same failure signature as incident 5. |
 
@@ -100,7 +100,7 @@ the same failure mode remains free to recur a sixth time.
 
 | Action | Owner | Tracking issue |
 |--------|-------|----------------|
-| Repin `pr-verifier.yml`'s `uses:` SHA to match sibling repos' baseline | unassigned — requires `workflows` permission no current hive agent credential set has | #3336 |
+| Repin `pr-verifier.yml`'s `uses:` SHA to match sibling repos' baseline | done — #3441 replaced the call with a self-contained check instead of a repin, since the target reusable workflow doesn't exist at any pin | #3336 (closed by #3441) |
 | Add a scheduled check that validates every `uses: kubestellar/infra/...@<sha>` reference in this repo's workflows resolves and matches its callee's declared `on.workflow_call` interface, so a stale/broken pin is caught before (or immediately after) it starts failing, independent of any one workflow's own trigger type | unassigned — requires `workflows` permission no current hive agent credential set has | #3348 (this retrospective) |
 | Write this retrospective covering all five incidents as one document, and index it in both operational-runbook tables | operations (done) | #3348 |
 
