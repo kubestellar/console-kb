@@ -37,7 +37,16 @@ const MALICIOUS_PATTERNS = [
   { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:ba)?sh/gi },
   // env / xargs / find shell-interpreter escapes
   // `env bash -c '...'` bypasses binary allowlists even when shell:false is set.
-  { name: 'Allowlist escape via env', pattern: /\benv\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  // env(1) accepts three token shapes before the command:
+  //   * short/long option flags     (`-i`, `--ignore-environment`)
+  //   * flags whose value is a separate argv token (`-u VAR`, `-C DIR`, `-S 'a b'`)
+  //   * `NAME=value` variable assignments (posix), of which there can be many
+  // The earlier regex only accepted dash-prefixed tokens, so
+  // `env FOO=bar bash -c evil` and `env -u PATH bash -c evil` slipped past
+  // the scanner even though they are the standard shapes for this bypass.
+  // Use a negative lookahead: skip any non-interpreter token, then require
+  // one of the known interpreter binaries.
+  { name: 'Allowlist escape via env', pattern: /\benv\b(?:\s+(?!(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b)\S+)*\s+(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
   { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
   { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
   // awk / sed carry their own DSL execute primitives — the wrapper binaries

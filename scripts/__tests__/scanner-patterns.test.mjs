@@ -210,6 +210,25 @@ describe('scanForMaliciousContent — command-injection surfaces', () => {
     expect(findingTypes(findings)).toContain('Allowlist escape via env')
   })
 
+  it.each([
+    ['env FOO=bar bash -c "id"'],
+    ['env A=1 B=2 sh -c "id"'],
+    ['env FOO=x python -c "import os; os.system(1)"'],
+    ['env -u PATH bash -c "id"'],
+    ['env FOO=bar -u PATH bash -c "id"'],
+    ['env -i FOO=x -u BAR python3 -c "print(1)"'],
+  ])('flags an env-based escape with variable/separate-arg tokens: %s', (cmd) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain('Allowlist escape via env')
+  })
+
+  it('does not flag benign env usage without an interpreter', () => {
+    const { findings } = scanForMaliciousContent(
+      mission('env FOO=bar make build')
+    )
+    expect(findingTypes(findings)).not.toContain('Allowlist escape via env')
+  })
+
   it('flags an xargs-based shell interpreter escape', () => {
     const { findings } = scanForMaliciousContent(
       mission('echo id | xargs bash -c')
