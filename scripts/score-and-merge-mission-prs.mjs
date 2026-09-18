@@ -43,7 +43,7 @@ function checkRequiredChecks(prNumber) {
   return requiredChecksPassed(checksJson, REQUIRED_CHECKS)
 }
 
-async function main() {
+export async function main() {
   // Find open PRs with the cncf-mission-gen label created recently
   const prsJson = gh(['pr', 'list', '--label', LABEL, '--state', 'open', '--json', 'number,headRefName,title,createdAt', '--limit', '50'])
   const prs = JSON.parse(prsJson)
@@ -108,7 +108,14 @@ async function main() {
   console.log(`\nDone: ${merged} merged, ${failed} left for review`)
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+// When invoked as a script (node score-and-merge-mission-prs.mjs), run
+// main(). Skip main() on import so unit tests can exercise the module
+// (and verify no accidental live `gh` calls happen at import time)
+// without kicking off the full auto-merge orchestration. This mirrors
+// the guard already used by ci-test-summary.mjs.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })
+}
