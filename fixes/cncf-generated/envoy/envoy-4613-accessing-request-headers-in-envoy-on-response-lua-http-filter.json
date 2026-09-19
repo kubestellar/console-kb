@@ -1,0 +1,77 @@
+{
+  "version": "kc-mission-v1",
+  "name": "envoy-4613-accessing-request-headers-in-envoy-on-response-lua-http-filter",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "envoy: Accessing request headers in envoy_on_response (lua HTTP filter).",
+    "description": "Accessing request headers in envoy_on_response (lua HTTP filter).. Requested by 17+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current envoy deployment",
+        "description": "Verify your envoy version and configuration:\n```bash\nkubectl get pods -n envoy -l app.kubernetes.io/name=envoy\nhelm list -n envoy 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working envoy installation."
+      },
+      {
+        "title": "Review envoy configuration",
+        "description": "Inspect the relevant envoy configuration:\n```bash\nkubectl get all -n envoy -l app.kubernetes.io/name=envoy\nkubectl get configmap -n envoy -l app.kubernetes.io/part-of=envoy\n```\nI'm trying to use a [lua HTTP filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http_filters/lua_filter) to set a response header whose value depends on a request header."
+      },
+      {
+        "title": "Apply the fix for Accessing request headers in envoy_on_response (lua HTTP…",
+        "description": "Commit Message: lua: add `requestHeaders()` accessor for response path\nAdditional Description: Adds `requestHeaders()` to the response handle so `envoy_on_response` can read what the request carried. Today the only routes from request to response are dynamic metadata and filter state, both of which\n```yaml\n- name: envoy.filters.http.lua\n            typed_config:\n              \"@type\": type.googleapis.com/envoy.config.filter.http.lua.v2.Lua\n              inline_code: |\n                function envoy_on_request(request_handle)\n                  request_handle:streamInfo():dynamicMetadata():set(\"context\", \"foo\", \"bar\")\n                end\n                function envoy_on_response(response_handle)\n                  local foo = response_handle:streamInfo():dynamicMetadata():get(\"context\")[\"foo\"]\n                  response_handle:logInfo(foo)\n                end\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n envoy -l app.kubernetes.io/name=envoy\nkubectl get events -n envoy --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Accessing request headers in envoy_on_response (lua HTTP…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "Commit Message: lua: add `requestHeaders()` accessor for response path\nAdditional Description: Adds `requestHeaders()` to the response handle so `envoy_on_response` can read what the request carried. Today the only routes from request to response are dynamic metadata and filter state, both of which cost a serialisation per request.\n\nThe returned handle is writable.",
+      "codeSnippets": [
+        "- name: envoy.filters.http.lua\n            typed_config:\n              \"@type\": type.googleapis.com/envoy.config.filter.http.lua.v2.Lua\n              inline_code: |\n                function envoy_on_request(request_handle)\n                  request_handle:streamInfo():dynamicMetadata():set(\"context\", \"foo\", \"bar\")\n                end\n                function envoy_on_response(response_handle)\n                  local foo = response_handle:streamInfo():dynamicMetadata():get(\"context\")[\"foo\"]\n                  response_handle:logInfo(foo)\n                end",
+        "name: envoy.lua\n        typed_config:\n          \"@type\": \"type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua\"\n          inlineCode: |\n            function envoy_on_request(request_handle)\n              request_handle:streamInfo():dynamicMetadata():set(\"context\",\"bar \", \"foo\")\n            end\n            function envoy_on_response(response_handle)\n              local val = response_handle:streamInfo():dynamicMetadata():get(\"context\")[\"foo\"]\n              response_handle:headers():add(\"x-custom-header\", val)\n            end",
+        "function envoy_on_request(request_handle)\n                local request_headers = request_handle:headers()\n                local headers = {}\n                for key, value in pairs(request_headers) do\n                  headers[key] = value\n                end\n                request_handle:streamInfo():dynamicMetadata():set(\"context\", \"request.info\", headers)\n              end\n\n              function envoy_on_response(response_handle)\n                local request_headers = response_handle:streamInfo():dynamicMetadata():get(\"context\")[\"request.info\"]\n                local response_headers = response_handle:headers()\n                local status = response_headers:get(\":status\")\n                if not isempty(status) then\n                  local asNumber = tonumber(status)\n                "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "envoy",
+      "graduated",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "envoy"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/envoyproxy/envoy/issues/4613",
+      "repo": "https://github.com/envoyproxy/envoy",
+      "pr": "https://github.com/envoyproxy/envoy/pull/44594"
+    },
+    "reactions": 17,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with envoy installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-09-19T06:16:54.689Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
