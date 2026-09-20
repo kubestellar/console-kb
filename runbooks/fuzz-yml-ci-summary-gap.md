@@ -1,11 +1,17 @@
 # Runbook: `fuzz.yml` has no structured CI-observability summary
 
-## Status: blocked on GitHub App token permission (`workflows` scope)
+## Status: resolved (historical context only)
 
 Tracked in [#3316](https://github.com/kubestellar/console-kb/issues/3316)
-(closed, but the underlying `fuzz.yml` fix was never applied — the closing
-commit only added this runbook and the `docs/slo.md` follow-up entry, so
-this "blocked" status is still accurate).
+(closed). The gap this runbook describes is now fixed on `master`: PR
+[#3431](https://github.com/kubestellar/console-kb/pull/3431) (merged
+2026-09-17) added an `if: always()` step-summary step to
+`.github/workflows/fuzz.yml`, using a different implementation than the
+"ready-to-apply diff" preserved below (it calls the standalone
+`scripts/fuzz-json-fixtures.mjs` / `scripts/fuzz-mission-scanner.mjs`
+scripts instead of the inline heredocs this diff assumed). The diff below
+is preserved as historical context for how the gap was first analyzed; it
+is **not** a pending action and should not be reapplied.
 
 ## Gap
 
