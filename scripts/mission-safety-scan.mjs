@@ -217,12 +217,26 @@ export function runSafetyScan(files) {
   return { filesScanned, errorCount, warningCount, findings }
 }
 
+/**
+ * Splits the CLI arg vector into an array of paths.
+ *
+ * The upstream workflow (`.github/workflows/mission-safety-scan.yml`) passes
+ * paths as a single quoted argument produced by `git diff --name-only …`,
+ * which is newline-separated. Splitting on any whitespace (`/\s+/`) would
+ * silently break a mission whose path contains a space or tab into two
+ * nonexistent paths — the loop's `readFileSync` catch then skips them
+ * without emitting a finding, so the scanner reports "Safety scan passed"
+ * on a file it never actually opened (issue #3470, same class as the
+ * `scan-pr.mjs` bypass fixed in #3280). Split on newline only so
+ * whitespace-in-path is preserved end-to-end.
+ */
+export function parseCliFiles(rawArgs) {
+  return rawArgs.flatMap(a => a.split(/\r?\n/)).filter(Boolean)
+}
+
 function main() {
   const startedAt = Date.now()
-  const files = process.argv
-    .slice(2)
-    .flatMap(a => a.split(/\s+/))
-    .filter(Boolean)
+  const files = parseCliFiles(process.argv.slice(2))
 
   const { filesScanned, errorCount, warningCount, findings } = runSafetyScan(files)
 

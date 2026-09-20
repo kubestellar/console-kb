@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { scanFileForSafetyIssues, runSafetyScan } from '../mission-safety-scan.mjs'
+import { scanFileForSafetyIssues, runSafetyScan, parseCliFiles } from '../mission-safety-scan.mjs'
 
 describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', () => {
   it('flags kubectl delete namespace/all --all as an error', () => {
@@ -191,5 +191,45 @@ describe('mission-safety-scan.mjs runSafetyScan (CI observability)', () => {
   it('reports zero findings and zero scanned when given no files', () => {
     const result = runSafetyScan([])
     expect(result).toEqual({ filesScanned: 0, errorCount: 0, warningCount: 0, findings: [] })
+  })
+})
+
+describe('mission-safety-scan.mjs parseCliFiles (whitespace-in-path bypass — #3470)', () => {
+  it('preserves a path containing a space as a single entry', () => {
+    // The workflow feeds `git diff --name-only` output as one quoted arg,
+    // newline-separated. A splitter that tokenizes on any whitespace would
+    // break `fixes/foo bar.json` into `fixes/foo` and `bar.json` — both
+    // fail readFileSync and the scanner silently reports "passed".
+    expect(parseCliFiles(['fixes/foo bar.json'])).toEqual(['fixes/foo bar.json'])
+  })
+
+  it('preserves a path containing a tab as a single entry', () => {
+    expect(parseCliFiles(['fixes/foo\tbar.json'])).toEqual(['fixes/foo\tbar.json'])
+  })
+
+  it('splits a newline-separated multi-file arg into distinct paths', () => {
+    expect(parseCliFiles(['fixes/a.json\nfixes/b.json\nfixes/c.json'])).toEqual([
+      'fixes/a.json',
+      'fixes/b.json',
+      'fixes/c.json',
+    ])
+  })
+
+  it('preserves whitespace-in-path across a mixed newline-separated batch', () => {
+    expect(parseCliFiles(['fixes/foo bar.json\nfixes/c.json'])).toEqual([
+      'fixes/foo bar.json',
+      'fixes/c.json',
+    ])
+  })
+
+  it('drops empty entries from blank lines', () => {
+    expect(parseCliFiles(['\nfixes/a.json\n\n'])).toEqual(['fixes/a.json'])
+  })
+
+  it('treats each argv entry independently (workflow may pass multiple)', () => {
+    expect(parseCliFiles(['fixes/a b.json', 'fixes/c.json'])).toEqual([
+      'fixes/a b.json',
+      'fixes/c.json',
+    ])
   })
 })

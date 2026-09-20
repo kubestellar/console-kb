@@ -195,4 +195,39 @@ describe('mission-content-validation.mjs runCli (in-process)', () => {
     expect(out).toContain('Content validation passed')
     expect(summaries[0].payload.filesValidated).toBe(0)
   })
+
+  // Regression guard for the whitespace-in-path bypass (#3470, same class
+  // as #3280). The workflow will pass newline-separated paths as a single
+  // quoted argument; splitting on any whitespace would silently break a
+  // mission at `fixes/foo bar.json` into `fixes/foo` and `bar.json`, both
+  // unloadable, and validation would report "passed" without ever opening
+  // the real file.
+  it('preserves whitespace-in-path when a batch is fed as a single newline-separated arg', () => {
+    writeMission('fixes/cncf-install/install-foo bar.json', {
+      metadata: {},
+      mission: {
+        missionClass: 'install',
+        steps: [{ description: '```\nhelm install foo\n```' }],
+      },
+    })
+    const { logger, summaries } = makeLogger()
+    const { stdout, stderr, out } = makeStd()
+    const code = runCli({
+      argv: [
+        'node',
+        'mission-content-validation.mjs',
+        'fixes/cncf-install/install-foo bar.json',
+      ],
+      now: () => 0,
+      logger,
+      stdout,
+      stderr,
+      checkUrl: () => true,
+      checkImage: () => true,
+    })
+    expect(code).toBe(0)
+    // filesValidated must count the whitespace path as ONE opened file, not
+    // zero (silent skip) and not two (split into nonexistent tokens).
+    expect(summaries[0].payload.filesValidated).toBe(1)
+  })
 })

@@ -258,9 +258,17 @@ export function runCli({
   checkImage = defaultCheckImage,
 } = {}) {
   const startedAt = now()
+  // Same wire as `scripts/mission-safety-scan.mjs`: the (planned) workflow
+  // will pass `git diff --name-only` output as a single quoted argument, so
+  // paths arrive newline-separated. Splitting on any whitespace (`/\s+/`)
+  // silently breaks a mission path containing a space or tab into two
+  // nonexistent paths, and the runContentValidation loop's readFile catch
+  // then skips them without emitting a finding — same bypass class as
+  // console-kb#3470 (safety scanner) and the earlier scan-pr.mjs fix in
+  // #3280. Split on newline only so whitespace-in-path is preserved.
   const files = argv
     .slice(2)
-    .flatMap(a => a.split(/\s+/))
+    .flatMap(a => a.split(/\r?\n/))
     .filter(Boolean)
   const installFiles = files.filter(f => /fixes\/cncf-install\/install-.*\.(json|yaml|yml)$/.test(f))
 
