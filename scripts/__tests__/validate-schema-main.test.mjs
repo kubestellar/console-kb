@@ -185,9 +185,9 @@ describe('validate-schema.mjs CLI main() untested arms', () => {
     })
   })
 
-  it('changed-files mode splits whitespace-separated file arguments', () => {
-    // The main() branch does args.flatMap(a => a.split(/\s+/)) — verify
-    // a single arg with two space-separated paths expands to two files.
+  it('changed-files mode treats each argv entry as a single file path', () => {
+    // main() does args.filter(Boolean) — each changed file must arrive as
+    // its own argv entry (see validate-schema.yml's `mapfile -d ''`).
     const a = join(dir, 'a.json')
     const b = join(dir, 'b.json')
     for (const p of [a, b]) {
@@ -201,7 +201,7 @@ describe('validate-schema.mjs CLI main() untested arms', () => {
       )
     }
 
-    const { stdout, exitCode } = runCLI(dir, [`${a} ${b}`])
+    const { stdout, exitCode } = runCLI(dir, [a, b])
     expect(exitCode).toBe(0)
 
     const summary = findSummary(stdout)
@@ -209,6 +209,32 @@ describe('validate-schema.mjs CLI main() untested arms', () => {
       trigger: 'changed-files',
       total: 2,
       validCount: 2,
+      invalidCount: 0,
+    })
+  })
+
+  it('changed-files mode does NOT split a whitespace-containing path (regression for #3478)', () => {
+    // A single argv entry with a space in the path (e.g. a mission file
+    // named "with space.json") must be treated as one file, not shattered
+    // into multiple nonexistent paths that silently skip validation.
+    const withSpace = join(dir, 'with space.json')
+    writeFileSync(
+      withSpace,
+      JSON.stringify({
+        version: 'kc-mission-v1',
+        name: 'x',
+        mission: { title: 'T', steps: [] },
+      })
+    )
+
+    const { stdout, exitCode } = runCLI(dir, [withSpace])
+    expect(exitCode).toBe(0)
+
+    const summary = findSummary(stdout)
+    expect(summary).toMatchObject({
+      trigger: 'changed-files',
+      total: 1,
+      validCount: 1,
       invalidCount: 0,
     })
   })
