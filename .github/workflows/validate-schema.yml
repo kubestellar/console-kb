@@ -34,15 +34,16 @@ jobs:
         id: changed
         if: github.event_name == 'pull_request'
         run: |
-          FILES=$(git diff --name-only --diff-filter=ACMR ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml' | tr '\n' ' ')
-          echo "files=$FILES" >> $GITHUB_OUTPUT
+          # NUL-delimited so paths containing whitespace survive to the scanner
+          # (same fix pattern as scan-missions.yml, #3280 / #3470).
+          git diff --name-only --diff-filter=ACMR -z ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml' > changed_files.txt
+          echo "count=$(tr -cd '\0' < changed_files.txt | wc -c)" >> $GITHUB_OUTPUT
       - name: Validate schema (PR — changed files only)
-        if: github.event_name == 'pull_request' && steps.changed.outputs.files != ''
-        env:
-          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        if: github.event_name == 'pull_request' && steps.changed.outputs.count != '0'
         run: |
           set -o pipefail
-          node scripts/validate-schema.mjs "$CHANGED_FILES" | tee validate-schema-output.log
+          mapfile -d '' -t FILES < changed_files.txt
+          node scripts/validate-schema.mjs "${FILES[@]}" | tee validate-schema-output.log
       - name: Validate schema (push/schedule/dispatch — all files)
         if: github.event_name != 'pull_request'
         run: |
