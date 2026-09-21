@@ -33,8 +33,12 @@ const MALICIOUS_PATTERNS = [
   // ; or || somewhere between two backticks in the joined text.
   { name: 'Command injection: backtick', pattern: /`[^`\n]*(?:\$\(|;|&&|\|\|)[^`\n]*`/g, allowSafeCLI: true },
   { name: 'Command injection: $() in string', pattern: /\$\([^)\n]{4,}\)/g, allowSafeCLI: true },
-  { name: 'Suspicious curl pipe', pattern: /curl\s[^|\n]*\|\s*(?:ba)?sh/gi },
-  { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:ba)?sh/gi },
+  // The right-hand side of the pipe must cover every shell/interpreter a
+  // mission could redirect a downloaded script into — a `curl … | zsh` (or
+  // `| python`, `| perl`, `| pwsh`) attack landed in the KB just as easily
+  // as `| bash` before this list was broadened (kubestellar/console-kb#3493).
+  { name: 'Suspicious curl pipe', pattern: /curl\s[^|\n]*\|\s*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|perl|ruby|node|php|deno|bun)\b/gi },
+  { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|perl|ruby|node|php|deno|bun)\b/gi },
   // env / xargs / find shell-interpreter escapes
   // `env bash -c '...'` bypasses binary allowlists even when shell:false is set.
   // env(1) accepts three token shapes before the command:
@@ -46,9 +50,13 @@ const MALICIOUS_PATTERNS = [
   // the scanner even though they are the standard shapes for this bypass.
   // Use a negative lookahead: skip any non-interpreter token, then require
   // one of the known interpreter binaries.
-  { name: 'Allowlist escape via env', pattern: /\benv\b(?:\s+(?!(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b)\S+)*\s+(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
-  { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
-  { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  // The interpreter list must stay in sync across env/xargs/find so
+  // `env FOO=bar csh -c evil` (or tcsh/fish/pwsh/powershell) can't slip
+  // through only because the classic POSIX shells are enumerated
+  // (kubestellar/console-kb#3493).
+  { name: 'Allowlist escape via env', pattern: /\benv\b(?:\s+(?!(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b)\S+)*\s+(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
   // awk / sed carry their own DSL execute primitives — the wrapper binaries
   // are in SAFE_CLI_COMMANDS (they're used legitimately as text filters), so
   // detection has to fire on the specific execute forms, not the invocation.
@@ -60,9 +68,17 @@ const MALICIOUS_PATTERNS = [
   // Non-shell interpreters given `-c`/`-e` reach into the shell only when the
   // script literal calls a shell-execution primitive. Narrowed so legitimate
   // one-liners (`python -c 'import yaml; ...'`, `node -e 'console.log(...)'`)
-  // don't false-positive — the rule only fires when the script also contains
-  // os.system / child_process / IO::Socket / backticks / Ruby %x.
-  { name: 'Interpreter -c/-e invokes shell primitive', pattern: /\b(?:python\d*|ruby|perl|node|php|deno|bun)\s+(?:-\S+\s+)*-[ceE]\b[\s\S]{0,300}?(?:\bsystem\s*\(|\bos\.system\b|child_process|IO::Socket|TCPSocket|`[^`\n]+`|%x\s*[({])/gi },
+  // don't false-positive — the rule fires when the script contains one of
+  // the language-specific execute primitives. The alternation covers:
+  //   * Python:  system(, os.system, subprocess, os.popen, os.exec, exec(
+  //   * Node:    child_process (+ its destructured import shapes)
+  //   * Perl:    IO::Socket, piped open(FH, "| cmd")
+  //   * Ruby:    Kernel.exec / Kernel.spawn / Kernel.system, %x{...}, backticks
+  //   * generic: TCPSocket, backticks
+  // Missing any of these lets `python -c 'import subprocess; subprocess.run(...)'`
+  // or `ruby -e 'Kernel.exec("evil")'` sneak past the scanner
+  // (kubestellar/console-kb#3493).
+  { name: 'Interpreter -c/-e invokes shell primitive', pattern: /\b(?:python\d*|ruby|perl|node|php|deno|bun)\s+(?:-\S+\s+)*-[ceE]\b[\s\S]{0,300}?(?:\bsystem\s*\(|\bos\.system\b|\bsubprocess\b|\bos\.popen\b|\bos\.exec\w*\b|\bexec\s*\(|child_process|IO::Socket|TCPSocket|Kernel\.(?:exec|spawn|system)\b|\bopen\s*\([^)\n]{0,80}["'`]\s*\||`[^`\n]+`|%x\s*[({])/gi },
 
   // Obfuscation bypass techniques (issue #2693)
   // Base64 decode piped to shell execution

