@@ -41,9 +41,7 @@ export const LLM_TOKEN = process.env.LLM_TOKEN || GITHUB_TOKEN
 const TARGET_PLATFORMS = process.env.TARGET_PLATFORMS
   ? process.env.TARGET_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
   : null
-const DRY_RUN = process.env.DRY_RUN === 'true'
-const BATCH_INDEX = process.env.BATCH_INDEX != null ? parseInt(process.env.BATCH_INDEX, 10) : null
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
+import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
 const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)

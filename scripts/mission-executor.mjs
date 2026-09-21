@@ -38,7 +38,7 @@ const log = createLogger('mission-executor')
 
 const MAX_RETRIES = parseInt(process.env.MAX_RETRIES || '3', 10)
 const MISSION_TIMEOUT_MS = parseInt(process.env.MISSION_TIMEOUT_MS || '300000', 10)
-const DRY_RUN = process.env.DRY_RUN === 'true'
+import { DRY_RUN } from './lib/batch-env.mjs'
 
 // ── LLM conversation ───────────────────────────────────────────
 //

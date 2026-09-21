@@ -18,9 +18,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const DRY_RUN = process.env.DRY_RUN === 'true'
-const BATCH_INDEX = process.env.BATCH_INDEX != null ? parseInt(process.env.BATCH_INDEX, 10) : null
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '20', 10)
+import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '3', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
