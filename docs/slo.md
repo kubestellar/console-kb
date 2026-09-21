@@ -43,14 +43,18 @@ No exporter or external data flow is added by this document — recommendations 
   leaves the PR open with an explanatory comment if either check hasn't passed.
   Recovery steps for the historical incident class remain documented in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
-  **Second known exception**: `Mission Safety Scan` itself has a script-level gap —
-  its `on.pull_request.paths` trigger watches `runbooks/**/*.json`/`*.yaml`/`*.yml`,
-  but the "Scan for dangerous commands" step's `git diff`/`find` file selection is
-  scoped only to `fixes/`. A PR that touches only `runbooks/**` files runs the job,
-  finds zero files to scan, and reports "Safety scan passed" without ever
-  evaluating the changed file's content — a false-green result that affects any
-  `runbooks/**`-only PR, independent of the auto-merge bypass above. Also tracked
-  as a follow-up (see below); recovery guidance is in the same
+  **Second known exception**: `Mission Safety Scan` used to have a script-level gap,
+  **now fixed** — its `on.pull_request.paths` trigger watched `runbooks/**/*.json`/
+  `*.yaml`/`*.yml`, but the "Scan for dangerous commands" step's `git diff`/`find`
+  file selection was scoped only to `fixes/`, so a `runbooks/**`-only PR resolved to
+  zero scanned files and reported "Safety scan passed" without ever evaluating the
+  changed content. PR
+  [#3444](https://github.com/kubestellar/console-kb/pull/3444) (2026-09-17)
+  rewired the step to call `scripts/mission-safety-scan.mjs`, whose `git diff`
+  pathspec covers both `fixes/**` and `runbooks/**` (verified on current `master`:
+  `.github/workflows/mission-safety-scan.yml`'s file-selection command includes
+  `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`). Recovery
+  guidance for the historical incident class remains in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Third known exception**: `Validate Mission Schema` itself has a broader
   version of this same gap, **now fixed** — it used to never validate

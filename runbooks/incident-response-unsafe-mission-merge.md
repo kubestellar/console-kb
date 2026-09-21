@@ -23,33 +23,43 @@ never inspecting the result of `Mission Safety Scan`
 that queries `gh pr checks` for both checks before the `--admin` merge and
 leaves the PR open with an explanatory comment if either hasn't passed.
 This runbook is retained for historical incident recovery (a bad commit
-merged before the fix landed) and because three related false-green gaps
-below, affecting other workflows, are still open. See `docs/slo.md`
-section 2 and `docs/BRANCH_PROTECTION.md` for background.
+merged before the fix landed) and because two related false-green gaps
+below, affecting other workflows, are still open (a third, in `Mission
+Safety Scan`, is now fixed — see below). See `docs/slo.md` section 2 and
+`docs/BRANCH_PROTECTION.md` for background.
 
 `fixes/**` and `runbooks/**` content merged this way feeds
 `fixes/index.json`, fetched live by the KubeStellar Console frontend on
 every KB page load. An unsafe or schema-invalid mission reaching `master`
 is a **user-facing incident**.
 
-### Related gap: `Mission Safety Scan` false-green on `runbooks/**`-only PRs
+### Related gap: `Mission Safety Scan` false-green on `runbooks/**`-only PRs (now fixed)
 
-Separately from the auto-merge bypass above, `Mission Safety Scan` itself
-has a script-level gap that affects **any** PR (not just `cncf-mission-gen`
-ones) that touches only `runbooks/**` files: its `on.pull_request.paths`
-trigger includes `runbooks/**/*.json`, `runbooks/**/*.yaml`, and
-`runbooks/**/*.yml`, but the "Scan for dangerous commands" step's file
-selection (`git diff --name-only ... -- 'fixes/**/*.json' 'fixes/**/*.yaml'
-'fixes/**/*.yml'`, with a `find fixes -name ...` fallback) is scoped only to
-`fixes/`. For a `runbooks/**`-only PR, this resolves to an empty file list,
-so the loop that checks for dangerous `kubectl`/`rm -rf`/credential/hostname
-patterns never runs against the changed file(s) — the job still reports
-"Safety scan passed" and shows green. A `runbooks/**` mission can reach
-`master` (via normal review, no `--admin` needed) without ever having its
-content actually scanned. Tracked separately as a `[operations]` issue since
-fixing it requires editing `.github/workflows/mission-safety-scan.yml`
-(`workflows` permission). Use the manual scan in step 2 of Detection below
-for **any** merged `runbooks/**` file, not only ones merged via auto-merge.
+Separately from the auto-merge bypass above, `Mission Safety Scan` used to
+have a script-level gap that affected **any** PR (not just
+`cncf-mission-gen` ones) that touched only `runbooks/**` files: its
+`on.pull_request.paths` trigger included `runbooks/**/*.json`,
+`runbooks/**/*.yaml`, and `runbooks/**/*.yml`, but the "Scan for dangerous
+commands" step's file selection (`git diff --name-only ... --
+'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml'`, with a
+`find fixes -name ...` fallback) was scoped only to `fixes/`. For a
+`runbooks/**`-only PR, this resolved to an empty file list, so the loop
+that checks for dangerous `kubectl`/`rm -rf`/credential/hostname patterns
+never ran against the changed file(s) — the job still reported "Safety
+scan passed" and showed green.
+
+**This is now fixed.** PR
+[#3444](https://github.com/kubestellar/console-kb/pull/3444) (merged
+2026-09-17) rewired the "Scan for dangerous commands" step to call
+`scripts/mission-safety-scan.mjs`, whose `git diff` file-selection covers
+both `fixes/**` and `runbooks/**` — verified on current `master`:
+`.github/workflows/mission-safety-scan.yml`'s `FILES=$(git diff ...)`
+command includes `'runbooks/**/*.json' 'runbooks/**/*.yaml'
+'runbooks/**/*.yml'` alongside the `fixes/**` globs. This section is
+retained for historical incident recovery only (a `runbooks/**` mission
+merged before 2026-09-17 without its content actually being scanned); use
+the manual scan in step 2 of Detection below to re-check any such
+pre-fix merge.
 
 ### Related gap: `Validate Mission Schema` never checked `runbooks/**` (now fixed)
 
@@ -140,8 +150,8 @@ hand against the checks listed in the "Validate mission quality" and
 - A mission file contains a pattern that `mission-safety-scan.yml` would
   flag (e.g. `kubectl delete namespace|ns|all ... --all`, `rm -rf` against
   `/`, `/*`, `~`, or `$HOME`, or similar destructive commands — see the
-  scan patterns in `.github/workflows/mission-safety-scan.yml`), but the
-  PR's `Mission Safety Scan` check shows no run, a cancelled run, or a
+  scan patterns in `scripts/mission-safety-scan.mjs`), but the PR's
+  `Mission Safety Scan` check shows no run, a cancelled run, or a
   failure, on a PR that was merged anyway.
 - The auto-merge PR comment (`Auto-merge: quality score .../100 ...`)
   appears on a PR whose `Mission Safety Scan` or `Validate Mission Schema`
@@ -149,10 +159,12 @@ hand against the checks listed in the "Validate mission quality" and
   `gh pr view <pr-number> --json statusCheckRollup`, if the PR is still
   queryable, or the merge commit's associated checks in the GitHub UI).
 - A merged PR touched only `runbooks/**` files and `Mission Safety Scan`
-  shows green (`Safety scan passed`), but the job's log has no per-file
-  scan output for the changed `runbooks/**` file(s) — this is the false-green
-  case described above, and applies whether or not the PR went through
-  auto-merge.
+  shows green — as of PR #3444, this is expected (the file-selection now
+  covers `runbooks/**`, so a genuine failure here would show the step
+  actually ran and flagged the file, not skipped it). If the job's log
+  instead shows zero per-file scan output for the changed `runbooks/**`
+  file(s), that indicates a regression of the fixed gap and should be
+  treated as a new incident.
 - A merged PR touched only `runbooks/**` files and `Validate Mission
   Schema` shows green — as of PR #3410, this is expected (the PR-mode
   pathspec now covers `runbooks/**`, so a genuine failure here would show
@@ -236,14 +248,13 @@ the merge (with an explanatory PR comment) if either hasn't passed. This
 closed [#3157](https://github.com/kubestellar/console-kb/issues/3157) and
 `docs/slo.md` section 2's original "known exception".
 
-Closing the separate false-green gap (`Mission Safety Scan` skipping
-`runbooks/**` files in its own scan logic) requires editing
-`.github/workflows/mission-safety-scan.yml` to add the same
-`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in its
-`on.pull_request.paths` trigger to the `git diff`/`find` file-selection
-logic in the "Scan for dangerous commands" step. Also requires `workflows`
-permission this contribution's credentials do not have — tracked in a
-separate open `[operations]` issue on this repo.
+The `Mission Safety Scan` false-green gap (skipping `runbooks/**` files in
+its own scan logic) is **fixed**: PR
+[#3444](https://github.com/kubestellar/console-kb/pull/3444) (merged
+2026-09-17) rewired the "Scan for dangerous commands" step to call
+`scripts/mission-safety-scan.mjs`, whose file-selection includes the same
+`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in the
+workflow's `on.pull_request.paths` trigger.
 
 The `Validate Mission Schema` gap (never checking `runbooks/**` on PRs or
 on its scheduled sweep) is **fixed**: the `--all` branch was updated first
