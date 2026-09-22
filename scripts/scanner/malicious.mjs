@@ -65,20 +65,28 @@ const MALICIOUS_PATTERNS = [
   // and the `<addr>e <cmd>` standalone command. Match either form inside a
   // quoted sed program.
   { name: 'sed execute flag (arbitrary shell)', pattern: /\bsed\b[^\n]*(?:s\/[^\/\n]*\/[^\/\n]*\/[gI]*e\b|['"](?:\d+|\$|\/[^\/\n]+\/)?\s*e\s+\S)/g },
-  // Non-shell interpreters given `-c`/`-e` reach into the shell only when the
-  // script literal calls a shell-execution primitive. Narrowed so legitimate
-  // one-liners (`python -c 'import yaml; ...'`, `node -e 'console.log(...)'`)
-  // don't false-positive — the rule fires when the script contains one of
-  // the language-specific execute primitives. The alternation covers:
+  // Non-shell interpreters given an inline-code flag reach into the shell
+  // only when the script literal calls a shell-execution primitive. Narrowed
+  // so legitimate one-liners (`python -c 'import yaml; ...'`,
+  // `node -e 'console.log(...)'`) don't false-positive — the rule fires when
+  // the script contains one of the language-specific execute primitives.
+  // The inline-code flag alternation covers every shape each interpreter
+  // accepts, not just `-c`/`-e` — otherwise `php -r`, `node -p`/`--print`/
+  // `--eval`, and `deno eval <code>` all sneak past even though they are
+  // the standard inline-eval invocations for those runtimes. The primitive
+  // alternation covers:
   //   * Python:  system(, os.system, subprocess, os.popen, os.exec, exec(
   //   * Node:    child_process (+ its destructured import shapes)
-  //   * Perl:    IO::Socket, piped open(FH, "| cmd")
+  //   * Deno:    Deno.Command / Deno.run
+  //   * Perl:    IO::Socket, piped open(FH, "| cmd"), qx{...}/qx// inline exec
   //   * Ruby:    Kernel.exec / Kernel.spawn / Kernel.system, %x{...}, backticks
+  //   * PHP:     system(, exec(, backticks
   //   * generic: TCPSocket, backticks
-  // Missing any of these lets `python -c 'import subprocess; subprocess.run(...)'`
-  // or `ruby -e 'Kernel.exec("evil")'` sneak past the scanner
-  // (kubestellar/console-kb#3493).
-  { name: 'Interpreter -c/-e invokes shell primitive', pattern: /\b(?:python\d*|ruby|perl|node|php|deno|bun)\s+(?:-\S+\s+)*-[ceE]\b[\s\S]{0,300}?(?:\bsystem\s*\(|\bos\.system\b|\bsubprocess\b|\bos\.popen\b|\bos\.exec\w*\b|\bexec\s*\(|child_process|IO::Socket|TCPSocket|Kernel\.(?:exec|spawn|system)\b|\bopen\s*\([^)\n]{0,80}["'`]\s*\||`[^`\n]+`|%x\s*[({])/gi },
+  // Missing any of these lets `python -c 'import subprocess; subprocess.run(...)'`,
+  // `ruby -e 'Kernel.exec("evil")'`, `php -r 'system("evil");'`, or
+  // `node -p 'require("child_process").execSync("evil")'` sneak past the
+  // scanner (kubestellar/console-kb#3493, #3511).
+  { name: 'Interpreter -c/-e invokes shell primitive', pattern: /\b(?:python\d*|ruby|perl|node|php|deno|bun)\s+(?:-\S+\s+)*(?:-[ceEprP]\b|--(?:eval|print)\b|eval\b)[\s\S]{0,300}?(?:\bsystem\s*\(|\bos\.system\b|\bsubprocess\b|\bos\.popen\b|\bos\.exec\w*\b|\bexec\s*\(|child_process|IO::Socket|TCPSocket|Kernel\.(?:exec|spawn|system)\b|Deno\.(?:Command|run)\b|\bopen\s*\([^)\n]{0,80}["'`]\s*\||`[^`\n]+`|%x\s*[({]|\bqx\s*[({\[/#|!])/gi },
 
   // Obfuscation bypass techniques (issue #2693)
   // Base64 decode piped to shell execution
