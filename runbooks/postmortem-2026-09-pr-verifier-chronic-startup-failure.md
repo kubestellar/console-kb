@@ -1,10 +1,14 @@
 # Postmortem: `pr-verifier.yml` — five `startup_failure` incidents since June 2026, never a retrospective
 
-## Status: ongoing — durable fix blocked on `workflows` permission
+## Status: resolved — fixed 2026-09-17 by PR #3441
 
 Tracked in [#3348](https://github.com/kubestellar/console-kb/issues/3348) (this
 retrospective) and [#3336](https://github.com/kubestellar/console-kb/issues/3336)
-(current active outage).
+(the fifth incident, closed by
+[#3441](https://github.com/kubestellar/console-kb/pull/3441)). This document's
+narrative and evidence trail are preserved as historical context and a worked
+detection example; only the outcome framing below has been updated to reflect
+the fix.
 
 ## Summary
 
@@ -25,9 +29,9 @@ first four fixes.
 - **User-facing effect:** none for Console KB end users; impact is entirely
   on contributor experience and PR-hygiene enforcement — PR title/label
   conformance checks silently stopped running during each outage window.
-- **Duration:** cumulative across five incidents (see Timeline); the
-  current (fifth) outage alone has run **12+ consecutive days** as of
-  2026-09-11/12 (100+ runs, 0 jobs ever created), confirmed still failing.
+- **Duration:** cumulative across five incidents (see Timeline); the fifth
+  outage ran **19 consecutive days** (2026-08-30 to 2026-09-17, 100+ runs,
+  0 jobs ever created) before being fixed by PR #3441.
 - **Scope:** internal only — `pr-verifier.yml` in `kubestellar/console-kb`.
 
 ## Timeline
@@ -91,10 +95,12 @@ the same failure mode remains free to recur a sixth time.
   mechanism specific to this workflow's failure mode.
 - **The fifth incident was foreseeable and specifically flagged in advance**
   (#3071 named `pr-verifier.yml` as one of 4 files left on the stale pin on
-  2026-08-30) but the fix still did not land before the predicted failure
-  began, because it requires `workflows` permission no current hive agent
-  credential set has — the same blocker that has stalled the fix for 12+
-  days since.
+  2026-08-30), but the fix did not land until 2026-09-17 — 19 days later —
+  because the planned remediation (a SHA repin) required `workflows`
+  permission no hive agent credential set had. PR #3441 ultimately sidestepped
+  that blocker by replacing the reusable-workflow call entirely rather than
+  repinning it, since the target callee doesn't exist in `kubestellar/infra`
+  at any pin.
 
 ## Action items
 
