@@ -49,10 +49,10 @@ import {
 } from './lib/cncf-mission-builder.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-export const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 // PAT for issue creation — events from PATs trigger workflows (GITHUB_TOKEN events don't)
 const ISSUE_TOKEN = process.env.ISSUE_TOKEN || process.env.GITHUB_TOKEN
-export const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
+const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
   : null
@@ -62,9 +62,11 @@ const ENABLED_SOURCES = process.env.ENABLED_SOURCES
   ? process.env.ENABLED_SOURCES.split(',').map(s => s.trim()).filter(Boolean)
   : null // null = use config file
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-generated')
-export const MAX_ISSUES_PER_PROJECT = 20
-export const MAX_RETRIES = 3
-export const BASE_BACKOFF_MS = 2000
+// MAX_ISSUES_PER_PROJECT, MAX_RETRIES, BASE_BACKOFF_MS are owned by
+// ./lib/cncf-github-client.mjs (see console-kb architect finding on the
+// reverse-import anti-pattern that this decoupling resolves). They are
+// only used inside the client's rate-limited fetch loop and per-project
+// issue search, so the main script no longer needs them at all.
 const MAX_COPILOT_ISSUES_PER_RUN = parseInt(process.env.MAX_COPILOT_ISSUES || '5', 10)
 const ISSUE_LABEL_PREFIX = '[Mission Gen]'
 const COPILOT_REPO_OWNER = process.env.COPILOT_REPO_OWNER || 'kubestellar'

@@ -118,11 +118,11 @@ describe('githubApi', () => {
   })
 
   it('adds Authorization header when GITHUB_TOKEN env var is set at call time', async () => {
-    // The module reads GITHUB_TOKEN once at import time (via
-    // `import { GITHUB_TOKEN } from '../generate-cncf-missions.mjs'`), so
-    // changing process.env after import does not affect the Authorization
-    // branch. Assert instead that the Accept + User-Agent headers are
-    // always present, which is the invariant callers rely on.
+    // githubApi now reads GITHUB_TOKEN from process.env at each call, so
+    // changing process.env after import is honored. This is the invariant
+    // the assertion protects; the earlier reverse-import version bound the
+    // token at import time and could not be tested here.
+    process.env.GITHUB_TOKEN = 'test-token-abc'
     const fetchMock = vi.fn(async () =>
       jsonResponse({ status: 200, body: {}, headers: highRateLimitHeaders() }),
     )
@@ -134,6 +134,7 @@ describe('githubApi', () => {
     const [, opts] = fetchMock.mock.calls[0]
     expect(opts.headers['X-Custom']).toBe('y')
     expect(opts.headers.Accept).toBe('application/vnd.github.v3+json')
+    expect(opts.headers.Authorization).toBe('Bearer test-token-abc')
   })
 
   it('returns null on 422 without retrying', async () => {

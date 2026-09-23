@@ -6,11 +6,19 @@
  * unit-tested independently of the mission-synthesis concerns that remain
  * in the main script.
  *
- * GITHUB_TOKEN and the tuning constants below are imported from the main
- * orchestrator module so there is a single source of truth for the token
- * and a single shared rate-limit budget across the generator run.
+ * This module reads its own configuration from environment variables and
+ * defaults so it does not import from its callers (breaking the previous
+ * reverse dependency on generate-cncf-missions.mjs — see the "Impact"
+ * section of the architect finding for details).
  */
-import { GITHUB_TOKEN, MIN_REACTIONS, MAX_ISSUES_PER_PROJECT, MAX_RETRIES, BASE_BACKOFF_MS } from '../generate-cncf-missions.mjs'
+
+// Config: tuning constants read from env at module load; GITHUB_TOKEN is read
+// per-call inside githubApi() so tests (and callers) can mutate process.env
+// after import.
+const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
+const MAX_ISSUES_PER_PROJECT = 20
+const MAX_RETRIES = 3
+const BASE_BACKOFF_MS = 2000
 
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
@@ -34,8 +42,9 @@ export async function githubApi(url, options = {}) {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'cncf-mission-generator/1.0',
   }
-  if (GITHUB_TOKEN) {
-    headers.Authorization = `Bearer ${GITHUB_TOKEN}`
+  const token = process.env.GITHUB_TOKEN
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
