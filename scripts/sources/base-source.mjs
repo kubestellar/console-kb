@@ -3,6 +3,13 @@
  * Each source module extends this to provide search + extraction for a specific platform.
  */
 
+// `slugify` is re-exported from scripts/lib/text-utils.mjs so all sources
+// (github-discussions, reddit, stackoverflow, and generate-cncf-missions'
+// former `baseSlugify` alias) share a single implementation. See
+// kubestellar/console-kb#3518.
+import { slugify } from '../lib/text-utils.mjs'
+export { slugify }
+
 export class BaseSource {
   constructor(id, config) {
     this.id = id
@@ -59,17 +66,6 @@ export class BaseSource {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-/**
- * Slugify a string for use as a filename.
- */
-export function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80)
 }
 
 /**

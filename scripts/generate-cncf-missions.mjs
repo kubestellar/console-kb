@@ -15,7 +15,6 @@ import { fileURLToPath } from 'url'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './cncf-projects.mjs'
 import { OTHER_PROJECTS } from './other-projects.mjs'
 import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
-import { slugify as baseSlugify } from './sources/base-source.mjs'
 import { RedditSource } from './sources/reddit.mjs'
 import { StackOverflowSource } from './sources/stackoverflow.mjs'
 import { GitHubDiscussionsSource } from './sources/github-discussions.mjs'
@@ -510,7 +509,7 @@ async function main() {
                   continue
                 }
 
-                const slug = baseSlugify(`${project.name}-${source.id}-${mission.mission?.title || canonicalId}`)
+                const slug = slugify(`${project.name}-${source.id}-${mission.mission?.title || canonicalId}`)
                 const filePath = join(projectDir, `${slug}.json`)
 
                 if (deduplicateAgainstExisting(slug, projectDir)) {
