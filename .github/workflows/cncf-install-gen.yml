@@ -791,9 +791,20 @@ jobs:
           gh label create "auto-generated" --color "0E8A16" --description "Automatically generated content" 2>/dev/null || true
           gh label create "install-missions" --color "1D76DB" --description "CNCF install mission files" 2>/dev/null || true
 
+          # gh pr create rejects bodies > 65536 chars (GraphQL createPullRequest limit).
+          # Truncate by bytes, not lines, and mark it clearly.
+          BODY_FILE=$(mktemp)
+          MAX_BYTES=60000
+          if [ "$(wc -c < install-report.md)" -gt "$MAX_BYTES" ]; then
+            head -c "$MAX_BYTES" install-report.md > "$BODY_FILE"
+            printf '\n\n---\n_⚠️ Report truncated to %s bytes to fit GitHub'\''s 65536-char PR body limit. Full report is available as the `install-report` workflow artifact._\n' "$MAX_BYTES" >> "$BODY_FILE"
+          else
+            cp install-report.md "$BODY_FILE"
+          fi
+
           PR_URL=$(gh pr create \
             --title "✨ CNCF install mission generation $(date +%Y-%m-%d)" \
-            --body "$(cat install-report.md | head -1500)" \
+            --body-file "$BODY_FILE" \
             --base master \
             --head "$BRANCH" \
             --label "auto-generated,install-missions" \
