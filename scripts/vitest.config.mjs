@@ -11,17 +11,16 @@ import { defineConfig } from 'vitest/config';
 //     `npm test -- --coverage` while a small legitimate dip doesn't
 //     cause churn. Ratchet upward in follow-up PRs.
 //
-// Refs #3299. The companion workflow change (add `--coverage` to
-// scripts-tests.yml and upload lcov as an artifact) is intentionally
-// left for a maintainer with `workflows: write`, since this repo's
-// GitHub App cannot modify files under .github/workflows/.
+// Refs #3299. The companion workflow change (`npm test` runs vitest
+// with --coverage, and scripts-tests.yml uploads the lcov artifact)
+// has already landed — see .github/workflows/scripts-tests.yml.
 //
 // Current measured baseline with the include/exclude below
-// (2026-09-09, `npm test -- --coverage`):
-//   Statements  42.05%
-//   Branches    48.19%
-//   Functions   45.77%
-//   Lines       42.10%
+// (2026-09-23, `npm test`):
+//   Statements  79.93%
+//   Branches    82.04%
+//   Functions   81.61%
+//   Lines       79.51%
 //
 // Thresholds are set a few points below each of these so a legitimate
 // small dip does not fail CI, but a real regression (a suite deleted,
@@ -55,10 +54,10 @@ export default defineConfig({
         '**/*.config.*',
       ],
       thresholds: {
-        lines: 61,
-        statements: 61,
-        functions: 65,
-        branches: 66,
+        lines: 76,
+        statements: 76,
+        functions: 78,
+        branches: 79,
       },
     },
   },
