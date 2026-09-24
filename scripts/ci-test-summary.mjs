@@ -47,44 +47,56 @@ export function coverageEnabled(env = process.env) {
   return env.GITHUB_ACTIONS === 'true';
 }
 
-function runVitest() {
+// Exported for unit testing (see __tests__/ci-test-summary-helpers.test.mjs).
+// Kept as a pure function of env so the --coverage decision is testable
+// without spawning a child process. Mirrors the seam pattern used by
+// runValidation() in scripts/validate-schema.mjs.
+export function buildVitestArgs(reportPath = REPORT_PATH, env = process.env) {
   const args = [
     join('node_modules', 'vitest', 'vitest.mjs'),
     'run',
     '--reporter=default',
     '--reporter=json',
-    `--outputFile.json=${REPORT_PATH}`,
+    `--outputFile.json=${reportPath}`,
   ];
-  if (coverageEnabled()) {
+  if (coverageEnabled(env)) {
     // vitest.config.mjs already configures the v8 provider, reporters
     // (text + lcov + json-summary), include/exclude, and thresholds.
     // A bare --coverage flips the collector on with that config.
     args.push('--coverage');
   }
+  return args;
+}
+
+function runVitest() {
   const result = spawnSync(
     process.execPath,
-    args,
+    buildVitestArgs(),
     { stdio: 'inherit', env: process.env },
   );
   return result.status ?? 1;
 }
 
-function readReport() {
+// Exported for unit testing. Reads and best-effort deletes the report
+// file; returns null when the file is missing or contains invalid JSON.
+export function readReport(reportPath = REPORT_PATH) {
   try {
-    return JSON.parse(readFileSync(REPORT_PATH, 'utf-8'));
+    return JSON.parse(readFileSync(reportPath, 'utf-8'));
   } catch {
     return null;
   } finally {
     try {
-      unlinkSync(REPORT_PATH);
+      unlinkSync(reportPath);
     } catch {
       // best-effort cleanup; missing file is fine
     }
   }
 }
 
-function writeStepSummary(summary) {
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+// Exported for unit testing. No-op when GITHUB_STEP_SUMMARY is unset,
+// otherwise appends the rendered markdown block to that file.
+export function writeStepSummary(summary, env = process.env) {
+  const summaryPath = env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
   appendFileSync(summaryPath, buildStepSummaryMarkdown(summary));
 }
