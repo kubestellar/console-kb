@@ -110,8 +110,8 @@ export function runCli({
 
   let files;
   if (isFullScan) {
-    // Discover all mission files under fixes/ (used for push/schedule/dispatch)
-    files = discoverFiles('fixes');
+    // Discover all mission files under first-class mission roots (used for push/schedule/dispatch)
+    files = ['fixes', 'runbooks'].flatMap(root => discoverFiles(root));
     stdout(`Discovered ${files.length} mission files to scan.\n`);
   } else {
     // Each changed file is delivered as its own argv entry (see

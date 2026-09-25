@@ -130,34 +130,37 @@ describe('scan-pr.mjs CLI', () => {
   })
 
   describe('--all discovery', () => {
-    function setupFixes(dir) {
+    function setupMissionRoots(dir) {
       const fixes = join(dir, 'fixes')
+      const runbooks = join(dir, 'runbooks')
       mkdirSync(fixes, { recursive: true })
       mkdirSync(join(fixes, 'nested'), { recursive: true })
+      mkdirSync(runbooks, { recursive: true })
       writeFileSync(join(fixes, 'root.json'), JSON.stringify(VALID_MISSION))
       writeFileSync(join(fixes, 'nested', 'deep.yaml'),
         'version: kc-mission-v1\nname: nested\nmission:\n  title: t\n  steps:\n    - title: s\n      description: d\n')
+      writeFileSync(join(runbooks, 'runbook.json'), JSON.stringify({ ...VALID_MISSION, name: 'runbook-sample' }))
       // Ignored: index.json (SKIP_FILENAMES) and README.md (extension not in set).
       writeFileSync(join(fixes, 'index.json'), '{"ignored": true}')
       writeFileSync(join(fixes, 'README.md'), '# not a mission')
-      return fixes
     }
 
-    it('recursively discovers all .json/.yaml/.yml missions under fixes/', () => {
+    it('recursively discovers all .json/.yaml/.yml missions under fixes/ and runbooks/', () => {
       withTempDir(dir => {
-        setupFixes(dir)
+        setupMissionRoots(dir)
         const result = runScanPR(dir, ['--all'])
         expect(result.status).toBe(0)
-        expect(result.stdout).toMatch(/Discovered 2 mission files/)
+        expect(result.stdout).toMatch(/Discovered 3 mission files/)
         const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
         expect(report).toContain('root.json')
         expect(report).toContain('deep.yaml')
+        expect(report).toContain('runbook.json')
       })
     })
 
     it('skips index.json even when its extension matches', () => {
       withTempDir(dir => {
-        setupFixes(dir)
+        setupMissionRoots(dir)
         const result = runScanPR(dir, ['--all'])
         const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
         // index.json is invalid ({"ignored":true} lacks required fields);
@@ -170,7 +173,7 @@ describe('scan-pr.mjs CLI', () => {
 
     it('skips non-mission extensions (README.md)', () => {
       withTempDir(dir => {
-        setupFixes(dir)
+        setupMissionRoots(dir)
         const result = runScanPR(dir, ['--all'])
         const report = readFileSync(join(dir, 'scan-results.md'), 'utf8')
         expect(report).not.toContain('README.md')

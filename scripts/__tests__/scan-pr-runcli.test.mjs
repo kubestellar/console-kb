@@ -155,13 +155,13 @@ describe('scan-pr runCli', () => {
     const writer = makeWriter();
     const appender = makeWriter();
 
-    let discoverArg = null;
+    const discoverArgs = [];
     const discoverFiles = (dir) => {
-      discoverArg = dir;
+      discoverArgs.push(dir);
       // Return an empty discovery so we exit via the "No mission files"
       // path — that keeps the assertion surface tight without needing
-      // a real fixture tree, and still proves the --all branch drove
-      // discoverFiles('fixes').
+      // a real fixture tree, and still proves the --all branch drives
+      // discovery across every mission root.
       return [];
     };
 
@@ -183,7 +183,7 @@ describe('scan-pr runCli', () => {
     }
 
     expect(code).toBe(0);
-    expect(discoverArg).toBe('fixes');
+    expect(discoverArgs).toEqual(['fixes', 'runbooks']);
     expect(out.lines.some(l => l.includes('Discovered 0 mission files to scan.'))).toBe(true);
     expect(out.lines).toContain('No mission files to scan.');
     // No scan-results write on the empty-batch path.
