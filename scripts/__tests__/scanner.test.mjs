@@ -77,6 +77,44 @@ describe('scanMissionFile', () => {
     expect(result.parsed).toBeDefined()
     expect(result.schema.valid).toBe(true)
   })
+
+  it('parses nested YAML missions with real structure', () => {
+    const yaml = [
+      'version: kc-mission-v1',
+      'name: yaml-mission',
+      'mission:',
+      '  title: YAML Mission',
+      '  steps:',
+      '    - title: Inspect pods',
+      '      description: Run kubectl get pods',
+      '',
+    ].join('\n')
+    const result = scanMissionFile(yaml)
+    expect(result.error).toBeNull()
+    expect(result.parsed).toEqual({
+      version: 'kc-mission-v1',
+      name: 'yaml-mission',
+      mission: {
+        title: 'YAML Mission',
+        steps: [{ title: 'Inspect pods', description: 'Run kubectl get pods' }],
+      },
+    })
+    expect(result.schema.valid).toBe(true)
+  })
+
+  it('returns parse error for invalid YAML', () => {
+    const result = scanMissionFile('{ not: valid yaml')
+    expect(result.error).toBe('Failed to parse as JSON or YAML')
+    expect(result.parsed).toBeNull()
+    expect(result.schema).toBeNull()
+    expect(result.scan).toBeNull()
+  })
+
+  it('returns parse error for YAML scalar documents', () => {
+    const result = scanMissionFile('just a scalar mission')
+    expect(result.error).toBe('Failed to parse as JSON or YAML')
+    expect(result.parsed).toBeNull()
+  })
 })
 
 // ─── 3. Sensitive data detection ─────────────────────────────────────

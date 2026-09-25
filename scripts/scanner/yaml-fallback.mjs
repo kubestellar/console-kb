@@ -5,7 +5,8 @@
 
 /**
  * Minimal YAML-like parser for simple key-value documents.
- * For full YAML support, use the js-yaml package in the entry-point scripts.
+ * Kept for legacy tests and simple key-value parsing only.
+ * scanMissionFile uses the full `yaml` package for mission files.
  */
 export function tryParseYamlSimple(content) {
   // Only handle if it looks like YAML (has colons, no opening brace)
@@ -13,9 +14,6 @@ export function tryParseYamlSimple(content) {
   if (!content.includes(':')) return null;
 
   try {
-    // Try to import and use js-yaml if available
-    // Dynamic import is async, so this is a best-effort sync approach
-    // For production use, the caller should handle YAML parsing
     const lines = content.split('\n');
     const result = {};
     let currentKey = null;
