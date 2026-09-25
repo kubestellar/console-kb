@@ -18,7 +18,18 @@ const SKIP_FILENAMES = new Set(['index.json']);
  */
 function discoverMissionFiles(dir) {
   const results = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    // A missing mission root is a legitimate state — a checkout may
+    // contain only `fixes/` or only `runbooks/`, and --all should still
+    // scan whichever exists rather than crashing with ENOENT. Any other
+    // error (permission, I/O) is still surfaced.
+    if (err && err.code === 'ENOENT') return results;
+    throw err;
+  }
+  for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...discoverMissionFiles(fullPath));

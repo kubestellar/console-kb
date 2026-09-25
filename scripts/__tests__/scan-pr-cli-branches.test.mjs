@@ -146,4 +146,38 @@ describe('scan-pr.mjs --all extension handling', () => {
       expect(report).toContain('y.json')
     })
   })
+
+  it('tolerates a missing mission root (only fixes/ present, no runbooks/)', () => {
+    // A checkout can legitimately have only one of the two mission
+    // roots. --all must still scan what exists rather than crashing
+    // with ENOENT on the missing root (regression guard for scan-pr.mjs
+    // discoverMissionFiles).
+    withTempDir(dir => {
+      const fixes = join(dir, 'fixes')
+      mkdirSync(fixes, { recursive: true })
+      writeFileSync(join(fixes, 'ok.json'), JSON.stringify(VALID_MISSION))
+      const result = runScanPR(dir, ['--all'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 1 mission files/)
+    })
+  })
+
+  it('tolerates a missing mission root (only runbooks/ present, no fixes/)', () => {
+    withTempDir(dir => {
+      const runbooks = join(dir, 'runbooks')
+      mkdirSync(runbooks, { recursive: true })
+      writeFileSync(join(runbooks, 'ok.json'), JSON.stringify(VALID_MISSION))
+      const result = runScanPR(dir, ['--all'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 1 mission files/)
+    })
+  })
+
+  it('tolerates both mission roots missing (empty checkout)', () => {
+    withTempDir(dir => {
+      const result = runScanPR(dir, ['--all'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/No mission files to scan/)
+    })
+  })
 })
