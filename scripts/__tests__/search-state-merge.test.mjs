@@ -31,6 +31,13 @@ describe('mergeProjectsInto', () => {
     expect(merged.projects.repo.reddit.cursor).toBe('new')
   })
 
+  it('honors explicit null cursor/lastSearched values from the batch', () => {
+    const merged = { projects: { repo: { reddit: { processedIds: [], lastSearched: '2024-01-01T00:00:00Z', cursor: 'stale' } } } }
+    mergeProjectsInto(merged, { projects: { repo: { reddit: { lastSearched: null, cursor: null, processedIds: [] } } } })
+    expect(merged.projects.repo.reddit.lastSearched).toBeNull()
+    expect(merged.projects.repo.reddit.cursor).toBeNull()
+  })
+
   it('handles a batch with no projects gracefully', () => {
     const merged = { projects: { repo: { reddit: { processedIds: ['a'] } } } }
     mergeProjectsInto(merged, {})

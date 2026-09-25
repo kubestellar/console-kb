@@ -18,8 +18,9 @@ function main() {
   if (existsSync('search-state.json')) {
     try {
       baseState = JSON.parse(readFileSync('search-state.json', 'utf8'))
-    } catch {
-      baseState = null
+    } catch (e) {
+      console.error(`Error parsing search-state.json: ${e.message}`)
+      process.exit(1)
     }
   }
 

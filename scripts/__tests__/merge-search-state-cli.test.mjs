@@ -35,18 +35,30 @@ async function runIn(cwd) {
   const logs = []
   const warns = []
   const errs = []
+  const exit = { called: false, code: 0 }
   const logSpy = vi.spyOn(console, 'log').mockImplementation((m) => logs.push(String(m)))
   const warnSpy = vi.spyOn(console, 'warn').mockImplementation((m) => warns.push(String(m)))
   const errSpy = vi.spyOn(console, 'error').mockImplementation((m) => errs.push(String(m)))
+  const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+    exit.called = true
+    exit.code = Number(code)
+    throw new Error('__PROCESS_EXIT__')
+  })
   process.chdir(cwd)
   try {
-    await import(`${SCRIPT_URL}?t=${Date.now()}-${Math.random()}`)
-    return { status: 0, stdout: logs.join('\n'), stderr: warns.concat(errs).join('\n') }
+    try {
+      await import(`${SCRIPT_URL}?t=${Date.now()}-${Math.random()}`)
+    } catch (e) {
+      if (e.message !== '__PROCESS_EXIT__') throw e
+    }
+    const status = exit.called ? exit.code : 0
+    return { status, stdout: logs.join('\n'), stderr: warns.concat(errs).join('\n') }
   } finally {
     process.chdir(prevCwd)
     logSpy.mockRestore()
     warnSpy.mockRestore()
     errSpy.mockRestore()
+    exitSpy.mockRestore()
   }
 }
 
@@ -143,7 +155,7 @@ describe('merge-search-state.mjs CLI', () => {
     expect(merged.projects).toEqual({})
   })
 
-  it('tolerates an invalid base search-state.json (treats it as absent) and still writes a merged file from batches', async () => {
+  it('exits non-zero for an invalid base search-state.json and leaves it untouched', async () => {
     writeFileSync(join(workdir, 'search-state.json'), '{ this is not valid json')
     writeFileSync(
       join(workdir, 'search-state-3.json'),
@@ -158,10 +170,10 @@ describe('merge-search-state.mjs CLI', () => {
 
     const result = await runIn(workdir)
 
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('Merged search state: 1 projects')
-    const merged = JSON.parse(readFileSync(join(workdir, 'search-state.json'), 'utf8'))
-    expect(merged.projects['from/batch'].github.processedIds).toEqual(['g'])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Error parsing search-state.json')
+    expect(result.stdout).toBe('')
+    expect(readFileSync(join(workdir, 'search-state.json'), 'utf8')).toBe('{ this is not valid json')
   })
 
   it('warns to stderr about an unparseable batch file and continues with the remaining batches', async () => {

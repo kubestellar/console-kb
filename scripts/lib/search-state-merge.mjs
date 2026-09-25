@@ -20,8 +20,12 @@ export function mergeProjectsInto(merged, batch) {
     if (!merged.projects[repo]) merged.projects[repo] = {}
     for (const [srcId, srcData] of Object.entries(sources)) {
       const existing = merged.projects[repo][srcId] || { processedIds: [] }
-      existing.lastSearched = srcData.lastSearched || existing.lastSearched
-      existing.cursor = srcData.cursor || existing.cursor
+      if (Object.prototype.hasOwnProperty.call(srcData, 'lastSearched')) {
+        existing.lastSearched = srcData.lastSearched
+      }
+      if (Object.prototype.hasOwnProperty.call(srcData, 'cursor')) {
+        existing.cursor = srcData.cursor
+      }
       const ids = new Set([...(existing.processedIds || []), ...(srcData.processedIds || [])])
       existing.processedIds = [...ids]
       merged.projects[repo][srcId] = existing
