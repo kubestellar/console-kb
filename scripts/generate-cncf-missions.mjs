@@ -22,7 +22,7 @@ import { validateMissionExport } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 
 import { truncateAtWordBoundary, slugify } from './lib/text-utils.mjs'
-import { sleep, findHighEngagementIssues, getIssueDetails, fetchPRDiffSummary } from './lib/cncf-github-client.mjs'
+import { sleep, githubApi, githubHeaders, findHighEngagementIssues, getIssueDetails, fetchPRDiffSummary } from './lib/cncf-github-client.mjs'
 import { extractResolutionFromIssue } from './lib/cncf-resolution.mjs'
 import {
   isKubernetesNative,
@@ -52,6 +52,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 // PAT for issue creation — events from PATs trigger workflows (GITHUB_TOKEN events don't)
 const ISSUE_TOKEN = process.env.ISSUE_TOKEN || process.env.GITHUB_TOKEN
+// Per-request timeout for the raw (non-retrying) Copilot-dispatch mutations.
+const DISPATCH_REQUEST_TIMEOUT_MS = 30000
 const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
@@ -198,29 +200,29 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     return null
   }
 
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    Accept: 'application/vnd.github.v3+json',
-  }
+  // Header policy (Accept / API version / auth) comes from the shared
+  // client; the POST/PUT calls below stay on raw fetch because they are
+  // non-idempotent (branch, commit, PR creation) and must not be blindly
+  // retried on 5xx the way githubApi() retries reads (console-kb#3551).
+  const headers = { ...githubHeaders(token), 'Content-Type': 'application/json' }
+  const requestInit = (init) => ({ ...init, headers, signal: AbortSignal.timeout(DISPATCH_REQUEST_TIMEOUT_MS) })
   const apiBase = `https://api.github.com/repos/${COPILOT_REPO_OWNER}/${COPILOT_REPO_NAME}`
 
   try {
-    // 1. Get master branch SHA
-    const refResp = await fetch(`${apiBase}/git/ref/heads/master`, { headers })
-    if (!refResp.ok) {
-      console.warn(`    [ERROR] Could not get master ref: ${refResp.status}`)
+    // 1. Get master branch SHA (read — goes through the shared retrying client)
+    const ref = await githubApi(`${apiBase}/git/ref/heads/master`, { headers: { Authorization: headers.Authorization } })
+    if (!ref?.object?.sha) {
+      console.warn('    [ERROR] Could not get master ref')
       return null
     }
-    const masterSha = (await refResp.json()).object.sha
+    const masterSha = ref.object.sha
 
     // 2. Create branch
     const branchName = `cncf-mission/${slug}`
-    const branchResp = await fetch(`${apiBase}/git/refs`, {
+    const branchResp = await fetch(`${apiBase}/git/refs`, requestInit({
       method: 'POST',
-      headers,
       body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: masterSha }),
-    })
+    }))
     if (!branchResp.ok) {
       const err = await branchResp.text().catch(() => '')
       // Branch may already exist from a previous run
@@ -237,9 +239,8 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     const BOT_NAME = 'github-actions[bot]'
     const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
     const commitMessage = `🌱 Add ${project.name}: ${truncateAtWordBoundary(issue.title, 60)} mission\n\nSigned-off-by: ${BOT_NAME} <${BOT_EMAIL}>`
-    const fileResp = await fetch(`${apiBase}/contents/${filePath}`, {
+    const fileResp = await fetch(`${apiBase}/contents/${filePath}`, requestInit({
       method: 'PUT',
-      headers,
       body: JSON.stringify({
         message: commitMessage,
         content,
@@ -247,7 +248,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
         committer: { name: BOT_NAME, email: BOT_EMAIL },
         author: { name: BOT_NAME, email: BOT_EMAIL },
       }),
-    })
+    }))
     if (!fileResp.ok) {
       const err = await fileResp.text().catch(() => '')
       console.warn(`    [ERROR] File creation failed: ${fileResp.status} ${err.slice(0, 200)}`)
@@ -256,16 +257,15 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 
     // 4. Create PR
     const prBody = buildPRBody({ project, issue, resolution, linkedPR, filePath, missionType })
-    const prResp = await fetch(`${apiBase}/pulls`, {
+    const prResp = await fetch(`${apiBase}/pulls`, requestInit({
       method: 'POST',
-      headers,
       body: JSON.stringify({
         title: `🌱 ${project.name}: ${truncateAtWordBoundary(issue.title, 80)}`,
         head: branchName,
         base: 'master',
         body: prBody,
       }),
-    })
+    }))
 
     if (!prResp.ok) {
       const err = await prResp.text().catch(() => '')
@@ -278,22 +278,20 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 
     // 5. Add labels to the PR
     try {
-      await fetch(`${apiBase}/issues/${pr.number}/labels`, {
+      await fetch(`${apiBase}/issues/${pr.number}/labels`, requestInit({
         method: 'POST',
-        headers,
         body: JSON.stringify({ labels: ['cncf-mission-gen', 'ai-fix-requested', 'triage/accepted'] }),
-      })
+      }))
     } catch (labelErr) {
       console.warn(`    [WARN] Could not add labels: ${labelErr.message}`)
     }
 
     // 6. Assign Copilot to enhance the pre-filled content
     try {
-      await fetch(`${apiBase}/issues/${pr.number}/assignees`, {
+      await fetch(`${apiBase}/issues/${pr.number}/assignees`, requestInit({
         method: 'POST',
-        headers,
         body: JSON.stringify({ assignees: ['copilot-swe-agent[bot]'] }),
-      })
+      }))
       console.log(`    [PR] Assigned Copilot to enhance #${pr.number}`)
     } catch (assignErr) {
       console.warn(`    [WARN] Could not assign Copilot: ${assignErr.message}`)
