@@ -23,6 +23,11 @@ import { scoreMission } from './quality-scorer.mjs'
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
+// GitHub REST primitives (rate-limit tracking, 30s timeout, 5xx/network
+// backoff) are shared with generate-cncf-missions.mjs via the lib; the
+// Response-returning variant is used here because the knowledge-source
+// fetchers below inspect `res.ok` themselves (kubestellar/console-kb#3536).
+import { sleep, githubApiResponse as githubApi } from './lib/cncf-github-client.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -47,11 +52,6 @@ const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
 // (kubestellar/console-kb#3134, #3333).
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
-let rateLimitRemaining = 5000
-let rateLimitReset = 0
-
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
-
 function loadInstallSourcesConfig() {
   const configPath = join(__dirname, 'install-sources.yaml')
   if (!existsSync(configPath)) {
@@ -62,44 +62,10 @@ function loadInstallSourcesConfig() {
 }
 
 // ─── GitHub API helpers ──────────────────────────────────────────────
-async function waitForRateLimit() {
-  if (rateLimitRemaining < 10) {
-    const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-    console.log(`  Rate limit low (${rateLimitRemaining}), waiting ${Math.round(waitMs / 1000)}s...`)
-    await sleep(waitMs)
-  }
-}
-
-async function githubApi(url, options = {}) {
-  await waitForRateLimit()
-  const headers = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'cncf-install-mission-gen/1.0',
-  }
-  if (GITHUB_TOKEN) headers.Authorization = `Bearer ${GITHUB_TOKEN}`
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
-    const rem = response.headers.get('x-ratelimit-remaining')
-    const rst = response.headers.get('x-ratelimit-reset')
-    if (rem != null) rateLimitRemaining = parseInt(rem, 10)
-    if (rst != null) rateLimitReset = parseInt(rst, 10)
-
-    if (response.status === 403 && rateLimitRemaining === 0) {
-      const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 2000
-      console.log(`  GitHub rate limit hit, waiting ${Math.round(waitMs / 1000)}s...`)
-      await sleep(waitMs)
-      continue
-    }
-    return response
-  }
-  throw new Error(`GitHub API request failed after 3 attempts: ${url}`)
-}
-
 async function fetchRawFile(owner, repo, path) {
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
   const res = await githubApi(url)
-  if (!res.ok) return null
+  if (!res?.ok) return null
   const data = await res.json()
   if (data.encoding === 'base64') {
     return Buffer.from(data.content, 'base64').toString('utf-8')
@@ -111,20 +77,20 @@ async function fetchRawFile(owner, repo, path) {
 
 async function fetchReadme(owner, repo) {
   const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}/readme`)
-  if (!res.ok) return null
+  if (!res?.ok) return null
   const data = await res.json()
   return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 8000)
 }
 
 async function fetchRepoMeta(owner, repo) {
   const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}`)
-  if (!res.ok) return null
+  if (!res?.ok) return null
   return res.json()
 }
 
 async function fetchLatestRelease(owner, repo) {
   const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}/releases/latest`)
-  if (!res.ok) return null
+  if (!res?.ok) return null
   return res.json()
 }
 
@@ -139,7 +105,7 @@ async function fetchHelmCharts(owner, repo) {
       // Also look for sub-charts
       try {
         const dirRes = await githubApi(`https://api.github.com/repos/${owner}/${repo}/contents/${p}charts`)
-        if (dirRes.ok) {
+        if (dirRes?.ok) {
           const entries = await dirRes.json()
           for (const entry of entries.slice(0, 3)) {
             const nested = await fetchRawFile(owner, repo, `${p}${entry.name}/Chart.yaml`)
@@ -165,7 +131,7 @@ async function fetchKustomizeManifests(owner, repo) {
       const manifests = []
       try {
         const dirRes = await githubApi(`https://api.github.com/repos/${owner}/${repo}/contents/${p}`)
-        if (dirRes.ok) {
+        if (dirRes?.ok) {
           const entries = await dirRes.json()
           for (const f of entries.filter(e => e.name.endsWith('.yaml') && e.name !== 'kustomization.yaml').slice(0, 3)) {
             const content = await fetchRawFile(owner, repo, `${p}${f.name}`)
