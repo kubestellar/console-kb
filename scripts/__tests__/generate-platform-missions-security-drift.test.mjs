@@ -51,6 +51,10 @@ const SOURCE = readFileSync(SOURCE_PATH, 'utf8')
 // respectively (kubestellar/console-kb#3134, #3333); the security-critical
 // bodies now live there, re-exported unchanged from generate-platform-missions.mjs.
 const ENDPOINT_GUARD_SOURCE = readFileSync(join(__dirname, '../lib/llm-endpoint-guard.mjs'), 'utf8')
+// The env-derived LLM config and the module-load SSRF gate moved to
+// scripts/lib/platform-llm-config.mjs (kubestellar/console-kb#3544);
+// generate-platform-missions.mjs imports (and re-exports) them from there.
+const LLM_CONFIG_SOURCE = readFileSync(join(__dirname, '../lib/platform-llm-config.mjs'), 'utf8')
 const MISSION_FILE_SOURCE = readFileSync(join(__dirname, '../lib/mission-file.mjs'), 'utf8')
 
 function functionBody(src, header) {
@@ -104,10 +108,22 @@ describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
     // endpoint sit in a module-scope constant until a request goes out.
     expect(
       /const\s+TRUSTED_LLM_ENDPOINT\s*=\s*assertTrustedEndpoint\s*\(\s*LLM_ENDPOINT\s*\)/.test(
-        SOURCE
+        LLM_CONFIG_SOURCE
       ),
       'assertTrustedEndpoint(LLM_ENDPOINT) must run at module load'
     ).toBe(true)
+  })
+
+  it('generate-platform-missions.mjs imports TRUSTED_LLM_ENDPOINT from lib/platform-llm-config.mjs', () => {
+    // Importing the config module is what arms the gate; the orchestrator
+    // must not re-parse LLM_ENDPOINT from env and bypass it.
+    expect(
+      /import\s*\{[^}]*\bTRUSTED_LLM_ENDPOINT\b[^}]*\}\s*from\s*['"]\.\/lib\/platform-llm-config\.mjs['"]/.test(
+        SOURCE
+      ),
+      'TRUSTED_LLM_ENDPOINT must be imported from ./lib/platform-llm-config.mjs'
+    ).toBe(true)
+    expect(/process\.env\.LLM_ENDPOINT/.test(SOURCE)).toBe(false)
   })
 
   it('assertTrustedEndpoint throws (not warns) on a non-allowlisted endpoint', () => {

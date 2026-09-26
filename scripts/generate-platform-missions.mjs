@@ -26,18 +26,27 @@ import { scoreMission } from './quality-scorer.mjs'
 import { sanitizeInfraDetails } from './lib/text-utils.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
-import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
+import {
+  getGithubToken,
+  getLlmToken,
+  LLM_ENDPOINT,
+  LLM_MODEL,
+  LLM_TIMEOUT_MS,
+  TRUSTED_LLM_ENDPOINT,
+} from './lib/platform-llm-config.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ─── Config ──────────────────────────────────────────────────────────
-// GITHUB_TOKEN and the LLM_* constants below are exported so that
-// scripts/platform/github-context.mjs and scripts/platform/synthesize.mjs
-// (extracted from this file, console-kb#3163) can import them without
-// duplicating env parsing or the SSRF-allowlist check.
-export const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-export const LLM_TOKEN = process.env.LLM_TOKEN || GITHUB_TOKEN
+// GITHUB_TOKEN / LLM_TOKEN / LLM_* / TRUSTED_LLM_ENDPOINT are owned by
+// ./lib/platform-llm-config.mjs (console-kb#3544), which also runs the
+// module-load SSRF gate (assertTrustedEndpoint). They are re-exported below
+// for callers/tests that still import them from here; the extracted
+// ./platform/*.mjs modules import the lib directly.
+export const GITHUB_TOKEN = getGithubToken()
+export const LLM_TOKEN = getLlmToken()
+export { LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS, TRUSTED_LLM_ENDPOINT }
 const TARGET_PLATFORMS = process.env.TARGET_PLATFORMS
   ? process.env.TARGET_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
   : null
@@ -49,16 +58,6 @@ const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 
 /** Missions older than this are considered stale and will be regenerated */
 const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
-
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-export const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
-export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
-
-// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).
-// ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint are shared with
-// generate-cncf-install-missions.mjs via ./lib/llm-endpoint-guard.mjs
-// (kubestellar/console-kb#3134, #3333).
-export const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
 // GitHub context fetching (githubFetch, fetchRepoMeta, fetchReadme, helm/kustomize
 // fetchers, checkHelmRepoUrl, gatherPlatformContext) and LLM prompt building +

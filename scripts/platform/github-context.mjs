@@ -6,11 +6,13 @@
  * (with a mocked global fetch) independently of the LLM synthesis and
  * quality-gate concerns that remain in the main script.
  *
- * GITHUB_TOKEN and the rate-limit state are imported from the main
- * orchestrator module so there is a single source of truth for the token
- * and a single shared rate-limit budget across the generator run.
+ * The GitHub token is read per-call from ../lib/platform-llm-config.mjs
+ * (console-kb#3544) so there is a single source of truth for env-derived
+ * config without importing back from the orchestrator that calls this
+ * module. The rate-limit state below is module-local and shared across
+ * the generator run.
  */
-import { GITHUB_TOKEN } from '../generate-platform-missions.mjs'
+import { getGithubToken } from '../lib/platform-llm-config.mjs'
 import { checkHelmRepoUrl } from '../lib/helm-sources.mjs'
 
 export { checkHelmRepoUrl }
@@ -33,7 +35,7 @@ export async function waitForRateLimit() {
 export async function githubFetch(url, options = {}) {
   await waitForRateLimit()
   const headers = {
-    Authorization: `Bearer ${GITHUB_TOKEN}`,
+    Authorization: `Bearer ${getGithubToken()}`,
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   }

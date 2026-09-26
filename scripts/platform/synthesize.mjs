@@ -2,12 +2,14 @@
  * LLM prompt-building and synthesis for the platform mission generator.
  *
  * Extracted from generate-platform-missions.mjs (console-kb#3163). The
- * trusted-endpoint / token / model config it depends on is imported from
- * the main orchestrator module, which remains the single place those
- * env-derived constants are validated (assertTrustedEndpoint runs once,
- * at module load, in generate-platform-missions.mjs).
+ * trusted-endpoint / token / model config it depends on lives in
+ * ../lib/platform-llm-config.mjs (console-kb#3544), which is the single
+ * place those env-derived constants are validated (assertTrustedEndpoint
+ * runs once, at module load, when that module is imported). This module
+ * must not import from the orchestrator that calls it.
  */
-import { slugify, LLM_TOKEN, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../generate-platform-missions.mjs'
+import { slugify } from '../lib/mission-file.mjs'
+import { getLlmToken, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../lib/platform-llm-config.mjs'
 
 export const PLATFORM_SYSTEM_PROMPT = `You are an expert Kubernetes platform engineer. Your task is to generate a comprehensive, accurate, and practical install mission JSON for a specific Kubernetes platform or managed service.
 
@@ -112,7 +114,7 @@ export async function synthesizePlatformMission(platform, context) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${LLM_TOKEN}`,
+        Authorization: `Bearer ${getLlmToken()}`,
       },
       signal: controller.signal,
       body: JSON.stringify({

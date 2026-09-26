@@ -43,15 +43,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const scriptsDir = join(__dirname, '..')
 
 // Files that must invoke the module-load SSRF gate on LLM_ENDPOINT.
+// generate-platform-missions.mjs delegates its gate to
+// lib/platform-llm-config.mjs (console-kb#3544), which it (and the
+// extracted platform/*.mjs modules) import at module load.
 const GATE_FILES = [
   'enrich-install-missions.mjs',
   'generate-cncf-install-missions.mjs',
-  'generate-platform-missions.mjs',
+  'lib/platform-llm-config.mjs',
   'lib/executor-llm.mjs',
 ]
 
 // Files that declare (own) ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint
-// locally. generate-cncf-install-missions.mjs and generate-platform-missions.mjs
+// locally. generate-cncf-install-missions.mjs and lib/platform-llm-config.mjs
 // import both from lib/llm-endpoint-guard.mjs instead (checked separately below).
 const DECLARATION_FILES = [
   'enrich-install-missions.mjs',
@@ -59,11 +62,19 @@ const DECLARATION_FILES = [
   'lib/llm-endpoint-guard.mjs',
 ]
 
-// generate-cncf-install-missions.mjs / generate-platform-missions.mjs must
+// generate-cncf-install-missions.mjs / lib/platform-llm-config.mjs must
 // import the shared guard rather than re-declaring it.
 const CONSOLIDATED_IMPORTER_FILES = [
   'generate-cncf-install-missions.mjs',
+  'lib/platform-llm-config.mjs',
+]
+
+// generate-platform-missions.mjs must obtain its LLM config (and thereby the
+// module-load gate) from lib/platform-llm-config.mjs, not re-parse env itself.
+const CONFIG_CONSUMER_FILES = [
   'generate-platform-missions.mjs',
+  'platform/synthesize.mjs',
+  'platform/github-context.mjs',
 ]
 
 /**
@@ -91,7 +102,7 @@ function extractPrefixes(source) {
 // Load every relevant file's source once. Failures here mean the test
 // itself is broken; surface them clearly rather than as N cascading
 // per-file failures.
-const ALL_FILES = [...new Set([...GATE_FILES, ...DECLARATION_FILES, ...CONSOLIDATED_IMPORTER_FILES])]
+const ALL_FILES = [...new Set([...GATE_FILES, ...DECLARATION_FILES, ...CONSOLIDATED_IMPORTER_FILES, ...CONFIG_CONSUMER_FILES])]
 const sources = new Map()
 for (const name of ALL_FILES) {
   sources.set(name, readFileSync(join(scriptsDir, name), 'utf8'))
@@ -188,13 +199,30 @@ describe('assertTrustedEndpoint function shape', () => {
   for (const name of CONSOLIDATED_IMPORTER_FILES) {
     it(`${name} imports assertTrustedEndpoint / ALLOWED_ENDPOINT_PREFIXES from lib/llm-endpoint-guard.mjs (no local re-declaration)`, () => {
       const source = sources.get(name)
+      // Top-level scripts import './lib/llm-endpoint-guard.mjs'; siblings
+      // under lib/ import './llm-endpoint-guard.mjs'.
       expect(source).toMatch(
-        /import\s*\{[^}]*\bassertTrustedEndpoint\b[^}]*\}\s*from\s*['"]\.\/lib\/llm-endpoint-guard\.mjs['"]/,
+        /import\s*\{[^}]*\bassertTrustedEndpoint\b[^}]*\}\s*from\s*['"]\.\/(?:lib\/)?llm-endpoint-guard\.mjs['"]/,
       )
       expect(source).toMatch(
-        /import\s*\{[^}]*\bALLOWED_ENDPOINT_PREFIXES\b[^}]*\}\s*from\s*['"]\.\/lib\/llm-endpoint-guard\.mjs['"]/,
+        /import\s*\{[^}]*\bALLOWED_ENDPOINT_PREFIXES\b[^}]*\}\s*from\s*['"]\.\/(?:lib\/)?llm-endpoint-guard\.mjs['"]/,
       )
       expect(source).not.toMatch(/function\s+assertTrustedEndpoint\s*\(/)
+    })
+  }
+
+  for (const name of CONFIG_CONSUMER_FILES) {
+    it(`${name} takes its LLM config from lib/platform-llm-config.mjs (no local env parsing / gate)`, () => {
+      const source = sources.get(name)
+      expect(source).toMatch(
+        /import\s*\{[^}]*\}\s*from\s*['"]\.\.?\/lib\/platform-llm-config\.mjs['"]/,
+      )
+      // The env parse + SSRF gate must live in exactly one place.
+      expect(source).not.toMatch(/process\.env\.LLM_ENDPOINT/)
+      expect(source).not.toMatch(/assertTrustedEndpoint\s*\(/)
+      // The extracted platform/*.mjs modules must not reverse-import the
+      // orchestrator they were extracted from (console-kb#3544).
+      expect(source).not.toMatch(/from\s*['"]\.\.\/generate-platform-missions\.mjs['"]/)
     })
   }
 })
