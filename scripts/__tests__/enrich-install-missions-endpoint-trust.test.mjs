@@ -108,10 +108,11 @@ describe('assertTrustedEndpoint', () => {
 })
 
 describe('ALLOWED_ENDPOINT_PREFIXES', () => {
-  it('exposes the three production LLM endpoints', () => {
+  it('exposes the four production LLM endpoints', () => {
     // Pinning this list guards against silent additions/removals: any new
     // entry should be a conscious decision that comes with its own review.
     expect(ALLOWED_ENDPOINT_PREFIXES).toEqual([
+      'https://models.github.ai/',
       'https://models.inference.ai.azure.com/',
       'https://api.openai.com/',
       'https://api.githubcopilot.com/',
