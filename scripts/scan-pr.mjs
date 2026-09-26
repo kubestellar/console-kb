@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
 import { createLogger } from './lib/logger.mjs';
@@ -17,8 +17,20 @@ const SKIP_FILENAMES = new Set(['index.json']);
  * Returns an array of relative file paths.
  */
 function discoverMissionFiles(dir) {
+  if (!existsSync(dir)) {
+    return [];
+  }
   const results = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+  for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...discoverMissionFiles(fullPath));
