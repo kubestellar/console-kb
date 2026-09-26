@@ -1,13 +1,15 @@
 // Behavioural tests for scripts/platform/github-context.mjs, extracted from
 // generate-platform-missions.mjs (console-kb#3163). These functions were
 // previously module-internal and untested — this suite exercises the
-// fetch-wrapping GitHub helpers and gatherPlatformContext() with a mocked
-// global fetch so the network/parsing/rate-limit logic runs without any
-// real HTTP calls (console-kb#3182).
+// GitHub helpers and gatherPlatformContext() with a mocked global fetch so
+// the network/parsing logic runs without any real HTTP calls (console-kb#3182).
+// Since console-kb#3551 the module delegates rate-limit/retry/timeout policy
+// to lib/cncf-github-client.mjs, so those semantics are covered there.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   sleep,
-  githubFetch,
+  waitForRateLimit,
+  githubApi,
   fetchRepoMeta,
   fetchReleases,
   fetchReadme,
@@ -17,6 +19,11 @@ import {
   checkHelmRepoUrl,
   gatherPlatformContext,
 } from '../platform/github-context.mjs'
+import {
+  sleep as libSleep,
+  waitForRateLimit as libWaitForRateLimit,
+  githubApi as libGithubApi,
+} from '../lib/cncf-github-client.mjs'
 
 function ghResponse({ ok = true, status = 200, body = {}, headers = {} } = {}) {
   const h = new Map(Object.entries(headers))
@@ -33,7 +40,16 @@ function b64(str) {
   return Buffer.from(str, 'utf-8').toString('base64')
 }
 
+let originalGithubToken
+beforeEach(() => {
+  originalGithubToken = process.env.GITHUB_TOKEN
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+})
+
 afterEach(() => {
+  if (originalGithubToken === undefined) delete process.env.GITHUB_TOKEN
+  else process.env.GITHUB_TOKEN = originalGithubToken
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -52,44 +68,43 @@ describe('sleep', () => {
   })
 })
 
-describe('githubFetch', () => {
-  it('sends an auth header and records rate-limit headers from the response', async () => {
+describe('shared GitHub client (console-kb#3551)', () => {
+  it('re-exports the lib client rather than carrying a private copy', () => {
+    expect(githubApi).toBe(libGithubApi)
+    expect(waitForRateLimit).toBe(libWaitForRateLimit)
+    expect(sleep).toBe(libSleep)
+  })
+
+  it('sends the shared Accept / API-version / auth headers and a request timeout', async () => {
+    process.env.GITHUB_TOKEN = 'platform-test-token'
     const fetchMock = vi.fn().mockResolvedValue(
-      ghResponse({ headers: { 'x-ratelimit-remaining': '4999', 'x-ratelimit-reset': '123' } })
+      ghResponse({ body: { full_name: 'foo/bar' }, headers: { 'x-ratelimit-remaining': '4999', 'x-ratelimit-reset': '123' } })
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    const res = await githubFetch('https://api.github.com/repos/foo/bar')
-    expect(res.ok).toBe(true)
+    expect(await fetchRepoMeta('foo', 'bar')).toEqual({ full_name: 'foo/bar' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, options] = fetchMock.mock.calls[0]
     expect(url).toBe('https://api.github.com/repos/foo/bar')
     expect(options.headers.Accept).toBe('application/vnd.github+json')
     expect(options.headers['X-GitHub-Api-Version']).toBe('2022-11-28')
-    expect(options.headers.Authorization).toMatch(/^Bearer /)
+    expect(options.headers.Authorization).toBe('Bearer platform-test-token')
+    expect(options.signal).toBeInstanceOf(AbortSignal)
   })
 
-  it('waits out the rate limit window when remaining requests are low', async () => {
+  it('retries a 5xx with backoff instead of failing the whole context fetch', async () => {
     vi.useFakeTimers()
-    const now = Date.now()
-    vi.setSystemTime(now)
-    const lowRemainingResponse = ghResponse({
-      headers: { 'x-ratelimit-remaining': '5', 'x-ratelimit-reset': String(Math.floor(now / 1000) + 2) },
-    })
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(lowRemainingResponse)
-      .mockResolvedValueOnce(ghResponse({ headers: { 'x-ratelimit-remaining': '5000', 'x-ratelimit-reset': '0' } }))
+      .mockResolvedValueOnce(ghResponse({ ok: false, status: 502 }))
+      .mockResolvedValueOnce(ghResponse({ body: { full_name: 'foo/bar' } }))
     vi.stubGlobal('fetch', fetchMock)
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    // First call reports low remaining, so the second call must wait.
-    await githubFetch('https://api.github.com/repos/foo/bar')
-    const secondCallPromise = githubFetch('https://api.github.com/repos/foo/baz')
-    await vi.advanceTimersByTimeAsync(5000)
-    await secondCallPromise
-
-    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/Rate limit low/))
-    logSpy.mockRestore()
+    const p = fetchRepoMeta('foo', 'bar')
+    await vi.runAllTimersAsync()
+    expect(await p).toEqual({ full_name: 'foo/bar' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    warnSpy.mockRestore()
   })
 })
 

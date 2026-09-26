@@ -20,8 +20,40 @@ const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
 
+// GitHub REST media type + API version pin. The older `.v3+json` media type
+// is deprecated; every caller now goes through this one definition so a
+// future GitHub default-version change is a one-line fix
+// (kubestellar/console-kb#3551).
+export const GITHUB_ACCEPT_HEADER = 'application/vnd.github+json'
+export const GITHUB_API_VERSION = '2022-11-28'
+const USER_AGENT = 'cncf-mission-generator/1.0'
+
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
+
+/**
+ * Base request headers for api.github.com: Accept, API-version pin,
+ * User-Agent, and `Authorization` when a token is available. `token`
+ * defaults to GITHUB_TOKEN (read per call so tests/callers can mutate
+ * process.env after import); pass an explicit token to use a different
+ * credential (e.g. ISSUE_TOKEN for PR creation).
+ *
+ * githubApi() uses this internally; it is exported for the few call sites
+ * that must issue non-idempotent mutations (POST/PUT) with raw fetch and
+ * therefore cannot go through the retrying client, so at least the header
+ * policy stays in one place.
+ */
+export function githubHeaders(token = process.env.GITHUB_TOKEN) {
+  const headers = {
+    Accept: GITHUB_ACCEPT_HEADER,
+    'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    'User-Agent': USER_AGENT,
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
+}
 
 export function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -38,14 +70,7 @@ export async function waitForRateLimit() {
 export async function githubApi(url, options = {}) {
   await waitForRateLimit()
 
-  const headers = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'cncf-mission-generator/1.0',
-  }
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = githubHeaders()
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {

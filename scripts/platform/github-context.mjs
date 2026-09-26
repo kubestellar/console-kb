@@ -6,95 +6,73 @@
  * (with a mocked global fetch) independently of the LLM synthesis and
  * quality-gate concerns that remain in the main script.
  *
- * GITHUB_TOKEN and the rate-limit state are imported from the main
- * orchestrator module so there is a single source of truth for the token
- * and a single shared rate-limit budget across the generator run.
+ * All requests go through the shared client in lib/cncf-github-client.mjs
+ * (console-kb#3551): one process-wide rate-limit budget, one retry/backoff
+ * policy, one request timeout, and one place that owns the Accept /
+ * X-GitHub-Api-Version headers. This module deliberately has no private
+ * rate-limit counters and no raw `fetch()` against api.github.com —
+ * scripts/__tests__/github-client-drift.test.mjs enforces that.
  */
-import { GITHUB_TOKEN } from '../generate-platform-missions.mjs'
+import { sleep, waitForRateLimit, githubApi } from '../lib/cncf-github-client.mjs'
 import { checkHelmRepoUrl } from '../lib/helm-sources.mjs'
 
-export { checkHelmRepoUrl }
+export { checkHelmRepoUrl, sleep, waitForRateLimit, githubApi }
 
-let rateLimitRemaining = 5000
-let rateLimitReset = 0
+const API = 'https://api.github.com/repos'
 
-export function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+/**
+ * Fetch a base64 `content` payload (contents API / readme endpoint) and
+ * return its decoded text, or null when it is missing or the shared client
+ * skipped the request.
+ */
+async function fetchDecodedContent(url, maxChars) {
+  const data = await githubApi(url)
+  if (!data || typeof data.content !== 'string') return null
+  return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, maxChars)
 }
 
-export async function waitForRateLimit() {
-  if (rateLimitRemaining < 10) {
-    const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-    console.log(`  Rate limit low (${rateLimitRemaining}), waiting ${Math.round(waitMs / 1000)}s...`)
-    await sleep(waitMs)
+async function fetchContentsFile(owner, repo, path, maxChars) {
+  return fetchDecodedContent(`${API}/${owner}/${repo}/contents/${path}`, maxChars)
+}
+
+/** Try `candidateDirs` in order and return the first decoded `file` found. */
+async function fetchFirstContentsFile(owner, repo, candidateDirs, file, maxChars) {
+  for (const dir of candidateDirs) {
+    const text = await fetchContentsFile(owner, repo, `${dir}${file}`, maxChars)
+    if (text != null) return text
   }
+  return null
 }
 
-export async function githubFetch(url, options = {}) {
-  await waitForRateLimit()
-  const headers = {
-    Authorization: `Bearer ${GITHUB_TOKEN}`,
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  }
-  const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
-  rateLimitRemaining = parseInt(response.headers.get('x-ratelimit-remaining') || '5000', 10)
-  rateLimitReset = parseInt(response.headers.get('x-ratelimit-reset') || '0', 10)
-  return response
-}
+const HELM_DIRS = ['charts/', 'chart/', 'helm/', '']
+const KUSTOMIZE_DIRS = ['config/default/', 'deploy/', 'manifests/', '']
+const README_MAX_CHARS = 8000
+const HELM_FILE_MAX_CHARS = 4000
+const KUSTOMIZE_MAX_CHARS = 3000
 
 export async function fetchRepoMeta(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}`)
-  if (!res.ok) return null
-  return res.json()
+  return githubApi(`${API}/${owner}/${repo}`)
 }
 
 export async function fetchReleases(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=10`)
-  if (!res.ok) return []
-  return res.json()
+  const releases = await githubApi(`${API}/${owner}/${repo}/releases?per_page=10`)
+  return Array.isArray(releases) ? releases : []
 }
 
 export async function fetchReadme(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/readme`)
-  if (!res.ok) return null
-  const data = await res.json()
-  return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 8000)
+  return fetchDecodedContent(`${API}/${owner}/${repo}/readme`, README_MAX_CHARS)
 }
 
 export async function fetchHelmChart(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}Chart.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
+  return fetchFirstContentsFile(owner, repo, HELM_DIRS, 'Chart.yaml', HELM_FILE_MAX_CHARS)
 }
 
 export async function fetchHelmValues(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}values.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
+  return fetchFirstContentsFile(owner, repo, HELM_DIRS, 'values.yaml', HELM_FILE_MAX_CHARS)
 }
 
 export async function fetchKustomize(owner, repo) {
-  for (const p of ['config/default/', 'deploy/', 'manifests/', '']) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}kustomization.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 3000)
-    }
-  }
-  return null
+  return fetchFirstContentsFile(owner, repo, KUSTOMIZE_DIRS, 'kustomization.yaml', KUSTOMIZE_MAX_CHARS)
 }
 
 export async function gatherPlatformContext(platform) {

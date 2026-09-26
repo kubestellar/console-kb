@@ -18,6 +18,9 @@ import {
   sleep,
   waitForRateLimit,
   githubApi,
+  githubHeaders,
+  GITHUB_ACCEPT_HEADER,
+  GITHUB_API_VERSION,
   findHighEngagementIssues,
   getIssueDetails,
   fetchPRDiffSummary,
@@ -98,6 +101,29 @@ describe('waitForRateLimit', () => {
   })
 })
 
+// ─── githubHeaders ─────────────────────────────────────────────────────
+
+describe('githubHeaders', () => {
+  it('emits the non-deprecated media type and pins the API version', () => {
+    delete process.env.GITHUB_TOKEN
+    const h = githubHeaders()
+    expect(h.Accept).toBe(GITHUB_ACCEPT_HEADER)
+    expect(h.Accept).toBe('application/vnd.github+json')
+    expect(h['X-GitHub-Api-Version']).toBe(GITHUB_API_VERSION)
+    expect(h['X-GitHub-Api-Version']).toBe('2022-11-28')
+    expect(h['User-Agent']).toMatch(/cncf-mission-generator/)
+    expect(h).not.toHaveProperty('Authorization')
+  })
+
+  it('reads GITHUB_TOKEN at call time by default and honors an explicit token', () => {
+    process.env.GITHUB_TOKEN = 'env-token'
+    expect(githubHeaders().Authorization).toBe('Bearer env-token')
+    expect(githubHeaders('issue-token').Authorization).toBe('Bearer issue-token')
+    expect(githubHeaders(undefined).Authorization).toBe('Bearer env-token')
+    expect(githubHeaders('')).not.toHaveProperty('Authorization')
+  })
+})
+
 // ─── githubApi ─────────────────────────────────────────────────────────
 
 describe('githubApi', () => {
@@ -113,7 +139,8 @@ describe('githubApi', () => {
     expect(result).toEqual({ ok: true })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, opts] = fetchMock.mock.calls[0]
-    expect(opts.headers.Accept).toBe('application/vnd.github.v3+json')
+    expect(opts.headers.Accept).toBe('application/vnd.github+json')
+    expect(opts.headers['X-GitHub-Api-Version']).toBe('2022-11-28')
     expect(opts.headers['User-Agent']).toMatch(/cncf-mission-generator/)
   })
 
@@ -133,7 +160,7 @@ describe('githubApi', () => {
     await p
     const [, opts] = fetchMock.mock.calls[0]
     expect(opts.headers['X-Custom']).toBe('y')
-    expect(opts.headers.Accept).toBe('application/vnd.github.v3+json')
+    expect(opts.headers.Accept).toBe('application/vnd.github+json')
     expect(opts.headers.Authorization).toBe('Bearer test-token-abc')
   })
 
