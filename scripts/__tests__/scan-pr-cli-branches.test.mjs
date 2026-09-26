@@ -146,4 +146,25 @@ describe('scan-pr.mjs --all extension handling', () => {
       expect(report).toContain('y.json')
     })
   })
+
+  it('treats a missing mission root as empty rather than crashing on ENOENT', () => {
+    // A --all scan enumerates every configured mission root (fixes/,
+    // runbooks/). If the working tree only carries one of them —
+    // a partial checkout, a fresh clone of the scripts/ subpackage,
+    // or a temp-dir test that only populates fixes/ — readdirSync
+    // on the absent root must not tear down the whole scan with
+    // ENOENT. Regressing this makes every --all scan against such
+    // a tree crash before it can report anything, and it also breaks
+    // the four extension/nesting tests above (which populate only
+    // fixes/) for the same reason.
+    withTempDir(dir => {
+      const fixes = join(dir, 'fixes')
+      mkdirSync(fixes, { recursive: true })
+      writeFileSync(join(fixes, 'ok.json'), JSON.stringify(VALID_MISSION))
+      // Deliberately do NOT create runbooks/.
+      const result = runScanPR(dir, ['--all'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 1 mission files/)
+    })
+  })
 })

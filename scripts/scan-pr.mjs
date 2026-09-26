@@ -15,10 +15,23 @@ const SKIP_FILENAMES = new Set(['index.json']);
 /**
  * Recursively discovers all mission files under the given directory.
  * Returns an array of relative file paths.
+ *
+ * Silently returns [] when `dir` does not exist. A --all scan enumerates
+ * every configured mission root (fixes/, runbooks/), and a working tree
+ * that only carries one of them (e.g. a partial checkout, a fresh clone
+ * of the scripts/ subpackage, or a temp-dir test that populates only
+ * fixes/) must not crash the whole scan on ENOENT of the other root.
  */
 function discoverMissionFiles(dir) {
   const results = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return results;
+    throw err;
+  }
+  for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...discoverMissionFiles(fullPath));
