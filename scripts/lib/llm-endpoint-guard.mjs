@@ -8,15 +8,17 @@
  * `ALLOWED_ENDPOINT_PREFIXES` + `assertTrustedEndpoint`. A single copy means
  * a future allowlist change (or security fix) only has to land once.
  *
- * `enrich-install-missions.mjs` and `lib/executor-llm.mjs` keep their own
- * copies for now (out of scope for this refactor — see
- * kubestellar/console-kb#3100).
+ * `enrich-install-missions.mjs`, `lib/executor-llm.mjs`, and
+ * `sources/llm-synthesizer/config.mjs` are expected to import from this
+ * module to ensure all consumers share a single source of truth for
+ * `LLM_ENDPOINT` validation.
  */
 
 export const ALLOWED_ENDPOINT_PREFIXES = [
   'https://models.inference.ai.azure.com/',
   'https://api.openai.com/',
   'https://api.githubcopilot.com/',
+  'https://models.github.ai/',
 ]
 
 /**
