@@ -50,8 +50,8 @@ const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 /** Missions older than this are considered stale and will be regenerated */
 const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-export const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
+export const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10)
 
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).

@@ -38,11 +38,12 @@ const SRC = readFileSync(join(HERE, '..', 'enrich-install-missions.mjs'), 'utf-8
 
 describe('enrich-install-missions security-drift guards', () => {
   describe('ALLOWED_ENDPOINT_PREFIXES', () => {
-    it('lists exactly the three approved LLM backends and no more', () => {
-      // A silently-added fourth prefix is the exact SSRF pathway
+    it('lists exactly the four approved LLM backends and no more', () => {
+      // A silently-added fifth prefix is the exact SSRF pathway
       // this allowlist exists to block. Locking the count + set
       // makes any expansion a review-visible source change.
       expect(ALLOWED_ENDPOINT_PREFIXES).toEqual([
+        'https://models.github.ai/',
         'https://models.inference.ai.azure.com/',
         'https://api.openai.com/',
         'https://api.githubcopilot.com/',

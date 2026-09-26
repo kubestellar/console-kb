@@ -13,10 +13,11 @@
  * all copies stay byte-identical.
  */
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
+const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 
 const ALLOWED_ENDPOINT_PREFIXES = [
+  'https://models.github.ai/',
   'https://models.inference.ai.azure.com/',
   'https://api.openai.com/',
   'https://api.githubcopilot.com/',
