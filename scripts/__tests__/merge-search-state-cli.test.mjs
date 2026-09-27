@@ -16,7 +16,7 @@
  * render-ci-step-summary-cli.test.mjs.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { resolve, dirname, join } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
@@ -155,7 +155,7 @@ describe('merge-search-state.mjs CLI', () => {
     expect(merged.projects).toEqual({})
   })
 
-  it('exits non-zero for an invalid base search-state.json and leaves it untouched', async () => {
+  it('self-heals from an invalid base search-state.json: preserves it as .corrupt-<ts>, warns, and still merges incoming batches', async () => {
     writeFileSync(join(workdir, 'search-state.json'), '{ this is not valid json')
     writeFileSync(
       join(workdir, 'search-state-3.json'),
@@ -170,10 +170,24 @@ describe('merge-search-state.mjs CLI', () => {
 
     const result = await runIn(workdir)
 
-    expect(result.status).toBe(1)
+    expect(result.status).toBe(0)
     expect(result.stderr).toContain('Error parsing search-state.json')
-    expect(result.stdout).toBe('')
-    expect(readFileSync(join(workdir, 'search-state.json'), 'utf8')).toBe('{ this is not valid json')
+    expect(result.stderr).toContain('treating base as empty and continuing')
+    expect(result.stdout).toContain('Merged search state: 1 projects')
+
+    // The clean merged output overwrites search-state.json.
+    const merged = JSON.parse(readFileSync(join(workdir, 'search-state.json'), 'utf8'))
+    expect(merged.projects['from/batch'].github.processedIds).toEqual(['g'])
+
+    // And the original corrupt bytes are preserved under a timestamped name
+    // (the "Commit search state" step in cncf-mission-gen.yml only stages
+    // `search-state.json`, so this preserved file stays out of git history
+    // while remaining available on the runner for triage).
+    const preserved = readdirSync(workdir).filter((f) =>
+      /^search-state\.json\.corrupt-/.test(f),
+    )
+    expect(preserved).toHaveLength(1)
+    expect(readFileSync(join(workdir, preserved[0]), 'utf8')).toBe('{ this is not valid json')
   })
 
   it('warns to stderr about an unparseable batch file and continues with the remaining batches', async () => {
