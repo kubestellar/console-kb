@@ -59,6 +59,10 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
   : null
 import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
+import { createLogger } from './lib/logger.mjs'
+
+const log = createLogger('generate-cncf-missions')
+
 const FORCE_RESCAN = process.env.FORCE_RESCAN === 'true'
 const ENABLED_SOURCES = process.env.ENABLED_SOURCES
   ? process.env.ENABLED_SOURCES.split(',').map(s => s.trim()).filter(Boolean)
@@ -345,6 +349,7 @@ function formatReport(report) {
 }
 
 async function main() {
+  const startedAt = Date.now()
   if (!GITHUB_TOKEN) {
     console.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
   }
@@ -385,6 +390,14 @@ async function main() {
     console.log('No projects in this batch range. Exiting.')
     const reportPath = join(process.cwd(), BATCH_INDEX != null ? `generation-report-${BATCH_INDEX}.md` : 'generation-report.md')
     writeFileSync(reportPath, formatReport({ generated: 0, skipped: 0, errors: 0, projects: [], missions: [] }))
+    log.summary('cncf-mission-generation-summary', {
+      batchIndex: BATCH_INDEX ?? -1,
+      projectsProcessed: 0,
+      generated: 0,
+      skipped: 0,
+      errors: 0,
+      durationMs: Date.now() - startedAt,
+    })
     process.exit(0)
   }
 
@@ -592,6 +605,16 @@ async function main() {
   writeFileSync(reportPath, formatReport(report))
   console.log(`\nReport written to: ${reportPath}`)
   console.log(`Done: ${report.generated} generated, ${report.skipped} skipped, ${report.errors} errors`)
+
+  const durationMs = Date.now() - startedAt
+  log.summary('cncf-mission-generation-summary', {
+    batchIndex: BATCH_INDEX ?? -1,
+    projectsProcessed: projects.length,
+    generated: report.generated,
+    skipped: report.skipped,
+    errors: report.errors,
+    durationMs,
+  })
 
   // Exit with error if error rate is too high (>30% of total attempted)
   const totalAttempted = report.generated + report.skipped + report.errors
