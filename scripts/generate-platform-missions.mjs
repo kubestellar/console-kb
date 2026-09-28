@@ -60,8 +60,9 @@ export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '90000', 10
 // (kubestellar/console-kb#3134, #3333).
 export const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
-// GitHub context fetching (githubFetch, fetchRepoMeta, fetchReadme, helm/kustomize
-// fetchers, checkHelmRepoUrl, gatherPlatformContext) and LLM prompt building +
+// GitHub context fetching (fetchRepoMeta, fetchReadme, helm/kustomize fetchers,
+// checkHelmRepoUrl, gatherPlatformContext — all on the shared client in
+// ./lib/cncf-github-client.mjs, console-kb#3551) and LLM prompt building +
 // synthesis (buildPlatformPrompt, synthesizePlatformMission) are extracted to
 // ./platform/github-context.mjs and ./platform/synthesize.mjs respectively
 // (console-kb#3163) — imported at the top of this file and re-exported below
