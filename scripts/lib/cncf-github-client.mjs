@@ -19,6 +19,7 @@ const MIN_REACTIONS = parseInt(process.env.MIN_REACTIONS || '10', 10)
 const MAX_ISSUES_PER_PROJECT = 20
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
+const REQUEST_TIMEOUT_MS = 30000
 
 let rateLimitRemaining = 5000
 let rateLimitReset = 0
@@ -35,7 +36,21 @@ export async function waitForRateLimit() {
   }
 }
 
-export async function githubApi(url, options = {}) {
+/**
+ * Low-level GitHub REST call that returns the raw `Response` (or `null`).
+ *
+ * Owns the shared rate-limit bookkeeping, per-request timeout, and retry
+ * policy: 403-with-exhausted-quota waits for the reset window, 5xx and
+ * network/timeout errors back off exponentially, and any other status is
+ * handed back to the caller unchanged so it can inspect `res.ok`,
+ * `res.headers`, `res.text()`, etc. Returns `null` only once MAX_RETRIES is
+ * exhausted — callers must treat a `null` result as "skip this resource".
+ *
+ * `githubApi()` below layers JSON parsing and 4xx-to-null handling on top of
+ * this; generate-cncf-install-missions.mjs uses this directly because its
+ * fetch helpers need the Response object (kubestellar/console-kb#3536).
+ */
+export async function githubApiResponse(url, options = {}) {
   await waitForRateLimit()
 
   const headers = {
@@ -49,7 +64,7 @@ export async function githubApi(url, options = {}) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(30000) })
+      const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
 
       // Track rate limits from response headers
       const remaining = response.headers.get('x-ratelimit-remaining')
@@ -64,11 +79,6 @@ export async function githubApi(url, options = {}) {
         continue
       }
 
-      if (response.status === 422) {
-        console.warn(`  GitHub API returned 422 for ${url}, skipping.`)
-        return null
-      }
-
       if (response.status >= 500) {
         const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
         console.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
@@ -76,13 +86,7 @@ export async function githubApi(url, options = {}) {
         continue
       }
 
-      if (!response.ok) {
-        const body = await response.text().catch(() => '')
-        console.warn(`  GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
-        return null
-      }
-
-      return response.json()
+      return response
     } catch (err) {
       const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
       console.warn(`  GitHub API request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
@@ -92,6 +96,29 @@ export async function githubApi(url, options = {}) {
 
   console.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
   return null
+}
+
+/**
+ * GitHub REST call returning the parsed JSON body, or `null` when the
+ * resource should be skipped (422, any other non-ok status, or retries
+ * exhausted in githubApiResponse()).
+ */
+export async function githubApi(url, options = {}) {
+  const response = await githubApiResponse(url, options)
+  if (!response) return null
+
+  if (response.status === 422) {
+    console.warn(`  GitHub API returned 422 for ${url}, skipping.`)
+    return null
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    console.warn(`  GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
+    return null
+  }
+
+  return response.json()
 }
 
 async function findHighEngagementIssues(project) {

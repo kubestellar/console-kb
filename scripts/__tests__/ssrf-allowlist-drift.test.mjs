@@ -134,11 +134,12 @@ describe('SSRF allowlist drift across duplicated copies', () => {
     }
   })
 
-  it('the shared allowlist has exactly the expected 3 approved endpoints', () => {
+  it('the shared allowlist has exactly the expected 4 approved endpoints', () => {
     // Pinned expectation so a silent widening in ALL copies still fails.
     // If a new endpoint is genuinely approved, this test AND the security
     // review sign-off must both be updated.
     expect(prefixesPerFile.get(FILES[0])).toEqual([
+      'https://models.github.ai/',
       'https://models.inference.ai.azure.com/',
       'https://api.openai.com/',
       'https://api.githubcopilot.com/',

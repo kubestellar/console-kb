@@ -143,7 +143,7 @@ describe('callLLM — happy path', () => {
     await runWithTimers(callLLM(SANITIZED_MISSION))
 
     const [url, init] = fetchMock.mock.calls[0]
-    expect(String(url)).toMatch(/models\.inference\.ai\.azure\.com/)
+    expect(String(url)).toMatch(/models\.github\.ai/)
     expect(init.method).toBe('POST')
     expect(init.headers['Content-Type']).toBe('application/json')
     const body = JSON.parse(init.body)

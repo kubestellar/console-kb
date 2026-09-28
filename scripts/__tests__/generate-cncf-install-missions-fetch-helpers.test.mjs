@@ -59,7 +59,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   // `rateLimitRemaining` / `rateLimitReset` are module-level mutable state in
-  // generate-cncf-install-missions.mjs (not exported), so a test that drives
+  // lib/cncf-github-client.mjs (not exported), so a test that drives
   // them low (e.g. simulating a 403 rate-limit exhaustion) would otherwise
   // leak that state into later tests and make their githubApi() calls hang
   // in `waitForRateLimit`'s sleep. Defensively reset via one more successful
@@ -101,36 +101,50 @@ describe('assertTrustedEndpoint (cncf-install-missions copy)', () => {
 
 // ─── githubApi ──────────────────────────────────────────────────────────
 
-describe('githubApi', () => {
-  // GITHUB_TOKEN is captured into a module-level const at import time, so
-  // toggling process.env.GITHUB_TOKEN after this file's static import has no
-  // effect on the already-imported module. Use a fresh dynamic import (with
-  // vi.resetModules) so each case controls the token as seen at load time.
-  it('sends an Authorization header when GITHUB_TOKEN is set at load time', async () => {
-    vi.resetModules()
+describe('githubApi (lib githubApiResponse re-export)', () => {
+  // `githubApi` here is `githubApiResponse` from ./lib/cncf-github-client.mjs
+  // (kubestellar/console-kb#3536). The token is read from process.env per
+  // call, so no module reset is needed to control it.
+  it('sends an Authorization header when GITHUB_TOKEN is set', async () => {
     process.env.GITHUB_TOKEN = 'secret-token'
-    const { githubApi: freshGithubApi } = await import('../generate-cncf-install-missions.mjs')
     const fetchMock = vi.fn(async () => jsonResponse({ headers: highRateLimitHeaders() }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await freshGithubApi('https://api.github.com/repos/foo/bar')
+    await githubApi('https://api.github.com/repos/foo/bar')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, options] = fetchMock.mock.calls[0]
     expect(options.headers.Authorization).toBe('Bearer secret-token')
   })
 
-  it('omits Authorization when GITHUB_TOKEN is unset at load time', async () => {
-    vi.resetModules()
+  it('omits Authorization when GITHUB_TOKEN is unset', async () => {
     delete process.env.GITHUB_TOKEN
-    const { githubApi: freshGithubApi } = await import('../generate-cncf-install-missions.mjs')
     const fetchMock = vi.fn(async () => jsonResponse({ headers: highRateLimitHeaders() }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await freshGithubApi('https://api.github.com/repos/foo/bar')
+    await githubApi('https://api.github.com/repos/foo/bar')
 
     const [, options] = fetchMock.mock.calls[0]
     expect(options.headers.Authorization).toBeUndefined()
+  })
+
+  it('passes a request timeout signal to fetch', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await githubApi('https://api.github.com/repos/foo/bar')
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('returns the raw Response for non-ok statuses so callers can inspect res.ok', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 404, headers: highRateLimitHeaders() })))
+
+    const res = await githubApi('https://api.github.com/repos/foo/bar')
+
+    expect(res.ok).toBe(false)
+    expect(res.status).toBe(404)
   })
 
   it('updates rate-limit bookkeeping from response headers and retries once on 403 exhaustion', async () => {
@@ -152,16 +166,41 @@ describe('githubApi', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('throws after 3 failed attempts against a persistently rate-limited API', async () => {
+  it('retries with backoff on 5xx and returns the eventual success', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ status: 502, headers: highRateLimitHeaders() }))
+      .mockResolvedValueOnce(jsonResponse({ status: 200, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = githubApi('https://api.github.com/repos/foo/bar')
+    await vi.runAllTimersAsync()
+    const res = await promise
+
+    expect(res.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns null (does not throw) after 3 failed attempts against a persistently rate-limited API', async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000)) } }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
     const promise = githubApi('https://api.github.com/repos/foo/bar')
-    const assertion = expect(promise).rejects.toThrow(/GitHub API request failed after 3 attempts/)
     await vi.runAllTimersAsync()
-    await assertion
+
+    await expect(promise).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('returns null (does not throw) when fetch keeps rejecting', async () => {
+    const fetchMock = vi.fn(async () => { throw new Error('ECONNRESET') })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = githubApi('https://api.github.com/repos/foo/bar')
+    await vi.runAllTimersAsync()
+
+    await expect(promise).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
@@ -169,6 +208,17 @@ describe('githubApi', () => {
 // ─── fetchRawFile / fetchReadme / fetchRepoMeta / fetchLatestRelease ───
 
 describe('fetchRawFile', () => {
+  it('returns null (instead of aborting the run) when the client gives up after persistent 5xx', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ status: 503, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = fetchRawFile('foo', 'bar', 'README.md')
+    await vi.runAllTimersAsync()
+
+    await expect(promise).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('returns null when the response is not ok', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 404, headers: highRateLimitHeaders() })))
     expect(await fetchRawFile('o', 'r', 'README.md')).toBeNull()
@@ -217,8 +267,21 @@ describe('fetchRepoMeta / fetchLatestRelease', () => {
   })
 
   it('fetchRepoMeta returns null on a non-ok response', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 500, headers: highRateLimitHeaders() })))
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 404, headers: highRateLimitHeaders() })))
     expect(await fetchRepoMeta('o', 'r')).toBeNull()
+  })
+
+  it('fetchRepoMeta retries a transient 5xx with backoff instead of failing', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ status: 500, headers: highRateLimitHeaders() }))
+      .mockResolvedValueOnce(jsonResponse({ body: { full_name: 'o/r' }, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = fetchRepoMeta('o', 'r')
+    await vi.runAllTimersAsync()
+
+    await expect(promise).resolves.toEqual({ full_name: 'o/r' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('fetchLatestRelease returns parsed JSON on success', async () => {
