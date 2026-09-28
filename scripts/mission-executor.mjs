@@ -15,7 +15,7 @@
  * Environment:
  *   GITHUB_TOKEN     — GitHub Models API auth (required)
  *   KUBECONFIG       — path to kubeconfig (default: ~/.kube/config)
- *   LLM_MODEL        — model to use (default: gpt-4o-mini)
+ *   LLM_MODEL        — model to use (default: openai/gpt-4o-mini)
  *   MAX_RETRIES      — retries per step (default: 3)
  *   STEP_TIMEOUT_MS  — timeout per command (default: 120000)
  *   MISSION_TIMEOUT_MS — timeout per mission (default: 300000)

@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
  * catches the exact refactor mistakes that black-box tests could not:
  *
  *   1. `ALLOWED_ENDPOINT_PREFIXES` — the SSRF (CWE-441) allowlist for the LLM
- *      endpoint MUST contain exactly the three approved backends. Silently
+ *      endpoint MUST contain exactly the four approved backends. Silently
  *      appending a fourth (or dropping one) would let an untrusted
  *      `LLM_ENDPOINT` env var be accepted at module load.
  *   2. `assertTrustedEndpoint` — is called at module load time on the resolved
@@ -71,7 +71,7 @@ function functionBody(src, header) {
 }
 
 describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
-  it('ALLOWED_ENDPOINT_PREFIXES contains exactly the three approved backends', () => {
+  it('ALLOWED_ENDPOINT_PREFIXES contains exactly the four approved backends', () => {
     const m = ENDPOINT_GUARD_SOURCE.match(
       /ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
     )
@@ -80,6 +80,7 @@ describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
     expect([...prefixes].sort()).toEqual([
       'https://api.githubcopilot.com/',
       'https://api.openai.com/',
+      'https://models.github.ai/',
       'https://models.inference.ai.azure.com/',
     ])
   })

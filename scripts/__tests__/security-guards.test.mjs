@@ -301,8 +301,8 @@ describe('assertTrustedEndpoint', () => {
     })
   })
 
-  it('ALLOWED_ENDPOINT_PREFIXES contains exactly 3 entries', () => {
-    expect(ALLOWED_ENDPOINT_PREFIXES).toHaveLength(3)
+  it('ALLOWED_ENDPOINT_PREFIXES contains exactly 4 entries', () => {
+    expect(ALLOWED_ENDPOINT_PREFIXES).toHaveLength(4)
   })
 
   it('ALLOWED_ENDPOINT_PREFIXES all use HTTPS', () => {

@@ -37,8 +37,8 @@ const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
+const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
 
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).
