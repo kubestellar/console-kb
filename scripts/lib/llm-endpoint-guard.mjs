@@ -14,6 +14,7 @@
  */
 
 export const ALLOWED_ENDPOINT_PREFIXES = [
+  'https://models.github.ai/',
   'https://models.inference.ai.azure.com/',
   'https://api.openai.com/',
   'https://api.githubcopilot.com/',
