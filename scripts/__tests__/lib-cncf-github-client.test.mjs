@@ -18,6 +18,7 @@ import {
   sleep,
   waitForRateLimit,
   githubApi,
+  githubApiResponse,
   findHighEngagementIssues,
   getIssueDetails,
   fetchPRDiffSummary,
@@ -211,6 +212,92 @@ describe('githubApi', () => {
     const result = await p
     expect(result).toEqual({ after: true })
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ─── githubApiResponse ─────────────────────────────────────────────────
+// Response-returning variant shared with generate-cncf-install-missions.mjs
+// (kubestellar/console-kb#3536). Same rate-limit/timeout/backoff policy as
+// githubApi, but non-ok 4xx statuses are handed back for the caller to judge.
+
+describe('githubApiResponse', () => {
+  it('returns the raw Response on a 200', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ status: 200, body: { raw: true }, headers: highRateLimitHeaders() }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await githubApiResponse('https://api.github.com/repos/o/r')
+    expect(res.ok).toBe(true)
+    await expect(res.json()).resolves.toEqual({ raw: true })
+    const [, opts] = fetchMock.mock.calls[0]
+    expect(opts.signal).toBeInstanceOf(AbortSignal)
+    expect(opts.headers['User-Agent']).toMatch(/cncf-mission-generator/)
+  })
+
+  it('returns the Response (not null) for 404 and 422 without retrying', async () => {
+    for (const status of [404, 422]) {
+      const fetchMock = vi.fn(async () => jsonResponse({ status, headers: highRateLimitHeaders() }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const res = await githubApiResponse('https://api.github.com/repos/o/r')
+      expect(res).not.toBeNull()
+      expect(res.ok).toBe(false)
+      expect(res.status).toBe(status)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('retries with exponential backoff on 5xx and returns the eventual success', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ status: 502, headers: highRateLimitHeaders() }))
+      .mockResolvedValueOnce(jsonResponse({ status: 200, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubApiResponse('https://api.github.com/repos/o/r')
+    await vi.runAllTimersAsync()
+    const res = await p
+    expect(res.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns null after MAX_RETRIES of persistent 5xx', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ status: 503, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubApiResponse('https://api.github.com/repos/o/r')
+    await vi.runAllTimersAsync()
+    await expect(p).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('returns null after MAX_RETRIES of network errors', async () => {
+    const fetchMock = vi.fn(async () => { throw new Error('network down') })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubApiResponse('https://api.github.com/repos/o/r')
+    await vi.runAllTimersAsync()
+    await expect(p).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('shares rate-limit state with githubApi (403 exhaustion seen by one waits in the other)', async () => {
+    let call = 0
+    const fetchMock = vi.fn(async () => {
+      call++
+      if (call === 1) {
+        return jsonResponse({ status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '0' } })
+      }
+      return jsonResponse({ status: 200, body: { after: true }, headers: highRateLimitHeaders() })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubApiResponse('https://api.github.com/repos/o/r')
+    await vi.runAllTimersAsync()
+    const res = await p
+    expect(res.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/Rate limited/))
   })
 })
 
