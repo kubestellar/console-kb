@@ -13,13 +13,22 @@ no gate at all from `mission-content-validation.yml` or
 lives at the repo root and is validated by neither).
 
 `search-state.json` is not cosmetic bookkeeping: it is the **dedup memory**
-for CNCF issue/discussion scanning across every configured project. The
-merge step's `JSON.parse` on the pre-existing file is wrapped in a bare
-`try {} catch {}` — if the checked-out `search-state.json` fails to parse,
-the merge silently falls back to an empty `projects: {}` object and
-proceeds as if no project had ever been scanned, rather than failing the
-job. A corrupted-then-reset state is therefore a **silent** incident: the
-workflow run shows green.
+for CNCF issue/discussion scanning across every configured project. If the
+checked-out `search-state.json` fails to parse, `scripts/merge-search-state.mjs`
+self-heals: it treats the base as an empty `projects: {}` object and
+proceeds, rather than failing the job (this replaced an `exit(1)` that used
+to permanently break the scheduled workflow — see
+kubestellar/console-kb#3197). A corrupted-then-reset state is a **quiet**
+incident in the sense that the workflow run still shows green, but as of
+this fix it is no longer silent: the merge step logs loudly to stderr, and
+when `GITHUB_STEP_SUMMARY` is set (every real run) it appends a `⚠️
+search-state.json self-healed from corrupt base` warning to the run's job
+summary. The corrupt file is also renamed to a timestamped
+`search-state.json.corrupt-<ts>` copy on disk, but that copy is **not**
+retrievable after the job — it lives only on the ephemeral runner, is never
+uploaded as a workflow artifact, and is gone once the job ends, so treat
+the job-summary line (or the stderr log) as the actual detection signal,
+not the renamed file.
 
 ## Symptoms
 
@@ -91,10 +100,16 @@ corruption incident.
 
 ## Prevention (tracked, not implemented by this runbook)
 
-Adding a `pull_request`-triggered JSON-validity check for `search-state.json`
-(matching the existing `fixes/**/*.json` / `runbooks/**/*.json` gates) and
-an `if: failure()` alert on the `collect` job both require editing
-`.github/workflows/*.yml`, which needs `workflows` permission this
+The `merge-search-state.mjs` job-summary warning (see above) covers
+detection for the corrupt-base case. Two gaps remain, and both require
+editing `.github/workflows/*.yml`, which needs `workflows` permission this
 contribution's credentials do not have — tracked in the same follow-up as
 [`runbooks/incident-response-index-publish-failure.md`](./incident-response-index-publish-failure.md#prevention-tracked-not-implemented-by-this-runbook)
-and the open `[operations]` issue on scheduled-workflow failure alerts.
+and the open `[operations]` issue on scheduled-workflow failure alerts:
+
+1. A `pull_request`-triggered JSON-validity check for `search-state.json`
+   (matching the existing `fixes/**/*.json` / `runbooks/**/*.json` gates) —
+   `search-state.json` is pushed directly to `master` with no PR gate at all.
+2. An `if: failure()` alert on the `collect` job itself, for failure modes
+   the self-heal doesn't cover (e.g. the job erroring out before it reaches
+   the merge step).
