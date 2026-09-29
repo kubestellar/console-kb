@@ -71,10 +71,11 @@ const CONSOLIDATED_IMPORTER_FILES = [
 
 // generate-platform-missions.mjs must obtain its LLM config (and thereby the
 // module-load gate) from lib/platform-llm-config.mjs, not re-parse env itself.
+// (platform/github-context.mjs no longer touches LLM config at all — its
+// GitHub fetch path is owned by lib/cncf-github-client.mjs, console-kb#3551.)
 const CONFIG_CONSUMER_FILES = [
   'generate-platform-missions.mjs',
   'platform/synthesize.mjs',
-  'platform/github-context.mjs',
 ]
 
 /**

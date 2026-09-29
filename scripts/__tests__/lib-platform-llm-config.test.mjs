@@ -101,11 +101,8 @@ describe('platform-llm-config — no reverse import from the orchestrator', () =
       }
     }))
     try {
-      const { githubFetch } = await import('../platform/github-context.mjs')
-      process.env.GITHUB_TOKEN = 'ghp_late'
-      await githubFetch('https://api.github.com/repos/x/y')
-      expect(calls.at(-1).options.headers.Authorization).toBe('Bearer ghp_late')
-
+      // (platform/github-context.mjs no longer reads tokens itself — its
+      // GitHub fetch path is owned by lib/cncf-github-client.mjs.)
       const { synthesizePlatformMission } = await import('../platform/synthesize.mjs')
       process.env.LLM_TOKEN = 'llm_late'
       await synthesizePlatformMission({ name: 'Demo' }, {})
