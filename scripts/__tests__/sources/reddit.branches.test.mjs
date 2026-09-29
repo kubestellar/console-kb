@@ -71,7 +71,10 @@ describe('RedditSource.search – error paths and filter branches', () => {
   beforeEach(() => {
     restoreEnv()
     for (const k of ENV_KEYS) delete process.env[k]
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // reddit.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -84,8 +87,8 @@ describe('RedditSource.search – error paths and filter branches', () => {
     const source = makeSource()
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
-    expect(console.warn).toHaveBeenCalled()
-    const msg = console.warn.mock.calls.map(c => c[0]).join('\n')
+    expect(process.stderr.write).toHaveBeenCalled()
+    const msg = process.stderr.write.mock.calls.map(c => c[0]).join('\n')
     expect(msg).toMatch(/503/)
   })
 
@@ -94,7 +97,7 @@ describe('RedditSource.search – error paths and filter branches', () => {
     const source = makeSource()
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
-    const msg = console.warn.mock.calls.map(c => c[0]).join('\n')
+    const msg = process.stderr.write.mock.calls.map(c => c[0]).join('\n')
     expect(msg).toMatch(/econnreset/)
   })
 

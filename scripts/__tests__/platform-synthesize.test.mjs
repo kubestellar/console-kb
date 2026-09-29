@@ -31,7 +31,10 @@ function llmResponse(payload) {
 let errorSpy
 
 beforeEach(() => {
-  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // platform/synthesize.mjs logs these errors via the shared structured
+  // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+  // process.stderr rather than calling console.error — see #3599.
+  errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 })
 
 afterEach(() => {

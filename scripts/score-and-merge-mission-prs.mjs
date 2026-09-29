@@ -16,13 +16,13 @@
 import { execFileSync } from 'child_process'
 import { scoreMission } from './quality-scorer.mjs'
 import {
-import { createLogger } from './lib/logger.mjs'
-const log = createLogger('score-and-merge-mission-prs')
   filterRecentPRs,
   requiredChecksPassed,
   findMissionFile,
   decodeMissionContent,
 } from './lib/mission-auto-merge.mjs'
+import { createLogger } from './lib/logger.mjs'
+const log = createLogger('score-and-merge-mission-prs')
 
 const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10)
 const LABEL = 'cncf-mission-gen'

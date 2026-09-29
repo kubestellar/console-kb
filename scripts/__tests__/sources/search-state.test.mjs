@@ -78,7 +78,10 @@ describe('search-state', () => {
 
   it('repairs malformed files by warning and starting fresh', () => {
     writeFileSync(join(fixtureDir, STATE_FILE), '{not valid json\n')
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // search-state.mjs logs this warning via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const state = loadSearchState(fixtureDir)
 
