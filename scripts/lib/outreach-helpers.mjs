@@ -5,6 +5,13 @@
  * they can be unit tested without triggering the CLI's top-level side
  * effects (existsSync/mkdirSync/writeFileSync at import time).
  */
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const DEFAULT_FIXES_DIR = join(__dirname, '..', '..', 'fixes', 'cncf-install')
+const defaultFs = { existsSync, mkdirSync, writeFileSync }
 
 const KB_REPO = 'kubestellar/console-kb'
 
@@ -92,3 +99,82 @@ _Labels: \`ai-mission\`, \`community\`, \`installation\`_
 export function generateIssueLabels() {
   return ['ai-mission', 'community', 'installation']
 }
+
+export function runOutreachGenerator({
+  argv = [],
+  projects = [],
+  env = process.env,
+  fs = defaultFs,
+  out = console,
+  fixesDir = DEFAULT_FIXES_DIR,
+} = {}) {
+  const dryRun = argv.includes('--dry-run')
+  const projectFilter = argv.find(a => a.startsWith('--project='))?.split('=')[1]
+  const outputDir = argv.find(a => a.startsWith('--output='))?.split('=')[1] || 'outreach-issues'
+  const consoleUrl = env?.CONSOLE_URL || 'https://console.kubestellar.io'
+
+  let filteredProjects = projects.filter(p => p.name !== 'kubestellar')
+
+  if (projectFilter) {
+    filteredProjects = filteredProjects.filter(p => p.name === projectFilter)
+    if (filteredProjects.length === 0) {
+      out.error(`Project '${projectFilter}' not found in CNCF projects list`)
+      return { exitCode: 1, summary: { total: 0, generated: 0, skipped: 0 } }
+    }
+  }
+
+  const projectsWithMissions = filteredProjects.filter(p => {
+    const slug = slugify(p.name)
+    const missionPath = join(fixesDir, `install-${slug}.json`)
+    return fs.existsSync(missionPath)
+  })
+
+  out.log(`Generating outreach issues for ${projectsWithMissions.length}/${filteredProjects.length} projects with missions`)
+
+  if (!dryRun) {
+    fs.mkdirSync(outputDir, { recursive: true })
+  }
+
+  const summary = { total: 0, generated: 0, skipped: 0 }
+
+  for (const project of projectsWithMissions) {
+    summary.total++
+    const slug = slugify(project.name)
+    const title = generateIssueTitle(project)
+    const body = generateIssueBody(project, consoleUrl)
+    const labels = generateIssueLabels()
+
+    if (dryRun) {
+      out.log(`\n${'═'.repeat(60)}`)
+      out.log(`Project: ${project.name} (${project.repo})`)
+      out.log(`Title: ${title}`)
+      out.log(`Labels: ${labels.join(', ')}`)
+      out.log(`${'─'.repeat(60)}`)
+      out.log(body.slice(0, 500) + '...')
+      summary.generated++
+    } else {
+      const outPath = join(outputDir, `${slug}.md`)
+      const metadata = [
+        `<!-- OUTREACH ISSUE for ${project.name} -->`,
+        `<!-- Repo: ${project.repo} -->`,
+        `<!-- Title: ${title} -->`,
+        `<!-- Labels: ${labels.join(', ')} -->`,
+        `<!-- To file: gh issue create --repo ${project.repo} --title "${title}" --body-file ${outPath} -->`,
+        '',
+      ].join('\n')
+      fs.writeFileSync(outPath, metadata + body)
+      out.log(`  ✅ ${slug}.md`)
+      summary.generated++
+    }
+  }
+
+  out.log(`\n📊 Summary: ${summary.generated}/${summary.total} outreach issues generated`)
+  if (!dryRun) {
+    out.log(`📁 Output: ${outputDir}/`)
+    out.log(`\nTo file an issue for a specific project:`)
+    out.log(`  gh issue create --repo OWNER/REPO --title "TITLE" --body-file ${outputDir}/PROJECT.md`)
+  }
+
+  return { exitCode: 0, summary }
+}
+
