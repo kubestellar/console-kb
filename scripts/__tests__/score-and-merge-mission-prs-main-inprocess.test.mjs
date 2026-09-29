@@ -77,7 +77,10 @@ describe('score-and-merge-mission-prs.mjs main() — in-process orchestration', 
     calls = []
     scoreMissionMock.mockReset()
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // score-and-merge-mission-prs.mjs now logs per-PR errors via the shared
+    // structured logger (scripts/lib/logger.mjs), which writes JSON lines
+    // directly to process.stderr instead of calling console.error — see #3599.
+    consoleErrorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -222,7 +225,7 @@ describe('score-and-merge-mission-prs.mjs main() — in-process orchestration', 
     await expect(main()).resolves.toBeUndefined()
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'PR #205: error - network timeout talking to gh',
+      expect.stringContaining('PR #205: error - network timeout talking to gh'),
     )
     expect(consoleLogSpy).toHaveBeenCalledWith('\nDone: 0 merged, 1 left for review')
   })

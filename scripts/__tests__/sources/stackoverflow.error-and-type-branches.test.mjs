@@ -32,7 +32,10 @@ const TEST_PROJECT = {
 describe('StackOverflowSource — error and quota branches', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // stackoverflow.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -58,7 +61,7 @@ describe('StackOverflowSource — error and quota branches', () => {
     // items short-circuited to []; text-search fallback (< 3 items) also fires,
     // so we assert on the tag-search warning going through the 503 branch.
     expect(result.items.filter(i => i.question_id === 1)).toEqual([])
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(process.stderr.write).toHaveBeenCalledWith(
       expect.stringContaining('SO: 503 for KubeVirt'),
     )
   })
@@ -83,7 +86,7 @@ describe('StackOverflowSource — error and quota branches', () => {
     // Quota-exhausted path returns { items: [] } and skips text search entirely.
     expect(result.items).toEqual([])
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(process.stderr.write).toHaveBeenCalledWith(
       expect.stringContaining('Quota nearly exhausted'),
     )
   })
@@ -104,7 +107,7 @@ describe('StackOverflowSource — error and quota branches', () => {
     })
 
     expect(result.items).toEqual([])
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(process.stderr.write).toHaveBeenCalledWith(
       expect.stringContaining('SO: Error searching for KubeVirt: DNS timeout'),
     )
   })
@@ -152,7 +155,7 @@ describe('StackOverflowSource — error and quota branches', () => {
     })
 
     expect(result.items).toHaveLength(1)
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(process.stderr.write).toHaveBeenCalledWith(
       expect.stringContaining('SO: Text search error: text search failed'),
     )
   })
@@ -161,7 +164,10 @@ describe('StackOverflowSource — error and quota branches', () => {
 describe('StackOverflowSource — extractMission null-answer and type detection', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // stackoverflow.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -253,7 +259,10 @@ describe('StackOverflowSource — extractMission null-answer and type detection'
 describe('StackOverflowSource — fetchAcceptedAnswer real fetch paths', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // stackoverflow.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -319,7 +328,10 @@ describe('StackOverflowSource — fetchAcceptedAnswer real fetch paths', () => {
 describe('StackOverflowSource — extractHtmlCodeBlocks length + keyword filters (issue #3130)', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // stackoverflow.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -413,7 +425,10 @@ describe('StackOverflowSource — extractHtmlCodeBlocks length + keyword filters
 describe('StackOverflowSource — extractStepsFromHtml 10-item cap (issue #3130)', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // stackoverflow.mjs logs warnings via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {

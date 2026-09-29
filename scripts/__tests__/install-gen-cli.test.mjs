@@ -36,7 +36,14 @@ async function runScript(name, { cwd, env = {} } = {}) {
   const exitCalls = []
 
   const logSpy = vi.spyOn(console, 'log').mockImplementation((m) => logs.push(String(m)))
-  const errSpy = vi.spyOn(console, 'error').mockImplementation((m) => errs.push(String(m)))
+  // scripts/install-gen/*.mjs now log their fatal "FILE env var is required"
+  // error via the shared structured logger (scripts/lib/logger.mjs), which
+  // writes JSON lines directly to process.stderr instead of calling
+  // console.error — see #3599.
+  const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation((m) => {
+    errs.push(String(m))
+    return true
+  })
   const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
     exitCalls.push(code)
     throw new Error(`__exit__:${code}`)
