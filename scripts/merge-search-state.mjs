@@ -10,7 +10,7 @@
  * All I/O lives here; the merge algorithm itself is in
  * lib/search-state-merge.mjs so it can be unit-tested directly.
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'fs'
 import { mergeSearchStates } from './lib/search-state-merge.mjs'
 
 function main() {
@@ -19,8 +19,29 @@ function main() {
     try {
       baseState = JSON.parse(readFileSync('search-state.json', 'utf8'))
     } catch (e) {
-      console.error(`Error parsing search-state.json: ${e.message}`)
-      process.exit(1)
+      // Base state is corrupt. The previous behaviour was to exit(1), which
+      // permanently broke the scheduled cncf-mission-gen workflow (see
+      // kubestellar/console-kb#3197 discussion and the daily run failure on
+      // 2026-09-27) until a human hand-edited the file on master.
+      //
+      // Batch files already self-heal on parse errors (warn + continue). Do
+      // the same for the base: preserve the corrupt file on disk under a
+      // timestamped name so it can be triaged, log loudly to stderr, and
+      // treat baseState as empty so incoming batches still merge. The
+      // corrupt-<ts> file is NOT staged by cncf-mission-gen.yml's "Commit
+      // search state" step (it only `git add search-state.json`), so it
+      // stays out of the repo history.
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const preserved = `search-state.json.corrupt-${stamp}`
+      try {
+        renameSync('search-state.json', preserved)
+      } catch (_) {
+        // Non-fatal: if we can't preserve it we still continue with empty base.
+      }
+      console.error(
+        `Error parsing search-state.json: ${e.message} — treating base as empty and continuing (preserved to ${preserved})`,
+      )
+      baseState = null
     }
   }
 

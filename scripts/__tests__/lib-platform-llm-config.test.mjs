@@ -27,8 +27,8 @@ describe('platform-llm-config — module-load constants', () => {
   it('falls back to the documented defaults when env is unset', async () => {
     const cfg = await import(MODULE)
     expect(cfg.LLM_ENDPOINT).toBe(cfg.DEFAULT_LLM_ENDPOINT)
-    expect(cfg.LLM_ENDPOINT).toBe('https://models.inference.ai.azure.com/chat/completions')
-    expect(cfg.LLM_MODEL).toBe('gpt-4o-mini')
+    expect(cfg.LLM_ENDPOINT).toBe('https://models.github.ai/inference/chat/completions')
+    expect(cfg.LLM_MODEL).toBe('openai/gpt-4o-mini')
     expect(cfg.LLM_TIMEOUT_MS).toBe(90000)
     expect(cfg.TRUSTED_LLM_ENDPOINT).toBe(cfg.LLM_ENDPOINT)
   })

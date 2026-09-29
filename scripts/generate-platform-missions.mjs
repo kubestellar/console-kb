@@ -59,8 +59,9 @@ const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 /** Missions older than this are considered stale and will be regenerated */
 const STALENESS_THRESHOLD_DAYS = parseInt(process.env.STALENESS_DAYS || '14', 10)
 
-// GitHub context fetching (githubFetch, fetchRepoMeta, fetchReadme, helm/kustomize
-// fetchers, checkHelmRepoUrl, gatherPlatformContext) and LLM prompt building +
+// GitHub context fetching (fetchRepoMeta, fetchReadme, helm/kustomize fetchers,
+// checkHelmRepoUrl, gatherPlatformContext — all on the shared client in
+// ./lib/cncf-github-client.mjs, console-kb#3551) and LLM prompt building +
 // synthesis (buildPlatformPrompt, synthesizePlatformMission) are extracted to
 // ./platform/github-context.mjs and ./platform/synthesize.mjs respectively
 // (console-kb#3163) — imported at the top of this file and re-exported below

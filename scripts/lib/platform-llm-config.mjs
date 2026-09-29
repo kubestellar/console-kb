@@ -22,8 +22,8 @@ import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './llm-endpoint
 
 export { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint }
 
-export const DEFAULT_LLM_ENDPOINT = 'https://models.inference.ai.azure.com/chat/completions'
-export const DEFAULT_LLM_MODEL = 'gpt-4o-mini'
+export const DEFAULT_LLM_ENDPOINT = 'https://models.github.ai/inference/chat/completions'
+export const DEFAULT_LLM_MODEL = 'openai/gpt-4o-mini'
 export const DEFAULT_LLM_TIMEOUT_MS = 90000
 
 export const LLM_ENDPOINT = process.env.LLM_ENDPOINT || DEFAULT_LLM_ENDPOINT

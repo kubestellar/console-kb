@@ -25,11 +25,12 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   : null
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini'
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
+const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 const LLM_TIMEOUT_MS = 60_000
 
 export const ALLOWED_ENDPOINT_PREFIXES = [
+  'https://models.github.ai/',
   'https://models.inference.ai.azure.com/',
   'https://api.openai.com/',
   'https://api.githubcopilot.com/',

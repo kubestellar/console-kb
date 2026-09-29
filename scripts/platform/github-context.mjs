@@ -6,97 +6,37 @@
  * (with a mocked global fetch) independently of the LLM synthesis and
  * quality-gate concerns that remain in the main script.
  *
- * The GitHub token is read per-call from ../lib/platform-llm-config.mjs
- * (console-kb#3544) so there is a single source of truth for env-derived
- * config without importing back from the orchestrator that calls this
- * module. The rate-limit state below is module-local and shared across
- * the generator run.
+ * All requests go through the shared client in lib/cncf-github-client.mjs
+ * (console-kb#3551): one process-wide rate-limit budget, one retry/backoff
+ * policy, one request timeout, and one place that owns the Accept /
+ * X-GitHub-Api-Version headers. This module deliberately has no private
+ * rate-limit counters and no raw `fetch()` against api.github.com —
+ * scripts/__tests__/github-client-drift.test.mjs enforces that.
  */
-import { getGithubToken } from '../lib/platform-llm-config.mjs'
+import { sleep, waitForRateLimit, githubApi } from '../lib/cncf-github-client.mjs'
 import { checkHelmRepoUrl } from '../lib/helm-sources.mjs'
+import {
+  fetchRepoMeta,
+  fetchReleases,
+  fetchReadme,
+  fetchHelmChart,
+  fetchHelmValues,
+  fetchKustomize,
+} from '../lib/repo-context.mjs'
 
-export { checkHelmRepoUrl }
-
-let rateLimitRemaining = 5000
-let rateLimitReset = 0
-
-export function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-export async function waitForRateLimit() {
-  if (rateLimitRemaining < 10) {
-    const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-    console.log(`  Rate limit low (${rateLimitRemaining}), waiting ${Math.round(waitMs / 1000)}s...`)
-    await sleep(waitMs)
-  }
-}
-
-export async function githubFetch(url, options = {}) {
-  await waitForRateLimit()
-  const headers = {
-    Authorization: `Bearer ${getGithubToken()}`,
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  }
-  const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } })
-  rateLimitRemaining = parseInt(response.headers.get('x-ratelimit-remaining') || '5000', 10)
-  rateLimitReset = parseInt(response.headers.get('x-ratelimit-reset') || '0', 10)
-  return response
-}
-
-export async function fetchRepoMeta(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}`)
-  if (!res.ok) return null
-  return res.json()
-}
-
-export async function fetchReleases(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=10`)
-  if (!res.ok) return []
-  return res.json()
-}
-
-export async function fetchReadme(owner, repo) {
-  const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/readme`)
-  if (!res.ok) return null
-  const data = await res.json()
-  return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 8000)
-}
-
-export async function fetchHelmChart(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}Chart.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
-}
-
-export async function fetchHelmValues(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
-  for (const p of paths) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}values.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 4000)
-    }
-  }
-  return null
-}
-
-export async function fetchKustomize(owner, repo) {
-  for (const p of ['config/default/', 'deploy/', 'manifests/', '']) {
-    const res = await githubFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${p}kustomization.yaml`)
-    if (res.ok) {
-      const data = await res.json()
-      return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 3000)
-    }
-  }
-  return null
+export { checkHelmRepoUrl, sleep, waitForRateLimit, githubApi }
+// Repo-context primitives now live in scripts/lib/repo-context.mjs
+// (kubestellar/console-kb#3575) so the CNCF-install generator can adopt
+// the same helpers. Re-exported here so existing importers of this module
+// (generate-platform-missions.mjs, platform-github-context.test.mjs) keep
+// working unchanged.
+export {
+  fetchRepoMeta,
+  fetchReleases,
+  fetchReadme,
+  fetchHelmChart,
+  fetchHelmValues,
+  fetchKustomize,
 }
 
 export async function gatherPlatformContext(platform) {
