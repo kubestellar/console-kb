@@ -8,7 +8,9 @@
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import sanitizeHtml from 'sanitize-html'
+import { createLogger } from '../lib/logger.mjs'
 
+const log = createLogger('stackoverflow')
 export class StackOverflowSource extends BaseSource {
   constructor(config) {
     super('stackoverflow', config)
@@ -48,7 +50,7 @@ export class StackOverflowSource extends BaseSource {
       const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
 
       if (!response.ok) {
-        console.warn(`  SO: ${response.status} for ${project.name}, skipping`)
+        log.warn(`  SO: ${response.status} for ${project.name}, skipping`)
         return { items: [] }
       }
 
@@ -57,7 +59,7 @@ export class StackOverflowSource extends BaseSource {
       if (data.quota_remaining != null) {
         console.log(`  SO: quota remaining: ${data.quota_remaining}`)
         if (data.quota_remaining < 10) {
-          console.warn(`  SO: Quota nearly exhausted, stopping`)
+          log.warn(`  SO: Quota nearly exhausted, stopping`)
           return { items: [] }
         }
       }
@@ -73,7 +75,7 @@ export class StackOverflowSource extends BaseSource {
         if (items.length >= this.maxPerProject) break
       }
     } catch (err) {
-      console.warn(`  SO: Error searching for ${project.name}: ${err.message}`)
+      log.warn(`  SO: Error searching for ${project.name}: ${err.message}`)
     }
 
     // Also try a text search if tag search returned few results
@@ -105,7 +107,7 @@ export class StackOverflowSource extends BaseSource {
           }
         }
       } catch (err) {
-        console.warn(`  SO: Text search error: ${err.message}`)
+        log.warn(`  SO: Text search error: ${err.message}`)
       }
     }
 

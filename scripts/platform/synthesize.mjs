@@ -10,7 +10,9 @@
  */
 import { slugify } from '../lib/mission-file.mjs'
 import { getLlmToken, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../lib/platform-llm-config.mjs'
+import { createLogger } from '../lib/logger.mjs'
 
+const log = createLogger('synthesize')
 export const PLATFORM_SYSTEM_PROMPT = `You are an expert Kubernetes platform engineer. Your task is to generate a comprehensive, accurate, and practical install mission JSON for a specific Kubernetes platform or managed service.
 
 Rules:
@@ -132,7 +134,7 @@ export async function synthesizePlatformMission(platform, context) {
     clearTimeout(timeout)
     if (!response.ok) {
       const err = await response.text()
-      console.error(`  LLM API error ${response.status}: ${err.slice(0, 200)}`)
+      log.error(`  LLM API error ${response.status}: ${err.slice(0, 200)}`)
       return null
     }
 
@@ -140,13 +142,13 @@ export async function synthesizePlatformMission(platform, context) {
     // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
     const contentType = response.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {
-      console.error(`  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)}`)
+      log.error(`  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)}`)
       return null
     }
     const MAX_LLM_RESPONSE_BYTES = 1_000_000
     const rawText = await response.text()
     if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-      console.error(`  LLM response too large (${rawText.length} bytes), rejecting`)
+      log.error(`  LLM response too large (${rawText.length} bytes), rejecting`)
       return null
     }
     const data = JSON.parse(rawText)
@@ -155,7 +157,7 @@ export async function synthesizePlatformMission(platform, context) {
     return JSON.parse(content)
   } catch (err) {
     clearTimeout(timeout)
-    console.error(`  LLM error: ${err.message}`)
+    log.error(`  LLM error: ${err.message}`)
     return null
   }
 }

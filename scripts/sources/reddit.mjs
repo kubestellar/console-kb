@@ -7,8 +7,10 @@
  */
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
+import { createLogger } from '../lib/logger.mjs'
 
 // Reddit requires descriptive User-Agent: platform:appid:version (by contact)
+const log = createLogger('reddit')
 const REDDIT_USER_AGENT = 'linux:cncf-mission-generator:v1.0.0 (by /u/kubestellar-bot; github.com/kubestellar/console-kb)'
 const REDDIT_BASE = 'https://old.reddit.com'
 
@@ -50,7 +52,7 @@ export class RedditSource extends BaseSource {
         })
 
         if (!response.ok) {
-          console.warn(`  Reddit: ${response.status} for r/${subreddit} search, skipping`)
+          log.warn(`  Reddit: ${response.status} for r/${subreddit} search, skipping`)
           continue
         }
 
@@ -78,7 +80,7 @@ export class RedditSource extends BaseSource {
           if (items.length >= this.maxPerProject) break
         }
       } catch (err) {
-        console.warn(`  Reddit: Error searching r/${subreddit}: ${err.message}`)
+        log.warn(`  Reddit: Error searching r/${subreddit}: ${err.message}`)
       }
       } // end searchTerms loop
     }

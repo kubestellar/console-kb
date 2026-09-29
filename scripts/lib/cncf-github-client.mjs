@@ -1,4 +1,5 @@
 /**
+const log = createLogger('cncf-github-client')
  * GitHub API client and issue-mining helpers for the CNCF mission generator.
  *
  * Extracted from generate-cncf-missions.mjs (console-kb#3133 / #3332) so the
@@ -99,14 +100,14 @@ export async function githubApiResponse(url, options = {}) {
 
       if (response.status === 403 && rateLimitRemaining === 0) {
         const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-        console.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
+        log.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
         await sleep(waitMs)
         continue
       }
 
       if (response.status >= 500) {
         const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-        console.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
+        log.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
         await sleep(backoff)
         continue
       }
@@ -114,12 +115,12 @@ export async function githubApiResponse(url, options = {}) {
       return response
     } catch (err) {
       const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-      console.warn(`  GitHub API request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
+      log.warn(`  GitHub API request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
       if (attempt < MAX_RETRIES - 1) await sleep(backoff)
     }
   }
 
-  console.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
+  log.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
   return null
 }
 
@@ -133,13 +134,13 @@ export async function githubApi(url, options = {}) {
   if (!response) return null
 
   if (response.status === 422) {
-    console.warn(`  GitHub API returned 422 for ${url}, skipping.`)
+    log.warn(`  GitHub API returned 422 for ${url}, skipping.`)
     return null
   }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '')
-    console.warn(`  GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
+    log.warn(`  GitHub API ${response.status}: ${url} - ${body.slice(0, 200)}`)
     return null
   }
 

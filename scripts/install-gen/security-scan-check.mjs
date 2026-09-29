@@ -7,10 +7,13 @@
 // it directly into inline JS source, removing a script-injection surface.
 import { readFileSync } from 'fs';
 import { scanMissionFile } from '../scanner.mjs';
+import { createLogger } from '../lib/logger.mjs';
+
+const log = createLogger('security-scan-check');
 
 const file = process.env.FILE;
 if (!file) {
-  console.error('FILE env var is required');
+  log.error('FILE env var is required');
   process.exit(2);
 }
 

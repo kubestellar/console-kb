@@ -34,7 +34,9 @@
  */
 
 import { readFileSync } from 'fs'
+import { createLogger } from './lib/logger.mjs'
 
+const log = createLogger('render-step-summary')
 function parseArgs(argv) {
   const args = { event: '', title: '', log: '' }
   for (let i = 0; i < argv.length; i++) {
@@ -92,7 +94,7 @@ export function renderMarkdownTable(title, summary) {
 export function runCli({
   argv = process.argv.slice(2),
   stdout = console.log,
-  stderr = console.error,
+  stderr = (message) => log.error(message),
   readFile = (path) => readFileSync(path, 'utf-8'),
   readStdin = () => readFileSync(0, 'utf-8'),
 } = {}) {
