@@ -28,6 +28,9 @@ import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
 // Response-returning variant is used here because the knowledge-source
 // fetchers below inspect `res.ok` themselves (kubestellar/console-kb#3536).
 import { sleep, githubApiResponse as githubApi } from './lib/cncf-github-client.mjs'
+// README/repo-meta fetchers are shared with platform/github-context.mjs
+// (kubestellar/console-kb#3575).
+import { fetchReadme, fetchRepoMeta } from './lib/repo-context.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -74,19 +77,6 @@ async function fetchRawFile(owner, repo, path) {
 }
 
 // ─── Knowledge source fetchers ───────────────────────────────────────
-
-async function fetchReadme(owner, repo) {
-  const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}/readme`)
-  if (!res?.ok) return null
-  const data = await res.json()
-  return Buffer.from(data.content, 'base64').toString('utf-8').slice(0, 8000)
-}
-
-async function fetchRepoMeta(owner, repo) {
-  const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}`)
-  if (!res?.ok) return null
-  return res.json()
-}
 
 async function fetchLatestRelease(owner, repo) {
   const res = await githubApi(`https://api.github.com/repos/${owner}/${repo}/releases/latest`)
