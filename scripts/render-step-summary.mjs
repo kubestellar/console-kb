@@ -94,7 +94,7 @@ export function renderMarkdownTable(title, summary) {
 export function runCli({
   argv = process.argv.slice(2),
   stdout = console.log,
-  stderr = console.error,
+  stderr = (message) => log.error(message),
   readFile = (path) => readFileSync(path, 'utf-8'),
   readStdin = () => readFileSync(0, 'utf-8'),
 } = {}) {

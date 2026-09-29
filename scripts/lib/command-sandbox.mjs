@@ -16,6 +16,9 @@
  */
 
 import { spawnSync } from 'child_process'
+import { createLogger } from './logger.mjs'
+
+const log = createLogger('command-sandbox')
 
 const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 
@@ -224,8 +227,7 @@ function runBinary(binary, cmdArgs, { timeoutMs = STEP_TIMEOUT_MS, input } = {})
 function execCommand(cmd, timeoutMs = STEP_TIMEOUT_MS) {
   const check = validateCommand(cmd)
   if (!check.safe) {
-    console.warn(`  ⚠️  [sec] Blocked unsafe command: ${check.reason}`)
-    console.warn(`  ⚠️  [sec] Command: ${cmd.slice(0, 200)}`)
+    log.warn('blocked unsafe command', { reason: check.reason, command_preview: cmd.slice(0, 200) })
     return {
       success: false,
       output: `[BLOCKED] ${check.reason}`,
