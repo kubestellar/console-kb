@@ -12,6 +12,7 @@
  */
 import { readdirSync, readFileSync, renameSync, writeFileSync, existsSync, appendFileSync } from 'fs'
 import { mergeSearchStates } from './lib/search-state-merge.mjs'
+import { createLogger } from './lib/logger.mjs'
 
 // Best-effort: append a warning to the GitHub Actions job summary so a
 // self-healed corrupt base is visible in the run's UI, not just in raw logs.
@@ -22,6 +23,7 @@ import { mergeSearchStates } from './lib/search-state-merge.mjs'
 // retrievable after this: it lives only on the ephemeral runner's
 // filesystem, is never uploaded as a workflow artifact, and is gone once
 // the job ends — this summary line is the only surviving detection signal.
+const log = createLogger('merge-search-state')
 function postSummary(message) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (!summaryPath) return
@@ -59,7 +61,7 @@ function main() {
       } catch (_) {
         // Non-fatal: if we can't preserve it we still continue with empty base.
       }
-      console.error(
+      log.error(
         `Error parsing search-state.json: ${e.message} — treating base as empty and continuing (preserved to ${preserved})`,
       )
       postSummary(
@@ -80,7 +82,7 @@ function main() {
     try {
       batchStates.push(JSON.parse(readFileSync(f, 'utf8')))
     } catch (e) {
-      console.warn(`Error merging ${f}: ${e.message}`)
+      log.warn(`Error merging ${f}: ${e.message}`)
     }
   }
 

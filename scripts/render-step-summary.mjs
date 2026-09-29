@@ -34,7 +34,9 @@
  */
 
 import { readFileSync } from 'fs'
+import { createLogger } from './lib/logger.mjs'
 
+const log = createLogger('render-step-summary')
 function parseArgs(argv) {
   const args = { event: '', title: '', log: '' }
   for (let i = 0; i < argv.length; i++) {

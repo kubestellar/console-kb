@@ -22,7 +22,9 @@ import { getBackendConfig, ANTHROPIC_ENDPOINT, ANTHROPIC_MODEL, GITHUB_MODELS_EN
 import { callAnthropic, callOpenAICompatible } from './providers.mjs'
 import { buildPrompt } from './prompt.mjs'
 import { extractJSON, validateAndClean, sleep } from './parse.mjs'
+import { createLogger } from '../../lib/logger.mjs'
 
+const log = createLogger('index')
 export { sleep } from './parse.mjs'
 
 /**
@@ -33,7 +35,7 @@ export { sleep } from './parse.mjs'
 export async function synthesizeMission(params) {
   const config = getBackendConfig()
   if (!config) {
-    console.warn('  [LLM] No API key found (set GITHUB_TOKEN, ANTHROPIC_API_KEY, or COPILOT_TOKEN)')
+    log.warn('  [LLM] No API key found (set GITHUB_TOKEN, ANTHROPIC_API_KEY, or COPILOT_TOKEN)')
     return null
   }
 
@@ -52,16 +54,16 @@ export async function synthesizeMission(params) {
 
       if (response.rateLimited) {
         const wait = response.retryAfterSec || 5
-        console.warn(`  [LLM] Rate limited, waiting ${wait}s (attempt ${attempt + 1})`)
+        log.warn(`  [LLM] Rate limited, waiting ${wait}s (attempt ${attempt + 1})`)
         await sleep(wait * 1000)
         continue
       }
 
       if (response.error) {
-        console.warn(`  [LLM] API error: ${response.error} (attempt ${attempt + 1})`)
+        log.warn(`  [LLM] API error: ${response.error} (attempt ${attempt + 1})`)
         // If Copilot fails (e.g. no subscription), fall back to next backend
         if (config.backend === 'copilot' && attempt === LLM_MAX_RETRIES) {
-          console.warn('  [LLM] Copilot failed, trying fallback backends...')
+          log.warn('  [LLM] Copilot failed, trying fallback backends...')
           return await synthesizeWithFallback(params, prompt)
         }
         if (attempt < LLM_MAX_RETRIES) {
@@ -73,7 +75,7 @@ export async function synthesizeMission(params) {
 
       const content = response.content
       if (!content) {
-        console.warn('  [LLM] Empty response')
+        log.warn('  [LLM] Empty response')
         return null
       }
 
@@ -83,8 +85,8 @@ export async function synthesizeMission(params) {
         parsed = JSON.parse(jsonStr)
       } catch (parseErr) {
         const MAX_PREVIEW_LEN = 300
-        console.warn(`  [LLM] JSON parse failed: ${parseErr.message}`)
-        console.warn(`  [LLM] Raw content preview: ${content.slice(0, MAX_PREVIEW_LEN)}`)
+        log.warn(`  [LLM] JSON parse failed: ${parseErr.message}`)
+        log.warn(`  [LLM] Raw content preview: ${content.slice(0, MAX_PREVIEW_LEN)}`)
         throw parseErr // re-throw to hit the retry logic
       }
 
@@ -95,18 +97,18 @@ export async function synthesizeMission(params) {
 
       const result = validateAndClean(parsed)
       if (!result) {
-        console.warn('  [LLM] Failed validation (generic steps, too few steps, or no commands)')
+        log.warn('  [LLM] Failed validation (generic steps, too few steps, or no commands)')
         return null
       }
 
       return result
     } catch (err) {
       if (err.name === 'AbortError' || err.name === 'TimeoutError') {
-        console.warn(`  [LLM] Timeout after ${LLM_TIMEOUT_MS}ms (attempt ${attempt + 1})`)
+        log.warn(`  [LLM] Timeout after ${LLM_TIMEOUT_MS}ms (attempt ${attempt + 1})`)
       } else if (err instanceof SyntaxError) {
-        console.warn(`  [LLM] Invalid JSON response (attempt ${attempt + 1}): ${err.message}`)
+        log.warn(`  [LLM] Invalid JSON response (attempt ${attempt + 1}): ${err.message}`)
       } else {
-        console.warn(`  [LLM] Error: ${err.message} (attempt ${attempt + 1})`)
+        log.warn(`  [LLM] Error: ${err.message} (attempt ${attempt + 1})`)
       }
       if (attempt < LLM_MAX_RETRIES) {
         await sleep(2000 * (attempt + 1))

@@ -7,7 +7,9 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { createLogger } from '../lib/logger.mjs'
 
+const log = createLogger('search-state')
 const STATE_FILE = 'search-state.json'
 
 const EMPTY_STATE = {
@@ -29,7 +31,7 @@ export function loadSearchState(baseDir = process.cwd()) {
     if (!state.projects) state.projects = {}
     return state
   } catch (err) {
-    console.warn(`Warning: Could not parse ${STATE_FILE}, starting fresh: ${err.message}`)
+    log.warn(`Warning: Could not parse ${STATE_FILE}, starting fresh: ${err.message}`)
     return structuredClone(EMPTY_STATE)
   }
 }

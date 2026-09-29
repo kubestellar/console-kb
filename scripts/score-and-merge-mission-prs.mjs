@@ -16,6 +16,8 @@
 import { execFileSync } from 'child_process'
 import { scoreMission } from './quality-scorer.mjs'
 import {
+import { createLogger } from './lib/logger.mjs'
+const log = createLogger('score-and-merge-mission-prs')
   filterRecentPRs,
   requiredChecksPassed,
   findMissionFile,
@@ -100,7 +102,7 @@ export async function main() {
         failed++
       }
     } catch (err) {
-      console.error(`PR #${pr.number}: error - ${err.message}`)
+      log.error(`PR #${pr.number}: error - ${err.message}`)
       failed++
     }
   }
@@ -115,7 +117,7 @@ export async function main() {
 // the guard already used by ci-test-summary.mjs.
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
-    console.error(err)
+    log.error(err)
     process.exit(1)
   })
 }

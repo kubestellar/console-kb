@@ -19,6 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
+import { createLogger } from './lib/logger.mjs'
+const log = createLogger('enrich-install-missions')
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '3', 10)
 const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
@@ -188,12 +190,12 @@ export async function callLLM(mission) {
 
       if (response.status === 429) {
         const wait = parseInt(response.headers.get('retry-after') || '10', 10)
-        console.warn(`  [LLM] Rate limited, waiting ${wait}s`)
+        log.warn(`  [LLM] Rate limited, waiting ${wait}s`)
         await sleep(wait * 1000)
         continue
       }
       if (!response.ok) {
-        console.warn(`  [LLM] API error ${response.status}`)
+        log.warn(`  [LLM] API error ${response.status}`)
         return null
       }
 
@@ -201,13 +203,13 @@ export async function callLLM(mission) {
       // bytes that will be merged into file-backed mission data (CWE-434 / http-to-file).
       const contentType = response.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
-        console.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
+        log.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
         return null
       }
       const MAX_LLM_RESPONSE_BYTES = 500_000
       const rawText = await response.text()
       if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-        console.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
+        log.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
         return null
       }
       const data = JSON.parse(rawText)
@@ -217,7 +219,7 @@ export async function callLLM(mission) {
       const parsed = JSON.parse(content)
       return parsed
     } catch (err) {
-      console.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
+      log.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
       if (attempt < 2) await sleep(3000 * (attempt + 1))
     }
   }
@@ -314,7 +316,7 @@ async function main() {
   console.log(`Model: ${LLM_MODEL} | DRY_RUN: ${DRY_RUN} | Concurrency: ${CONCURRENCY}`)
 
   if (!GITHUB_TOKEN && !process.env.LLM_TOKEN) {
-    console.error('GITHUB_TOKEN or LLM_TOKEN required')
+    log.error('GITHUB_TOKEN or LLM_TOKEN required')
     process.exit(1)
   }
 
@@ -358,7 +360,7 @@ async function main() {
           }
           return result
         } catch (err) {
-          console.error(`  ❌ ${fileName}: ${err.message}`)
+          log.error(`  ❌ ${fileName}: ${err.message}`)
           report.errors++
           return { status: 'error', reason: err.message }
         }
@@ -372,14 +374,14 @@ async function main() {
   console.log(`Enriched: ${report.enriched} | Skipped: ${report.skipped} | Errors: ${report.errors} | Total: ${report.total}`)
 
   if (report.errors > report.total * 0.3) {
-    console.error('Too many errors (>30%), exiting with failure')
+    log.error('Too many errors (>30%), exiting with failure')
     process.exit(1)
   }
 }
 
 if (process.argv[1]?.endsWith('enrich-install-missions.mjs')) {
   main().catch(err => {
-    console.error('Fatal:', err)
+    log.error('Fatal:', err)
     process.exit(1)
   })
 }

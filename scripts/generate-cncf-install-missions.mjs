@@ -40,6 +40,8 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   ? process.env.TARGET_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
   : null
 import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
+import { createLogger } from './lib/logger.mjs'
+const log = createLogger('generate-cncf-install-missions')
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
 const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
@@ -58,7 +60,7 @@ const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 function loadInstallSourcesConfig() {
   const configPath = join(__dirname, 'install-sources.yaml')
   if (!existsSync(configPath)) {
-    console.warn('Warning: install-sources.yaml not found, using defaults')
+    log.warn('Warning: install-sources.yaml not found, using defaults')
     return { sources: {}, quality: { minScore: 60, draftMinScore: 40 }, author: { name: 'KubeStellar Bot', github: 'kubestellar' } }
   }
   return parseYaml(readFileSync(configPath, 'utf-8'))
@@ -348,12 +350,12 @@ async function synthesizeInstallMission(project, context) {
 
       if (response.status === 429) {
         const wait = parseInt(response.headers.get('retry-after') || '10', 10)
-        console.warn(`  [LLM] Rate limited, waiting ${wait}s`)
+        log.warn(`  [LLM] Rate limited, waiting ${wait}s`)
         await sleep(wait * 1000)
         continue
       }
       if (!response.ok) {
-        console.warn(`  [LLM] API error ${response.status}`)
+        log.warn(`  [LLM] API error ${response.status}`)
         return null
       }
 
@@ -361,13 +363,13 @@ async function synthesizeInstallMission(project, context) {
       // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
       const contentType = response.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
-        console.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
+        log.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
         return null
       }
       const MAX_LLM_RESPONSE_BYTES = 1_000_000
       const rawText = await response.text()
       if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-        console.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
+        log.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
         return null
       }
       const data = JSON.parse(rawText)
@@ -378,7 +380,7 @@ async function synthesizeInstallMission(project, context) {
       if (parsed.skip || !parsed.steps?.length) return null
       return parsed
     } catch (err) {
-      console.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
+      log.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
       if (attempt < 2) await sleep(3000 * (attempt + 1))
     }
   }
@@ -522,7 +524,7 @@ function formatReport(report) {
 async function main() {
   console.log('=== CNCF Install Mission Generator ===')
   if (!GITHUB_TOKEN) {
-    console.error('GITHUB_TOKEN required')
+    log.error('GITHUB_TOKEN required')
     process.exit(1)
   }
 
@@ -584,7 +586,7 @@ async function main() {
     try {
       context = await gatherProjectContext(project)
     } catch (err) {
-      console.warn(`  Context gathering failed: ${err.message}`)
+      log.warn(`  Context gathering failed: ${err.message}`)
     }
 
     // Synthesize mission via LLM
@@ -592,7 +594,7 @@ async function main() {
     try {
       llmResult = await synthesizeInstallMission(project, context)
     } catch (err) {
-      console.error(`  LLM synthesis failed: ${err.message}`)
+      log.error(`  LLM synthesis failed: ${err.message}`)
       report.errors++
       report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'error', installMethods: 'N/A' })
       continue
@@ -776,7 +778,7 @@ async function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(err => {
-    console.error('Fatal error:', err)
+    log.error('Fatal error:', err)
     process.exit(1)
   })
 }

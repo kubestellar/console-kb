@@ -51,6 +51,8 @@ const TARGET_PLATFORMS = process.env.TARGET_PLATFORMS
   ? process.env.TARGET_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
   : null
 import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
+import { createLogger } from './lib/logger.mjs'
+const log = createLogger('generate-platform-missions')
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
 const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
@@ -203,7 +205,7 @@ function formatReport(results) {
 async function main() {
   console.log('=== Platform Mission Generator ===')
   if (!LLM_TOKEN) {
-    console.error('LLM_TOKEN or GITHUB_TOKEN required')
+    log.error('LLM_TOKEN or GITHUB_TOKEN required')
     process.exit(1)
   }
 
@@ -411,7 +413,7 @@ async function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(err => {
-    console.error('Fatal error:', err)
+    log.error('Fatal error:', err)
     process.exit(1)
   })
 }

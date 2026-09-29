@@ -6,7 +6,9 @@
  */
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
+import { createLogger } from '../lib/logger.mjs'
 
+const log = createLogger('github-discussions')
 const GRAPHQL_URL = 'https://api.github.com/graphql'
 
 export class GitHubDiscussionsSource extends BaseSource {
@@ -22,7 +24,7 @@ export class GitHubDiscussionsSource extends BaseSource {
 
   async search(project, sourceState) {
     if (!this.token) {
-      console.warn('  Discussions: No GITHUB_TOKEN, skipping')
+      log.warn('  Discussions: No GITHUB_TOKEN, skipping')
       return { items: [] }
     }
 
@@ -95,13 +97,13 @@ export class GitHubDiscussionsSource extends BaseSource {
         })
 
         if (!response.ok) {
-          console.warn(`  Discussions: ${response.status} for ${project.repo}, skipping`)
+          log.warn(`  Discussions: ${response.status} for ${project.repo}, skipping`)
           break
         }
 
         const result = await response.json()
         if (result.errors) {
-          console.warn(`  Discussions: GraphQL errors for ${project.repo}: ${result.errors[0]?.message}`)
+          log.warn(`  Discussions: GraphQL errors for ${project.repo}: ${result.errors[0]?.message}`)
           break
         }
 
@@ -126,7 +128,7 @@ export class GitHubDiscussionsSource extends BaseSource {
         cursor = discussions.pageInfo.endCursor
         page++
       } catch (err) {
-        console.warn(`  Discussions: Error for ${project.repo}: ${err.message}`)
+        log.warn(`  Discussions: Error for ${project.repo}: ${err.message}`)
         break
       }
     }
