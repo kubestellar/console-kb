@@ -16,7 +16,7 @@
  * render-ci-step-summary-cli.test.mjs.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, existsSync, closeSync, openSync } from 'fs'
 import { tmpdir } from 'os'
 import { resolve, dirname, join } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
@@ -188,6 +188,44 @@ describe('merge-search-state.mjs CLI', () => {
     )
     expect(preserved).toHaveLength(1)
     expect(readFileSync(join(workdir, preserved[0]), 'utf8')).toBe('{ this is not valid json')
+  })
+
+  it('appends a job-summary warning when GITHUB_STEP_SUMMARY is set and the base is corrupt', async () => {
+    writeFileSync(join(workdir, 'search-state.json'), 'not json at all')
+    const summaryPath = join(workdir, 'step-summary.md')
+    closeSync(openSync(summaryPath, 'w'))
+    const prevSummary = process.env.GITHUB_STEP_SUMMARY
+    process.env.GITHUB_STEP_SUMMARY = summaryPath
+    try {
+      const result = await runIn(workdir)
+      expect(result.status).toBe(0)
+
+      const summary = readFileSync(summaryPath, 'utf8')
+      expect(summary).toContain('search-state.json self-healed from corrupt base')
+      expect(summary).toContain('incident-response-search-state-corruption.md')
+    } finally {
+      if (prevSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY
+      else process.env.GITHUB_STEP_SUMMARY = prevSummary
+    }
+  })
+
+  it('does not write a job summary when the base search-state.json is valid', async () => {
+    writeFileSync(
+      join(workdir, 'search-state.json'),
+      JSON.stringify({ projects: { 'ok/repo': { github: { processedIds: ['a'] } } } }),
+    )
+    const summaryPath = join(workdir, 'step-summary.md')
+    closeSync(openSync(summaryPath, 'w'))
+    const prevSummary = process.env.GITHUB_STEP_SUMMARY
+    process.env.GITHUB_STEP_SUMMARY = summaryPath
+    try {
+      const result = await runIn(workdir)
+      expect(result.status).toBe(0)
+      expect(readFileSync(summaryPath, 'utf8')).toBe('')
+    } finally {
+      if (prevSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY
+      else process.env.GITHUB_STEP_SUMMARY = prevSummary
+    }
   })
 
   it('warns to stderr about an unparseable batch file and continues with the remaining batches', async () => {
