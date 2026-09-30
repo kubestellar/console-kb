@@ -151,8 +151,12 @@ export function extractUrls(mission) {
   return urls
 }
 
-/** Default HTTP HEAD-style check (via `curl`) matching the original bash's connect/timeout options. */
-function defaultCheckUrl(url) {
+/**
+ * Default HTTP HEAD-style check (via `curl`) matching the original bash's
+ * connect/timeout options. Exported so the fallback `'000'` branch (curl
+ * absent or non-zero exit) can be exercised without real network I/O.
+ */
+export function defaultCheckUrl(url) {
   try {
     const code = execFileSync(
       'curl',
@@ -165,8 +169,12 @@ function defaultCheckUrl(url) {
   }
 }
 
-/** Default container image existence check (via `crane digest`), matching the original bash. */
-function defaultCheckImage(img) {
+/**
+ * Default container image existence check (via `crane digest`), matching
+ * the original bash. Exported so the fallback `false` branch (crane
+ * absent or non-zero exit) can be exercised without a real registry.
+ */
+export function defaultCheckImage(img) {
   try {
     execFileSync('crane', ['digest', img], { stdio: 'ignore' })
     return true
