@@ -64,7 +64,10 @@ describe('llm-synthesizer — Anthropic error branches', () => {
     for (const k of ENV_KEYS) delete process.env[k]
     process.env.USE_COPILOT = 'false'
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // llm-synthesizer/index.mjs logs warnings via the shared structured
+    // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -134,7 +137,7 @@ describe('llm-synthesizer — Anthropic error branches', () => {
     expect(result).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(3)
     // The synthesizer must have warned with the wrapped 500 status.
-    const warnCall = console.warn.mock.calls.map((c) => c.join(' ')).join('\n')
+    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
     expect(warnCall).toMatch(/500:/)
   })
 
@@ -156,7 +159,7 @@ describe('llm-synthesizer — Anthropic error branches', () => {
 
     expect(result).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(3)
-    const warnCall = console.warn.mock.calls.map((c) => c.join(' ')).join('\n')
+    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
     // Wrapped as "502: " with empty body (from .catch).
     expect(warnCall).toMatch(/502:/)
   })
@@ -176,7 +179,7 @@ describe('llm-synthesizer — Anthropic error branches', () => {
 
     expect(result).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const warnCall = console.warn.mock.calls.map((c) => c.join(' ')).join('\n')
+    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
     expect(warnCall).toMatch(/Empty response/)
   })
 })
@@ -187,7 +190,10 @@ describe('llm-synthesizer — validateAndClean default arms', () => {
     for (const k of ENV_KEYS) delete process.env[k]
     process.env.USE_COPILOT = 'false'
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // llm-synthesizer/index.mjs logs warnings via the shared structured
+    // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -250,7 +256,10 @@ describe('llm-synthesizer — buildPrompt/cleanInput no-body arms', () => {
     for (const k of ENV_KEYS) delete process.env[k]
     process.env.USE_COPILOT = 'false'
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // llm-synthesizer/index.mjs logs warnings via the shared structured
+    // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
   afterEach(() => {
     vi.restoreAllMocks()

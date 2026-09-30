@@ -49,7 +49,10 @@ let logSpy
 beforeEach(() => {
   vi.useFakeTimers()
   originalGithubToken = process.env.GITHUB_TOKEN
-  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  // The module now logs warnings via the shared structured logger
+  // (scripts/lib/logger.mjs), which writes JSON lines directly to
+  // process.stderr rather than calling console.warn — see #3599.
+  warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 

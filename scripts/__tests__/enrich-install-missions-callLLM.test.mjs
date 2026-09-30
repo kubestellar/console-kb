@@ -54,13 +54,16 @@ function goodContentResponse(payload = { uninstall: [{ title: 'u', description: 
   })
 }
 
-// Silence expected console.warn output from the retry/error branches.
+// Silence expected structured-logger output from the retry/error branches.
+// enrich-install-missions.mjs logs warnings via the shared structured logger
+// (scripts/lib/logger.mjs), which writes JSON lines directly to
+// process.stderr rather than calling console.warn — see #3599.
 let warnSpy
 let originalLLMToken
 let originalGithubToken
 
 beforeEach(() => {
-  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   vi.useFakeTimers()
   originalLLMToken = process.env.LLM_TOKEN
   originalGithubToken = process.env.GITHUB_TOKEN

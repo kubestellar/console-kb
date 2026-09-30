@@ -1,5 +1,4 @@
 /**
-const log = createLogger('cncf-github-client')
  * GitHub API client and issue-mining helpers for the CNCF mission generator.
  *
  * Extracted from generate-cncf-missions.mjs (console-kb#3133 / #3332) so the
@@ -12,6 +11,8 @@ const log = createLogger('cncf-github-client')
  * reverse dependency on generate-cncf-missions.mjs — see the "Impact"
  * section of the architect finding for details).
  */
+import { createLogger } from './logger.mjs'
+const log = createLogger('cncf-github-client')
 
 // Config: tuning constants read from env at module load; GITHUB_TOKEN is read
 // per-call inside githubApi() so tests (and callers) can mutate process.env

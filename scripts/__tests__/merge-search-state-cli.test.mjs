@@ -33,12 +33,16 @@ const SCRIPT_URL = pathToFileURL(SCRIPT).href
 async function runIn(cwd) {
   const prevCwd = process.cwd()
   const logs = []
-  const warns = []
-  const errs = []
+  const stderrWrites = []
   const exit = { called: false, code: 0 }
   const logSpy = vi.spyOn(console, 'log').mockImplementation((m) => logs.push(String(m)))
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation((m) => warns.push(String(m)))
-  const errSpy = vi.spyOn(console, 'error').mockImplementation((m) => errs.push(String(m)))
+  // merge-search-state.mjs logs warnings/errors via the shared structured
+  // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+  // process.stderr instead of calling console.warn/console.error — see #3599.
+  const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((m) => {
+    stderrWrites.push(String(m))
+    return true
+  })
   const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
     exit.called = true
     exit.code = Number(code)
@@ -52,12 +56,11 @@ async function runIn(cwd) {
       if (e.message !== '__PROCESS_EXIT__') throw e
     }
     const status = exit.called ? exit.code : 0
-    return { status, stdout: logs.join('\n'), stderr: warns.concat(errs).join('\n') }
+    return { status, stdout: logs.join('\n'), stderr: stderrWrites.join('\n') }
   } finally {
     process.chdir(prevCwd)
     logSpy.mockRestore()
-    warnSpy.mockRestore()
-    errSpy.mockRestore()
+    stderrSpy.mockRestore()
     exitSpy.mockRestore()
   }
 }
