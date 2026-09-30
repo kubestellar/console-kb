@@ -20,6 +20,7 @@ import * as lib from '../lib/cncf-github-client.mjs'
 import * as platformContext from '../platform/github-context.mjs'
 import * as platformGenerator from '../generate-platform-missions.mjs'
 import * as cncfGenerator from '../generate-cncf-missions.mjs'
+import * as ghDiscussions from '../sources/github-discussions.mjs'
 
 const SCRIPTS_DIR = fileURLToPath(new URL('..', import.meta.url))
 const LIB_CLIENT = 'lib/cncf-github-client.mjs'
@@ -38,6 +39,12 @@ const PRIVATE_CLIENT_PATTERNS = [
   { name: 'private rate-limit counter', re: /\b(let|var|const)\s+rateLimit(Remaining|Reset)\b/ },
   { name: 'raw x-ratelimit header parsing', re: /x-ratelimit-(remaining|reset)/i },
   { name: 'deprecated GitHub v3 media type', re: /application\/vnd\.github\.v3\+json/ },
+  // kubestellar/console-kb#3604: GraphQL calls must also share the lib's
+  // rate-limit counter / retry / timeout / header policy. Any raw fetch
+  // against api.github.com/graphql outside the lib re-splits the token
+  // budget across two disconnected counters.
+  { name: 'raw fetch to api.github.com/graphql', re: /fetch\s*\(\s*['"`]https?:\/\/api\.github\.com\/graphql/ },
+  { name: 'raw graphql URL constant', re: /=\s*['"`]https?:\/\/api\.github\.com\/graphql['"`]/ },
 ]
 
 function listMjsFiles(dir) {
@@ -88,5 +95,21 @@ describe('single GitHub REST client (console-kb#3551)', () => {
     expect(lib.GITHUB_ACCEPT_HEADER).toBe('application/vnd.github+json')
     expect(lib.GITHUB_API_VERSION).toBe('2022-11-28')
     expect(src).not.toMatch(/vnd\.github\.v3\+json/)
+  })
+
+  // kubestellar/console-kb#3604
+  it('the lib exposes a shared GraphQL primitive that github-discussions consumes', () => {
+    expect(typeof lib.githubGraphql).toBe('function')
+    expect(lib.GRAPHQL_URL).toBe('https://api.github.com/graphql')
+    // Discussions source must not carry its own token cache or fetch — the
+    // per-call GITHUB_TOKEN read now happens inside githubHeaders() in the lib.
+    const src = readFileSync(
+      join(SCRIPTS_DIR, 'sources/github-discussions.mjs'), 'utf8',
+    )
+    expect(src).not.toMatch(/this\.token\s*=/)
+    expect(src).not.toMatch(/\bfetch\s*\(/)
+    expect(src).toMatch(/githubGraphql/)
+    // Sanity: importing the source did not surface a competing GRAPHQL_URL.
+    expect(ghDiscussions).not.toHaveProperty('GRAPHQL_URL')
   })
 })

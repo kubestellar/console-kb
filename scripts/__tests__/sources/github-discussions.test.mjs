@@ -40,16 +40,19 @@ describe('GitHubDiscussionsSource', () => {
   })
 
   it('searches discussions and filters out skipped items', async () => {
+    const okHeaders = { get: () => null }
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
+        headers: okHeaders,
         json: async () => ({
           data: { repository: { hasDiscussionsEnabled: true } },
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
+        headers: okHeaders,
         json: async () => ({
           data: {
             repository: {
@@ -112,7 +115,7 @@ describe('GitHubDiscussionsSource', () => {
       })
     globalThis.fetch = fetchMock
 
-    const source = new GitHubDiscussionsSource({ rateLimitDelay: 0, maxPerProject: 3, minUpvotes: 5 })
+    const source = new GitHubDiscussionsSource({ rateLimitDelay: 0, maxPerProject: 1, minUpvotes: 5 })
     const result = await source.search(TEST_PROJECT, {
       lastSearched: '2024-05-01T00:00:00.000Z',
       processedIds: ['ghd:kubestellar/console-kb/9'],

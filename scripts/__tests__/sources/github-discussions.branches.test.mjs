@@ -55,26 +55,28 @@ describe('GitHubDiscussionsSource — branch coverage', () => {
   })
 
   it('search returns empty when hasDiscussionsEnabled probe returns !ok', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) })
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 404, json: async () => ({}), text: async () => '', headers: { get: () => null } })
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result).toEqual({ items: [] })
   })
 
   it('search returns empty when hasDiscussionsEnabled probe throws', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('network'))
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('network'))
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result).toEqual({ items: [] })
-  })
+  }, 20000)
 
   // ─── search() page-loop failure branches ──────────────────────────────
 
   it('search breaks the page loop when the discussions fetch is not ok', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }) })
-      .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }), headers: { get: () => null } })
+      .mockResolvedValue({ ok: false, status: 404, json: async () => ({}), text: async () => '', headers: { get: () => null } })
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
@@ -83,8 +85,8 @@ describe('GitHubDiscussionsSource — branch coverage', () => {
   it('search breaks the page loop when GraphQL returns errors', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ errors: [{ message: 'rate limited' }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }), headers: { get: () => null } })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ errors: [{ message: 'rate limited' }] }), headers: { get: () => null } })
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
@@ -93,8 +95,8 @@ describe('GitHubDiscussionsSource — branch coverage', () => {
   it('search breaks the page loop when the response has no discussions payload', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: {} } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }), headers: { get: () => null } })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: {} } }), headers: { get: () => null } })
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
@@ -103,19 +105,20 @@ describe('GitHubDiscussionsSource — branch coverage', () => {
   it('search catches fetch errors thrown mid-loop and returns collected items', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }) })
-      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }), headers: { get: () => null } })
+      .mockRejectedValue(new Error('timeout'))
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const result = await source.search(TEST_PROJECT, EMPTY_STATE)
     expect(result.items).toEqual([])
-  })
+  }, 20000)
 
   it('search skips nodes that are null or lack an answer', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { repository: { hasDiscussionsEnabled: true } } }), headers: { get: () => null } })
       .mockResolvedValueOnce({
         ok: true,
+        headers: { get: () => null },
         json: async () => ({
           data: {
             repository: {

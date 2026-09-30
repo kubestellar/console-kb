@@ -7,15 +7,14 @@
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
+import { githubGraphql } from '../lib/cncf-github-client.mjs'
 
 const log = createLogger('github-discussions')
-const GRAPHQL_URL = 'https://api.github.com/graphql'
 
 export class GitHubDiscussionsSource extends BaseSource {
   constructor(config) {
     super('github-discussions', config)
     this.minUpvotes = config.minUpvotes || 5
-    this.token = process.env.GITHUB_TOKEN
   }
 
   canonicalId(item) {
@@ -23,7 +22,7 @@ export class GitHubDiscussionsSource extends BaseSource {
   }
 
   async search(project, sourceState) {
-    if (!this.token) {
+    if (!process.env.GITHUB_TOKEN) {
       log.warn('  Discussions: No GITHUB_TOKEN, skipping')
       return { items: [] }
     }
@@ -82,32 +81,13 @@ export class GitHubDiscussionsSource extends BaseSource {
     while (page < MAX_PAGES && items.length < this.maxPerProject) {
       try {
         await this.throttle()
-        const response = await fetch(GRAPHQL_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-            'Content-Type': 'application/json',
-            'User-Agent': 'cncf-mission-generator/1.0',
-          },
-          body: JSON.stringify({
-            query,
-            variables: { owner, repo, cursor },
-          }),
-          signal: AbortSignal.timeout(30000),
-        })
-
-        if (!response.ok) {
-          log.warn(`  Discussions: ${response.status} for ${project.repo}, skipping`)
+        const data = await githubGraphql(query, { owner, repo, cursor })
+        if (!data) {
+          log.warn(`  Discussions: request failed for ${project.repo}, skipping`)
           break
         }
 
-        const result = await response.json()
-        if (result.errors) {
-          log.warn(`  Discussions: GraphQL errors for ${project.repo}: ${result.errors[0]?.message}`)
-          break
-        }
-
-        const discussions = result.data?.repository?.discussions
+        const discussions = data.repository?.discussions
         if (!discussions) break
 
         for (const d of discussions.nodes || []) {
@@ -178,26 +158,15 @@ export class GitHubDiscussionsSource extends BaseSource {
   async checkDiscussionsEnabled(owner, repo) {
     try {
       await this.throttle()
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'cncf-mission-generator/1.0',
-        },
-        body: JSON.stringify({
-          query: `query($owner: String!, $repo: String!) {
-            repository(owner: $owner, name: $repo) {
-              hasDiscussionsEnabled
-            }
-          }`,
-          variables: { owner, repo },
-        }),
-        signal: AbortSignal.timeout(15000),
-      })
-      if (!response.ok) return false
-      const result = await response.json()
-      return result.data?.repository?.hasDiscussionsEnabled === true
+      const data = await githubGraphql(
+        `query($owner: String!, $repo: String!) {
+          repository(owner: $owner, name: $repo) {
+            hasDiscussionsEnabled
+          }
+        }`,
+        { owner, repo },
+      )
+      return data?.repository?.hasDiscussionsEnabled === true
     } catch {
       return false
     }

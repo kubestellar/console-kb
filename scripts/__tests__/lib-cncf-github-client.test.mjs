@@ -19,9 +19,11 @@ import {
   waitForRateLimit,
   githubApi,
   githubApiResponse,
+  githubGraphql,
   githubHeaders,
   GITHUB_ACCEPT_HEADER,
   GITHUB_API_VERSION,
+  GRAPHQL_URL,
   findHighEngagementIssues,
   getIssueDetails,
   fetchPRDiffSummary,
@@ -328,6 +330,114 @@ describe('githubApiResponse', () => {
     expect(res.status).toBe(200)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/Rate limited/))
+  })
+})
+
+// ─── githubGraphql (console-kb#3604) ───────────────────────────────────
+
+describe('githubGraphql', () => {
+  it('exposes the canonical api.github.com/graphql URL', () => {
+    expect(GRAPHQL_URL).toBe('https://api.github.com/graphql')
+  })
+
+  it('posts JSON with the shared header set and returns data on 200', async () => {
+    process.env.GITHUB_TOKEN = 'test-token'
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ status: 200, body: { data: { viewer: { login: 'octocat' } } }, headers: highRateLimitHeaders() }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubGraphql('query { viewer { login } }', { foo: 1 })
+    await vi.runAllTimersAsync()
+    const data = await p
+
+    expect(data).toEqual({ viewer: { login: 'octocat' } })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe(GRAPHQL_URL)
+    expect(opts.method).toBe('POST')
+    expect(opts.headers.Accept).toBe(GITHUB_ACCEPT_HEADER)
+    expect(opts.headers['X-GitHub-Api-Version']).toBe(GITHUB_API_VERSION)
+    expect(opts.headers['Content-Type']).toBe('application/json')
+    expect(opts.headers.Authorization).toMatch(/^Bearer /)
+    expect(JSON.parse(opts.body)).toEqual({
+      query: 'query { viewer { login } }',
+      variables: { foo: 1 },
+    })
+  })
+
+  it('retries on 5xx and returns data on the retry', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ status: 503, body: 'busy', headers: highRateLimitHeaders() }))
+      .mockResolvedValueOnce(jsonResponse({ status: 200, body: { data: { ok: true } }, headers: highRateLimitHeaders() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubGraphql('query { ok }')
+    await vi.runAllTimersAsync()
+    const data = await p
+
+    expect(data).toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns null when the response body carries GraphQL errors', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ status: 200, body: { errors: [{ message: 'bad query' }] }, headers: highRateLimitHeaders() }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubGraphql('query { bad }')
+    await vi.runAllTimersAsync()
+    const data = await p
+
+    expect(data).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null on a non-retryable 4xx', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ status: 401, body: 'unauth', headers: highRateLimitHeaders() }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubGraphql('query { viewer { login } }')
+    await vi.runAllTimersAsync()
+    const data = await p
+
+    expect(data).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('updates the shared rate-limit counter from x-ratelimit-remaining', async () => {
+    // Drive the shared counter to 8 (< 10) via a graphql call, then confirm
+    // the next REST call waits via waitForRateLimit (visible as a Date.now
+    // read + sleep, since we are on fake timers).
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: 200,
+        body: { data: { ok: true } },
+        headers: { 'x-ratelimit-remaining': '8', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 30) },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p = githubGraphql('query { ok }')
+    await vi.runAllTimersAsync()
+    await p
+
+    // Now REST calls must wait (waitForRateLimit sees remaining < 10).
+    const restMock = vi.fn(async () =>
+      jsonResponse({ status: 200, body: { ok: 1 }, headers: highRateLimitHeaders() }),
+    )
+    vi.stubGlobal('fetch', restMock)
+    const restP = githubApi('https://api.github.com/anything')
+    // Before advancing timers, REST fetch has not yet been called (blocked in sleep).
+    await Promise.resolve()
+    expect(restMock).not.toHaveBeenCalled()
+    await vi.runAllTimersAsync()
+    await restP
+    expect(restMock).toHaveBeenCalled()
   })
 })
 

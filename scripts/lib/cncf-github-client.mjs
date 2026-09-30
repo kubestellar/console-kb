@@ -148,6 +148,80 @@ export async function githubApi(url, options = {}) {
   return response.json()
 }
 
+export const GRAPHQL_URL = 'https://api.github.com/graphql'
+
+/**
+ * GitHub GraphQL call sharing the same rate-limit counter, retry policy,
+ * timeout, and header set as the REST client (kubestellar/console-kb#3604).
+ *
+ * REST and GraphQL draw from the same 5000 req/hour secondary-rate budget
+ * on the token, so both call paths update the same `rateLimitRemaining` /
+ * `rateLimitReset` bookkeeping via `x-ratelimit-*` response headers and
+ * both wait on `waitForRateLimit()` before issuing a request. That makes
+ * back-pressure decisions consistent across the two families.
+ *
+ * Returns the parsed `data` object on success, or `null` when the request
+ * should be skipped (non-ok status, `errors` array in the response, or
+ * MAX_RETRIES exhausted). Callers pass a GraphQL query string plus a
+ * variables object; `options.headers` extends the default header set.
+ */
+export async function githubGraphql(query, variables = {}, options = {}) {
+  await waitForRateLimit()
+
+  const headers = githubHeaders()
+  const body = JSON.stringify({ query, variables })
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', ...options.headers },
+        body,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+
+      const remaining = response.headers?.get?.('x-ratelimit-remaining')
+      const reset = response.headers?.get?.('x-ratelimit-reset')
+      if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
+      if (reset != null) rateLimitReset = parseInt(reset, 10)
+
+      if (response.status === 403 && rateLimitRemaining === 0) {
+        const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
+        log.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
+        await sleep(waitMs)
+        continue
+      }
+
+      if (response.status >= 500) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+        log.warn(`  GraphQL server error ${response.status}, retrying in ${backoff}ms...`)
+        await sleep(backoff)
+        continue
+      }
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '')
+        log.warn(`  GraphQL ${response.status}: ${errText.slice(0, 200)}`)
+        return null
+      }
+
+      const result = await response.json()
+      if (result.errors) {
+        log.warn(`  GraphQL errors: ${result.errors[0]?.message}`)
+        return null
+      }
+      return result.data ?? null
+    } catch (err) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+      log.warn(`  GraphQL request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
+      if (attempt < MAX_RETRIES - 1) await sleep(backoff)
+    }
+  }
+
+  log.warn(`  GraphQL failed after ${MAX_RETRIES} retries`)
+  return null
+}
+
 async function findHighEngagementIssues(project) {
   const [owner, repo] = project.repo.split('/')
 
