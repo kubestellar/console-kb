@@ -3,53 +3,42 @@
  *
  * Trusted-prefix allowlists for env-configurable LLM endpoints. Any URL supplied
  * via ANTHROPIC_ENDPOINT / LLM_ENDPOINT must start with one of these prefixes,
- * otherwise the module load fails fast. Matches the assertTrustedEndpoint()
- * pattern already used in mission-executor.mjs, enrich-install-missions.mjs,
- * generate-cncf-install-missions.mjs, and generate-platform-missions.mjs
- * (CWE-441). Prevents an attacker who can influence process env (e.g. a
- * compromised reusable workflow that writes to $GITHUB_ENV) from redirecting
- * Bearer-token traffic to an attacker-controlled host.
+ * otherwise the module load fails fast. Uses the shared assertTrustedEndpoint()
+ * gate from lib/llm-endpoint-guard.mjs (also used by mission-executor.mjs,
+ * enrich-install-missions.mjs, generate-cncf-install-missions.mjs, and
+ * generate-platform-missions.mjs) so the SSRF check itself has a single
+ * source of truth (CWE-441, kubestellar/console-kb#3562). Prevents an
+ * attacker who can influence process env (e.g. a compromised reusable
+ * workflow that writes to $GITHUB_ENV) from redirecting Bearer-token traffic
+ * to an attacker-controlled host.
+ *
+ * `LLM_ENDPOINT` here is intentionally guarded against a narrower policy
+ * (`GITHUB_MODELS_POLICY`) than the generator/executor scripts' own
+ * `LLM_ENDPOINT` (`LLM_ENDPOINT_POLICY`): this synthesizer only ever talks to
+ * GitHub Models / Azure AI, not api.openai.com or api.githubcopilot.com
+ * directly. Both policies are named exports of lib/llm-endpoint-guard.mjs so
+ * scripts/__tests__/ssrf-allowlist-drift.test.mjs can pin them independently.
  *
  * Extracted from scripts/sources/llm-synthesizer.mjs (console-kb#3196).
  */
+import { assertTrustedEndpoint, GITHUB_MODELS_POLICY, ANTHROPIC_POLICY } from '../../lib/llm-endpoint-guard.mjs'
 
 // --- Configuration ---
 const COPILOT_ENDPOINT = 'https://api.enterprise.githubcopilot.com/chat/completions'
 const COPILOT_MODEL = process.env.COPILOT_MODEL || 'claude-opus-4.6'
 
-// Trusted-prefix allowlists for env-configurable LLM endpoints. Any URL supplied
-// via ANTHROPIC_ENDPOINT / LLM_ENDPOINT must start with one of these prefixes,
-// otherwise the module load fails fast. Matches the assertTrustedEndpoint()
-// pattern already used in mission-executor.mjs, enrich-install-missions.mjs,
-// generate-cncf-install-missions.mjs, and generate-platform-missions.mjs
-// (CWE-441). Prevents an attacker who can influence process env (e.g. a
-// compromised reusable workflow that writes to $GITHUB_ENV) from redirecting
-// Bearer-token traffic to an attacker-controlled host.
-const ALLOWED_ANTHROPIC_PREFIXES = ['https://api.anthropic.com/']
-const ALLOWED_MODELS_PREFIXES = [
-  'https://models.github.ai/',
-  'https://models.inference.ai.azure.com/',
-]
-
-function assertTrustedEndpoint(name, endpoint, allowedPrefixes) {
-  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
-    throw new Error(`Untrusted ${name}: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
-  }
-  return endpoint
-}
-
 export const ANTHROPIC_ENDPOINT = assertTrustedEndpoint(
-  'ANTHROPIC_ENDPOINT',
   process.env.ANTHROPIC_ENDPOINT || 'https://api.anthropic.com/v1/messages',
-  ALLOWED_ANTHROPIC_PREFIXES,
+  ANTHROPIC_POLICY,
+  'ANTHROPIC_ENDPOINT',
 )
 export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 export const ANTHROPIC_VERSION = '2023-06-01'
 
 export const GITHUB_MODELS_ENDPOINT = assertTrustedEndpoint(
-  'LLM_ENDPOINT',
   process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions',
-  ALLOWED_MODELS_PREFIXES,
+  GITHUB_MODELS_POLICY,
+  'LLM_ENDPOINT',
 )
 export const GITHUB_MODELS_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o'
 
