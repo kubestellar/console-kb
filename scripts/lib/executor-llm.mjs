@@ -5,30 +5,16 @@
  * check, token resolution, and the llmChat conversation helper used to
  * drive step extraction, failure diagnosis, and final verification.
  *
- * NOTE: `ALLOWED_ENDPOINT_PREFIXES` / `assertTrustedEndpoint()` are
- * intentionally duplicated (not imported from a shared module) across
- * mission-executor.mjs (here), enrich-install-missions.mjs,
- * generate-cncf-install-missions.mjs, and generate-platform-missions.mjs.
- * See scripts/__tests__/ssrf-allowlist-drift.test.mjs, which enforces that
- * all copies stay byte-identical.
+ * The SSRF guard (`ALLOWED_ENDPOINT_PREFIXES` / `assertTrustedEndpoint`) is
+ * imported from the canonical `lib/llm-endpoint-guard.mjs` and re-exported
+ * unchanged (kubestellar/console-kb#3614), so mission-executor.mjs still
+ * sees the same symbol names it used before the consolidation.
  */
+
+import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './llm-endpoint-guard.mjs'
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
-
-const ALLOWED_ENDPOINT_PREFIXES = [
-  'https://models.github.ai/',
-  'https://models.inference.ai.azure.com/',
-  'https://api.openai.com/',
-  'https://api.githubcopilot.com/',
-]
-
-function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREFIXES) {
-  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
-    throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
-  }
-  return endpoint
-}
 
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 

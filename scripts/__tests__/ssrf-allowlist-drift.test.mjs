@@ -6,33 +6,32 @@
  * #3333, `generate-cncf-install-missions.mjs` and
  * `generate-platform-missions.mjs` were consolidated onto a single shared
  * copy in `lib/llm-endpoint-guard.mjs` (imported + re-exported from both,
- * so the module-load SSRF gate still runs at import time in each). The
- * remaining two copies are out of scope for that refactor (see
- * kubestellar/console-kb#3100) and still carry their own local declaration:
+ * so the module-load SSRF gate still runs at import time in each). As of
+ * kubestellar/console-kb#3614 the remaining two copies —
+ * `enrich-install-missions.mjs` and `lib/executor-llm.mjs` — were
+ * consolidated onto the same shared copy, so there is now a single
+ * declaration site:
  *
- *   - enrich-install-missions.mjs      (exported, covered by security-guards.test.mjs)
- *   - lib/executor-llm.mjs             (NOT exported; extracted from
- *                                        mission-executor.mjs by console-kb#3151,
- *                                        re-exported unchanged from there)
  *   - lib/llm-endpoint-guard.mjs        (shared canonical copy, imported by
- *                                        generate-cncf-install-missions.mjs and
- *                                        generate-platform-missions.mjs)
+ *                                        every other file below)
  *
  * These tests read the relevant files as text and enforce that:
- *   1. Each of the three declaration sites defines a single
+ *   1. The single declaration site defines a single
  *      `ALLOWED_ENDPOINT_PREFIXES = [ ... ]` array literal.
- *   2. The parsed contents of that array are byte-equal across all three,
- *      AND the two consolidated generator scripts import the shared copy
- *      rather than re-declaring it.
- *   3. Each declaration site defines an `assertTrustedEndpoint(endpoint,
+ *   2. The declaration site defines an `assertTrustedEndpoint(endpoint,
  *      allowedPrefixes = ...)` function with the same body pattern (the
  *      `.some(prefix => endpoint.startsWith(prefix))` check that is the
  *      actual SSRF gate).
- *   4. Every one of the four files (declaration sites + consolidated
- *      importers) performs the module-load validation gate:
+ *   3. Every one of the four gate-invoking files
+ *      (`enrich-install-missions.mjs`, `generate-cncf-install-missions.mjs`,
+ *      `lib/platform-llm-config.mjs`, `lib/executor-llm.mjs`) performs the
+ *      module-load validation gate:
  *      `const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)`.
- *   5. All prefixes use HTTPS (defence-in-depth: catch anyone quietly adding
+ *   4. All prefixes use HTTPS (defence-in-depth: catch anyone quietly adding
  *      an http:// entry).
+ *   5. Every non-canonical file imports `ALLOWED_ENDPOINT_PREFIXES` and
+ *      `assertTrustedEndpoint` from `lib/llm-endpoint-guard.mjs` rather than
+ *      re-declaring them.
  *   6. `sources/llm-synthesizer/config.mjs` (console-kb#3562) guards two
  *      *different* env vars (`LLM_ENDPOINT`, `ANTHROPIC_ENDPOINT`) against
  *      two different, narrower named policies (`GITHUB_MODELS_POLICY`,
@@ -60,19 +59,20 @@ const GATE_FILES = [
   'lib/executor-llm.mjs',
 ]
 
-// Files that declare (own) ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint
-// locally. generate-cncf-install-missions.mjs and lib/platform-llm-config.mjs
-// import both from lib/llm-endpoint-guard.mjs instead (checked separately below).
+// The single declaration (owning) site.
 const DECLARATION_FILES = [
-  'enrich-install-missions.mjs',
-  'lib/executor-llm.mjs',
   'lib/llm-endpoint-guard.mjs',
 ]
 
-// generate-cncf-install-missions.mjs / lib/platform-llm-config.mjs must
-// import the shared guard rather than re-declaring it.
+// Every non-canonical file that consumes the SSRF gate must import both
+// symbols from lib/llm-endpoint-guard.mjs rather than re-declaring them.
+// (`enrich-install-missions.mjs` re-exports the imported symbols so the
+// existing runtime-import tests in `enrich-install-missions-endpoint-trust`
+// and `enrich-install-missions-security-drift` keep working unchanged.)
 const CONSOLIDATED_IMPORTER_FILES = [
+  'enrich-install-missions.mjs',
   'generate-cncf-install-missions.mjs',
+  'lib/executor-llm.mjs',
   'lib/platform-llm-config.mjs',
 ]
 

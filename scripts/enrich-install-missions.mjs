@@ -31,23 +31,13 @@ const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/infer
 const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 const LLM_TIMEOUT_MS = 60_000
 
-export const ALLOWED_ENDPOINT_PREFIXES = [
-  'https://models.github.ai/',
-  'https://models.inference.ai.azure.com/',
-  'https://api.openai.com/',
-  'https://api.githubcopilot.com/',
-]
-
-/**
- * Asserts that an LLM endpoint URL starts with an approved prefix (CWE-441: prevent SSRF).
- * Throws if the endpoint is not trusted.
- */
-export function assertTrustedEndpoint(endpoint, allowedPrefixes = ALLOWED_ENDPOINT_PREFIXES) {
-  if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {
-    throw new Error(`Untrusted LLM_ENDPOINT: ${endpoint}. Must start with one of: ${allowedPrefixes.join(', ')}`)
-  }
-  return endpoint
-}
+// Shared SSRF guard: canonical copy lives in lib/llm-endpoint-guard.mjs
+// (kubestellar/console-kb#3614). Re-exported below so tests that import
+// these symbols from `enrich-install-missions.mjs` keep working unchanged
+// and `scripts/__tests__/enrich-install-missions-security-drift.test.mjs`
+// still runs the pinned-list check against the same runtime values.
+import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
+export { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint }
 
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
