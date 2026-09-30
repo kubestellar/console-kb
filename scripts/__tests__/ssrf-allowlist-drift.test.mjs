@@ -33,6 +33,13 @@
  *      `const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)`.
  *   5. All prefixes use HTTPS (defence-in-depth: catch anyone quietly adding
  *      an http:// entry).
+ *   6. `sources/llm-synthesizer/config.mjs` (console-kb#3562) guards two
+ *      *different* env vars (`LLM_ENDPOINT`, `ANTHROPIC_ENDPOINT`) against
+ *      two different, narrower named policies (`GITHUB_MODELS_POLICY`,
+ *      `ANTHROPIC_POLICY`, both exported by `lib/llm-endpoint-guard.mjs`).
+ *      It must import `assertTrustedEndpoint` from the shared module
+ *      instead of re-declaring the gate function, and both named policies
+ *      are pinned so they can't silently widen.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
@@ -78,6 +85,16 @@ const CONFIG_CONSUMER_FILES = [
   'platform/synthesize.mjs',
 ]
 
+// sources/llm-synthesizer/config.mjs guards two *different* env vars
+// (LLM_ENDPOINT, ANTHROPIC_ENDPOINT) against two narrower, named policies
+// (GITHUB_MODELS_POLICY, ANTHROPIC_POLICY) exported by
+// lib/llm-endpoint-guard.mjs. It must import assertTrustedEndpoint and both
+// policies rather than re-declaring its own copy of the gate function
+// (console-kb#3562) — the allowlists themselves are intentionally narrower
+// than LLM_ENDPOINT_POLICY, so they are not part of the byte-equality check
+// above, but drift in *those* policies is pinned separately below.
+const SYNTHESIZER_CONFIG_FILE = 'sources/llm-synthesizer/config.mjs'
+
 /**
  * Extract every prefix string listed in the first
  * `ALLOWED_ENDPOINT_PREFIXES = [ ... ]` array literal in `source`.
@@ -100,10 +117,26 @@ function extractPrefixes(source) {
   return prefixes
 }
 
+/**
+ * Extract every prefix string listed in the first `name = [ ... ]` array
+ * literal (any export name, e.g. `GITHUB_MODELS_POLICY`) in `source`.
+ */
+function extractNamedPolicy(source, exportName) {
+  const arrayMatch = source.match(
+    new RegExp(`${exportName}\\s*=\\s*\\[([\\s\\S]*?)\\]`),
+  )
+  if (!arrayMatch) return null
+  const prefixes = []
+  const stringRe = /['"]([^'"]+)['"]/g
+  let m
+  while ((m = stringRe.exec(arrayMatch[1]))) prefixes.push(m[1])
+  return prefixes
+}
+
 // Load every relevant file's source once. Failures here mean the test
 // itself is broken; surface them clearly rather than as N cascading
 // per-file failures.
-const ALL_FILES = [...new Set([...GATE_FILES, ...DECLARATION_FILES, ...CONSOLIDATED_IMPORTER_FILES, ...CONFIG_CONSUMER_FILES])]
+const ALL_FILES = [...new Set([...GATE_FILES, ...DECLARATION_FILES, ...CONSOLIDATED_IMPORTER_FILES, ...CONFIG_CONSUMER_FILES, SYNTHESIZER_CONFIG_FILE])]
 const sources = new Map()
 for (const name of ALL_FILES) {
   sources.set(name, readFileSync(join(scriptsDir, name), 'utf8'))
@@ -185,16 +218,21 @@ describe('assertTrustedEndpoint function shape', () => {
   for (const name of DECLARATION_FILES) {
     it(`${name} defines assertTrustedEndpoint using a prefix startsWith check`, () => {
       const source = sources.get(name)
-      // Match either `function assertTrustedEndpoint` or `export function ...`
+      // Match either `function assertTrustedEndpoint` or `export function ...`.
+      // lib/llm-endpoint-guard.mjs's copy additionally accepts an optional
+      // trailing `name` param (used by sources/llm-synthesizer/config.mjs's
+      // two distinct policies) — allow that here too.
       expect(source).toMatch(
-        /(?:export\s+)?function\s+assertTrustedEndpoint\s*\(\s*endpoint\s*,\s*allowedPrefixes\s*=\s*ALLOWED_ENDPOINT_PREFIXES\s*\)/,
+        /(?:export\s+)?function\s+assertTrustedEndpoint\s*\(\s*endpoint\s*,\s*allowedPrefixes\s*=\s*ALLOWED_ENDPOINT_PREFIXES\s*(?:,\s*name\s*=\s*['"]LLM_ENDPOINT['"]\s*)?\)/,
       )
       // The actual gate: .some(prefix => endpoint.startsWith(prefix))
       expect(source).toMatch(
         /allowedPrefixes\.some\(\s*prefix\s*=>\s*endpoint\.startsWith\(\s*prefix\s*\)\s*\)/,
       )
-      // Must throw on mismatch, not silently continue.
-      expect(source).toMatch(/throw\s+new\s+Error\(\s*[`'"]\s*Untrusted\s+LLM_ENDPOINT/i)
+      // Must throw on mismatch, not silently continue. lib/llm-endpoint-guard.mjs's
+      // copy interpolates the (optional) `name` param into the message instead
+      // of hardcoding `LLM_ENDPOINT`; the other declaration sites hardcode it.
+      expect(source).toMatch(/throw\s+new\s+Error\(\s*[`'"]\s*Untrusted\s+(?:LLM_ENDPOINT|\$\{name\})/i)
     })
   }
 
@@ -241,4 +279,40 @@ describe('module-load validation gate', () => {
       )
     })
   }
+})
+
+// ─── 6. sources/llm-synthesizer/config.mjs imports the shared gate ─────────
+// (console-kb#3562): this file guards two different env vars against two
+// different, narrower named policies, so it can't just import
+// ALLOWED_ENDPOINT_PREFIXES like the CONSOLIDATED_IMPORTER_FILES above — but
+// it must still import assertTrustedEndpoint (and both policies) rather than
+// re-declaring its own copy of the gate function.
+describe('sources/llm-synthesizer/config.mjs shares the gate function', () => {
+  const source = sources.get(SYNTHESIZER_CONFIG_FILE)
+
+  it('imports assertTrustedEndpoint, GITHUB_MODELS_POLICY, and ANTHROPIC_POLICY from lib/llm-endpoint-guard.mjs', () => {
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bassertTrustedEndpoint\b[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/llm-endpoint-guard\.mjs['"]/,
+    )
+    expect(source).toMatch(/\bGITHUB_MODELS_POLICY\b/)
+    expect(source).toMatch(/\bANTHROPIC_POLICY\b/)
+  })
+
+  it('does not re-declare its own assertTrustedEndpoint function', () => {
+    expect(source).not.toMatch(/function\s+assertTrustedEndpoint\s*\(/)
+  })
+
+  it('calls the module-load gate for both LLM_ENDPOINT and ANTHROPIC_ENDPOINT', () => {
+    expect(source).toMatch(/assertTrustedEndpoint\s*\(\s*process\.env\.LLM_ENDPOINT/)
+    expect(source).toMatch(/assertTrustedEndpoint\s*\(\s*process\.env\.ANTHROPIC_ENDPOINT/)
+  })
+
+  it('GITHUB_MODELS_POLICY and ANTHROPIC_POLICY are pinned (no silent widening)', () => {
+    const guardSource = sources.get('lib/llm-endpoint-guard.mjs')
+    expect(extractNamedPolicy(guardSource, 'GITHUB_MODELS_POLICY')).toEqual([
+      'https://models.github.ai/',
+      'https://models.inference.ai.azure.com/',
+    ])
+    expect(extractNamedPolicy(guardSource, 'ANTHROPIC_POLICY')).toEqual(['https://api.anthropic.com/'])
+  })
 })
