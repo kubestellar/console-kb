@@ -102,14 +102,6 @@ No exporter or external data flow is added by this document — recommendations 
   the same
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
 
-  **Separate known gap**: `KB Quality Enforcement`
-  (`.github/workflows/kb-quality-enforcement.yml`) triggers on PRs touching
-  either `fixes/**/*.json` or `runbooks/**/*.json`, but its "Detect Changed KB
-  Entries" step only diffs `fixes/**/*.json` — a PR that changes only
-  `runbooks/**/*.json` produces zero detected files, skips the quality-scorer
-  step entirely, and still reports the `quality-check` job as passing. Tracked
-  as a follow-up (see below); this document does not add the fix itself.
-
 ### 3. Time-to-detect a bad publish
 
 - **SLI**: elapsed time from a bad `fixes/index.json` commit landing on `master` to
