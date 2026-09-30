@@ -8,11 +8,10 @@
  * `ALLOWED_ENDPOINT_PREFIXES` + `assertTrustedEndpoint`. A single copy means
  * a future allowlist change (or security fix) only has to land once.
  *
- * `enrich-install-missions.mjs` and `lib/executor-llm.mjs` keep their own
- * copies of `ALLOWED_ENDPOINT_PREFIXES` for now (out of scope for this
- * refactor — see kubestellar/console-kb#3100), but `assertTrustedEndpoint`
- * itself must stay byte-identical to this one across all copies (enforced
- * by scripts/__tests__/ssrf-allowlist-drift.test.mjs).
+ * `enrich-install-missions.mjs` and `lib/executor-llm.mjs` were consolidated
+ * onto this shared copy as well (kubestellar/console-kb#3614) so there is a
+ * single declaration site; each of those files still runs the module-load
+ * SSRF gate on its own `LLM_ENDPOINT` via the imported `assertTrustedEndpoint`.
  *
  * `sources/llm-synthesizer/config.mjs` guards two *different* env vars
  * (`LLM_ENDPOINT`, `ANTHROPIC_ENDPOINT`) against two different, narrower
@@ -23,9 +22,8 @@
  */
 
 // Policy for the generator/executor scripts' `LLM_ENDPOINT` (OpenAI-family
-// backends: GitHub Models, Azure AI, OpenAI, GitHub Copilot). Kept under its
-// original export name — enrich-install-missions.mjs and lib/executor-llm.mjs
-// import/compare it by this name (scripts/__tests__/ssrf-allowlist-drift.test.mjs).
+// backends: GitHub Models, Azure AI, OpenAI, GitHub Copilot). Every consumer
+// imports this array by name (scripts/__tests__/ssrf-allowlist-drift.test.mjs).
 export const ALLOWED_ENDPOINT_PREFIXES = [
   'https://models.github.ai/',
   'https://models.inference.ai.azure.com/',
