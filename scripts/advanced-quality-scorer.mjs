@@ -4,8 +4,11 @@
  * Implements a pluggable architecture for eventual LLM generation of issues and suggestions.
  */
 
+import { kbQualityThreshold } from './lib/quality-thresholds.mjs';
+
 /** Minimum score (0–100) a mission must achieve to pass quality enforcement.
- * Override at runtime via the QUALITY_THRESHOLD environment variable.
+ * Override at runtime via the KB_QUALITY_THRESHOLD environment variable
+ * (falls back to the legacy QUALITY_THRESHOLD, then to this default).
  *
  * Why 60? Empirically chosen from a sample of ~50 KB entries:
  *   - Entries scoring <60 consistently lacked code snippets, had vague descriptions,
@@ -14,7 +17,7 @@
  * This is a round number that errs on the side of permissiveness for the initial POC;
  * it should be tuned upward once the scorer has been exercised across the full dataset.
  */
-export const MIN_SCORE = parseInt(process.env.QUALITY_THRESHOLD || '60', 10);
+export const MIN_SCORE = kbQualityThreshold(60);
 const DEFAULT_THRESHOLD = MIN_SCORE; // internal alias used by scoreMissionAdvanced default arg
 
 /**

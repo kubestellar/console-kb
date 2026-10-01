@@ -15,6 +15,7 @@
  */
 import { execFileSync } from 'child_process'
 import { scoreMission } from './quality-scorer.mjs'
+import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import {
   filterRecentPRs,
   requiredChecksPassed,
@@ -24,7 +25,7 @@ import {
 import { createLogger } from './lib/logger.mjs'
 const log = createLogger('score-and-merge-mission-prs')
 
-const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10)
+const QUALITY_THRESHOLD = genQualityThreshold(70)
 const LABEL = 'cncf-mission-gen'
 const LOOKBACK_HOURS = 6
 const REQUIRED_CHECKS = ['Mission Safety Scan', 'Validate Mission Schema']

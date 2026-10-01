@@ -10,7 +10,7 @@
  *   BATCH_INDEX        — batch index for parallelism
  *   BATCH_SIZE         — projects per batch (default 20)
  *   DRY_RUN            — if 'true', no files written
- *   QUALITY_THRESHOLD  — minimum score (default 60)
+ *   GEN_QUALITY_THRESHOLD — minimum score (default 60; falls back to legacy QUALITY_THRESHOLD)
  *   FORCE_REGENERATE   — if 'true', overwrite existing missions
  */
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs'
@@ -20,6 +20,7 @@ import { parse as parseYaml } from 'yaml'
 import { CNCF_PROJECTS } from './cncf-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
+import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
@@ -57,7 +58,7 @@ import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
 import { createLogger } from './lib/logger.mjs'
 const log = createLogger('generate-cncf-install-missions')
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
-const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
+const QUALITY_THRESHOLD = genQualityThreshold(60)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 

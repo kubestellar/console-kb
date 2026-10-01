@@ -23,6 +23,7 @@ import { K8S_PLATFORMS, getPlatformByName } from './k8s-platforms.mjs'
 import { OTHER_PROJECTS } from './other-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
+import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { sanitizeInfraDetails } from './lib/text-utils.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
@@ -54,7 +55,7 @@ import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
 import { createLogger } from './lib/logger.mjs'
 const log = createLogger('generate-platform-missions')
 const FORCE_REGENERATE = process.env.FORCE_REGENERATE === 'true'
-const QUALITY_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '60', 10)
+const QUALITY_THRESHOLD = genQualityThreshold(60)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'platform-install')
 
