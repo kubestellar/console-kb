@@ -16,11 +16,11 @@ import { defineConfig } from 'vitest/config';
 // has already landed — see .github/workflows/scripts-tests.yml.
 //
 // Current measured baseline with the include/exclude below
-// (2026-09-23, `npm test`):
-//   Statements  79.93%
-//   Branches    82.04%
-//   Functions   81.61%
-//   Lines       79.51%
+// (2026-10-01, `npm test`):
+//   Statements  82.39%
+//   Branches    82.90%
+//   Functions   83.98%
+//   Lines       82.23%
 //
 // Thresholds are set a few points below each of these so a legitimate
 // small dip does not fail CI, but a real regression (a suite deleted,
@@ -54,10 +54,10 @@ export default defineConfig({
         '**/*.config.*',
       ],
       thresholds: {
-        lines: 76,
-        statements: 76,
-        functions: 78,
-        branches: 79,
+        lines: 79,
+        statements: 79,
+        functions: 81,
+        branches: 80,
       },
     },
   },
