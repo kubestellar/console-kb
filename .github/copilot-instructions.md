@@ -12,9 +12,34 @@ fixes/
   platform-install/<slug>.json                 # Platform install missions
   index.json                                   # Auto-generated index
 scripts/
-  quality-scorer.mjs                           # Scores missions 0-100
+  quality-scorer.mjs                           # Generation-path scorer (scoreMission): stepsSpecificity,
+                                                #   descriptionClarity, resolutionCompleteness, codePresence,
+                                                #   metadataQuality, contentUniqueness. Gates "ship this
+                                                #   generated mission?" (used by the generate-*.mjs scripts and
+                                                #   score-and-merge-mission-prs.mjs).
+  advanced-quality-scorer.mjs                  # KB-enforcement scorer (scoreMissionAdvanced / MIN_SCORE):
+                                                #   clarity, completeness, correctness, structure, observability.
+                                                #   Gates "mark this indexed entry qualityPass?" (used by
+                                                #   build-index.mjs and test-kb-quality-ci.mjs). These two
+                                                #   scorers measure different dimensions and are NOT comparable
+                                                #   score-for-score — see scripts/lib/quality-thresholds.mjs.
+  lib/quality-thresholds.mjs                   # Single parse point for both thresholds (see below)
   scanner.mjs                                  # Validates mission schema
 ```
+
+### Quality Threshold Env Vars
+
+Both scorers' pass/fail thresholds are parsed exactly once, in `scripts/lib/quality-thresholds.mjs`
+(mirrors the `scripts/lib/batch-env.mjs` pattern from #3500):
+
+- `GEN_QUALITY_THRESHOLD` — generation path (`quality-scorer.mjs` and its callers:
+  `generate-cncf-install-missions.mjs`, `generate-platform-missions.mjs`,
+  `score-and-merge-mission-prs.mjs`).
+- `KB_QUALITY_THRESHOLD` — KB enforcement path (`advanced-quality-scorer.mjs` only).
+
+Precedence for each var: **new var > legacy `QUALITY_THRESHOLD` > per-call-site default**. The
+legacy `QUALITY_THRESHOLD` env var still works as a fallback for both paths, but setting it affects
+both scorers at once — prefer the scoped vars above when you only mean to retune one gate.
 
 ## Mission Generation Tasks
 

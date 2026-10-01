@@ -4,7 +4,9 @@
  * Missions below the threshold are dropped.
  */
 
-const DEFAULT_THRESHOLD = parseInt(process.env.QUALITY_THRESHOLD || '70', 10)
+import { genQualityThreshold } from './lib/quality-thresholds.mjs'
+
+const DEFAULT_THRESHOLD = genQualityThreshold(70)
 
 /**
  * Score a mission object on quality dimensions.
