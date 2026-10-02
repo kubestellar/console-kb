@@ -117,4 +117,47 @@ describe('render-ci-step-summary runCli', () => {
       Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true })
     }
   })
+
+  it('narrows to --event and prepends --title when both are passed via argv', async () => {
+    const out = makeStdoutSink()
+    const input = JSON.stringify({
+      event: 'mission-safety-scan-summary',
+      level: 'error',
+      filesScanned: 2,
+      errors: 1,
+      warnings: 0,
+      durationMs: 4,
+    })
+
+    const code = await runCli({
+      argv: ['--event', 'mission-safety-scan-summary', '--title', 'Mission Safety Scan Summary'],
+      stdout: out.fn,
+      readStdin: async () => input,
+    })
+
+    expect(code).toBe(0)
+    const output = out.chunks.join('')
+    expect(output.startsWith('### Mission Safety Scan Summary\n\n')).toBe(true)
+    expect(output).toContain('| Files scanned | 2 |')
+    expect(output).toContain('| Result | ❌ fail |')
+  })
+
+  it('ignores an unrelated known event when --event narrows to a different one', async () => {
+    const out = makeStdoutSink()
+    const input = [
+      JSON.stringify({ event: 'kb-quality-ci-summary', total: 1, passed: 1, failed: 0 }),
+      JSON.stringify({ event: 'schema-validation-summary', level: 'info', trigger: 'all', total: 2, validCount: 2, invalidCount: 0, durationMs: 5 }),
+    ].join('\n')
+
+    const code = await runCli({
+      argv: ['--event', 'schema-validation-summary', '--title', 'Schema Validation Summary'],
+      stdout: out.fn,
+      readStdin: async () => input,
+    })
+
+    expect(code).toBe(0)
+    const output = out.chunks.join('')
+    expect(output).toContain('| Trigger | all |')
+    expect(output).not.toContain('| Total files | 1 |')
+  })
 })
