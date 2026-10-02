@@ -13,7 +13,7 @@ import { createLogger } from './lib/logger.mjs'
 const log = createLogger('fetch-cncf-landscape')
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const LANDSCAPE_URL = 'https://raw.githubusercontent.com/cncf/landscape/master/landscape.yml'
-const OUTPUT_PATH = join(__dirname, 'cncf-projects.mjs')
+const OUTPUT_PATH = join(__dirname, 'catalogs', 'cncf-projects.mjs')
 
 export const CATEGORY_PATTERNS = [
   [/prometheus|grafana|jaeger|fluentd|thanos|cortex|opentelemetry|loki|tempo|pixie|skooner|headlamp|trickster|opencost|inspektor|kepler|parseable|perses/i, 'observability'],
