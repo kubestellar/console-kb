@@ -25,6 +25,11 @@ import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } 
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { sanitizeInfraDetails } from './lib/text-utils.mjs'
+// Mission-tree sanitizer previously inlined inside `main()` — extracted to
+// `lib/mission-sanitizer.mjs` (kubestellar/console-kb#3641) so the policy
+// lives next to the generate-cncf-install-missions.mjs sibling policy and
+// both are pinned by scripts/__tests__/sanitize-mission-text-drift.test.mjs.
+import { sanitizePlatformMission } from './lib/mission-sanitizer.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
 import {
@@ -334,28 +339,10 @@ async function main() {
 
     if (!gateResult.pass) continue
 
-    // 4. Sanitize the mission text after LLM synthesis
-    const sanitizeMissionText = (obj, maxLen = 5000) => {
-      if (typeof obj === 'string') {
-        // Redact infra details, HTML-encode angle brackets (js/bad-tag-filter,
-        // js/incomplete-multi-character-sanitization — CWE-80/79), strip control
-        // chars, and cap length (CWE-434, fixes #2896).
-        return sanitizeInfraDetails(obj)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-          .slice(0, maxLen)
-      }
-      if (Array.isArray(obj)) return obj.map(item => sanitizeMissionText(item, maxLen))
-      if (obj && typeof obj === 'object') {
-        const result = {}
-        for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v, maxLen)
-        return result
-      }
-      return obj
-    }
-    mission.mission = sanitizeMissionText(mission.mission)
+    // 4. Sanitize the mission text after LLM synthesis.
+    // Policy + walker extracted to lib/mission-sanitizer.mjs
+    // (CWE-80/79/434, fixes #2896; kubestellar/console-kb#3641).
+    mission.mission = sanitizePlatformMission(mission.mission)
 
     // 5. Write mission file
     const platformSlug = slugify(platform.name)
@@ -381,7 +368,7 @@ async function main() {
     const missionJson = serializeSanitizedMissionForFile(mission)
 
     if (!DRY_RUN) {
-      // mission.mission is sanitized by sanitizeMissionText() above;
+      // mission.mission is sanitized by sanitizePlatformMission() above;
       // path validated via basename allowlist and assertSafePath(); serializeSanitizedMissionForFile()
       // applies a final integrity check before the bytes reach disk (fixes #2909).
       writeFileSync(resolvedPath, missionJson) // codeql[js/http-to-file-access]

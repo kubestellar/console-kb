@@ -24,6 +24,11 @@ import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
+// Mission-tree sanitizer previously inlined inside `main()` — extracted to
+// `lib/mission-sanitizer.mjs` (kubestellar/console-kb#3641) so the policy
+// lives next to the generate-platform-missions.mjs sibling policy and both
+// are pinned by scripts/__tests__/sanitize-mission-text-drift.test.mjs.
+import { sanitizeInstallMission, replaceUntilStable } from './lib/mission-sanitizer.mjs'
 // GitHub REST primitives (rate-limit tracking, 30s timeout, 5xx/network
 // backoff) are shared with generate-cncf-missions.mjs via the lib; the
 // Response-returning variant is used here because the knowledge-source
@@ -308,15 +313,6 @@ export function applyQualityGate(mission, config) {
 // are shared with generate-platform-missions.mjs via ./lib/mission-file.mjs
 // (kubestellar/console-kb#3134, #3333).
 
-function replaceUntilStable(input, pattern, replacement = '') {
-  let previous
-  do {
-    previous = input
-    input = input.replace(pattern, replacement)
-  } while (input !== previous)
-  return input
-}
-
 // ─── Helm URL validation ─────────────────────────────────────────────
 
 async function validateAndFixHelmUrl(helmUrl, projectName) {
@@ -558,40 +554,10 @@ async function main() {
     report.scores.push(gateResult.score)
     const methods = (mission.metadata.installMethods || []).join(', ')
 
-    // Sanitize mission text after LLM synthesis
-    const sanitizeMissionText = (obj) => {
-      if (typeof obj === 'string') {
-        // Strip HTML tags and script content to prevent prompt injection in MDX output
-        // Use loop-until-stable to handle overlapping/nested patterns (CWE-80, CWE-79)
-        let sanitized = obj
-        
-        // Decode HTML entities first to catch entity-encoded attacks
-        sanitized = sanitized
-          .replace(/&lt;/gi, '<')
-          .replace(/&gt;/gi, '>')
-          .replace(/&quot;/gi, '"')
-          .replace(/&#x27;/gi, "'")
-          .replace(/&#x2F;/gi, '/')
-          .replace(/&amp;/gi, '&')
-        
-        // Loop each multi-character sanitizer to a fixed point (CWE-80/116).
-        // Match closing </script> with any content before > to cover variants like </script\t\n bar> (js/bad-tag-filter).
-        sanitized = replaceUntilStable(sanitized, /<script[\s\S]*?<\/\s*script[^>]*>/gi)
-        sanitized = replaceUntilStable(sanitized, /\bon\w+[\s\u0000-\u001F\u007F]*=[\s\u0000-\u001F\u007F]*(?:["'][^"']*["']|[^\s>]+)/gi)
-        sanitized = replaceUntilStable(sanitized, /javascript[\s\u0000-\u001F\u007F]*:/gi)
-        sanitized = replaceUntilStable(sanitized, /<[^>]+>/g)
-        
-        return sanitized
-      }
-      if (Array.isArray(obj)) return obj.map(sanitizeMissionText)
-      if (obj && typeof obj === 'object') {
-        const result = {}
-        for (const [k, v] of Object.entries(obj)) result[k] = sanitizeMissionText(v)
-        return result
-      }
-      return obj
-    }
-    mission.mission = sanitizeMissionText(mission.mission)
+    // Sanitize mission text after LLM synthesis.
+    // Policy + walker extracted to lib/mission-sanitizer.mjs (CWE-80/79/116,
+    // kubestellar/console-kb#3641).
+    mission.mission = sanitizeInstallMission(mission.mission)
 
     if (DRY_RUN) {
       console.log(`  [DRY RUN] Would write: ${gateResult.tier === 'draft' ? draftPath : outPath}`)
@@ -613,7 +579,7 @@ async function main() {
       assertSafePath(resolvedPath, resolvedSolutionsDir)
       const missionJson = serializeSanitizedMissionForFile(mission)
       
-      // mission.mission is sanitized by sanitizeMissionText() above;
+      // mission.mission is sanitized by sanitizeInstallMission() above;
       // path validated via basename allowlist and assertSafePath(); serializeSanitizedMissionForFile()
       // applies a final integrity check before the bytes reach disk (fixes #2909).
       writeFileSync(resolvedPath, missionJson) // codeql[js/http-to-file-access]
