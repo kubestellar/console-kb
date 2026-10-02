@@ -117,4 +117,72 @@ describe('render-ci-step-summary.mjs renderSummary', () => {
     expect(renderSummary('')).toContain('No structured CI summary line found')
     expect(renderSummary(undefined)).toContain('No structured CI summary line found')
   })
+
+  it('renders a passing mission-safety-scan-summary as a markdown table', () => {
+    const input = JSON.stringify({
+      event: 'mission-safety-scan-summary',
+      level: 'info',
+      filesScanned: 4,
+      errors: 0,
+      warnings: 1,
+      durationMs: 8,
+    })
+
+    const out = renderSummary(input)
+
+    expect(out).toContain('| Files scanned | 4 |')
+    expect(out).toContain('| Errors | 0 |')
+    expect(out).toContain('| Warnings | 1 |')
+    expect(out).toContain('| Duration (ms) | 8 |')
+    expect(out).toContain('| Result | ✅ pass |')
+  })
+
+  it('renders a failing mission-safety-scan-summary with the fail icon', () => {
+    const input = JSON.stringify({
+      event: 'mission-safety-scan-summary',
+      level: 'error',
+      filesScanned: 2,
+      errors: 1,
+      warnings: 0,
+      durationMs: 3,
+    })
+
+    const out = renderSummary(input)
+
+    expect(out).toContain('| Result | ❌ fail |')
+  })
+
+  it('prepends a "### <title>" heading when --title is set', () => {
+    const input = JSON.stringify({ event: 'kb-quality-ci-summary', total: 1, passed: 1, failed: 0 })
+
+    const out = renderSummary(input, { title: 'KB Quality Enforcement Summary' })
+
+    expect(out.startsWith('### KB Quality Enforcement Summary\n\n')).toBe(true)
+    expect(out).toContain('| Result | ✅ pass |')
+  })
+
+  it('prepends the title to the placeholder message when no summary line matches', () => {
+    const out = renderSummary('no json here', { title: 'Schema Validation Summary' })
+
+    expect(out.startsWith('### Schema Validation Summary\n\n')).toBe(true)
+    expect(out).toContain('No structured CI summary line found')
+  })
+
+  it('narrows rendering to just the --event when multiple known events are present', () => {
+    const input = [
+      JSON.stringify({ event: 'kb-quality-ci-summary', total: 1, passed: 1, failed: 0 }),
+      JSON.stringify({ event: 'schema-validation-summary', level: 'info', trigger: 'all', total: 2, validCount: 2, invalidCount: 0, durationMs: 5 }),
+    ].join('\n')
+
+    const out = renderSummary(input, { event: 'schema-validation-summary' })
+
+    expect(out).toContain('| Trigger | all |')
+    expect(out).not.toContain('| Total files | 1 |')
+  })
+
+  it('returns the placeholder when --event is set but no matching line is present', () => {
+    const out = renderSummary('plain log line, no json', { event: 'mission-safety-scan-summary' })
+
+    expect(out).toContain('No structured CI summary line found')
+  })
 })

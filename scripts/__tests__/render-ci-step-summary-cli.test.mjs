@@ -14,7 +14,7 @@
  * `end` handler, non-zero exit on empty input) trips a real test
  * rather than being caught by a workflow engineer at 2 AM.
  *
- * Mirrors the sibling render-step-summary.test.mjs's spawnSync pattern.
+ * Mirrors this file's own spawnSync pattern used for every other event.
  */
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'child_process'
@@ -97,5 +97,52 @@ describe('render-ci-step-summary.mjs CLI', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('| Total files | 2 |')
     expect(result.stdout).toContain('| Result | ✅ info |')
+  })
+
+  it('narrows to --event and prepends a --title heading for a single-event caller', () => {
+    const input = [
+      '✅ fixes/foo.json: Valid kc-mission-v1',
+      JSON.stringify({
+        event: 'schema-validation-summary',
+        level: 'info',
+        trigger: 'changed-files',
+        total: 1,
+        validCount: 1,
+        invalidCount: 0,
+        durationMs: 12,
+      }),
+    ].join('\n')
+
+    const result = spawnSync(process.execPath, [
+      SCRIPT,
+      '--event', 'schema-validation-summary',
+      '--title', 'Schema Validation Summary',
+    ], { encoding: 'utf8', input })
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(result.stdout.startsWith('### Schema Validation Summary\n\n')).toBe(true)
+    expect(result.stdout).toContain('| Trigger | changed-files |')
+  })
+
+  it('renders a mission-safety-scan-summary from stdin', () => {
+    const input = JSON.stringify({
+      event: 'mission-safety-scan-summary',
+      level: 'info',
+      filesScanned: 3,
+      errors: 0,
+      warnings: 0,
+      durationMs: 5,
+    })
+
+    const result = spawnSync(process.execPath, [
+      SCRIPT,
+      '--event', 'mission-safety-scan-summary',
+      '--title', 'Mission Safety Scan Summary',
+    ], { encoding: 'utf8', input })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('| Files scanned | 3 |')
+    expect(result.stdout).toContain('| Result | ✅ pass |')
   })
 })
