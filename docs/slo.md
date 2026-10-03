@@ -72,17 +72,22 @@ No exporter or external data flow is added by this document — recommendations 
   guidance for the historical incident class remains in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Fourth known exception**: `KB Quality Enforcement`
-  (`.github/workflows/kb-quality-enforcement.yml`) has the same
-  false-green gap for a third workflow — its `on.pull_request.paths`
-  trigger includes `runbooks/**/*.json`, but the "Detect Changed KB
-  Entries" step's `git diff` pathspec covers only `fixes/**/*.json`, so a
-  `runbooks/**`-only PR resolves to zero changed files and the "Run
-  Quality Scorer" step is skipped (job still reports green, having scored
-  nothing). Confirmed reproducible: `node scripts/test-kb-quality-ci.mjs`
-  with no args reports "No KB JSON files provided for scoring", while
-  `node scripts/test-kb-quality-ci.mjs runbooks/disaster-recovery.json`
-  scores it 100/100 when given the file directly. Also tracked as a
-  follow-up (see below); recovery guidance is in the same
+  (`.github/workflows/kb-quality-enforcement.yml`) had the same
+  false-green gap for a third workflow, **now fixed** — its
+  `on.pull_request.paths` trigger includes `runbooks/**/*.json`, but the
+  "Detect Changed KB Entries" step's `git diff` pathspec used to cover
+  only `fixes/**/*.json`, so a `runbooks/**`-only PR resolved to zero
+  changed files and the "Run Quality Scorer" step was skipped (job still
+  reported green, having scored nothing). Closed as
+  [#3631](https://github.com/kubestellar/console-kb/issues/3631) and
+  fixed in PR
+  [#3633](https://github.com/kubestellar/console-kb/pull/3633) (merged
+  2026-10-02), which extended the "Detect Changed KB Entries" step's
+  `git diff` pathspec to also match `runbooks/**/*.json`. Verified on
+  current `master`: `.github/workflows/kb-quality-enforcement.yml`'s
+  detect-files step includes `'runbooks/**/*.json'` alongside
+  `'fixes/**/*.json'`. Recovery guidance for the historical incident
+  class remains in
   [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md).
   **Fifth known exception**: `Mission Content Validation`
   (`.github/workflows/mission-content-validation.yml`) has the same
@@ -208,11 +213,13 @@ that queries both checks before the `--admin` merge and leaves the PR open with
 an explanatory comment otherwise, closing
 [#3157](https://github.com/kubestellar/console-kb/issues/3157).
 
-Separately, the section 2 "separate known gap" above (`kb-quality-enforcement.yml`
-never scoring `runbooks/**/*.json`-only PRs) also requires editing that workflow's
-diff pathspec to include `runbooks/**/*.json` alongside `fixes/**/*.json`. Also
-filed separately as a `[operations]` issue for the same `workflows`-permission
-reason.
+Separately, the section 2 "fourth known exception" above
+(`kb-quality-enforcement.yml` never scoring `runbooks/**/*.json`-only PRs) is
+now resolved: PR
+[#3633](https://github.com/kubestellar/console-kb/pull/3633) (merged
+2026-10-02) extended that workflow's diff pathspec to include
+`runbooks/**/*.json` alongside `fixes/**/*.json`, closing
+[#3631](https://github.com/kubestellar/console-kb/issues/3631).
 
 The section 2 "second known exception" above (`mission-safety-scan.yml`'s
 scan-step file selection omitting `runbooks/**` despite the workflow's own

@@ -89,30 +89,26 @@ files (same `kc-mission-v1` schema as `fixes/**`, per `runbooks/README.md`)
 now have automated schema validation coverage on both triggers. This
 section is retained for historical incident recovery only.
 
-### Related gap: `KB Quality Enforcement` false-green on `runbooks/**`-only PRs
+### Related gap: `KB Quality Enforcement` false-green on `runbooks/**`-only PRs (fixed)
 
-A third instance of the same false-green class affects
+A third instance of the same false-green class used to affect
 `KB Quality Enforcement` (`.github/workflows/kb-quality-enforcement.yml`).
-Its `on.pull_request.paths` trigger includes `runbooks/**/*.json`, but the
+Its `on.pull_request.paths` trigger includes `runbooks/**/*.json`, and the
 "Detect Changed KB Entries" step's file selection
-(`git diff --name-only --diff-filter=d ... -- 'fixes/**/*.json'`) is scoped
-only to `fixes/`. For a `runbooks/**`-only PR, this resolves to an empty
-file list (`files_changed=false`), so the "Run Quality Scorer" step's `if`
-condition is false and the step is **skipped**, not failed — the job
-reports green having scored zero files. Confirmed via
-`node scripts/test-kb-quality-ci.mjs` (no args → "No KB JSON files
-provided for scoring") vs. `node scripts/test-kb-quality-ci.mjs
-runbooks/disaster-recovery.json` (scores 100/100 when given the file
-directly) — `runbooks` does not otherwise appear in
-`scripts/test-kb-quality-ci.mjs` or `scripts/advanced-quality-scorer.mjs`.
-Confirmed still present as of this writing. Originally filed as
-`[operations]` issue #3203, then re-confirmed and closed as a
-docs-only duplicate in #3268 (both now closed, not fixed — the "fourth
-known exception" in `docs/slo.md` section 2 remains the authoritative
-tracking for this gap) since fixing it requires editing
-`.github/workflows/kb-quality-enforcement.yml` (`workflows` permission).
-Use the manual scoring command in step 3 of Detection below for any
-merged `runbooks/**` file.
+(`git diff --name-only --diff-filter=d ... -- 'fixes/**/*.json'`) used to be
+scoped only to `fixes/`. For a `runbooks/**`-only PR, this resolved to an
+empty file list (`files_changed=false`), so the "Run Quality Scorer" step's
+`if` condition was false and the step was **skipped**, not failed — the job
+reported green having scored zero files. Originally filed as `[operations]`
+issue #3203, then re-confirmed and closed as a docs-only duplicate in
+#3268, then re-confirmed and closed as #3631 — **fixed** in PR
+[#3633](https://github.com/kubestellar/console-kb/pull/3633) (merged
+2026-10-02), which extended the "Detect Changed KB Entries" step's
+`git diff` pathspec to also match `runbooks/**/*.json`. Verified on current
+`master`: `.github/workflows/kb-quality-enforcement.yml`'s detect-files
+step includes `'runbooks/**/*.json'`. This section is retained for
+historical incident recovery only; the manual scoring command in step 3
+of Detection below remains useful as defense-in-depth.
 
 ### Related gap: `Mission Content Validation` false-green on `runbooks/**`-only PRs
 
@@ -173,9 +169,13 @@ hand against the checks listed in the "Validate mission quality" and
   entirely, that indicates a regression of the fixed gap and should be
   treated as a new incident.
 - A merged PR touched only `runbooks/**` files and `KB Quality
-  Enforcement` shows green, but the job's log shows "No KB JSON files
-  changed" and the "Run Quality Scorer" step was **skipped** (not run) —
-  this is the `KB Quality Enforcement` false-green gap described above.
+  Enforcement` shows green — as of PR #3633, this is expected (the
+  detect-files pathspec now covers `runbooks/**`, so a genuine failure
+  here would show the "Run Quality Scorer" step actually ran and scored
+  the file, not skipped it). If the job's log instead shows "No KB JSON
+  files changed" and the "Run Quality Scorer" step **skipped** for a PR
+  that did touch `runbooks/**/*.json`, that indicates a regression of the
+  fixed gap and should be treated as a new incident.
 - A merged PR touched only `runbooks/**` files and `Mission Content
   Validation` shows green, but the job's log shows "No install missions
   changed" and "No solution files changed" on both validation steps — this
@@ -200,8 +200,9 @@ git log --oneline -10 --grep="cncf-mission-gen" -- fixes/ runbooks/
 grep -RPl 'kubectl delete (namespace|ns|all)\b.*--all' fixes/ runbooks/ || true
 grep -RPl 'rm\s+-rf?\s+(/|/\*|~|\$HOME)' fixes/ runbooks/ || true
 
-# 3. Confirm quality-scorer coverage — kb-quality-enforcement.yml only
-#    diffs fixes/**, so runbooks/*.json must be passed explicitly too
+# 3. Confirm quality-scorer coverage. kb-quality-enforcement.yml's PR
+#    trigger now diffs runbooks/** too (fixed in #3633); re-run directly
+#    against runbooks/*.json as defense-in-depth.
 node scripts/test-kb-quality-ci.mjs $(ls runbooks/*.json)
 ```
 
@@ -266,15 +267,16 @@ in PR [#3410](https://github.com/kubestellar/console-kb/pull/3410), which
 extended the pathspec to also include
 `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`.
 
-Closing the `KB Quality Enforcement` gap (never scoring `runbooks/**` on
-PRs) requires extending the `git diff` pathspec in the "Detect Changed KB
+The `KB Quality Enforcement` gap (never scoring `runbooks/**` on PRs) is
+**fixed**: PR
+[#3633](https://github.com/kubestellar/console-kb/pull/3633) (merged
+2026-10-02) extended the `git diff` pathspec in the "Detect Changed KB
 Entries" step of `.github/workflows/kb-quality-enforcement.yml` to also
 include `'runbooks/**/*.json'`, matching the trigger's own
-`on.pull_request.paths`. Requires `workflows` permission this
-contribution's credentials do not have. Originally tracked in
-`[operations]` issue #3203, closed as a docs-only duplicate in #3268
-(both now closed, not fixed) — `docs/slo.md` section 2's "fourth known
-exception" remains the authoritative tracking for this gap.
+`on.pull_request.paths`, closing
+[#3631](https://github.com/kubestellar/console-kb/issues/3631) (originally
+tracked in `[operations]` issue #3203, closed as a docs-only duplicate in
+#3268).
 
 Closing the `Mission Content Validation` gap (never validating
 `runbooks/**` on PRs, despite triggering on it) requires extending the
