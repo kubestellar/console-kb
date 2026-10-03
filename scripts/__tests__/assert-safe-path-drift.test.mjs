@@ -8,14 +8,14 @@
  * re-exported from both, so existing imports of `assertSafePath` from either
  * generator file keep working unchanged).
  *
- * `scripts/enrich-install-missions.mjs` keeps its own local copy for now
- * (out of scope for this refactor — see kubestellar/console-kb#3100). This
- * test now locks:
- *   - the shared `lib/mission-file.mjs` copy and the remaining
- *     `enrich-install-missions.mjs` copy stay behaviourally identical
- *     (byte-equal function body), and
- *   - the two consolidated generator scripts import (not re-declare)
- *     `assertSafePath` from the shared lib.
+ * `scripts/enrich-install-missions.mjs` has now been consolidated the same
+ * way (closing out kubestellar/console-kb#3100): it imports and re-exports
+ * `assertSafePath` from `lib/mission-file.mjs` instead of declaring its own
+ * copy, so all three call sites share one implementation. This test now
+ * locks:
+ *   - the shared `lib/mission-file.mjs` copy is the sole declaration, and
+ *   - all three consuming scripts import (not re-declare) `assertSafePath`
+ *     from the shared lib.
  *
  * This test uses the same static-analysis approach as the sibling drift
  * checks (`sanitize-infra-details-drift.test.mjs`,
@@ -41,16 +41,16 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPTS_DIR = join(HERE, '..')
 
-// Files that still declare assertSafePath locally.
+// The sole remaining declaration site.
 const DECLARATION_COPIES = [
   { file: 'lib/mission-file.mjs', expectedExport: true },
-  { file: 'enrich-install-missions.mjs', expectedExport: true },
 ]
 
 // Files that import (and re-export) the shared lib/mission-file.mjs copy.
 const CONSOLIDATED_IMPORTER_FILES = [
   'generate-platform-missions.mjs',
   'generate-cncf-install-missions.mjs',
+  'enrich-install-missions.mjs',
 ]
 
 // Extract the function body (from the opening `{` after the signature to
@@ -65,7 +65,7 @@ function extractAssertSafePath(source) {
 }
 
 describe('assertSafePath drift', () => {
-  it('appears exactly once in each of the two declaration sites', () => {
+  it('appears exactly once in the sole declaration site', () => {
     for (const { file } of DECLARATION_COPIES) {
       const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
       const matches = source.match(
@@ -74,23 +74,15 @@ describe('assertSafePath drift', () => {
       expect(matches, `${file}`).not.toBeNull()
       expect(matches.length, `${file} should declare assertSafePath exactly once`).toBe(1)
     }
-  })
 
-  it('the shared lib copy and the remaining local copy share the same function body', () => {
-    const bodies = DECLARATION_COPIES.map(({ file }) => {
+    // Guard against a future PR silently reintroducing a second local copy
+    // in any of the consolidated importer files.
+    for (const file of CONSOLIDATED_IMPORTER_FILES) {
       const source = readFileSync(join(SCRIPTS_DIR, file), 'utf8')
-      const parsed = extractAssertSafePath(source)
-      expect(parsed, `${file} must contain an assertSafePath declaration`).not.toBeNull()
-      return { file, body: parsed.body }
-    })
-
-    const reference = bodies[0].body
-    for (const { file, body } of bodies.slice(1)) {
       expect(
-        body,
-        `${file} assertSafePath body has drifted from ${bodies[0].file}. ` +
-          `Update both copies in lockstep, or consolidate enrich-install-missions.mjs too.`,
-      ).toBe(reference)
+        extractAssertSafePath(source),
+        `${file} should import assertSafePath from lib/mission-file.mjs, not re-declare it`,
+      ).toBeNull()
     }
   })
 

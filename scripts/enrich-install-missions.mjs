@@ -42,11 +42,13 @@ export { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint }
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
-export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
-  if (!resolvedTarget.startsWith(resolvedAllowedDir + '/') && resolvedTarget !== resolvedAllowedDir) {
-    throw new Error(`Path traversal detected: ${resolvedTarget} is outside ${resolvedAllowedDir}`)
-  }
-}
+// Shared path-traversal guard: canonical copy lives in lib/mission-file.mjs
+// (kubestellar/console-kb#3100/#3134/#3333). Re-exported below so tests that
+// import this symbol from `enrich-install-missions.mjs` keep working
+// unchanged and `scripts/__tests__/assert-safe-path-drift.test.mjs` still
+// runs the same guard-behaviour checks against the shared implementation.
+import { assertSafePath } from './lib/mission-file.mjs'
+export { assertSafePath }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
