@@ -35,6 +35,10 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = readFileSync(join(HERE, '..', 'enrich-install-missions.mjs'), 'utf-8')
+// assertSafePath is consolidated onto the shared lib copy (console-kb#3100);
+// enrich-install-missions.mjs only imports + re-exports it, so the
+// verbatim-source checks below read the lib implementation instead.
+const MISSION_FILE_SRC = readFileSync(join(HERE, '..', 'lib', 'mission-file.mjs'), 'utf-8')
 
 describe('enrich-install-missions security-drift guards', () => {
   describe('ALLOWED_ENDPOINT_PREFIXES', () => {
@@ -113,14 +117,14 @@ describe('enrich-install-missions security-drift guards', () => {
       // Without the '/', '/opt/fixes/cncf-installEVIL/x' would pass
       // the startsWith check against '/opt/fixes/cncf-install'.
       // The verbatim source is what a code review can inspect; lock it.
-      expect(SRC).toContain(
+      expect(MISSION_FILE_SRC).toContain(
         "if (!resolvedTarget.startsWith(resolvedAllowedDir + '/') && resolvedTarget !== resolvedAllowedDir) {",
       )
     })
 
     it('throws with the exact "Path traversal detected" phrasing', () => {
       // Ops runbooks and log-scraping alerts key off this string.
-      expect(SRC).toContain('throw new Error(`Path traversal detected:')
+      expect(MISSION_FILE_SRC).toContain('throw new Error(`Path traversal detected:')
     })
 
     it('is called on both filePath and SOLUTIONS_DIR resolved paths', () => {
