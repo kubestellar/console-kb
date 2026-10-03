@@ -20,12 +20,8 @@
  * `warnings`, `durationMs`), matching the convention already used by
  * `validate-schema.mjs` and `mission-safety-scan.mjs`.
  *
- * This is intentionally a STANDALONE, unit-tested script — it does not
- * modify `.github/workflows/mission-content-validation.yml`. Creating/
- * updating a workflow file requires the GitHub App `workflows`
- * permission, which this repo's telemetry automation does not hold
- * (see PR #3311/#3374 for the same constraint). A maintainer with that
- * permission can replace both inline `run:` blocks with a single:
+ * This is intentionally a STANDALONE, unit-tested script; the workflow
+ * invokes it instead of carrying duplicate inline bash/python blocks:
  *
  *   - name: Validate mission content
  *     run: node scripts/mission-content-validation.mjs "$FILES"
