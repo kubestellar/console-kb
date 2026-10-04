@@ -6,6 +6,7 @@
 // Since console-kb#3551 the module delegates rate-limit/retry/timeout policy
 // to lib/cncf-github-client.mjs, so those semantics are covered there.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 // checkHelmRepoUrl now runs the SSRF guard from lib/url-fetch-guard.mjs
 // (console-kb SSRF fix, CWE-918), which does a real DNS lookup on the
@@ -14,6 +15,40 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
 }))
+
+// safeFetch (lib/url-fetch-guard.mjs) talks to `node:http`/`node:https`
+// directly rather than the global `fetch` — it pins the DNS resolution
+// used for SSRF validation to the one used for the actual connection,
+// closing a TOCTOU/DNS-rebinding gap a global-fetch mock can't exercise.
+// Fake that transport here so checkHelmRepoUrl tests can still drive
+// index.yaml reachability deterministically.
+let fakeHttpResponder = () => ({ status: 200 })
+
+function fakeHttpRequest(urlObj, options, callback) {
+  const req = new EventEmitter()
+  req.end = () => {
+    let result
+    try {
+      result = fakeHttpResponder(urlObj.href || String(urlObj))
+    } catch (err) {
+      queueMicrotask(() => req.emit('error', err))
+      return
+    }
+    const res = new EventEmitter()
+    res.statusCode = result.status
+    res.headers = result.headers || {}
+    queueMicrotask(() => {
+      callback(res)
+      if (result.body) res.emit('data', Buffer.from(result.body))
+      res.emit('end')
+    })
+  }
+  req.destroy = () => {}
+  return req
+}
+
+vi.mock('node:http', () => ({ request: fakeHttpRequest }))
+vi.mock('node:https', () => ({ request: fakeHttpRequest }))
 
 import {
   sleep,
@@ -199,17 +234,21 @@ describe('fetchKustomize', () => {
 })
 
 describe('checkHelmRepoUrl', () => {
+  afterEach(() => {
+    fakeHttpResponder = () => ({ status: 200 })
+  })
+
   it('returns false when no URL is given', async () => {
     expect(await checkHelmRepoUrl(null)).toBe(false)
   })
 
   it('returns true when the index.yaml is reachable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+    fakeHttpResponder = () => ({ status: 200 })
     expect(await checkHelmRepoUrl('https://charts.example.com')).toBe(true)
   })
 
   it('returns false when the request throws (network error / timeout)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')))
+    fakeHttpResponder = () => { throw new Error('network error') }
     expect(await checkHelmRepoUrl('https://charts.example.com')).toBe(false)
   })
 })
