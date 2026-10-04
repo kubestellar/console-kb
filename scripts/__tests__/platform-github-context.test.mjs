@@ -6,6 +6,15 @@
 // Since console-kb#3551 the module delegates rate-limit/retry/timeout policy
 // to lib/cncf-github-client.mjs, so those semantics are covered there.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// checkHelmRepoUrl now runs the SSRF guard from lib/url-fetch-guard.mjs
+// (console-kb SSRF fix, CWE-918), which does a real DNS lookup on the
+// helm-repo hostname. Stub it to resolve the test's *.example.com fixtures
+// to a public IP so these tests keep exercising the mocked-fetch logic.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}))
+
 import {
   sleep,
   waitForRateLimit,

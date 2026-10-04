@@ -18,6 +18,15 @@
  * elaborate mocking and is intentionally deferred to a follow-up PR).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// checkVersionFreshness now runs the SSRF guard from lib/url-fetch-guard.mjs
+// (console-kb SSRF fix, CWE-918), which does a real DNS lookup on the
+// helm-repo hostname. Stub it to resolve the test's *.example.com fixtures
+// to a public IP so these tests keep exercising the mocked-fetch logic.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}))
+
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

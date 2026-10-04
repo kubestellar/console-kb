@@ -14,6 +14,16 @@
 // mirroring the pattern already used for callLLM in
 // enrich-install-missions.mjs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// checkHelmRepoUrl / validateAndFixHelmUrl now run the SSRF guard from
+// lib/url-fetch-guard.mjs (console-kb SSRF fix, CWE-918), which does a real
+// DNS lookup on the helm-repo hostname. Stub it to resolve the test's
+// *.example.com fixtures to a public IP so these tests keep exercising the
+// mocked-fetch reachability logic rather than failing on offline DNS.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}))
+
 import {
   assertTrustedEndpoint,
   githubApi,
