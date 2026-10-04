@@ -34,6 +34,14 @@ import { defineConfig } from 'vitest/config';
 // covered end-to-end. That is a v8 limitation, not a coverage gap —
 // the aggregate absorbs it and the thresholds are set with that in
 // mind. Do not chase per-file 100% on those entry-point scripts.
+//
+// `catalogs/**/*.mjs` (added by #3638) was missing from `include` below
+// until it was added here: the directory didn't exist when the
+// install-gen/lib/sources/platform/scanner entries were first added, so
+// a real regression in scripts/catalogs/*.mjs could not have failed this
+// gate even though it is already exercised by __tests__/catalog-*.test.mjs
+// and friends — the same "silent coverage gap" shape as install-gen's
+// pre-#3516 exclusion.
 export default defineConfig({
   test: {
     include: ['__tests__/**/*.test.mjs'],
@@ -47,6 +55,7 @@ export default defineConfig({
         'platform/**/*.mjs',
         'scanner/**/*.mjs',
         'install-gen/**/*.mjs',
+        'catalogs/**/*.mjs',
       ],
       exclude: [
         '__tests__/**',
