@@ -34,6 +34,9 @@ import { sanitizeInstallMission, replaceUntilStable } from './lib/mission-saniti
 // Response-returning variant is used here because the knowledge-source
 // fetchers below inspect `res.ok` themselves (kubestellar/console-kb#3536).
 import { sleep, githubApiResponse as githubApi } from './lib/cncf-github-client.mjs'
+// Shared defensive request/retry/Content-Type/size-ceiling handling: canonical
+// copy lives in lib/llm-json-request.mjs (console-kb architecture finding).
+import { requestLlmChatJson } from './lib/llm-json-request.mjs'
 // README/repo-meta fetchers are shared with platform/github-context.mjs
 // (kubestellar/console-kb#3575).
 import { fetchReadme, fetchRepoMeta } from './lib/repo-context.mjs'
@@ -195,61 +198,22 @@ async function synthesizeInstallMission(project, context) {
 
   const prompt = buildInstallPrompt(project, context)
 
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    try {
-      const response = await fetch(TRUSTED_LLM_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [
-            { role: 'system', content: INSTALL_SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 3000,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-      })
-
-      if (response.status === 429) {
-        const wait = parseInt(response.headers.get('retry-after') || '10', 10)
-        log.warn(`  [LLM] Rate limited, waiting ${wait}s`)
-        await sleep(wait * 1000)
-        continue
-      }
-      if (!response.ok) {
-        log.warn(`  [LLM] API error ${response.status}`)
-        return null
-      }
-
-      // Validate Content-Type and enforce a response size ceiling before parsing
-      // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        log.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
-        return null
-      }
-      const MAX_LLM_RESPONSE_BYTES = 1_000_000
-      const rawText = await response.text()
-      if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-        log.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
-        return null
-      }
-      const data = JSON.parse(rawText)
-      const content = data.choices?.[0]?.message?.content
-      if (!content) return null
-
-      const parsed = JSON.parse(content)
-      if (parsed.skip || !parsed.steps?.length) return null
-      return parsed
-    } catch (err) {
-      log.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
-      if (attempt < 2) await sleep(3000 * (attempt + 1))
-    }
-  }
-  return null
+  // Request/retry/Content-Type/size-ceiling handling (CWE-434) lives in the
+  // shared helper — see lib/llm-json-request.mjs for the full contract.
+  const parsed = await requestLlmChatJson({
+    endpoint: TRUSTED_LLM_ENDPOINT,
+    model: LLM_MODEL,
+    token,
+    systemPrompt: INSTALL_SYSTEM_PROMPT,
+    userPrompt: prompt,
+    maxTokens: 3000,
+    timeoutMs: LLM_TIMEOUT_MS,
+    maxResponseBytes: 1_000_000,
+    log,
+    sleep,
+  })
+  if (!parsed || parsed.skip || !parsed.steps?.length) return null
+  return parsed
 }
 
 // ─── Quality Gate ────────────────────────────────────────────────────
