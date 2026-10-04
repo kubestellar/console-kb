@@ -31,6 +31,7 @@ import { sanitizeInfraDetails } from './lib/text-utils.mjs'
 // both are pinned by scripts/__tests__/sanitize-mission-text-drift.test.mjs.
 import { sanitizePlatformMission } from './lib/mission-sanitizer.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
+import { isSafeFetchUrl } from './lib/url-fetch-guard.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
 import {
   getGithubToken,
@@ -133,7 +134,11 @@ const HELM_VALIDATE_TIMEOUT_MS = 10000
 
 export async function checkVersionFreshness(helmRepoUrl, chartName, version) {
   try {
-    const res = await fetch(`${helmRepoUrl}/index.yaml`, { signal: AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS) })
+    // helmRepoUrl is LLM-synthesized from untrusted scraped content (SSRF
+    // guard — CWE-918; see lib/url-fetch-guard.mjs).
+    const url = `${helmRepoUrl}/index.yaml`
+    if (!(await isSafeFetchUrl(url))) return true
+    const res = await fetch(url, { signal: AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS) })
     if (!res.ok) return true
     const text = await res.text()
     // Escape ALL regex metacharacters in the HTTP-derived version string before
