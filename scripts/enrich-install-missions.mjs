@@ -38,6 +38,9 @@ const LLM_TIMEOUT_MS = 60_000
 // still runs the pinned-list check against the same runtime values.
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
 export { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint }
+// Shared defensive request/retry/Content-Type/size-ceiling handling: canonical
+// copy lives in lib/llm-json-request.mjs (console-kb architecture finding).
+import { requestLlmChatJson } from './lib/llm-json-request.mjs'
 
 // Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
 const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
@@ -159,63 +162,23 @@ export async function callLLM(mission) {
 
   const prompt = buildEnrichPrompt(mission)
 
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    try {
-      // codeql[js/file-access-to-http] mission is pre-sanitized via sanitizeMissionForHTTP()
-      // at every call site; LLM_ENDPOINT validated against allowlist by assertTrustedEndpoint()
-      // at module load (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896, #2909).
-      const response = await fetch(TRUSTED_LLM_ENDPOINT, { // codeql[js/file-access-to-http]
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [
-            { role: 'system', content: ENRICH_SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 2500,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-      })
-
-      if (response.status === 429) {
-        const wait = parseInt(response.headers.get('retry-after') || '10', 10)
-        log.warn(`  [LLM] Rate limited, waiting ${wait}s`)
-        await sleep(wait * 1000)
-        continue
-      }
-      if (!response.ok) {
-        log.warn(`  [LLM] API error ${response.status}`)
-        return null
-      }
-
-      // Validate Content-Type and enforce a response size ceiling before using HTTP-derived
-      // bytes that will be merged into file-backed mission data (CWE-434 / http-to-file).
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        log.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
-        return null
-      }
-      const MAX_LLM_RESPONSE_BYTES = 500_000
-      const rawText = await response.text()
-      if (rawText.length > MAX_LLM_RESPONSE_BYTES) {
-        log.warn(`  [LLM] Response too large (${rawText.length} bytes), rejecting`)
-        return null
-      }
-      const data = JSON.parse(rawText)
-      const content = data.choices?.[0]?.message?.content
-      if (!content) return null
-
-      const parsed = JSON.parse(content)
-      return parsed
-    } catch (err) {
-      log.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
-      if (attempt < 2) await sleep(3000 * (attempt + 1))
-    }
-  }
-  return null
+  // codeql[js/file-access-to-http] mission is pre-sanitized via sanitizeMissionForHTTP()
+  // at every call site; LLM_ENDPOINT validated against allowlist by assertTrustedEndpoint()
+  // at module load (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896, #2909).
+  // Request/retry/Content-Type/size-ceiling handling (CWE-434) lives in the
+  // shared helper — see lib/llm-json-request.mjs for the full contract.
+  return requestLlmChatJson({
+    endpoint: TRUSTED_LLM_ENDPOINT, // codeql[js/file-access-to-http]
+    model: LLM_MODEL,
+    token,
+    systemPrompt: ENRICH_SYSTEM_PROMPT,
+    userPrompt: prompt,
+    maxTokens: 2500,
+    timeoutMs: LLM_TIMEOUT_MS,
+    maxResponseBytes: 500_000,
+    log,
+    sleep,
+  })
 }
 
 // ─── Validation ──────────────────────────────────────────────────────
