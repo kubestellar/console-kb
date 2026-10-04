@@ -12,8 +12,20 @@
  * Uses execFileSync with argument arrays (not string-interpolated execSync)
  * so PR titles/numbers/branch names can never be interpreted as shell
  * metacharacters.
+ *
+ * Also mirrors a bounded run summary (counts only — never a PR title,
+ * breakdown, or other unbounded/caller-controlled text) into
+ * `$GITHUB_STEP_SUMMARY` and emits a `mission-auto-merge-summary`
+ * structured line via `lib/logger.mjs`'s `summary()` helper, matching
+ * every sibling CI script in this directory (see build-index.mjs,
+ * scan-pr.mjs). Before this, the auto-merge job's only record of a run
+ * was raw step logs — the workflow's own "Write Auto-Merge Summary"
+ * step says as much ("See job logs for per-PR scoring details"). No
+ * workflow YAML change is required: GITHUB_STEP_SUMMARY is already set
+ * by the Actions runner for every job.
  */
 import { execFileSync } from 'child_process'
+import { appendFileSync } from 'node:fs'
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import {
@@ -46,17 +58,55 @@ function checkRequiredChecks(prNumber) {
   return requiredChecksPassed(checksJson, REQUIRED_CHECKS)
 }
 
+/**
+ * Writes the bounded run summary (counts/duration only) to
+ * $GITHUB_STEP_SUMMARY when set, and emits the matching
+ * `mission-auto-merge-summary` structured log line.
+ */
+function emitSummary({ totalPRs, merged, failed, skippedNoMission, durationMs }) {
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const summaryLines = [
+      '## 🤖 Mission Auto-Merge Summary',
+      '',
+      '| Metric | Value |',
+      '|--------|-------|',
+      `| Recent PRs (last ${LOOKBACK_HOURS}h) | ${totalPRs} |`,
+      `| Merged | ${merged} |`,
+      `| Left for review | ${failed} |`,
+      `| Skipped (no mission file) | ${skippedNoMission} |`,
+      `| Duration (ms) | ${durationMs} |`,
+      '',
+    ]
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summaryLines.join('\n')}\n`, 'utf8')
+  }
+
+  log.summary('mission-auto-merge-summary', {
+    level: failed > 0 ? 'warn' : 'info',
+    totalPRs,
+    merged,
+    failed,
+    skippedNoMission,
+    durationMs,
+  })
+}
+
 export async function main() {
+  const startedAt = Date.now()
+
   // Find open PRs with the cncf-mission-gen label created recently
   const prsJson = gh(['pr', 'list', '--label', LABEL, '--state', 'open', '--json', 'number,headRefName,title,createdAt', '--limit', '50'])
   const prs = JSON.parse(prsJson)
   const recentPrs = filterRecentPRs(prs, LOOKBACK_HOURS)
 
   console.log(`Found ${recentPrs.length} recent mission PRs (last ${LOOKBACK_HOURS}h)`)
-  if (!recentPrs.length) return
+  if (!recentPrs.length) {
+    emitSummary({ totalPRs: 0, merged: 0, failed: 0, skippedNoMission: 0, durationMs: Date.now() - startedAt })
+    return
+  }
 
   let merged = 0
   let failed = 0
+  let skippedNoMission = 0
 
   for (const pr of recentPrs) {
     try {
@@ -66,6 +116,7 @@ export async function main() {
 
       if (!missionFile) {
         console.log(`PR #${pr.number}: no mission JSON found, skipping`)
+        skippedNoMission++
         continue
       }
 
@@ -109,6 +160,13 @@ export async function main() {
   }
 
   console.log(`\nDone: ${merged} merged, ${failed} left for review`)
+  emitSummary({
+    totalPRs: recentPrs.length,
+    merged,
+    failed,
+    skippedNoMission,
+    durationMs: Date.now() - startedAt,
+  })
 }
 
 // When invoked as a script (node score-and-merge-mission-prs.mjs), run

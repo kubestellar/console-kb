@@ -20,6 +20,9 @@
  * `vi.mock`. That lets v8 attribute coverage to main()'s own frame while
  * still exercising every orchestration branch deterministically.
  */
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const scoreMissionMock = vi.fn()
@@ -71,6 +74,8 @@ describe('score-and-merge-mission-prs.mjs main() — in-process orchestration', 
   let calls
   let consoleLogSpy
   let consoleErrorSpy
+  let stdoutWriteSpy
+  let prevStepSummary
 
   beforeEach(() => {
     vi.resetModules()
@@ -81,9 +86,16 @@ describe('score-and-merge-mission-prs.mjs main() — in-process orchestration', 
     // structured logger (scripts/lib/logger.mjs), which writes JSON lines
     // directly to process.stderr instead of calling console.error — see #3599.
     consoleErrorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    // log.summary() (scripts/lib/logger.mjs) writes its structured
+    // `mission-auto-merge-summary` line directly to process.stdout.
+    stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    prevStepSummary = process.env.GITHUB_STEP_SUMMARY
+    delete process.env.GITHUB_STEP_SUMMARY
   })
 
   afterEach(() => {
+    if (prevStepSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY
+    else process.env.GITHUB_STEP_SUMMARY = prevStepSummary
     vi.restoreAllMocks()
   })
 
@@ -245,5 +257,64 @@ describe('score-and-merge-mission-prs.mjs main() — in-process orchestration', 
     expect(consoleLogSpy).toHaveBeenCalledWith('Found 0 recent mission PRs (last 6h)')
     // The early-return branch does not print the "Done: ..." summary.
     expect(consoleLogSpy).not.toHaveBeenCalledWith(expect.stringContaining('Done:'))
+  })
+
+  it('emits a bounded mission-auto-merge-summary line (never a PR title/breakdown) on stdout', async () => {
+    const mergedPr = makePr({ number: 301 })
+    const skippedPr = makePr({ number: 302, title: 'Unrelated change' })
+    const mission = { mission: { title: 'T' } }
+    execFileSyncMock = makeGhStub({
+      'pr list': () => JSON.stringify([mergedPr, skippedPr]),
+      'pr diff': (args) => (args[2] === '301' ? 'fixes/cncf-generated/example/fix.json\n' : 'README.md\n'),
+      'pr checks': () =>
+        JSON.stringify([
+          { name: 'Mission Safety Scan', state: 'SUCCESS', bucket: 'pass' },
+          { name: 'Validate Mission Schema', state: 'SUCCESS', bucket: 'pass' },
+        ]),
+      'pr comment': () => '',
+      'pr merge': () => '',
+      'api repos/{owner}/{repo}/contents/fixes%2Fcncf-generated%2Fexample%2Ffix.json?ref=cncf-mission-gen/example': () =>
+        encodeMission(mission),
+    })
+    scoreMissionMock.mockReturnValue({ score: 95, pass: true, breakdown: { total: 95 } })
+
+    const main = await loadMain()
+    await main()
+
+    const summaryLine = stdoutWriteSpy.mock.calls
+      .map((c) => c[0])
+      .find((s) => typeof s === 'string' && s.includes('mission-auto-merge-summary'))
+    expect(summaryLine).toBeDefined()
+    const parsed = JSON.parse(summaryLine)
+    expect(parsed).toEqual({
+      event: 'mission-auto-merge-summary',
+      level: 'info',
+      totalPRs: 2,
+      merged: 1,
+      failed: 0,
+      skippedNoMission: 1,
+      durationMs: expect.any(Number),
+    })
+  })
+
+  it('appends a bounded markdown table to $GITHUB_STEP_SUMMARY when it is set', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mission-auto-merge-summary-'))
+    const summaryPath = join(dir, 'step-summary.md')
+    process.env.GITHUB_STEP_SUMMARY = summaryPath
+    try {
+      execFileSyncMock = makeGhStub({
+        'pr list': () => '[]',
+      })
+
+      const main = await loadMain()
+      await main()
+
+      const summary = readFileSync(summaryPath, 'utf8')
+      expect(summary).toContain('## 🤖 Mission Auto-Merge Summary')
+      expect(summary).toContain('| Recent PRs (last 6h) | 0 |')
+      expect(summary).toContain('| Merged | 0 |')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
