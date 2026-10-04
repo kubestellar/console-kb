@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "coredns: Panic in route53 plugin fails to release lock and stops responding.",
-    "description": "Panic in route53 plugin fails to release lock and stops responding.. This issue affects 8+ users.",
+    "description": "A panic (invalid memory address or nil pointer dereference) in the CoreDNS route53 plugin leaves zMu held, after which CoreDNS stops responding to all queries. This issue affects 8+ users.",
     "type": "troubleshoot",
     "status": "completed",
     "steps": [
@@ -19,8 +19,8 @@
         "description": "Inspect the relevant coredns configuration:\n```bash\nkubectl get all -n coredns -l app.kubernetes.io/name=coredns\nkubectl get configmap -n coredns -l app.kubernetes.io/part-of=coredns\n```\n**What happened**:\nWe use the `route53` plugin with a basic config \n```\nroute53 <SOME_INTERNAL_DOMAIN>.:<SOME_HOSTED_ZONE> {\n  fallthrough\n}\n```\nThis works well for _almost_ all requests."
       },
       {
-        "title": "Apply the fix for Panic in route53 plugin fails to release lock and stops…",
-        "description": "ServeDNS holds zMu.RLock() for the whole duration of zone.Lookup(ctx, state, qname). When a record is a CNAME pointing outside the configured zone, Lookup calls into Upstream.Lookup, which re-enters the plugin chain and can block on real network I/O. Go's sync.RWMutex blocks new RLock() calls once\n```yaml\nroute53 <SOME_INTERNAL_DOMAIN>.:<SOME_HOSTED_ZONE> {\n  fallthrough\n}\n```"
+        "title": "Upgrade CoreDNS to a release containing the route53 lock fix",
+        "description": "Root cause: ServeDNS holds zMu.RLock() for the whole duration of zone.Lookup(ctx, state, qname). When a record is a CNAME pointing outside the configured zone, Lookup calls into Upstream.Lookup, which re-enters the plugin chain and can block on real network I/O. Go's sync.RWMutex blocks new RLock() calls once a writer (the zone-refresh goroutine's zMu.Lock()) is waiting, so every subsequent query deadlocks and CoreDNS stops responding.\n\nThe fix is upstream in https://github.com/coredns/coredns/pull/8601 (releases zMu before calling zone.Lookup). Upgrade CoreDNS to the first release newer than v1.14.7 that includes that PR:\n```bash\nkubectl -n coredns set image deployment/coredns coredns=coredns/coredns:<FIXED_VERSION>\nkubectl -n coredns rollout status deployment/coredns\n```\nUntil you can upgrade, mitigate by restarting deadlocked pods and avoiding CNAME records in the Route53 hosted zone that point outside the configured zones:\n```bash\nkubectl -n coredns rollout restart deployment/coredns\n```"
       },
       {
         "title": "Confirm Panic in route53 plugin fails to release lock and… is resolved",
@@ -28,9 +28,9 @@
       }
     ],
     "resolution": {
-      "summary": "ServeDNS holds zMu.RLock() for the whole duration of zone.Lookup(ctx, state, qname). When a record is a CNAME pointing outside the configured zone, Lookup calls into Upstream.Lookup, which re-enters the plugin chain and can block on real network I/O.",
+      "summary": "The outage happens because ServeDNS holds zMu.RLock() for the whole duration of zone.Lookup(ctx, state, qname); when a record is a CNAME pointing outside the configured zone, Lookup re-enters the plugin chain via Upstream.Lookup and can block on network I/O while still holding the lock. Once the zone-refresh goroutine queues zMu.Lock(), Go's sync.RWMutex rejects all new RLock() calls, deadlocking every query. The fix (coredns/coredns#8601) releases zMu before calling zone.Lookup, so a slow or re-entrant upstream lookup can no longer wedge the plugin; upgrading to a CoreDNS release containing that change resolves the issue.",
       "codeSnippets": [
-        "route53 <SOME_INTERNAL_DOMAIN>.:<SOME_HOSTED_ZONE> {\n  fallthrough\n}"
+        "kubectl -n coredns set image deployment/coredns coredns=coredns/coredns:<FIXED_VERSION>\nkubectl -n coredns rollout status deployment/coredns"
       ]
     }
   },
