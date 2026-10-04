@@ -18,6 +18,7 @@
  * elaborate mocking and is intentionally deferred to a follow-up PR).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 // checkVersionFreshness now runs the SSRF guard from lib/url-fetch-guard.mjs
 // (console-kb SSRF fix, CWE-918), which does a real DNS lookup on the
@@ -26,6 +27,40 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
 }))
+
+// safeFetch (lib/url-fetch-guard.mjs) talks to `node:http`/`node:https`
+// directly rather than the global `fetch` — it pins the DNS resolution
+// used for SSRF validation to the one used for the actual connection,
+// closing a TOCTOU/DNS-rebinding gap a global-fetch mock can't exercise.
+// Fake that transport here so checkVersionFreshness tests can still drive
+// index.yaml reachability/content per-test.
+let fakeHttpResponder = () => ({ status: 200, body: '' })
+
+function fakeHttpRequest(urlObj, options, callback) {
+  const req = new EventEmitter()
+  req.end = () => {
+    let result
+    try {
+      result = fakeHttpResponder(urlObj.href || String(urlObj))
+    } catch (err) {
+      queueMicrotask(() => req.emit('error', err))
+      return
+    }
+    const res = new EventEmitter()
+    res.statusCode = result.status
+    res.headers = result.headers || {}
+    queueMicrotask(() => {
+      callback(res)
+      if (result.body) res.emit('data', Buffer.from(result.body))
+      res.emit('end')
+    })
+  }
+  req.destroy = () => {}
+  return req
+}
+
+vi.mock('node:http', () => ({ request: fakeHttpRequest }))
+vi.mock('node:https', () => ({ request: fakeHttpRequest }))
 
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -283,42 +318,31 @@ describe('buildPlatformPrompt — sections', () => {
 // ─── checkVersionFreshness ───────────────────────────────────────────
 
 describe('checkVersionFreshness', () => {
-  const originalFetch = globalThis.fetch
-
   afterEach(() => {
-    globalThis.fetch = originalFetch
+    fakeHttpResponder = () => ({ status: 200, body: '' })
     vi.restoreAllMocks()
   })
 
   it('returns true when the index.yaml fetch is non-2xx (fail-open)', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      text: async () => '',
-    })
+    fakeHttpResponder = () => ({ status: 404, body: '' })
     const result = await checkVersionFreshness('https://helm.example.com', 'foo', '1.0.0')
     expect(result).toBe(true)
   })
 
   it('returns true when the pinned version is present in index.yaml', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => 'entries:\n  foo:\n    - name: foo\n      version: 1.2.3\n',
-    })
+    fakeHttpResponder = () => ({ status: 200, body: 'entries:\n  foo:\n    - name: foo\n      version: 1.2.3\n' })
     const result = await checkVersionFreshness('https://helm.example.com', 'foo', '1.2.3')
     expect(result).toBe(true)
   })
 
   it('returns false when the pinned version is not in index.yaml', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => 'entries:\n  foo:\n    - name: foo\n      version: 9.9.9\n',
-    })
+    fakeHttpResponder = () => ({ status: 200, body: 'entries:\n  foo:\n    - name: foo\n      version: 9.9.9\n' })
     const result = await checkVersionFreshness('https://helm.example.com', 'foo', '1.2.3')
     expect(result).toBe(false)
   })
 
   it('returns true when fetch throws (network / timeout — fail-open)', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('network down'))
+    fakeHttpResponder = () => { throw new Error('network down') }
     const result = await checkVersionFreshness('https://helm.example.com', 'foo', '1.0.0')
     expect(result).toBe(true)
   })
@@ -327,10 +351,7 @@ describe('checkVersionFreshness', () => {
     // Version "1.2.3" as a literal must not match a different but similar
     // encoded string like "1x2x3". If the escape were dropped, "." would
     // match any char and the assertion below would fail.
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => 'version: 1x2x3\n',
-    })
+    fakeHttpResponder = () => ({ status: 200, body: 'version: 1x2x3\n' })
     const result = await checkVersionFreshness('https://helm.example.com', 'foo', '1.2.3')
     expect(result).toBe(false)
   })

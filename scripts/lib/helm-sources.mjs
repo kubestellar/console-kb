@@ -21,7 +21,7 @@
  * hosts (including via DNS resolution, to catch rebinding).
  */
 
-import { isSafeFetchUrl } from './url-fetch-guard.mjs'
+import { isSafeFetchUrl, safeFetch } from './url-fetch-guard.mjs'
 
 /** Timeout for the `index.yaml` reachability probe against a Helm repo URL. */
 export const HELM_REPO_INDEX_TIMEOUT_MS = 10000
@@ -32,9 +32,10 @@ export async function checkHelmRepoUrl(helmRepoUrl) {
   const url = `${helmRepoUrl}/index.yaml`
   if (!(await isSafeFetchUrl(url))) return false
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(HELM_REPO_INDEX_TIMEOUT_MS),
-    })
+    // safeFetch (not plain fetch): pins the DNS resolution used for
+    // validation to the one used for the connection, closing the
+    // TOCTOU/DNS-rebinding gap a separate isSafeFetchUrl pre-check cannot.
+    const response = await safeFetch(url, { timeoutMs: HELM_REPO_INDEX_TIMEOUT_MS })
     return response.ok
   } catch {
     return false

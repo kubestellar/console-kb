@@ -210,10 +210,13 @@ describe('checkVersionFreshness regex-metachar escape drift', () => {
     expect(body).toMatch(/new RegExp\(\s*`[^`]*escapeRegExpChars\(version\)[^`]*`/)
   })
 
-  it('uses a bounded network timeout via AbortSignal.timeout', () => {
+  it('uses a bounded network timeout via safeFetch(..., { timeoutMs })', () => {
     // A missing timeout turns a hostile helm mirror into a
-    // never-completing generator run.
-    expect(body).toContain('AbortSignal.timeout(HELM_VALIDATE_TIMEOUT_MS)')
+    // never-completing generator run. safeFetch (not plain fetch) also
+    // pins the DNS resolution used for connection to the one used for
+    // SSRF validation, closing a TOCTOU/DNS-rebinding gap a separate
+    // isSafeFetchUrl pre-check cannot (see lib/url-fetch-guard.mjs).
+    expect(body).toContain('safeFetch(url, { timeoutMs: HELM_VALIDATE_TIMEOUT_MS })')
     expect(SOURCE).toMatch(/const\s+HELM_VALIDATE_TIMEOUT_MS\s*=\s*\d+/)
   })
 

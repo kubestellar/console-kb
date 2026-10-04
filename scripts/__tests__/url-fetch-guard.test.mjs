@@ -3,6 +3,7 @@
 // content (GitHub Discussions / Reddit / Stack Overflow) and previously
 // fetched with no host validation by checkHelmRepoUrl / checkVersionFreshness.
 import { describe, it, expect, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(async hostname => {
@@ -18,7 +19,62 @@ vi.mock('node:dns/promises', () => ({
   }),
 }))
 
-const { assertSafeFetchUrl, isSafeFetchUrl } = await import('../lib/url-fetch-guard.mjs')
+// `safeFetch`'s pinned `lookup` option uses the callback-style `node:dns`
+// (not `node:dns/promises`). These resolutions model the TOCTOU scenario:
+// an attacker-controlled DNS server could answer a *separate* validation
+// lookup with a public IP, but safeFetch has no separate validation lookup
+// to desync from — this is the single lookup that also opens the socket.
+vi.mock('node:dns', () => ({
+  lookup: vi.fn((hostname, options, callback) => {
+    const responses = {
+      'public.example.com': [{ address: '93.184.216.34', family: 4 }],
+      'rebind.example': [{ address: '169.254.169.254', family: 4 }],
+      'all-private.example': [{ address: '10.0.0.1', family: 4 }],
+      'mixed.example': [{ address: '10.0.0.1', family: 4 }, { address: '93.184.216.34', family: 4 }],
+      'redirect-target.example': [{ address: '93.184.216.34', family: 4 }],
+    }
+    const addrs = responses[hostname]
+    if (!addrs) return callback(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }))
+    callback(null, addrs)
+  }),
+}))
+
+// Fakes the TCP/TLS layer: calls the `lookup` option Node would otherwise
+// invoke to resolve the host before connecting, so these tests exercise
+// the real `pinnedSafeLookup` logic (via the real `node:dns` mock above)
+// rather than re-implementing it.
+function makeFakeTransport(responder) {
+  return (urlObj, options, callback) => {
+    const req = new EventEmitter()
+    req.end = () => {
+      options.lookup(urlObj.hostname, { all: true }, (err) => {
+        if (err) return req.emit('error', err)
+        let result
+        try {
+          result = responder(urlObj.href)
+        } catch (resErr) {
+          return req.emit('error', resErr)
+        }
+        const res = new EventEmitter()
+        res.statusCode = result.status
+        res.headers = result.headers || {}
+        queueMicrotask(() => {
+          callback(res)
+          if (result.body) res.emit('data', Buffer.from(result.body))
+          res.emit('end')
+        })
+      })
+    }
+    req.destroy = () => {}
+    return req
+  }
+}
+
+let fakeTransportResponder = () => ({ status: 200, body: 'ok' })
+vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h))(...args) }))
+vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h))(...args) }))
+
+const { assertSafeFetchUrl, isSafeFetchUrl, safeFetch } = await import('../lib/url-fetch-guard.mjs')
 
 describe('isSafeFetchUrl', () => {
   it('allows a normal public https URL', async () => {
@@ -111,5 +167,63 @@ describe('assertSafeFetchUrl', () => {
 
   it('throws for an unsafe URL', async () => {
     await expect(assertSafeFetchUrl('http://127.0.0.1/')).rejects.toThrow(/Unsafe URL rejected/)
+  })
+})
+
+describe('safeFetch', () => {
+  it('fetches a public hostname successfully', async () => {
+    fakeTransportResponder = () => ({ status: 200, body: 'apiVersion: v1' })
+    const res = await safeFetch('http://public.example.com/index.yaml')
+    expect(res.ok).toBe(true)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('apiVersion: v1')
+  })
+
+  it('rejects when the connect-time lookup resolves only to a private/metadata IP (DNS rebind)', async () => {
+    // Even though this hostname looks unrelated to the earlier pre-check
+    // tests, what matters here is that safeFetch's *own* connection-time
+    // lookup (not a separate, already-passed pre-check) is what rejects
+    // this — there is no earlier lookup for a rebinding DNS server to
+    // have answered differently.
+    await expect(safeFetch('http://rebind.example/index.yaml')).rejects.toThrow(/reserved\/private IPs/)
+  })
+
+  it('rejects a non-http(s) scheme before attempting any connection', async () => {
+    await expect(safeFetch('file:///etc/passwd')).rejects.toThrow(/Unsafe URL rejected/)
+  })
+
+  it('connects when at least one resolved address is public, ignoring private ones in the same answer', async () => {
+    fakeTransportResponder = () => ({ status: 200, body: 'ok' })
+    const res = await safeFetch('http://mixed.example/index.yaml')
+    expect(res.ok).toBe(true)
+  })
+
+  it('follows a same-safety redirect to its (re-validated) target', async () => {
+    fakeTransportResponder = (href) => {
+      if (href.includes('public.example.com')) {
+        return { status: 302, headers: { location: 'http://redirect-target.example/index.yaml' } }
+      }
+      return { status: 200, body: 'redirected-ok' }
+    }
+    const res = await safeFetch('http://public.example.com/index.yaml')
+    expect(res.ok).toBe(true)
+    expect(await res.text()).toBe('redirected-ok')
+  })
+
+  it('rejects a redirect chain longer than maxRedirects', async () => {
+    let hop = 0
+    fakeTransportResponder = () => {
+      hop += 1
+      return { status: 302, headers: { location: `http://public.example.com/${hop}` } }
+    }
+    await expect(safeFetch('http://public.example.com/index.yaml', { maxRedirects: 2 }))
+      .rejects.toThrow(/too many redirects/)
+  })
+
+  it('returns ok:false (not a throw) for a non-2xx status', async () => {
+    fakeTransportResponder = () => ({ status: 404, body: '' })
+    const res = await safeFetch('http://public.example.com/index.yaml')
+    expect(res.ok).toBe(false)
+    expect(res.status).toBe(404)
   })
 })

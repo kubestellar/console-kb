@@ -14,6 +14,7 @@
 // mirroring the pattern already used for callLLM in
 // enrich-install-missions.mjs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 // checkHelmRepoUrl / validateAndFixHelmUrl now run the SSRF guard from
 // lib/url-fetch-guard.mjs (console-kb SSRF fix, CWE-918), which does a real
@@ -23,6 +24,40 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
 }))
+
+// safeFetch (lib/url-fetch-guard.mjs) talks to `node:http`/`node:https`
+// directly rather than the global `fetch` — it pins the DNS resolution
+// used for SSRF validation to the one used for the actual connection,
+// closing a TOCTOU/DNS-rebinding gap a global-fetch mock can't exercise.
+// Fake that transport here so checkHelmRepoUrl / validateAndFixHelmUrl
+// tests can still drive index.yaml reachability per-URL.
+let fakeHttpResponder = () => ({ status: 200 })
+
+function fakeHttpRequest(urlObj, options, callback) {
+  const req = new EventEmitter()
+  req.end = () => {
+    let result
+    try {
+      result = fakeHttpResponder(urlObj.href || String(urlObj))
+    } catch (err) {
+      queueMicrotask(() => req.emit('error', err))
+      return
+    }
+    const res = new EventEmitter()
+    res.statusCode = result.status
+    res.headers = result.headers || {}
+    queueMicrotask(() => {
+      callback(res)
+      if (result.body) res.emit('data', Buffer.from(result.body))
+      res.emit('end')
+    })
+  }
+  req.destroy = () => {}
+  return req
+}
+
+vi.mock('node:http', () => ({ request: fakeHttpRequest }))
+vi.mock('node:https', () => ({ request: fakeHttpRequest }))
 
 import {
   assertTrustedEndpoint,
@@ -65,6 +100,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   originalLLMToken = process.env.LLM_TOKEN
   originalGithubToken = process.env.GITHUB_TOKEN
+  fakeHttpResponder = () => ({ status: 200 })
 })
 
 afterEach(async () => {
@@ -454,17 +490,17 @@ describe('fetchArtifactHubChart', () => {
 
 describe('checkHelmRepoUrl', () => {
   it('returns true when index.yaml resolves', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 200 })))
+    fakeHttpResponder = () => ({ status: 200 })
     expect(await checkHelmRepoUrl('https://charts.example.com')).toBe(true)
   })
 
   it('returns false on a non-ok response', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 404 })))
+    fakeHttpResponder = () => ({ status: 404 })
     expect(await checkHelmRepoUrl('https://charts.example.com')).toBe(false)
   })
 
   it('returns false when fetch throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('timeout') }))
+    fakeHttpResponder = () => { throw new Error('timeout') }
     expect(await checkHelmRepoUrl('https://charts.example.com')).toBe(false)
   })
 })
@@ -594,28 +630,23 @@ describe('synthesizeInstallMission', () => {
 
 describe('validateAndFixHelmUrl', () => {
   it('returns valid:true immediately when the given URL already resolves', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 200 })))
+    fakeHttpResponder = () => ({ status: 200 })
     const result = await validateAndFixHelmUrl('https://charts.example.com', 'demo')
     expect(result).toEqual({ valid: true, url: 'https://charts.example.com' })
   })
 
   it('falls back to an ArtifactHub-resolved repo URL when the given URL fails', async () => {
-    const fetchMock = vi.fn(async (url) => {
-      if (url.includes('charts.example.com/index.yaml')) return jsonResponse({ status: 404 })
-      if (url.includes('artifacthub.io')) {
-        return jsonResponse({ body: { packages: [{ repository: { url: 'https://fallback.example.com' }, name: 'demo', version: '2.0.0' }] } })
-      }
-      if (url.includes('fallback.example.com/index.yaml')) return jsonResponse({ status: 200 })
-      return jsonResponse({ status: 404 })
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    fakeHttpResponder = (href) => (href.includes('fallback.example.com') ? { status: 200 } : { status: 404 })
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse({ body: { packages: [{ repository: { url: 'https://fallback.example.com' }, name: 'demo', version: '2.0.0' }] } }),
+    ))
 
     const result = await validateAndFixHelmUrl('https://charts.example.com', 'demo')
     expect(result).toEqual({ valid: true, url: 'https://fallback.example.com', fromArtifactHub: true })
   })
 
   it('returns valid:false when neither the URL nor the ArtifactHub fallback resolve', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 404 })))
+    fakeHttpResponder = () => ({ status: 404 })
     const result = await validateAndFixHelmUrl('https://charts.example.com', 'demo')
     expect(result).toEqual({ valid: false })
   })
