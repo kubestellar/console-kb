@@ -211,6 +211,15 @@ function formatReport(results) {
     lines.push('')
   }
 
+  if (failed.length > 0) {
+    lines.push('## Failed')
+    for (const r of failed) {
+      lines.push(`- **${r.platform}** (score: ${r.score})`)
+      if (r.issues?.length) lines.push(`  Issues: ${r.issues.join('; ')}`)
+    }
+    lines.push('')
+  }
+
   return lines.join('\n')
 }
 
