@@ -153,7 +153,24 @@ export async function synthesizePlatformMission(platform, context) {
     }
     const data = JSON.parse(rawText)
     const content = data.choices?.[0]?.message?.content
-    if (!content) return null
+    if (!content) {
+      // Unlike every other failure branch above, an empty/missing content
+      // field is returned with HTTP 200 and a well-formed JSON envelope, so
+      // there is nothing else in this function that would otherwise surface
+      // *why* the provider produced no content (rate-limiting, a
+      // content-filter refusal, a response-schema change, etc). Log the
+      // finish_reason and any top-level error the provider reported so a
+      // run that fails this way leaves diagnostic evidence instead of just
+      // "LLM returned null" (console-kb#3702).
+      const finishReason = data.choices?.[0]?.finish_reason
+      const providerError = data.error
+      log.error(
+        `  LLM response had no content (finish_reason: ${finishReason ?? 'unknown'}${
+          providerError ? `, error: ${JSON.stringify(providerError).slice(0, 200)}` : ''
+        })`
+      )
+      return null
+    }
     return JSON.parse(content)
   } catch (err) {
     clearTimeout(timeout)

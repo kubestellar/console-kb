@@ -82,9 +82,24 @@ describe('synthesizePlatformMission — failure branches', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/too large/))
   })
 
-  it('returns null when the LLM response has no message content', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ body: { choices: [{ message: {} }] } })))
+  it('returns null and logs the finish_reason when the LLM response has no message content', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ body: { choices: [{ message: {}, finish_reason: 'content_filter' }] } }))
+    )
     expect(await synthesizePlatformMission(PLATFORM, CONTEXT)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/no content.*finish_reason: content_filter/))
+  })
+
+  it('returns null and logs a provider error when present alongside empty content', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ body: { choices: [{ message: {} }], error: { code: 'rate_limited' } } })
+      )
+    )
+    expect(await synthesizePlatformMission(PLATFORM, CONTEXT)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/no content.*rate_limited/))
   })
 
   it('returns null and logs when fetch throws (network error / abort)', async () => {
