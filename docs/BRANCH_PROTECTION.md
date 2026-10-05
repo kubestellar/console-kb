@@ -10,7 +10,7 @@ Enable these rules in **Settings → Branches → Branch protection rules** for 
 |---------|-------------------|
 | Require pull request reviews before merging | ✅ Enabled — at least 1 approving review |
 | Dismiss stale reviews on new commits | ✅ Enabled |
-| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint, `Mission Safety Scan`, `Validate Mission Schema`, `KB Quality Enforcement`, `Mission Content Validation`) |
+| Require status checks to pass before merging | ✅ Enabled (CodeQL, actionlint, `Mission Safety Scan`, `Validate Mission Schema`, `KB Quality Enforcement`, `Mission Content Validation`, `Scripts Tests`) |
 | Require conversation resolution before merging | ✅ Enabled |
 | Restrict force pushes | ✅ Disabled for all non-admins |
 | Require signed commits | ⚠️ Recommended but optional |
@@ -61,11 +61,19 @@ fails the job on skeleton steps, unreachable Helm repos, or missing inline
 manifests). Neither was listed here previously; without them configured as
 required, the same "merge while still running/cancelled/failing" gap applies
 to them as it does to `Mission Safety Scan` and `Validate Mission Schema`
-above. `Scripts Tests` (`.github/workflows/scripts-tests.yml`) is
-intentionally *not* added to this list: its `npm test` step currently runs
-with `continue-on-error: true`, so the job reports success even when tests
-fail — marking it required would give a false sense of coverage gating until
-that gap (tracked separately, see #3199) is closed.
+above.
+
+`Scripts Tests` (`.github/workflows/scripts-tests.yml`) is now included in
+the required-status-checks list above. It was previously excluded here
+because its `npm test` step ran with `continue-on-error: true`, so the job
+reported success even when tests failed. **That gap is now fixed**: PR
+[#3417](https://github.com/kubestellar/console-kb/pull/3417) (merged
+2026-09-16) closed [#3199](https://github.com/kubestellar/console-kb/issues/3199)
+by dropping `continue-on-error` and switching `npm test` to
+`vitest run --coverage`. Verified on current `master`: the "Run tests" step
+in `.github/workflows/scripts-tests.yml` carries no `continue-on-error`, so a
+real test failure now fails the check instead of merging behind a green
+checkmark — see `docs/slo.md` section 5 for the authoritative tracking.
 
 **Caveat, now resolved — marking `Validate Mission Schema` required now
 does gate `runbooks/**` content**: the check used to never validate any
