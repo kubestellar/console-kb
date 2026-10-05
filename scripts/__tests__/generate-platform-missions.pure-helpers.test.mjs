@@ -164,10 +164,11 @@ describe('formatReport — verdict grouping', () => {
     expect(out).toContain('  Issues: Malicious content detected: script')
   })
 
-  it('counts skipped and failed verdicts in Summary but does not print per-item sections for them', () => {
-    // formatReport counts all 5 verdicts but only prints per-platform
-    // bullets for pass/draft/rejected; skipped/failed roll up in
-    // Summary only.
+  it('counts skipped in Summary only but prints a per-item Failed section', () => {
+    // formatReport counts all 5 verdicts. It prints per-platform bullets
+    // for pass/draft/rejected/failed; only skipped rolls up in Summary
+    // alone. Failed got its own section in #3692 so that publish
+    // failures are loud instead of hidden in a count.
     const out = formatReport([
       { platform: 'ok', verdict: 'pass', score: 90 },
       { platform: 'sk', verdict: 'skipped', score: 0 },
@@ -177,9 +178,11 @@ describe('formatReport — verdict grouping', () => {
     expect(out).toContain('- Skipped: 1')
     expect(out).toContain('- Failed: 1')
     expect(out).toContain('## Published')
-    // No section headings for skipped / failed:
+    // No section heading for skipped:
     expect(out).not.toContain('## Skipped')
-    expect(out).not.toContain('## Failed')
+    // Failed entries get a loud per-item section:
+    expect(out).toContain('## Failed')
+    expect(out).toContain('- **fx** (score: 0)')
   })
 
   it('groups a mixed batch into three sections in Published → Drafted → Rejected order', () => {
