@@ -8,6 +8,7 @@
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
+import { extractResourceKinds } from '../lib/text-utils.mjs'
 
 // Reddit requires descriptive User-Agent: platform:appid:version (by contact)
 const log = createLogger('reddit')
@@ -181,11 +182,6 @@ function extractRedditLabels(text, project) {
     if (text.toLowerCase().includes(kw)) labels.push(kw)
   }
   return [...new Set(labels)]
-}
-
-function extractResourceKinds(text) {
-  const kinds = ['Pod', 'Deployment', 'Service', 'Ingress', 'ConfigMap', 'Secret', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'PersistentVolumeClaim', 'NetworkPolicy', 'ServiceAccount', 'ClusterRole', 'HorizontalPodAutoscaler']
-  return kinds.filter(k => text.includes(k) || text.toLowerCase().includes(k.toLowerCase()))
 }
 
 function detectType(text) {
