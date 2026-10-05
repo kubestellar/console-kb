@@ -37,7 +37,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 
 /** Returns true if `address` (a literal IPv4/IPv6 address) is non-public. */
-function isPrivateOrReservedIp(address) {
+export function isPrivateOrReservedIp(address) {
   const version = isIP(address)
   if (version === 4) {
     const octets = address.split('.').map(Number)

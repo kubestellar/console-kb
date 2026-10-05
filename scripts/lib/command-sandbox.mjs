@@ -16,7 +16,9 @@
  */
 
 import { spawnSync } from 'child_process'
+import { isIP } from 'node:net'
 import { createLogger } from './logger.mjs'
+import { isPrivateOrReservedIp } from './url-fetch-guard.mjs'
 
 const log = createLogger('command-sandbox')
 
@@ -95,6 +97,35 @@ function validateCommand(cmd) {
           safe: false,
           reason:
             'curl upload/config flags (-F/--form, -T/--upload-file, -d/--data*, -K/--config, --netrc*) are not allowed (data-exfiltration risk)',
+        }
+      }
+    }
+
+    // SSRF (CWE-918): LLM-synthesised missions are seeded from public,
+    // unauthenticated sources (scripts/sources/*), so an attacker can steer
+    // the LLM into emitting a `curl` call that targets a loopback/private/
+    // link-local address or the cloud metadata endpoint
+    // (http://169.254.169.254/...) instead of a public install artifact.
+    // Unlike the upload/config flags above, a bare GET to such a host can
+    // still leak metadata credentials via the command's stdout, which is
+    // echoed to CI logs and the mission report. This only catches literal
+    // IP targets (no DNS lookup is done here, so it is not a full defense
+    // against a hostname that resolves to a private address at connect
+    // time); it reuses the same reserved-range table as
+    // `lib/url-fetch-guard.mjs`'s `safeFetch`.
+    const urlMatches = cmd.match(/https?:\/\/[^\s'"]+/gi) || []
+    for (const urlMatch of urlMatches) {
+      let parsed
+      try {
+        parsed = new URL(urlMatch)
+      } catch {
+        continue
+      }
+      const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+      if (hostname === 'localhost' || (isIP(hostname) && isPrivateOrReservedIp(hostname))) {
+        return {
+          safe: false,
+          reason: `curl target rejected (loopback/private/link-local/metadata address): ${urlMatch}`,
         }
       }
     }

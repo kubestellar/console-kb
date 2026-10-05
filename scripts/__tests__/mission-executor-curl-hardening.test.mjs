@@ -61,6 +61,40 @@ describe('validateCommand — curl upload/config flags (#3274)', () => {
   })
 })
 
+describe('validateCommand — curl SSRF target rejection (CWE-918)', () => {
+  const unsafeCases = [
+    'curl -fsSL http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+    'curl -fsSL http://127.0.0.1:8080/admin',
+    'curl -fsSL http://localhost:6443/api',
+    'curl -fsSL http://10.0.0.5/internal',
+    'curl -fsSL http://192.168.1.1/',
+    'curl -fsSL http://172.16.0.1/',
+    'curl -fsSL http://[::1]/',
+  ]
+  it.each(unsafeCases)('rejects %s', (cmd) => {
+    const r = validateCommand(cmd)
+    expect(r.safe).toBe(false)
+    expect(r.reason).toMatch(/loopback|private|link-local|metadata/i)
+  })
+
+  it('still permits curl to a public hostname (not a literal IP)', () => {
+    const r = validateCommand('curl -fsSL https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz')
+    expect(r.safe).toBe(true)
+  })
+
+  it('still permits curl to a public IP literal', () => {
+    const r = validateCommand('curl -fsSL http://8.8.8.8/')
+    expect(r.safe).toBe(true)
+  })
+
+  it('execCommand blocks curl targeting the cloud metadata endpoint', () => {
+    const r = execCommand('curl -fsSL http://169.254.169.254/latest/meta-data/')
+    expect(r.success).toBe(false)
+    expect(r.output.startsWith('[BLOCKED]')).toBe(true)
+    expect(r.error).toMatch(/metadata|private|loopback|link-local/i)
+  })
+})
+
 describe('sanitizeArg — @-prefixed file-read arguments (#3274)', () => {
   it('rejects @/absolute/path', () => {
     expect(() => sanitizeArg('@/home/runner/.docker/config.json')).toThrow(/file-read @path/)
