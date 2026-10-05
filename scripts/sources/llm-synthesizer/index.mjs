@@ -133,7 +133,11 @@ async function synthesizeWithFallback(params, prompt) {
           return validateAndClean(parsed)
         }
       }
-    } catch { /* fall through */ }
+    } catch (err) {
+      // Last-resort fallback: unlike the primary path above, nothing else
+      // observes this failure, so it must be logged here or it vanishes.
+      log.warn(`  [LLM] Anthropic fallback error: ${err.message}`)
+    }
   }
 
   const ghToken = process.env.LLM_TOKEN
@@ -148,7 +152,11 @@ async function synthesizeWithFallback(params, prompt) {
           return validateAndClean(parsed)
         }
       }
-    } catch { /* give up */ }
+    } catch (err) {
+      // Final fallback exhausted: log before giving up, since this is the
+      // last chance to record why synthesis produced no mission.
+      log.warn(`  [LLM] GitHub Models fallback error: ${err.message}`)
+    }
   }
 
   return null
