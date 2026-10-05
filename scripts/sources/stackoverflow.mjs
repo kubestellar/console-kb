@@ -9,6 +9,7 @@ import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import sanitizeHtml from 'sanitize-html'
 import { createLogger } from '../lib/logger.mjs'
+import { extractResourceKinds } from '../lib/text-utils.mjs'
 
 const log = createLogger('stackoverflow')
 export class StackOverflowSource extends BaseSource {
@@ -233,11 +234,6 @@ function extractStepsFromHtml(html) {
     if (steps.length >= 10) break
   }
   return steps
-}
-
-function extractResourceKinds(text) {
-  const kinds = ['Pod', 'Deployment', 'Service', 'Ingress', 'ConfigMap', 'Secret', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'PersistentVolumeClaim', 'NetworkPolicy', 'ServiceAccount', 'ClusterRole', 'HorizontalPodAutoscaler']
-  return kinds.filter(k => text.includes(k) || text.toLowerCase().includes(k.toLowerCase()))
 }
 
 function detectTypeFromTags(tags) {

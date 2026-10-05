@@ -12,6 +12,26 @@ const ENGLISH_STOPWORDS = new Set([
 ])
 const MIN_ENGLISH_STOPWORD_RATIO = 0.08
 
+// Kubernetes resource kinds scanned for in free-text community content
+// (GitHub Discussions, Reddit, Stack Overflow) to tag a mission with the
+// resources it discusses. Kept here as the single copy — it previously had
+// a byte-identical duplicate in each of scripts/sources/github-discussions.mjs,
+// scripts/sources/reddit.mjs, and scripts/sources/stackoverflow.mjs.
+const K8S_RESOURCE_KINDS = [
+  'Pod', 'Deployment', 'Service', 'Ingress', 'ConfigMap', 'Secret',
+  'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'PersistentVolumeClaim',
+  'NetworkPolicy', 'ServiceAccount', 'ClusterRole', 'HorizontalPodAutoscaler',
+]
+
+/**
+ * Returns the Kubernetes resource kinds mentioned in `text` (case-insensitive).
+ */
+export function extractResourceKinds(text) {
+  return K8S_RESOURCE_KINDS.filter(
+    (k) => text.includes(k) || text.toLowerCase().includes(k.toLowerCase())
+  )
+}
+
 /**
  * Strip PR template boilerplate, HTML comments, image markdown, email reply
  * headers, emoji shortcodes, and other non-content noise from issue/PR text.

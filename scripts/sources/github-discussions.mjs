@@ -8,6 +8,7 @@ import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
 import { githubGraphql } from '../lib/cncf-github-client.mjs'
+import { extractResourceKinds } from '../lib/text-utils.mjs'
 
 const log = createLogger('github-discussions')
 
@@ -182,11 +183,6 @@ function extractCodeBlocks(text) {
     if (block.length > 20 && block.length < 5000) blocks.push(block)
   }
   return blocks
-}
-
-function extractResourceKinds(text) {
-  const kinds = ['Pod', 'Deployment', 'Service', 'Ingress', 'ConfigMap', 'Secret', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'PersistentVolumeClaim', 'NetworkPolicy', 'ServiceAccount', 'ClusterRole', 'HorizontalPodAutoscaler']
-  return kinds.filter(k => text.includes(k) || text.toLowerCase().includes(k.toLowerCase()))
 }
 
 function detectType(text) {
