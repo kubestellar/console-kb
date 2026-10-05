@@ -308,6 +308,41 @@ jobs:
             echo "| Security blocked | $SECURITY_BLOCKED |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Fail if all publish attempts failed
+        run: |
+          node --input-type=module <<'NODE'
+          import { readdirSync, readFileSync } from 'node:fs'
+
+          const reportFiles = readdirSync('.').filter((name) => /^platform-report-.*\.md$/.test(name))
+          let published = 0
+          let failed = 0
+          const failureSections = []
+
+          for (const file of reportFiles) {
+            const body = readFileSync(file, 'utf8')
+            published += Number(body.match(/^- Published:\s*(\d+)/m)?.[1] || 0)
+            failed += Number(body.match(/^- Failed:\s*(\d+)/m)?.[1] || 0)
+            const failedSection = body.match(/## Failed\n([\s\S]*?)(?:\n## |\n?$)/)?.[1]?.trim()
+            if (failedSection) failureSections.push(`### ${file}\n${failedSection}`)
+          }
+
+          if (failed > 0 && published === 0) {
+            const details = failureSections.length
+              ? failureSections.join('\n\n')
+              : 'No per-mission failure details were reported.'
+            console.error(`All platform mission publishes failed: Published=${published}, Failed=${failed}`)
+            console.error(details)
+            if (process.env.GITHUB_STEP_SUMMARY) {
+              const { appendFileSync } = await import('node:fs')
+              appendFileSync(
+                process.env.GITHUB_STEP_SUMMARY,
+                `\n### 🚫 Platform mission publish failure\n\nPublished: ${published}\n\nFailed: ${failed}\n\n${details}\n`,
+              )
+            }
+            process.exit(1)
+          }
+          NODE
+
       - name: Create PR
         env:
           GH_TOKEN: ${{ secrets.ORG_TOKEN }}
@@ -318,6 +353,14 @@ jobs:
           if git diff --cached --quiet; then
             echo "No new missions to commit; skipping PR"
             exit 0
+          fi
+          CHANGED_FILES="$(git diff --cached --name-only)"
+          if [ "$CHANGED_FILES" = "fixes/index.json" ]; then
+            if node --input-type=module -e "import { readFileSync } from 'node:fs'; import { execFileSync } from 'node:child_process'; const normalizeIndex = (raw) => { const index = JSON.parse(raw); delete index.generatedAt; return JSON.stringify(index); }; const oldIndex = execFileSync('git', ['show', 'HEAD:fixes/index.json'], { encoding: 'utf8' }); const newIndex = readFileSync('fixes/index.json', 'utf8'); process.exit(normalizeIndex(oldIndex) === normalizeIndex(newIndex) ? 0 : 1);"
+            then
+              echo "Only fixes/index.json generatedAt changed; skipping PR"
+              exit 0
+            fi
           fi
           NEW_COUNT=$(git diff --cached --name-only -- 'fixes/platform-install/platform-*.json' | wc -l | tr -d ' ')
           git config user.name "github-actions[bot]"
