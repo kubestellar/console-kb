@@ -5,6 +5,7 @@ import path, { join, relative, extname } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { scoreMissionAdvanced, MIN_SCORE } from './advanced-quality-scorer.mjs';
 import { createLogger } from './lib/logger.mjs';
+import { appendStepSummaryTable } from './lib/step-summary-table.mjs';
 // Companion: kubestellar/console#8148 exposes these index fields via /api/missions/scores.
 
 const log = createLogger('build-index');
@@ -154,20 +155,16 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
   // shows scanned/indexed/skipped counts at a glance instead of requiring a
   // raw log dig. GITHUB_STEP_SUMMARY is already set by the Actions runner
   // for every job — no workflow YAML change is required to write to it.
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    const summaryLines = [
-      '## 📇 Mission Index Build Summary',
-      '',
-      '| Metric | Value |',
-      '|--------|-------|',
-      `| Files scanned | ${allFiles.length} |`,
-      `| Missions indexed | ${missions.length} |`,
-      `| Skipped (no metadata / parse error) | ${skipped} |`,
-      `| Duration (ms) | ${durationMs} |`,
-      '',
-    ];
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summaryLines.join('\n')}\n`, 'utf8');
-  }
+  appendStepSummaryTable(
+    '📇 Mission Index Build Summary',
+    [
+      ['Files scanned', allFiles.length],
+      ['Missions indexed', missions.length],
+      ['Skipped (no metadata / parse error)', skipped],
+      ['Duration (ms)', durationMs],
+    ],
+    { appendFile: appendFileSync },
+  );
 
   log.summary('build-index-summary', {
     totalFiles: allFiles.length,

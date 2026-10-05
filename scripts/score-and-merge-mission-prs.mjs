@@ -15,19 +15,20 @@
  *
  * Also mirrors a bounded run summary (counts only — never a PR title,
  * breakdown, or other unbounded/caller-controlled text) into
- * `$GITHUB_STEP_SUMMARY` and emits a `mission-auto-merge-summary`
- * structured line via `lib/logger.mjs`'s `summary()` helper, matching
- * every sibling CI script in this directory (see build-index.mjs,
- * scan-pr.mjs). Before this, the auto-merge job's only record of a run
- * was raw step logs — the workflow's own "Write Auto-Merge Summary"
- * step says as much ("See job logs for per-PR scoring details"). No
- * workflow YAML change is required: GITHUB_STEP_SUMMARY is already set
- * by the Actions runner for every job.
+ * `$GITHUB_STEP_SUMMARY` via the shared `lib/step-summary-table.mjs`
+ * helper (see console-kb#3684), and emits a `mission-auto-merge-summary`
+ * structured line via `lib/logger.mjs`'s `summary()` helper. Before this,
+ * the auto-merge job's only record of a run was raw step logs — the
+ * workflow's own "Write Auto-Merge Summary" step says as much ("See job
+ * logs for per-PR scoring details"). No workflow YAML change is
+ * required: GITHUB_STEP_SUMMARY is already set by the Actions runner
+ * for every job.
  */
 import { execFileSync } from 'child_process'
 import { appendFileSync } from 'node:fs'
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
+import { appendStepSummaryTable } from './lib/step-summary-table.mjs'
 import {
   filterRecentPRs,
   requiredChecksPassed,
@@ -64,21 +65,17 @@ function checkRequiredChecks(prNumber) {
  * `mission-auto-merge-summary` structured log line.
  */
 function emitSummary({ totalPRs, merged, failed, skippedNoMission, durationMs }) {
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    const summaryLines = [
-      '## 🤖 Mission Auto-Merge Summary',
-      '',
-      '| Metric | Value |',
-      '|--------|-------|',
-      `| Recent PRs (last ${LOOKBACK_HOURS}h) | ${totalPRs} |`,
-      `| Merged | ${merged} |`,
-      `| Left for review | ${failed} |`,
-      `| Skipped (no mission file) | ${skippedNoMission} |`,
-      `| Duration (ms) | ${durationMs} |`,
-      '',
-    ]
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summaryLines.join('\n')}\n`, 'utf8')
-  }
+  appendStepSummaryTable(
+    '🤖 Mission Auto-Merge Summary',
+    [
+      [`Recent PRs (last ${LOOKBACK_HOURS}h)`, totalPRs],
+      ['Merged', merged],
+      ['Left for review', failed],
+      ['Skipped (no mission file)', skippedNoMission],
+      ['Duration (ms)', durationMs],
+    ],
+    { appendFile: appendFileSync },
+  )
 
   log.summary('mission-auto-merge-summary', {
     level: failed > 0 ? 'warn' : 'info',
