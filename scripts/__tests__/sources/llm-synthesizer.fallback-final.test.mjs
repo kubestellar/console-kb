@@ -25,6 +25,10 @@ import { synthesizeMission } from '../../sources/llm-synthesizer.mjs'
  *     `textBlock?.text || null` yields null
  *   - line 264 falsy — callOpenAICompatible 429 response missing the
  *     `retry-after` header → `parseInt(header || '5')`
+ *   - synthesizeWithFallback's two top-level `catch` blocks when the
+ *     fallback fetch itself throws (previously silent; see console-kb
+ *     telemetry gap: the last-resort fallback path logged nothing on
+ *     failure, unlike every other error path in this module)
  *
  * Every test drives only the exported synthesizeMission entry point —
  * production code is not modified. All I/O is mocked through
@@ -97,6 +101,10 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     restoreEnv()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // llm-synthesizer/index.mjs logs via the shared structured logger
+    // (scripts/lib/logger.mjs), which writes JSON lines directly to
+    // process.stderr rather than calling console.warn — see #3599.
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -287,5 +295,63 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
 
     expect(result).not.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('logs and returns null when the Anthropic fallback fetch itself throws', async () => {
+    // Before this fix, a thrown error in synthesizeWithFallback's Anthropic
+    // branch was swallowed by a bare `catch { /* fall through */ }` with no
+    // log output at all — the last-resort fallback path failed silently.
+    process.env.COPILOT_TOKEN = 'copilot-tok'
+    delete process.env.USE_COPILOT
+    process.env.ANTHROPIC_API_KEY = 'anthropic-tok'
+    delete process.env.LLM_TOKEN
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(copilotFail())
+      .mockResolvedValueOnce(copilotFail())
+      .mockResolvedValueOnce(copilotFail())
+      .mockRejectedValueOnce(new Error('anthropic network blip'))
+    globalThis.fetch = fetchMock
+
+    vi.useFakeTimers()
+    const p = synthesizeMission(BASE_PARAMS)
+    await vi.advanceTimersByTimeAsync(30_000)
+    const result = await p
+    vi.useRealTimers()
+
+    expect(result).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
+    expect(warnCall).toMatch(/Anthropic fallback error: anthropic network blip/)
+  })
+
+  it('logs and returns null when the GitHub Models fallback fetch itself throws', async () => {
+    // Same silent-swallow gap as above, in the final `catch { /* give up */ }`
+    // arm for the GitHub Models fallback — the very last chance to explain
+    // why synthesis produced nothing.
+    process.env.COPILOT_TOKEN = 'copilot-tok'
+    delete process.env.USE_COPILOT
+    delete process.env.ANTHROPIC_API_KEY
+    process.env.LLM_TOKEN = 'gh-tok'
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(copilotFail())
+      .mockResolvedValueOnce(copilotFail())
+      .mockResolvedValueOnce(copilotFail())
+      .mockRejectedValueOnce(new Error('github models network blip'))
+    globalThis.fetch = fetchMock
+
+    vi.useFakeTimers()
+    const p = synthesizeMission(BASE_PARAMS)
+    await vi.advanceTimersByTimeAsync(30_000)
+    const result = await p
+    vi.useRealTimers()
+
+    expect(result).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
+    expect(warnCall).toMatch(/GitHub Models fallback error: github models network blip/)
   })
 })
