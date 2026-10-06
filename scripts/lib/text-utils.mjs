@@ -33,6 +33,32 @@ export function extractResourceKinds(text) {
 }
 
 /**
+ * Extracts up to 10 steps from a numbered list (preferred) or, failing that,
+ * a bulleted list, in free-text community content. Returns an empty array
+ * when neither pattern is found. Previously had a byte-identical duplicate
+ * in each of scripts/sources/github-discussions.mjs and
+ * scripts/sources/reddit.mjs.
+ */
+export function extractSteps(text) {
+  const steps = []
+  const numbered = text.match(/\d+[.)]\s+[^\n]+/g)
+  if (numbered) {
+    for (const step of numbered.slice(0, 10)) {
+      steps.push(step.replace(/^\d+[.)]\s+/, '').trim())
+    }
+  }
+  if (steps.length === 0) {
+    const bullets = text.match(/^[-*]\s+[^\n]+/gm)
+    if (bullets) {
+      for (const step of bullets.slice(0, 10)) {
+        steps.push(step.replace(/^[-*]\s+/, '').trim())
+      }
+    }
+  }
+  return steps
+}
+
+/**
  * Strip PR template boilerplate, HTML comments, image markdown, email reply
  * headers, emoji shortcodes, and other non-content noise from issue/PR text.
  */
