@@ -54,6 +54,7 @@ function jsonResponse(status, bodyObj) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
     json: async () => bodyObj,
     text: async () => JSON.stringify(bodyObj),
   }
@@ -92,27 +93,32 @@ describe('llmChat — HTTP paths', () => {
     restoreEnv()
   })
 
-  it('throws with wrapped status + body on non-2xx', async () => {
+  it('throws a generic failure message on non-2xx', async () => {
+    // requestLlmChatJson (console-kb#3675/#3713) logs a warning and
+    // returns null on any non-ok HTTP status, rather than throwing a
+    // status-specific message; llmChat() then wraps any null result in
+    // one generic error, regardless of the underlying HTTP status.
     globalThis.fetch = vi.fn(async () => ({
       ok: false,
       status: 503,
+      headers: { get: () => 'application/json' },
       text: async () => 'service unavailable',
       json: async () => ({}),
     }))
     const mod = await loadModule()
     await expect(mod.llmChat([{ role: 'user', content: 'x' }])).rejects.toThrow(
-      /LLM API error 503: service unavailable/,
+      /LLM request failed or returned an empty\/invalid response/,
     )
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
   })
 
-  it('throws "Empty LLM response" when choices[0].message.content is missing', async () => {
+  it('throws the generic failure message when choices[0].message.content is missing', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse(200, { choices: [{ message: {} }] }),
     )
     const mod = await loadModule()
     await expect(mod.llmChat([{ role: 'user', content: 'x' }])).rejects.toThrow(
-      /Empty LLM response/,
+      /LLM request failed or returned an empty\/invalid response/,
     )
   })
 
@@ -184,9 +190,18 @@ describe('executeStep — dry-run path (spawn-free)', () => {
   })
 
   it('marks the step error when the LLM extraction call throws', async () => {
-    globalThis.fetch = vi.fn(async () => {
-      throw new Error('network down')
-    })
+    // A non-ok response (not a thrown/network error): requestLlmChatJson
+    // retries thrown/network errors with a real setTimeout backoff, which
+    // would make this test take 9s+. A non-ok response is handled
+    // immediately (no retry) and reaches the same "llmChat throws"
+    // outcome without the delay.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      headers: { get: () => 'application/json' },
+      text: async () => '',
+      json: async () => ({}),
+    }))
     const mod = await loadModule()
     const result = await mod.executeStep(
       { title: 'Boom', description: 'x' },
@@ -195,7 +210,7 @@ describe('executeStep — dry-run path (spawn-free)', () => {
       [],
     )
     expect(result.status).toBe('error')
-    expect(result.output).toMatch(/LLM extraction failed: network down/)
+    expect(result.output).toMatch(/LLM extraction failed: LLM request failed/)
   })
 })
 
