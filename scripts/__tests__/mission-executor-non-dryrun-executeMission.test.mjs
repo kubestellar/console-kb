@@ -34,13 +34,19 @@ function restoreEnv() {
 }
 
 function chatResponse(payload) {
+  // requestLlmChatJson parses the chat-completion envelope from
+  // response.text() (not response.json() — it reads the raw body once
+  // to enforce the size ceiling before parsing), so text() must return
+  // the full `{ choices: [...] }` envelope, same shape as json().
+  const envelope = {
+    choices: [{ message: { content: JSON.stringify(payload) } }],
+  }
   return {
     ok: true,
     status: 200,
-    text: async () => JSON.stringify(payload),
-    json: async () => ({
-      choices: [{ message: { content: JSON.stringify(payload) } }],
-    }),
+    headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
+    text: async () => JSON.stringify(envelope),
+    json: async () => envelope,
   }
 }
 
@@ -237,8 +243,18 @@ describe('executeMission — non-DRY_RUN branches', () => {
       call++
       if (call === 1) return chatResponse({ commands: ['kubectl apply -f a.yaml'] })
       if (call === 2) return chatResponse({ commands: ['kubectl rollout status'] })
-      // final_verification → throw
-      throw new Error('llm down')
+      // final_verification → fails with a handled HTTP error (not a
+      // thrown/network error): requestLlmChatJson retries network errors
+      // with a real setTimeout backoff, which would make this test take
+      // 9s+. A non-ok response is returned immediately (no retry),
+      // reaching the same "llmChat throws" outcome without the delay.
+      return {
+        ok: false,
+        status: 500,
+        headers: { get: () => 'application/json' },
+        text: async () => '',
+        json: async () => ({}),
+      }
     })
 
     const missionPath = writeMission('llmthrow', {

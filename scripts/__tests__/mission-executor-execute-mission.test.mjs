@@ -47,6 +47,7 @@ function jsonResponse(status, bodyObj) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
     json: async () => bodyObj,
     text: async () => JSON.stringify(bodyObj),
   }
