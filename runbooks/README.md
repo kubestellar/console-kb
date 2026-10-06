@@ -30,6 +30,7 @@ All runbooks follow the `kc-mission-v1` schema with `missionClass: "runbook"`. T
 | [`disaster-recovery.json`](./disaster-recovery.json) | Back up and restore etcd state on a kubeadm cluster. Validated end-to-end on kind v1.35 / etcd v3.6.6. | Advanced |
 | [`restore-etcd-snapshot.json`](./restore-etcd-snapshot.json) | Restore a kubeadm-managed control plane from a previously captured etcd snapshot. | Advanced |
 | [`restore-velero-backup.json`](./restore-velero-backup.json) | Restore namespaces, volumes, and workloads from an existing Velero backup. | Intermediate |
+| [`verify-cnpg-backup.json`](./verify-cnpg-backup.json) | Verify a CloudNativePG Barman backup with a disposable restore, application-data assertions, and cleanup checks. | Intermediate |
 
 > **⚠️ Deprecation notice — legacy `kubestellar/kubestellar` Helm components**
 >
