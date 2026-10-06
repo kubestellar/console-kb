@@ -142,7 +142,16 @@ export async function synthesizePlatformMission(platform, context) {
     // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
     const contentType = response.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {
-      log.error(`  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)}`)
+      // A 200 response with a non-JSON Content-Type carries no `!response.ok`
+      // signal, so without the body itself there is nothing to distinguish
+      // an upstream outage page from a proxy error from a provider-format
+      // change (console-kb#3702, where this branch fired 5 consecutive
+      // scheduled runs with only the Content-Type logged and no indication
+      // of what the body actually said).
+      const body = await response.text()
+      log.error(
+        `  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)} — body: ${body.slice(0, 200)}`
+      )
       return null
     }
     const MAX_LLM_RESPONSE_BYTES = 1_000_000

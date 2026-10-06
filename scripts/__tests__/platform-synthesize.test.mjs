@@ -75,6 +75,15 @@ describe('synthesizePlatformMission — failure branches', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/unexpected Content-Type/))
   })
 
+  it('logs a snippet of the body when the Content-Type is not application/json', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ contentType: 'text/plain', body: 'rate limit exceeded, try later' }))
+    )
+    expect(await synthesizePlatformMission(PLATFORM, CONTEXT)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/rate limit exceeded, try later/))
+  })
+
   it('returns null when the response body exceeds the 1MB ceiling', async () => {
     const huge = 'x'.repeat(1_000_001)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ body: huge })))
