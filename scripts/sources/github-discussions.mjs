@@ -8,7 +8,7 @@ import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
 import { githubGraphql } from '../lib/cncf-github-client.mjs'
-import { extractResourceKinds } from '../lib/text-utils.mjs'
+import { extractResourceKinds, extractSteps } from '../lib/text-utils.mjs'
 
 const log = createLogger('github-discussions')
 
@@ -194,21 +194,3 @@ function detectType(text) {
   return 'troubleshooting'
 }
 
-function extractSteps(text) {
-  const steps = []
-  const numbered = text.match(/\d+[.)]\s+[^\n]+/g)
-  if (numbered) {
-    for (const step of numbered.slice(0, 10)) {
-      steps.push(step.replace(/^\d+[.)]\s+/, '').trim())
-    }
-  }
-  if (steps.length === 0) {
-    const bullets = text.match(/^[-*]\s+[^\n]+/gm)
-    if (bullets) {
-      for (const step of bullets.slice(0, 10)) {
-        steps.push(step.replace(/^[-*]\s+/, '').trim())
-      }
-    }
-  }
-  return steps
-}

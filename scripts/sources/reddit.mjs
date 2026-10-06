@@ -8,7 +8,7 @@
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
-import { extractResourceKinds } from '../lib/text-utils.mjs'
+import { extractResourceKinds, extractSteps } from '../lib/text-utils.mjs'
 
 // Reddit requires descriptive User-Agent: platform:appid:version (by contact)
 const log = createLogger('reddit')
@@ -191,25 +191,4 @@ function detectType(text) {
   if (lower.includes('performance') || lower.includes('slow') || lower.includes('latency')) return 'performance'
   if (lower.includes('security') || lower.includes('rbac') || lower.includes('tls')) return 'security'
   return 'troubleshooting'
-}
-
-function extractSteps(text) {
-  const steps = []
-  // Look for numbered lists
-  const numbered = text.match(/\d+[.)]\s+[^\n]+/g)
-  if (numbered) {
-    for (const step of numbered.slice(0, 10)) {
-      steps.push(step.replace(/^\d+[.)]\s+/, '').trim())
-    }
-  }
-  // Look for bullet points
-  if (steps.length === 0) {
-    const bullets = text.match(/^[-*]\s+[^\n]+/gm)
-    if (bullets) {
-      for (const step of bullets.slice(0, 10)) {
-        steps.push(step.replace(/^[-*]\s+/, '').trim())
-      }
-    }
-  }
-  return steps
 }
