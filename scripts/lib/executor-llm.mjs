@@ -12,6 +12,7 @@
  */
 
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './llm-endpoint-guard.mjs'
+import { requestLlmChatJson } from './llm-json-request.mjs'
 
 const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
 const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
@@ -54,36 +55,28 @@ When diagnosing failures, respond in JSON:
 }
 Set "skip": true only if the step is genuinely optional (e.g. external DNS, cloud-specific LB).`
 
+const LLM_TIMEOUT_MS = 30000
+const LLM_MAX_RESPONSE_BYTES = 1024 * 1024
+
 async function llmChat(messages) {
   const token = getToken()
   if (!token) throw new Error('No GITHUB_TOKEN set for LLM API')
 
-  const resp = await fetch(TRUSTED_LLM_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages,
-      temperature: 0.2,
-      max_tokens: 1500,
-      response_format: { type: 'json_object' },
-    }),
-    signal: AbortSignal.timeout(30000),
+  const result = await requestLlmChatJson({
+    endpoint: TRUSTED_LLM_ENDPOINT,
+    model: LLM_MODEL,
+    token,
+    messages,
+    temperature: 0.2,
+    maxTokens: 1500,
+    timeoutMs: LLM_TIMEOUT_MS,
+    maxResponseBytes: LLM_MAX_RESPONSE_BYTES,
+    log: console,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   })
+  if (result === null) throw new Error('LLM request failed or returned an empty/invalid response')
 
-  if (!resp.ok) {
-    const body = await resp.text()
-    throw new Error(`LLM API error ${resp.status}: ${body.slice(0, 200)}`)
-  }
-
-  const data = await resp.json()
-  const content = data.choices?.[0]?.message?.content
-  if (!content) throw new Error('Empty LLM response')
-
-  return JSON.parse(content)
+  return result
 }
 
 export {

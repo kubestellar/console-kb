@@ -16,7 +16,8 @@
  * Returns the parsed JSON body of `choices[0].message.content`, or `null`
  * if the call failed for any handled reason (rate-limited past the retry
  * budget, HTTP error, bad Content-Type, oversize body, missing/invalid
- * content). Does not perform caller-specific post-parse validation
+ * content). Callers may pass a full multi-turn `messages` array instead of
+ * `systemPrompt`/`userPrompt`. Does not perform caller-specific post-parse validation
  * (e.g. required fields) — that remains the caller's responsibility.
  */
 export async function requestLlmChatJson({
@@ -25,6 +26,7 @@ export async function requestLlmChatJson({
   token,
   systemPrompt,
   userPrompt,
+  messages,
   temperature = 0.3,
   maxTokens,
   timeoutMs,
@@ -39,7 +41,7 @@ export async function requestLlmChatJson({
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
-          messages: [
+          messages: messages ?? [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
