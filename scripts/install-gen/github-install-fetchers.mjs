@@ -12,9 +12,16 @@
  * scripts/scanner.mjs → scripts/scanner/ (#3195). The generator continues to
  * re-export every helper here so existing tests and callers keep working
  * unchanged.
+ *
+ * Helm/Kustomize candidate directories import the canonical HELM_DIRS /
+ * KUSTOMIZE_DIRS from lib/repo-context.mjs rather than re-declaring their
+ * own copies, per that module's "consumers should import these constants"
+ * note — two independent literal path lists had already drifted (the
+ * kustomize/ candidate directory was present here but missing from the
+ * canonical list used by generate-platform-missions.mjs).
  */
 import { githubApiResponse as githubApi } from '../lib/cncf-github-client.mjs'
-import { fetchReadme, fetchRepoMeta } from '../lib/repo-context.mjs'
+import { fetchReadme, fetchRepoMeta, HELM_DIRS, KUSTOMIZE_DIRS } from '../lib/repo-context.mjs'
 
 // ─── GitHub API helpers ──────────────────────────────────────────────
 export async function fetchRawFile(owner, repo, path) {
@@ -37,7 +44,7 @@ export async function fetchLatestRelease(owner, repo) {
 }
 
 export async function fetchHelmCharts(owner, repo) {
-  const paths = ['charts/', 'chart/', 'helm/', '']
+  const paths = HELM_DIRS
   const charts = []
   for (const p of paths) {
     const chartYaml = await fetchRawFile(owner, repo, `${p}Chart.yaml`)
@@ -65,7 +72,7 @@ export async function fetchHelmCharts(owner, repo) {
 }
 
 export async function fetchKustomizeManifests(owner, repo) {
-  const paths = ['config/default/', 'deploy/', 'manifests/', 'kustomize/', '']
+  const paths = KUSTOMIZE_DIRS
   for (const p of paths) {
     const kustomization = await fetchRawFile(owner, repo, `${p}kustomization.yaml`)
     if (kustomization) {

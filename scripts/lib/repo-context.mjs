@@ -21,7 +21,7 @@ const API = 'https://api.github.com/repos'
 // fetching. Consumers should import these constants rather than re-declare
 // them so a future tuning change lands in one place.
 export const HELM_DIRS = ['charts/', 'chart/', 'helm/', '']
-export const KUSTOMIZE_DIRS = ['config/default/', 'deploy/', 'manifests/', '']
+export const KUSTOMIZE_DIRS = ['config/default/', 'deploy/', 'manifests/', 'kustomize/', '']
 export const README_MAX_CHARS = 8000
 export const HELM_FILE_MAX_CHARS = 4000
 export const KUSTOMIZE_MAX_CHARS = 3000
