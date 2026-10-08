@@ -234,6 +234,34 @@ describe('validate-schema.mjs --all discovery', () => {
     })
   })
 
+  it('also discovers mission files under solutions/, in addition to fixes/ and runbooks/', () => {
+    // Guards against the same false-green regression as the runbooks/ test
+    // above, for solutions/cncf-generated/*.json (console-kb#3744): same
+    // kc-mission-v1 schema, previously zero scheduled/push validation
+    // coverage because ALL_MODE_DIRS omitted it.
+    withTempDir(dir => {
+      mkdirSync(join(dir, 'fixes'), { recursive: true })
+      mkdirSync(join(dir, 'solutions'), { recursive: true })
+      writeFileSync(join(dir, 'fixes', 'a.json'), JSON.stringify(VALID_MISSION))
+      writeFileSync(join(dir, 'solutions', 'c.json'), JSON.stringify(VALID_MISSION))
+
+      const result = runCli(dir, ['--all'])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/Discovered 2 mission files to validate\./)
+      expect(result.stdout).toContain('a.json')
+      expect(result.stdout).toContain('c.json')
+
+      const summary = parseSummary(result.stdout)
+      expect(summary).toMatchObject({
+        trigger: 'all',
+        total: 2,
+        validCount: 2,
+        invalidCount: 0,
+      })
+    })
+  })
+
   it('sets summary trigger to "all" and level to "error" when a discovered file is invalid', () => {
     // Guards the trigger vs level distinction: trigger reflects the CLI
     // switch, level reflects the outcome. A regression that swapped them

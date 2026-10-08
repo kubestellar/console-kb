@@ -17,7 +17,7 @@ const SKIP_FILENAMES = new Set(['index.json']);
  * Returns an array of relative file paths.
  *
  * Silently returns [] when `dir` does not exist. A --all scan enumerates
- * every configured mission root (fixes/, runbooks/), and a working tree
+ * every configured mission root (fixes/, runbooks/, solutions/), and a working tree
  * that only carries one of them (e.g. a partial checkout, a fresh clone
  * of the scripts/ subpackage, or a temp-dir test that populates only
  * fixes/) must not crash the whole scan on ENOENT of the other root.
@@ -123,8 +123,11 @@ export function runCli({
 
   let files;
   if (isFullScan) {
-    // Discover all mission files under first-class mission roots (used for push/schedule/dispatch)
-    files = ['fixes', 'runbooks'].flatMap(root => discoverFiles(root));
+    // Discover all mission files under first-class mission roots (used for
+    // push/schedule/dispatch). 'solutions' holds the same kc-mission-v1
+    // shape as fixes/ and runbooks/ (console-kb#3744) and was previously
+    // omitted here, leaving it with no scheduled content-scan coverage.
+    files = ['fixes', 'runbooks', 'solutions'].flatMap(root => discoverFiles(root));
     stdout(`Discovered ${files.length} mission files to scan.\n`);
   } else {
     // Each changed file is delivered as its own argv entry (see
