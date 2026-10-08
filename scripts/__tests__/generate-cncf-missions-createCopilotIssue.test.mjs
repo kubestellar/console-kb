@@ -62,12 +62,21 @@ function mockIssue(overrides = {}) {
 
 const resolution = { summary: 'Restart the kubelet', steps: ['Step 1'] }
 
+// createCopilotIssue() logs its warn/error paths via the shared structured
+// logger (scripts/lib/logger.mjs), which writes JSON lines directly to
+// process.stderr rather than calling console.warn — see #3596. Spy on
+// stderr and match against the JSON-embedded message text, mirroring
+// enrich-install-missions-callLLM.test.mjs's pattern.
 let warnSpy
 let logSpy
 
+function stderrContaining(substring) {
+  return expect.stringContaining(JSON.stringify(substring).slice(1, -1))
+}
+
 beforeEach(() => {
   githubApiMock.mockReset()
-  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 
@@ -102,7 +111,7 @@ describe('createCopilotIssue', () => {
     const { createCopilotIssue: createCopilotIssueNoToken } = await import('../generate-cncf-missions.mjs')
     const result = await createCopilotIssueNoToken(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No ISSUE_TOKEN'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('No ISSUE_TOKEN'))
     if (originalIssueToken === undefined) delete process.env.ISSUE_TOKEN
     else process.env.ISSUE_TOKEN = originalIssueToken
     if (originalGithubToken === undefined) delete process.env.GITHUB_TOKEN
@@ -114,7 +123,7 @@ describe('createCopilotIssue', () => {
     githubApiMock.mockResolvedValue({})
     const result = await createCopilotIssue(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not get master ref'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('Could not get master ref'))
   })
 
   it('returns null when branch creation fails with an unexpected error', async () => {
@@ -122,7 +131,7 @@ describe('createCopilotIssue', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 500, body: 'boom' })))
     const result = await createCopilotIssue(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Branch creation failed'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('Branch creation failed'))
   })
 
   it('continues past a "Reference already exists" branch error', async () => {
@@ -141,7 +150,7 @@ describe('createCopilotIssue', () => {
     // Branch-exists is tolerated, so the flow proceeds to the file write,
     // which we fail here to confirm execution didn't stop at the branch step.
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('File creation failed'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('File creation failed'))
   })
 
   it('returns null when the mission file write fails', async () => {
@@ -154,7 +163,7 @@ describe('createCopilotIssue', () => {
     vi.stubGlobal('fetch', fetchMock)
     const result = await createCopilotIssue(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('File creation failed'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('File creation failed'))
   })
 
   it('returns null when PR creation fails', async () => {
@@ -168,7 +177,7 @@ describe('createCopilotIssue', () => {
     vi.stubGlobal('fetch', fetchMock)
     const result = await createCopilotIssue(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('PR creation failed'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('PR creation failed'))
   })
 
   it('succeeds end-to-end and tolerates label/assignee failures', async () => {
@@ -190,14 +199,14 @@ describe('createCopilotIssue', () => {
       slug: expect.any(String),
       url: 'https://github.com/kubestellar/console-kb/pull/42',
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not add labels'))
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not assign Copilot'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('Could not add labels'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('Could not assign Copilot'))
   })
 
   it('returns null and logs when an unexpected exception is thrown mid-flow', async () => {
     githubApiMock.mockRejectedValue(new Error('network down'))
     const result = await createCopilotIssue(sampleProject, mockIssue(), resolution, null)
     expect(result).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('PR creation error'))
+    expect(warnSpy).toHaveBeenCalledWith(stderrContaining('PR creation error'))
   })
 })

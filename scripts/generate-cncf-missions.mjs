@@ -84,7 +84,7 @@ const COPILOT_REPO_NAME = process.env.COPILOT_REPO_NAME || 'console-kb'
 function loadSourcesConfig() {
   const configPath = join(__dirname, 'knowledge-sources.yaml')
   if (!existsSync(configPath)) {
-    console.warn('Warning: knowledge-sources.yaml not found, using defaults')
+    log.warn('Warning: knowledge-sources.yaml not found, using defaults')
     return { sources: { 'github-issues': { enabled: true, minReactions: 10, maxPerProject: 20, searchWindow: '90d' } } }
   }
   // Simple YAML parser for our flat structure (avoids needing js-yaml dependency)
@@ -200,7 +200,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 
   const token = ISSUE_TOKEN
   if (!token) {
-    console.warn('    [SKIP] No ISSUE_TOKEN available for PR creation')
+    log.warn('    [SKIP] No ISSUE_TOKEN available for PR creation')
     return null
   }
 
@@ -216,7 +216,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     // 1. Get master branch SHA (read — goes through the shared retrying client)
     const ref = await githubApi(`${apiBase}/git/ref/heads/master`, { headers: { Authorization: headers.Authorization } })
     if (!ref?.object?.sha) {
-      console.warn('    [ERROR] Could not get master ref')
+      log.warn('    [ERROR] Could not get master ref')
       return null
     }
     const masterSha = ref.object.sha
@@ -231,7 +231,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
       const err = await branchResp.text().catch(() => '')
       // Branch may already exist from a previous run
       if (!err.includes('Reference already exists')) {
-        console.warn(`    [ERROR] Branch creation failed: ${branchResp.status} ${err.slice(0, 200)}`)
+        log.warn(`    [ERROR] Branch creation failed: ${branchResp.status} ${err.slice(0, 200)}`)
         return null
       }
     }
@@ -255,7 +255,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
     }))
     if (!fileResp.ok) {
       const err = await fileResp.text().catch(() => '')
-      console.warn(`    [ERROR] File creation failed: ${fileResp.status} ${err.slice(0, 200)}`)
+      log.warn(`    [ERROR] File creation failed: ${fileResp.status} ${err.slice(0, 200)}`)
       return null
     }
 
@@ -273,7 +273,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
 
     if (!prResp.ok) {
       const err = await prResp.text().catch(() => '')
-      console.warn(`    [ERROR] PR creation failed: ${prResp.status} ${err.slice(0, 200)}`)
+      log.warn(`    [ERROR] PR creation failed: ${prResp.status} ${err.slice(0, 200)}`)
       return null
     }
 
@@ -287,7 +287,7 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
         body: JSON.stringify({ labels: ['cncf-mission-gen', 'ai-fix-requested', 'triage/accepted'] }),
       }))
     } catch (labelErr) {
-      console.warn(`    [WARN] Could not add labels: ${labelErr.message}`)
+      log.warn(`    [WARN] Could not add labels: ${labelErr.message}`)
     }
 
     // 6. Assign Copilot to enhance the pre-filled content
@@ -298,12 +298,12 @@ async function createCopilotIssue(project, issue, resolution, linkedPR) {
       }))
       console.log(`    [PR] Assigned Copilot to enhance #${pr.number}`)
     } catch (assignErr) {
-      console.warn(`    [WARN] Could not assign Copilot: ${assignErr.message}`)
+      log.warn(`    [WARN] Could not assign Copilot: ${assignErr.message}`)
     }
 
     return { prNumber: pr.number, slug, url: pr.html_url }
   } catch (err) {
-    console.warn(`    [ERROR] PR creation error: ${err.message}`)
+    log.warn(`    [ERROR] PR creation error: ${err.message}`)
     return null
   }
 }
@@ -351,7 +351,7 @@ function formatReport(report) {
 async function main() {
   const startedAt = Date.now()
   if (!GITHUB_TOKEN) {
-    console.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
+    log.warn('Warning: GITHUB_TOKEN not set. API rate limits will be very low.')
   }
 
   // Load knowledge sources config and search state
@@ -446,7 +446,7 @@ async function main() {
               console.log(`  [github-issues] Processing issue #${issue.number}: ${issue.title.slice(0, 60)}...`)
               const details = await getIssueDetails(owner, repo, issue.number)
               if (!details) {
-                console.warn(`  Could not fetch details for #${issue.number}, skipping.`)
+                log.warn(`  Could not fetch details for #${issue.number}, skipping.`)
                 continue
               }
 
@@ -493,7 +493,7 @@ async function main() {
               })
               await sleep(1000) // Rate limit: 1 issue per second
             } catch (err) {
-              console.error(`  Error processing issue #${issue.number}: ${err.message}`)
+              log.error(`  Error processing issue #${issue.number}: ${err.message}`)
               projectReport.errors++
               report.errors++
             }
@@ -546,7 +546,7 @@ async function main() {
                 // Schema validation before writing
                 const schemaResult = validateMissionExport(mission)
                 if (!schemaResult.valid) {
-                  console.warn(`  [${source.id}] ⚠️ Schema invalid for ${slug}: ${schemaResult.errors.join(', ')}`)
+                  log.warn(`  [${source.id}] ⚠️ Schema invalid for ${slug}: ${schemaResult.errors.join(', ')}`)
                   report.skipped++
                   newIds.push(canonicalId)
                   continue
@@ -568,7 +568,7 @@ async function main() {
                   sourceIssue: mission.metadata?.sourceUrl || '',
                 })
               } catch (err) {
-                console.error(`  [${source.id}] Error processing ${canonicalId}: ${err.message}`)
+                log.error(`  [${source.id}] Error processing ${canonicalId}: ${err.message}`)
                 projectReport.errors++
                 report.errors++
                 newIds.push(canonicalId) // Don't retry failed items
@@ -577,13 +577,13 @@ async function main() {
 
             updateSourceState(searchState, project.repo, source.id, newIds, result.cursor || null)
           } catch (err) {
-            console.error(`  [${source.id}] Search error for ${project.name}: ${err.message}`)
+            log.error(`  [${source.id}] Search error for ${project.name}: ${err.message}`)
             projectReport.errors++
             report.errors++
           }
         }
       } catch (err) {
-        console.error(`  [${source.id}] Fatal error for ${project.name}: ${err.message}`)
+        log.error(`  [${source.id}] Fatal error for ${project.name}: ${err.message}`)
         projectReport.errors++
         report.errors++
       }
@@ -619,7 +619,7 @@ async function main() {
   // Exit with error if error rate is too high (>30% of total attempted)
   const totalAttempted = report.generated + report.skipped + report.errors
   if (totalAttempted > 0 && report.errors / totalAttempted > 0.3) {
-    console.error(`Error rate ${(report.errors / totalAttempted * 100).toFixed(1)}% exceeds 30% threshold`)
+    log.error(`Error rate ${(report.errors / totalAttempted * 100).toFixed(1)}% exceeds 30% threshold`)
     process.exit(1)
   }
 }
@@ -627,7 +627,7 @@ async function main() {
 // Only run main when executed directly
 if (process.argv[1]?.endsWith('generate-cncf-missions.mjs')) {
   main().catch(err => {
-    console.error('Unhandled error in main:', err.message)
+    log.error(`Unhandled error in main: ${err.message}`)
     process.exit(1)
   })
 }
