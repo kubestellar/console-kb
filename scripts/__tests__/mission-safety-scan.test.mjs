@@ -25,6 +25,14 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
     expect(errors).toContain('Placeholder container image not replaced')
   })
 
+  it('does not flag a real project name containing "registry/" as a placeholder image (solutions/ false positive)', () => {
+    const { errors } = scanFileForSafetyIssues(
+      'solutions/x.json',
+      'See https://github.com/boring-registry/boring-registry for details.'
+    )
+    expect(errors).not.toContain('Placeholder container image not replaced')
+  })
+
   it('flags an install mission with no actual install commands as an error', () => {
     const content = JSON.stringify({
       missionClass: 'install',
@@ -111,6 +119,11 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
   it('flags a nonexistent Kubernetes version as an error', () => {
     const { errors } = scanFileForSafetyIssues('fixes/x.json', 'Requires Kubernetes v1.40')
     expect(errors).toContain('References nonexistent Kubernetes version')
+  })
+
+  it('does not flag an unrelated 3-part semver version like gRPC\'s v1.44.0 (solutions/ false positive)', () => {
+    const { errors } = scanFileForSafetyIssues('solutions/x.json', 'What version of gRPC? v1.44.0')
+    expect(errors).not.toContain('References nonexistent Kubernetes version')
   })
 
   it('warns on :latest tag only when the file path contains "install"', () => {
