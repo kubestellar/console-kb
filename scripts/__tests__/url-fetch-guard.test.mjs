@@ -83,7 +83,7 @@ let fakeLookupOptions = {}
 vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
 vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
 
-const { assertSafeFetchUrl, isSafeFetchUrl, safeFetch } = await import('../lib/url-fetch-guard.mjs')
+const { assertSafeFetchUrl, isSafeFetchUrl, safeFetch, isPrivateOrReservedIp } = await import('../lib/url-fetch-guard.mjs')
 
 describe('isSafeFetchUrl', () => {
   it('allows a normal public https URL', async () => {
@@ -262,5 +262,54 @@ describe('safeFetch', () => {
     const res = await safeFetch('http://public.example.com/index.yaml')
     expect(res.ok).toBe(false)
     expect(res.status).toBe(404)
+  })
+
+  // The checks below live in `validateUrlForConnect` (safeFetch's own
+  // connect-time re-validation, run on the initial URL *and* every redirect
+  // hop) and are distinct from the identical-looking checks in
+  // `assertSafeFetchUrl` exercised above — different function, same source
+  // lines were previously 0%-covered. A regression here would be a real
+  // SSRF bypass in the function callers actually use (checkHelmRepoUrl /
+  // checkVersionFreshness), undetected by the assertSafeFetchUrl tests.
+  it('rejects localhost on the initial safeFetch call, before attempting any connection', async () => {
+    await expect(safeFetch('http://localhost:8080/index.yaml')).rejects.toThrow(/Unsafe URL rejected \(localhost\)/)
+  })
+
+  it('rejects a literal private IP on the initial safeFetch call, before attempting any connection', async () => {
+    await expect(safeFetch('http://10.0.0.5/index.yaml')).rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
+  })
+
+  it('rejects a redirect whose target is localhost (redirect-based SSRF bypass attempt)', async () => {
+    fakeTransportResponder = (href) => {
+      if (href.includes('public.example.com')) {
+        return { status: 302, headers: { location: 'http://localhost:8080/admin' } }
+      }
+      return { status: 200, body: 'should-not-be-reached' }
+    }
+    await expect(safeFetch('http://public.example.com/index.yaml')).rejects.toThrow(/Unsafe URL rejected \(localhost\)/)
+  })
+
+  it('rejects a redirect whose target is a literal private IP (redirect-based SSRF bypass attempt)', async () => {
+    fakeTransportResponder = (href) => {
+      if (href.includes('public.example.com')) {
+        return { status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' } }
+      }
+      return { status: 200, body: 'should-not-be-reached' }
+    }
+    await expect(safeFetch('http://public.example.com/index.yaml'))
+      .rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
+  })
+
+})
+
+describe('isPrivateOrReservedIp', () => {
+  // `isPrivateOrReservedIp` is only ever called by this module's own code
+  // after an `isIP(...)` check has already confirmed the string is a
+  // literal IPv4 or IPv6 address, so the final fallback (any other input)
+  // is unreachable via safeFetch/assertSafeFetchUrl. It is still exported
+  // and part of the function's documented contract ("non-public" is the
+  // safe default for anything it can't classify), so it's tested directly.
+  it('treats a non-IP string as unsafe (fail-safe default)', () => {
+    expect(isPrivateOrReservedIp('not-an-ip')).toBe(true)
   })
 })
