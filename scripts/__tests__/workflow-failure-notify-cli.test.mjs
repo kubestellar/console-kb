@@ -8,11 +8,25 @@
  */
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { resolve, dirname } from 'node:path'
+import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs'
+import { resolve, dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = resolve(__dirname, '..', 'workflow-failure-notify.mjs')
+
+// A `gh` stub that always exits non-zero, so the swallow-on-error test below
+// doesn't depend on real network access (the real `gh run view` call was
+// flaky in CI: https://github.com/kubestellar/console-kb — a 5s vitest
+// timeout racing an actual GitHub API round trip, e.g. run 37711387868).
+function fakeGhDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'fake-gh-'))
+  const ghPath = join(dir, 'gh')
+  writeFileSync(ghPath, '#!/bin/sh\nexit 1\n')
+  chmodSync(ghPath, 0o755)
+  return dir
+}
 
 function runScript(mode, env) {
   return spawnSync(process.execPath, [SCRIPT, mode], {
@@ -73,12 +87,12 @@ describe('workflow-failure-notify.mjs CLI', () => {
   })
 
   it('failed-jobs: swallows a gh failure and prints an empty line', () => {
-    // No GH_TOKEN/auth available in the test sandbox, and an
-    // unreachable-in-CI repo/run-id combination, so `gh run view` is
-    // expected to error here — exercising the swallow-on-error path.
+    // Stub `gh` on PATH to fail immediately, exercising the swallow-on-error
+    // path without depending on real network access or GitHub API latency.
     const result = runScript('failed-jobs', {
       REPOSITORY: 'kubestellar/console-kb',
       RUN_ID: '0',
+      PATH: `${fakeGhDir()}:${process.env.PATH}`,
     })
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('\n')
