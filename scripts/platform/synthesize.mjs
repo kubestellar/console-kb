@@ -9,7 +9,7 @@
  * must not import from the orchestrator that calls it.
  */
 import { slugify } from '../lib/mission-file.mjs'
-import { getLlmToken, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../lib/platform-llm-config.mjs'
+import { getLlmToken, getGithubToken, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../lib/platform-llm-config.mjs'
 import { createLogger } from '../lib/logger.mjs'
 
 const log = createLogger('synthesize')
@@ -111,25 +111,39 @@ export async function synthesizePlatformMission(platform, context) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
 
-  try {
-    const response = await fetch(TRUSTED_LLM_ENDPOINT, {
+  const requestBody = JSON.stringify({
+    model: LLM_MODEL,
+    messages: [
+      { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.2,
+    max_tokens: 6000,
+    response_format: { type: 'json_object' },
+  })
+  const post = (token) =>
+    fetch(TRUSTED_LLM_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${getLlmToken()}`,
+        Authorization: 'Bearer ' + token,
       },
       signal: controller.signal,
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 6000,
-        response_format: { type: 'json_object' },
-      }),
+      body: requestBody,
     })
+  const isJson = (res) => (res.headers.get('content-type') || '').includes('application/json')
+
+  try {
+    let response = await post(getLlmToken())
+
+    // A 200 text/plain "OK" body means the LLM_TOKEN PAT is not accepted by
+    // the Models endpoint (console-kb#3702, #3742). Retry once with the
+    // workflow's GITHUB_TOKEN (models: read) before giving up.
+    const fallbackToken = getGithubToken()
+    if (response.ok && !isJson(response) && fallbackToken && fallbackToken !== getLlmToken()) {
+      log.warn('  LLM response was not JSON with LLM_TOKEN; retrying with GITHUB_TOKEN')
+      response = await post(fallbackToken)
+    }
 
     clearTimeout(timeout)
     if (!response.ok) {
