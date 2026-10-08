@@ -8,6 +8,9 @@ on:
       - 'runbooks/**/*.json'
       - 'runbooks/**/*.yaml'
       - 'runbooks/**/*.yml'
+      - 'solutions/**/*.json'
+      - 'solutions/**/*.yaml'
+      - 'solutions/**/*.yml'
 
 permissions:
   contents: read
@@ -31,16 +34,35 @@ jobs:
           cache-dependency-path: scripts/package-lock.json
       - name: Install dependencies
         run: cd scripts && npm ci
+      - name: Detect changed mission files
+        id: changed
+        run: |
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml' 'solutions/**/*.json' 'solutions/**/*.yaml' 'solutions/**/*.yml' > changed_files.txt 2>/dev/null || find fixes runbooks solutions \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) -newer .git/index > changed_files.txt
+          if [ -s changed_files.txt ] && ! grep -qv '^solutions/' changed_files.txt; then
+            echo "only_solutions=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "only_solutions=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Scan for dangerous commands
+        continue-on-error: ${{ steps.changed.outputs.only_solutions == 'true' }}
         run: |
           set -o pipefail
-          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} -- 'fixes/**/*.json' 'fixes/**/*.yaml' 'fixes/**/*.yml' 'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml' 2>/dev/null || find fixes runbooks \( -name '*.json' -o -name '*.yaml' -o -name '*.yml' \) -newer .git/index)
+          FILES=$(cat changed_files.txt)
           node scripts/mission-safety-scan.mjs "$FILES" | tee mission-safety-scan-output.log
       - name: Write mission safety scan summary
         if: always()
         run: |
-          [ -f mission-safety-scan-output.log ] && \
+          if [ -f mission-safety-scan-output.log ]; then
             node scripts/render-ci-step-summary.mjs \
               --event mission-safety-scan-summary \
               --title 'Mission Safety Scan Summary' \
               < mission-safety-scan-output.log >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ steps.changed.outputs.only_solutions }}" = "true" ]; then
+            {
+              echo
+              echo "### Non-blocking solutions baseline"
+              echo "This run touched only solutions/ files, so current generated-content findings are reported but do not fail the job while solutions coverage is introduced."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
