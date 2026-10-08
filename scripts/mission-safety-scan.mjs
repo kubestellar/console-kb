@@ -110,7 +110,12 @@ export function scanFileForSafetyIssues(filePath, content) {
     errors.push('Dangerous: kubectl delete targeting protected namespace')
   }
 
-  if (/registry\/org\/image:tag|registry\/[a-z]|your-docker-registry\//.test(content)) {
+  // registry/[a-z] intentionally requires an org/image:tag shape (not a bare
+  // "registry/" substring) so it doesn't fire on real-world project names
+  // that happen to contain "registry/", e.g. the boring-registry project
+  // (github.com/boring-registry/boring-registry) — see solutions/ false
+  // positive filed alongside this fix.
+  if (/registry\/org\/image:tag|registry\/[\w.-]+\/[\w.-]+:[\w.-]+|your-docker-registry\//.test(content)) {
     errors.push('Placeholder container image not replaced')
   }
 
@@ -155,7 +160,11 @@ export function scanFileForSafetyIssues(filePath, content) {
     errors.push('Uses pip install kubectl/helm — these are not the real tools')
   }
 
-  if (/v1\.(3[4-9]|[4-9][0-9])/.test(content)) {
+  // Kubernetes releases are versioned "vMAJOR.MINOR" (e.g. v1.34), never with
+  // a third "vMAJOR.MINOR.PATCH" component in the MINOR>=34 range this check
+  // targets, so the trailing-patch lookahead excludes unrelated 3-part semver
+  // like gRPC's "v1.44.0" from being misread as a Kubernetes version.
+  if (/\bv1\.(3[4-9]|[4-9][0-9])(?!\.\d)\b/.test(content)) {
     errors.push('References nonexistent Kubernetes version')
   }
 
