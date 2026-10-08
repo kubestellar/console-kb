@@ -1,17 +1,11 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 import * as yaml from 'js-yaml';
 import { validateMissionExport } from './scanner.mjs';
 import { createLogger } from './lib/logger.mjs';
+import { discoverMissionFiles } from './lib/mission-discovery.mjs';
 
 const log = createLogger('validate-schema');
-
-/** Valid mission file extensions */
-const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
-
-/** Files to skip when discovering all missions */
-const SKIP_FILENAMES = new Set(['index.json']);
 
 /**
  * Directories scanned in `--all` mode. `runbooks/` holds the same
@@ -21,26 +15,6 @@ const SKIP_FILENAMES = new Set(['index.json']);
  * (console-kb#3744) and had the identical gap.
  */
 const ALL_MODE_DIRS = ['fixes', 'runbooks', 'solutions'];
-
-/**
- * Recursively discovers all mission files under the given directory.
- * Returns an array of relative file paths.
- */
-function discoverMissionFiles(dir) {
-  const results = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...discoverMissionFiles(fullPath));
-    } else if (entry.isFile()) {
-      const ext = entry.name.substring(entry.name.lastIndexOf('.'));
-      if (MISSION_EXTENSIONS.has(ext) && !SKIP_FILENAMES.has(entry.name)) {
-        results.push(fullPath);
-      }
-    }
-  }
-  return results;
-}
 
 /**
  * Runs schema validation over `files` and returns a result summary.

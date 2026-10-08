@@ -1,49 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, appendFileSync } from 'fs';
 import { scanMissionFile, formatScanResultAsMarkdown } from './scanner.mjs';
 import { createLogger } from './lib/logger.mjs';
+import { discoverMissionFiles } from './lib/mission-discovery.mjs';
 
 const log = createLogger('scan-pr');
-
-/** Valid mission file extensions */
-const MISSION_EXTENSIONS = new Set(['.json', '.yaml', '.yml']);
-
-/** Files to skip when discovering all missions */
-const SKIP_FILENAMES = new Set(['index.json']);
-
-/**
- * Recursively discovers all mission files under the given directory.
- * Returns an array of relative file paths.
- *
- * Silently returns [] when `dir` does not exist. A --all scan enumerates
- * every configured mission root (fixes/, runbooks/, solutions/), and a working tree
- * that only carries one of them (e.g. a partial checkout, a fresh clone
- * of the scripts/ subpackage, or a temp-dir test that populates only
- * fixes/) must not crash the whole scan on ENOENT of the other root.
- */
-function discoverMissionFiles(dir) {
-  const results = [];
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return results;
-    throw err;
-  }
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...discoverMissionFiles(fullPath));
-    } else if (entry.isFile()) {
-      const ext = entry.name.substring(entry.name.lastIndexOf('.'));
-      if (MISSION_EXTENSIONS.has(ext) && !SKIP_FILENAMES.has(entry.name)) {
-        results.push(fullPath);
-      }
-    }
-  }
-  return results;
-}
 
 /**
  * Scans `files` and returns a result summary plus the rendered markdown
