@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { slugify } from './text-utils.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_FIXES_DIR = join(__dirname, '..', '..', 'fixes', 'cncf-install')
@@ -15,9 +16,7 @@ const defaultFs = { existsSync, mkdirSync, writeFileSync }
 
 const KB_REPO = 'kubestellar/console-kb'
 
-export function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
+export { slugify }
 
 export function titleCase(str) {
   return str.replace(/(?:^|[-_])(\w)/g, (_, c) => ' ' + c.toUpperCase()).trim()
