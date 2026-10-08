@@ -183,7 +183,7 @@ describe('scan-pr runCli', () => {
     }
 
     expect(code).toBe(0);
-    expect(discoverArgs).toEqual(['fixes', 'runbooks']);
+    expect(discoverArgs).toEqual(['fixes', 'runbooks', 'solutions']);
     expect(out.lines.some(l => l.includes('Discovered 0 mission files to scan.'))).toBe(true);
     expect(out.lines).toContain('No mission files to scan.');
     // No scan-results write on the empty-batch path.

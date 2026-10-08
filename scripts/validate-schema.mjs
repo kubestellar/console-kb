@@ -17,9 +17,10 @@ const SKIP_FILENAMES = new Set(['index.json']);
  * Directories scanned in `--all` mode. `runbooks/` holds the same
  * `kc-mission-v1` schema format as `fixes/` (see runbooks/README.md) but was
  * previously omitted here, leaving its mission files with no scheduled/push
- * schema-validation coverage.
+ * schema-validation coverage. `solutions/` holds the same format too
+ * (console-kb#3744) and had the identical gap.
  */
-const ALL_MODE_DIRS = ['fixes', 'runbooks'];
+const ALL_MODE_DIRS = ['fixes', 'runbooks', 'solutions'];
 
 /**
  * Recursively discovers all mission files under the given directory.
