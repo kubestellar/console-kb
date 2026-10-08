@@ -2,7 +2,7 @@
 // for helmRepoUrl, an LLM-synthesized value seeded from untrusted public
 // content (GitHub Discussions / Reddit / Stack Overflow) and previously
 // fetched with no host validation by checkHelmRepoUrl / checkVersionFreshness.
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
 vi.mock('node:dns/promises', () => ({
@@ -43,11 +43,17 @@ vi.mock('node:dns', () => ({
 // invoke to resolve the host before connecting, so these tests exercise
 // the real `pinnedSafeLookup` logic (via the real `node:dns` mock above)
 // rather than re-implementing it.
-function makeFakeTransport(responder) {
+// Node's own http/https client calls the `lookup` option as
+// `lookup(hostname, options, callback)` with plain family/hints options —
+// it does NOT pass `{ all: true }` (that flag is opt-in, for callers who
+// want every resolved address instead of one). `lookupOptions` lets a test
+// simulate that real default shape instead of always exercising the
+// `{ all: true }` branch of `pinnedSafeLookup`.
+function makeFakeTransport(responder, lookupOptions = { all: true }) {
   return (urlObj, options, callback) => {
     const req = new EventEmitter()
     req.end = () => {
-      options.lookup(urlObj.hostname, { all: true }, (err) => {
+      options.lookup(urlObj.hostname, lookupOptions, (err) => {
         if (err) return req.emit('error', err)
         let result
         try {
@@ -71,8 +77,11 @@ function makeFakeTransport(responder) {
 }
 
 let fakeTransportResponder = () => ({ status: 200, body: 'ok' })
-vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h))(...args) }))
-vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h))(...args) }))
+// Defaults to the real Node shape (no `all`); tests that specifically want
+// to exercise the `{ all: true }` branch set this before calling safeFetch.
+let fakeLookupOptions = {}
+vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
+vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
 
 const { assertSafeFetchUrl, isSafeFetchUrl, safeFetch } = await import('../lib/url-fetch-guard.mjs')
 
@@ -171,6 +180,10 @@ describe('assertSafeFetchUrl', () => {
 })
 
 describe('safeFetch', () => {
+  afterEach(() => {
+    fakeLookupOptions = {}
+  })
+
   it('fetches a public hostname successfully', async () => {
     fakeTransportResponder = () => ({ status: 200, body: 'apiVersion: v1' })
     const res = await safeFetch('http://public.example.com/index.yaml')
@@ -188,11 +201,35 @@ describe('safeFetch', () => {
     await expect(safeFetch('http://rebind.example/index.yaml')).rejects.toThrow(/reserved\/private IPs/)
   })
 
+  it('resolves via the single-address lookup callback shape Node actually uses by default (no `all`)', async () => {
+    // Node's http/https client invokes the `lookup` option without `all`,
+    // so `pinnedSafeLookup` answers with `callback(null, address, family)`
+    // (a single address), not `callback(null, [addresses])`. Every other
+    // test in this file passed `{ all: true }` explicitly (see the
+    // dedicated test below), leaving this — the actual default, always-hit
+    // — branch unexercised.
+    fakeLookupOptions = {}
+    fakeTransportResponder = () => ({ status: 200, body: 'single-address-ok' })
+    const res = await safeFetch('http://public.example.com/index.yaml')
+    expect(res.ok).toBe(true)
+    expect(await res.text()).toBe('single-address-ok')
+  })
+
+  it('rejects via the single-address lookup callback shape when the only resolved address is private', async () => {
+    fakeLookupOptions = {}
+    await expect(safeFetch('http://rebind.example/index.yaml')).rejects.toThrow(/reserved\/private IPs/)
+  })
+
   it('rejects a non-http(s) scheme before attempting any connection', async () => {
     await expect(safeFetch('file:///etc/passwd')).rejects.toThrow(/Unsafe URL rejected/)
   })
 
-  it('connects when at least one resolved address is public, ignoring private ones in the same answer', async () => {
+  it('connects when at least one resolved address is public, ignoring private ones in the same answer (all:true lookup shape)', async () => {
+    // Explicitly exercises the `{ all: true }` branch of `pinnedSafeLookup`
+    // — the shape used by a caller requesting every candidate address —
+    // which the other safeFetch tests no longer hit now that they default
+    // to Node's real (non-`all`) single-address lookup shape.
+    fakeLookupOptions = { all: true }
     fakeTransportResponder = () => ({ status: 200, body: 'ok' })
     const res = await safeFetch('http://mixed.example/index.yaml')
     expect(res.ok).toBe(true)
