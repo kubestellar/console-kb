@@ -228,11 +228,14 @@ now resolved: PR
 
 The section 2 "second known exception" above (`mission-safety-scan.yml`'s
 scan-step file selection omitting `runbooks/**` despite the workflow's own
-trigger watching it) also requires editing that workflow — adding the
-`runbooks/**/*.json`/`*.yaml`/`*.yml` globs already present in
-`on.pull_request.paths` to the `git diff`/`find` pathspecs in the "Scan for
-dangerous commands" step. Also filed separately as a `[operations]` issue
-for the same `workflows`-permission reason.
+trigger watching it) is now resolved: PR
+[#3444](https://github.com/kubestellar/console-kb/pull/3444) (merged
+2026-09-17) rewired the "Scan for dangerous commands" step to call
+`scripts/mission-safety-scan.mjs`, whose `git diff` pathspec already covers
+both `fixes/**` and `runbooks/**`. Verified on current `master`:
+`.github/workflows/mission-safety-scan.yml`'s file-selection command
+includes `'runbooks/**/*.json' 'runbooks/**/*.yaml' 'runbooks/**/*.yml'`
+alongside the `fixes/**` globs.
 
 The section 2 "third known exception" above (`validate-schema.yml` never
 validating `runbooks/**`) is now fully resolved:
