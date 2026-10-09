@@ -5,6 +5,7 @@
  */
 
 import { deepStringValues } from './scan-utils.mjs';
+import { SHELL_INTERPRETERS, CURL_PIPE_TO_SHELL, WGET_PIPE_TO_SHELL } from '../lib/shell-interpreters.mjs';
 
 const MALICIOUS_PATTERNS = [
   // XSS
@@ -37,8 +38,10 @@ const MALICIOUS_PATTERNS = [
   // mission could redirect a downloaded script into — a `curl … | zsh` (or
   // `| python`, `| perl`, `| pwsh`) attack landed in the KB just as easily
   // as `| bash` before this list was broadened (kubestellar/console-kb#3493).
-  { name: 'Suspicious curl pipe', pattern: /curl\s[^|\n]*\|\s*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|perl|ruby|node|php|deno|bun)\b/gi },
-  { name: 'Suspicious wget pipe', pattern: /wget\s[^|\n]*\|\s*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|perl|ruby|node|php|deno|bun)\b/gi },
+  // Built from the shared SHELL_INTERPRETERS list (console-kb#3758) so this
+  // check and mission-safety-scan.mjs's PR-facing gate can't drift apart again.
+  { name: 'Suspicious curl pipe', pattern: CURL_PIPE_TO_SHELL },
+  { name: 'Suspicious wget pipe', pattern: WGET_PIPE_TO_SHELL },
   // env / xargs / find shell-interpreter escapes
   // `env bash -c '...'` bypasses binary allowlists even when shell:false is set.
   // env(1) accepts three token shapes before the command:
