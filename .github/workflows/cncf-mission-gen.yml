@@ -199,7 +199,7 @@ jobs:
     permissions:
       contents: write  # needed to commit search-state.json to master
     needs: [plan, generate]
-    if: needs.plan.outputs.dry_run != 'true'
+    if: always() && needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -223,6 +223,13 @@ jobs:
               echo "" >> generation-report.md
             fi
           done
+
+          REPORT_COUNT=$(ls generation-report-*.md 2>/dev/null | wc -l | tr -d ' ')
+          MISSING_BATCHES=$(( ${{ needs.plan.outputs.batch_count }} - REPORT_COUNT ))
+          if [ "$MISSING_BATCHES" -gt 0 ]; then
+            echo "::warning::$MISSING_BATCHES of ${{ needs.plan.outputs.batch_count }} generate batches produced no report (likely failed) - their missions are absent from this run"
+            echo "⚠️ $MISSING_BATCHES of ${{ needs.plan.outputs.batch_count }} generate batches produced no report (batch failed; its missions were dropped from this run)" >> $GITHUB_STEP_SUMMARY
+          fi
       - name: Merge search state files
         run: node scripts/merge-search-state.mjs
       - name: Commit search state
