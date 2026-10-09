@@ -164,7 +164,7 @@ jobs:
       contents: read
       pull-requests: read
     needs: [plan, generate]
-    if: needs.plan.outputs.dry_run != 'true'
+    if: always() && needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.report.outputs.published }}
@@ -219,6 +219,13 @@ jobs:
           echo "drafts=$DRAFTS" >> $GITHUB_OUTPUT
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
           echo "Found $PUBLISHED published, $DRAFTS draft missions"
+
+          REPORT_COUNT=$(ls install-report-*.md 2>/dev/null | wc -l | tr -d ' ')
+          MISSING_BATCHES=$(( ${{ needs.plan.outputs.batch_count }} - REPORT_COUNT ))
+          if [ "$MISSING_BATCHES" -gt 0 ]; then
+            echo "::warning::$MISSING_BATCHES of ${{ needs.plan.outputs.batch_count }} generate batches produced no report (likely failed) - their missions are absent from this run"
+            echo "⚠️ $MISSING_BATCHES of ${{ needs.plan.outputs.batch_count }} generate batches produced no report (batch failed; its missions were dropped from this run)" >> $GITHUB_STEP_SUMMARY
+          fi
 
           # Batch-level quality gate (Gate 7)
           # Read quality scores directly from mission JSON metadata
