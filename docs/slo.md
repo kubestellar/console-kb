@@ -117,13 +117,18 @@ No exporter or external data flow is added by this document — recommendations 
 - **SLI**: elapsed time from a bad `fixes/index.json` commit landing on `master` to
   the first confirmed detection (manual validation per the incident-response runbook,
   or a future automated check).
-- **SLO target**: detect within 24 hours. There is currently no automated alert on
-  `Build Mission Index` job failure or on a passing-but-corrupt publish — detection
-  today relies on a maintainer noticing a broken Console KB page or a failed
-  scheduled workflow run. Tracked as a follow-up (see below); this document does not
-  add the alert itself. Until that alert exists, use
+- **SLO target**: detect within 24 hours. **Formerly a gap, now fixed**: PR
+  [#3762](https://github.com/kubestellar/console-kb/pull/3762) added
+  `Build Mission Index` to `scheduled-workflow-failure-issue.yml`'s failure
+  alert (special-cased to fire on any `conclusion == 'failure'` for this
+  workflow, not just `event == 'schedule'`, since `build-index.yml` itself
+  runs `on: push`/`workflow_dispatch`) — a job failure now files a tracked
+  `kind/bug` issue instead of relying on a maintainer noticing a broken
+  Console KB page. A passing-but-corrupt publish (bad content that doesn't
+  fail the job) is still undetected by this alert; until a content-level
+  check exists, use
   [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md)
-  to manually check for a silent job failure.
+  to manually check for that case.
 
 ### 4. Time-to-rollback
 
@@ -163,31 +168,33 @@ fix in [#3721](https://github.com/kubestellar/console-kb/pull/3721),
 extended to the mission-generation workflows in
 [#3728](https://github.com/kubestellar/console-kb/pull/3728), and to
 `scan-missions.yml`/`validate-schema.yml`/`fuzz.yml` in
-[#3754](https://github.com/kubestellar/console-kb/pull/3754)) now files a
+[#3754](https://github.com/kubestellar/console-kb/pull/3754), and to
+`build-index.yml` in
+[#3762](https://github.com/kubestellar/console-kb/pull/3762)) now files a
 `kind/bug` + `lifecycle/frozen` issue whenever a `workflow_run` with
 `event == 'schedule'` completes with `conclusion == 'failure'` for
 `codeql.yml`, `scorecard.yml`, `stale.yml`, `cncf-mission-gen.yml`,
 `cncf-install-gen.yml`, `platform-install-gen.yml`, `scan-missions.yml`,
-`validate-schema.yml`, and `fuzz.yml`. `platform-install-gen.yml`, which
-writes directly to `fixes/platform-install/**` and `fixes/index.json` at
-the highest cadence of any workflow in this repo, is included.
+`validate-schema.yml`, and `fuzz.yml` — plus, as a special case keyed on
+workflow name rather than `event == 'schedule'`, any failure (regardless of
+triggering event) of `build-index.yml` ("Build Mission Index"), since that
+workflow runs `on: push`/`workflow_dispatch` rather than a schedule.
+`platform-install-gen.yml`, which writes directly to
+`fixes/platform-install/**` and `fixes/index.json` at the highest cadence
+of any workflow in this repo, is included.
 
-Two workflows remain genuinely uncovered, because the alert fires only on
-`event == 'schedule'` and neither triggers on a schedule:
+One workflow remains genuinely uncovered: `mission-safety-scan.yml`, which
+runs `on: pull_request` only — neither a schedule nor a push to `master`,
+so neither the `event == 'schedule'` branch nor the `build-index.yml`-style
+name-based special case applies to it.
 
-- `build-index.yml` runs `on: push` (to `master`, on `fixes/**`/`runbooks/**`
-  changes) plus `workflow_dispatch` — this is the SLI in section 3 above,
-  and it is the single highest-priority gap by this document's own SLO
-  framing (index integrity, section 1), since a bad or silently-failed
-  publish there is read on every Console KB page load.
-- `mission-safety-scan.yml` runs `on: pull_request` only.
-
-Adding schedule-style alerting for either requires a different trigger
-shape (e.g. a `workflow_run` listener keyed on `event == 'push'`, or an
-`if: failure()` step inside the workflow itself) and, either way, editing
-`.github/workflows/*.yml`, which needs `workflows` permission this
-contribution's credentials do not have; filed separately as an
-`[operations]` issue instead of included in this docs-only change.
+Adding equivalent alerting for it requires a different trigger shape (e.g.
+an `if: failure()` step inside the workflow itself, since a failed
+required PR check does not produce a `workflow_run` completion the same
+way) and, either way, editing `.github/workflows/*.yml`, which needs
+`workflows` permission this contribution's credentials do not have; filed
+separately as an `[operations]` issue instead of included in this
+docs-only change.
 
 `stale.yml` (daily, `0 0 * * *`) is now covered by the same alert and is
 worth calling out separately because it has a real-world precedent: it
@@ -300,6 +307,6 @@ flag and added coverage measurement, closing
 - [`runbooks/incident-response-index-publish-failure.md`](../runbooks/incident-response-index-publish-failure.md)
 - [`runbooks/incident-response-search-state-corruption.md`](../runbooks/incident-response-search-state-corruption.md) — covers the `CNCF Mission Generation` workflow's separate direct-to-`master` push of `search-state.json`, which (unlike `fixes/index.json`) has no content-validation gate at all
 - [`runbooks/incident-response-unsafe-mission-merge.md`](../runbooks/incident-response-unsafe-mission-merge.md) — covers the `CNCF Mission Generation` workflow's `--admin` auto-merge bypassing `Mission Safety Scan` and `Validate Mission Schema`, and separately, `Mission Safety Scan`'s own false-green on `runbooks/**`-only PRs
-- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the nine scheduled/publish/security-scan workflows above, pending the automated alert tracked as a follow-up; also now covers event-triggered reusable-workflow callers, since the same silent-failure risk applies there too (worked example: `pr-verifier.yml`'s #3336 incident, fixed by #3441)
+- [`runbooks/incident-response-scheduled-workflow-failure.md`](../runbooks/incident-response-scheduled-workflow-failure.md) — manual detection for a silent job failure (or missing run) in any of the ten scheduled/publish/security-scan workflows now covered by `scheduled-workflow-failure-issue.yml` (see "Follow-up not covered by this document" above), kept for the one remaining uncovered workflow (`mission-safety-scan.yml`) and for a passing-but-corrupt publish that the alert's job-failure check cannot see; also now covers event-triggered reusable-workflow callers, since the same silent-failure risk applies there too (worked example: `pr-verifier.yml`'s #3336 incident, fixed by #3441)
 - [`runbooks/POSTMORTEM_TEMPLATE.md`](../runbooks/POSTMORTEM_TEMPLATE.md)
 - [`docs/BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md)
