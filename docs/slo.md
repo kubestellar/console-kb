@@ -156,33 +156,45 @@ No exporter or external data flow is added by this document — recommendations 
 
 ## Follow-up not covered by this document
 
-None of the scheduled workflows that publish or validate content on a cadence
-(`build-index.yml` on every qualifying push, `validate-schema.yml` weekly,
-`mission-safety-scan.yml` per-PR, `cncf-mission-gen.yml` daily, `cncf-install-gen.yml`
-weekly, `scan-missions.yml` weekly, `platform-install-gen.yml` 4x daily, `fuzz.yml`
-daily) alert anyone when the *job itself* fails — a red run there means the SLI in
-section 3 above cannot be measured at all beyond a maintainer noticing the Actions
-tab. `platform-install-gen.yml` writes directly to `fixes/platform-install/**` and
-`fixes/index.json` at the highest cadence of any workflow in this repo, so a silent
-failure there has the widest exposure window per day. Adding that alert requires
-editing `.github/workflows/*.yml`, which needs `workflows` permission this
-contribution's credentials do not have; filed separately as `[operations]` issues
-instead of included in this docs-only change.
+**Formerly a gap, now mostly fixed**: `.github/workflows/scheduled-workflow-failure-issue.yml`
+("Open Issue on Scheduled Workflow Failure", added in
+[#3719](https://github.com/kubestellar/console-kb/pull/3719), trigger-name
+fix in [#3721](https://github.com/kubestellar/console-kb/pull/3721),
+extended to the mission-generation workflows in
+[#3728](https://github.com/kubestellar/console-kb/pull/3728), and to
+`scan-missions.yml`/`validate-schema.yml`/`fuzz.yml` in
+[#3754](https://github.com/kubestellar/console-kb/pull/3754)) now files a
+`kind/bug` + `lifecycle/frozen` issue whenever a `workflow_run` with
+`event == 'schedule'` completes with `conclusion == 'failure'` for
+`codeql.yml`, `scorecard.yml`, `stale.yml`, `cncf-mission-gen.yml`,
+`cncf-install-gen.yml`, `platform-install-gen.yml`, `scan-missions.yml`,
+`validate-schema.yml`, and `fuzz.yml`. `platform-install-gen.yml`, which
+writes directly to `fixes/platform-install/**` and `fixes/index.json` at
+the highest cadence of any workflow in this repo, is included.
 
-The same gap also applies to this repo's two recurring security scans,
-`codeql.yml` (nightly, `30 5 * * *`) and `scorecard.yml` (weekly,
-`0 6 * * 1`): neither has an `if: failure()` step, issue/comment creation, or
-webhook, so a silently-broken CodeQL or Scorecard run has no automated
-time-to-detect signal either. Tracked as a follow-up alongside the workflows
-above (see below); this document does not add the alert itself.
+Two workflows remain genuinely uncovered, because the alert fires only on
+`event == 'schedule'` and neither triggers on a schedule:
 
-The same gap also applies to `stale.yml` (daily, `0 0 * * *`), which
-additionally has a real-world precedent: it previously failed silently with
-`startup_failure` due to an invalid `secrets:` token passed to
-`reusable-stale.yml` (#3057/#3071). A repeat of that failure mode today would
-again be visible only via the Actions tab. Tracked as a follow-up alongside
-the workflows above (see below); this document does not add the alert
-itself.
+- `build-index.yml` runs `on: push` (to `master`, on `fixes/**`/`runbooks/**`
+  changes) plus `workflow_dispatch` — this is the SLI in section 3 above,
+  and it is the single highest-priority gap by this document's own SLO
+  framing (index integrity, section 1), since a bad or silently-failed
+  publish there is read on every Console KB page load.
+- `mission-safety-scan.yml` runs `on: pull_request` only.
+
+Adding schedule-style alerting for either requires a different trigger
+shape (e.g. a `workflow_run` listener keyed on `event == 'push'`, or an
+`if: failure()` step inside the workflow itself) and, either way, editing
+`.github/workflows/*.yml`, which needs `workflows` permission this
+contribution's credentials do not have; filed separately as an
+`[operations]` issue instead of included in this docs-only change.
+
+`stale.yml` (daily, `0 0 * * *`) is now covered by the same alert and is
+worth calling out separately because it has a real-world precedent: it
+previously failed silently with `startup_failure` due to an invalid
+`secrets:` token passed to `reusable-stale.yml` (#3057/#3071), visible only
+via the Actions tab at the time. A repeat of that failure mode today would
+now generate a tracked `kind/bug` issue instead.
 
 This silent-failure gap is not limited to cron-triggered workflows: `PR
 Verifier` (`.github/workflows/pr-verifier.yml`, triggered on
