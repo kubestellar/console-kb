@@ -1,0 +1,136 @@
+{
+  "version": "kc-mission-v1",
+  "name": "runbook-verify-cnpg-backup",
+  "missionClass": "runbook",
+  "author": "Daniel Gaskins",
+  "authorGithub": "danielgaskins",
+  "mission": {
+    "title": "Verify a CloudNativePG backup with a disposable restore",
+    "description": "Check that a completed Barman Cloud plugin backup can restore and satisfy application-data assertions. This runbook installs an attested, digest-pinned, suspended cnpg-drill Helm chart, runs one disposable restore Job, and validates its JSON result and cleanup. It uses a separately configured read-only recovery ObjectStore in the source namespace. Backup data stays in the cluster and its existing object store; no hosted account or telemetry upload is required. Tested with Kubernetes 1.35.8, CloudNativePG 1.30.1, Barman Cloud plugin 0.15.0 and RustFS 1.0.0; other archives need their own first-run validation.",
+    "type": "restore",
+    "status": "completed",
+    "estimatedMinutes": 45,
+    "steps": [
+      {
+        "id": "step-01-preflight",
+        "title": "Confirm the source, recovery store, and data assertions",
+        "description": "Use the same exported KUBECONFIG for Helm and kubectl. Choose the Kubernetes context and namespace explicitly. Export DRILL_CONTEXT, DRILL_NAMESPACE, DRILL_CLUSTER, DRILL_RECOVERY_STORE, DRILL_RELEASE, DRILL_JOB, and DRILL_VALUES before running the commands. DRILL_RELEASE must be a short, dedicated release name (at most 40 characters). DRILL_JOB must be a new job name for each new drill; retrying the same mission with unchanged inputs reuses that job. Use a new job name whenever the source, values, or target changes. DRILL_VALUES is a trusted Helm values file with at least one application-data assertion in checks, including the database, query, and expected value or freshness limit. SELECT 1 alone only verifies connectivity. The recovery ObjectStore must be separate from the writer store, point to the same archive, and use credentials already verified to allow reads and deny uploads/deletes. Do not display Secret values or query results. Only supply trusted SQL. Confirm capacity for an additional database copy and authorization to create the temporary resources. Export DRILL_ARTIFACT_DIR as a dedicated local download directory. Run each command block as a script or in a subshell so a failed guard does not close your interactive shell. Use a current authenticated GitHub CLI supporting attestation verify, --source-digest, --signer-workflow and --deny-self-hosted-runners. Review the chart source and permissions before granting access; namespace-wide Cluster creation remains allowed. A recovered-primary source also requires rbac.sourcePrimaryPodName in DRILL_VALUES to match its reviewed current primary Pod.",
+        "commands": [
+          "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get clusters.postgresql.cnpg.io \"$DRILL_CLUSTER\"",
+          "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get objectstores.barmancloud.cnpg.io \"$DRILL_RECOVERY_STORE\""
+        ],
+        "validation": "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get clusters.postgresql.cnpg.io \"$DRILL_CLUSTER\" -o json | jq -e '[.spec.plugins[]? | select(.name == \"barman-cloud.cloudnative-pg.io\" and .enabled != false)] | length == 1 and all(.[]; .parameters.barmanObjectName != env.DRILL_RECOVERY_STORE)'",
+        "failureHandling": "Stop if the source uses in-tree backups, snapshots, tablespaces, or an unsupported replica/recovery configuration. Use the source operator recovery procedure instead. If recovery credentials have not been tested for denied writes and deletes, provision a restricted identity and verify those permissions with the storage administrator before proceeding. Confirm that every intended application assertion is in DRILL_VALUES."
+      },
+      {
+        "id": "step-02-preview",
+        "title": "Preview the suspended restore job",
+        "description": "Verify chart 0.1.8 and its CLI 0.1.5 image against their exact source commits and GitHub workflows, then render the downloaded archive and run server dry-run. Helm preview and installation use that local archive and force the verified image digest. Review the source, recovery store, assertions, fixed drill name and RBAC. Deletion and exec are limited to named resources, but Cluster creation remains namespace-wide and can reach namespace-local credentials through CNPG; these permissions do not isolate the tool from production data. Source exec requires an explicitly named Pod. Recovery log access is off by default. Set maxBackupAgeSeconds to the actual recovery requirement in DRILL_VALUES.",
+        "commands": [
+          "set -euo pipefail\n: \"${DRILL_ARTIFACT_DIR:?Set a dedicated chart download directory}\"\ngh attestation verify \"oci://ghcr.io/danielgaskins/charts/cnpg-drill@sha256:2557d1371806360d0843b5982683998d2670b69d71b2cf5f60b8e00539761737\" --repo danielgaskins/cnpg-drill --signer-workflow danielgaskins/cnpg-drill/.github/workflows/chart.yml --source-digest 86bad48b4d7c6d5aa6d47b4db751c8d85274da27 --deny-self-hosted-runners\ngh attestation verify \"oci://ghcr.io/danielgaskins/cnpg-drill@sha256:139c1e5cd6a1188838aab7396945381b9d015bde56bff0ff360613aa210d286c\" --repo danielgaskins/cnpg-drill --signer-workflow danielgaskins/cnpg-drill/.github/workflows/container.yml --source-digest 091ee1d9c379b737ee8c1279f40365a74fcd24cb --deny-self-hosted-runners\nmkdir -p \"$DRILL_ARTIFACT_DIR\"\nfetchdir=$(mktemp -d \"$DRILL_ARTIFACT_DIR/fetch.XXXXXX\")\nhelm pull \"oci://ghcr.io/danielgaskins/charts/cnpg-drill@sha256:2557d1371806360d0843b5982683998d2670b69d71b2cf5f60b8e00539761737\" --destination \"$fetchdir\"\nshopt -s nullglob\narchives=(\"$fetchdir\"/cnpg-drill*.tgz)\n[[ ${#archives[@]} -eq 1 ]]\ngh attestation verify \"${archives[0]}\" --repo danielgaskins/cnpg-drill --signer-workflow danielgaskins/cnpg-drill/.github/workflows/chart.yml --source-digest 86bad48b4d7c6d5aa6d47b4db751c8d85274da27 --deny-self-hosted-runners\nmv -- \"${archives[0]}\" \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\"\nrmdir -- \"$fetchdir\"\nhelm template \"$DRILL_RELEASE\" \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\" --namespace \"$DRILL_NAMESPACE\" --values \"$DRILL_VALUES\" --set-string cluster=\"$DRILL_CLUSTER\" --set-string recoveryObjectStore=\"$DRILL_RECOVERY_STORE\" --set-string image.repository=ghcr.io/danielgaskins/cnpg-drill --set-string image.digest=sha256:139c1e5cd6a1188838aab7396945381b9d015bde56bff0ff360613aa210d286c --set suspended=true --set retainOnFailure=false --set timeoutSeconds=1800"
+        ],
+        "validation": "set -euo pipefail\ngh attestation verify \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\" --repo danielgaskins/cnpg-drill --signer-workflow danielgaskins/cnpg-drill/.github/workflows/chart.yml --source-digest 86bad48b4d7c6d5aa6d47b4db751c8d85274da27 --deny-self-hosted-runners\nhelm template \"$DRILL_RELEASE\" \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\" --namespace \"$DRILL_NAMESPACE\" --values \"$DRILL_VALUES\" --set-string cluster=\"$DRILL_CLUSTER\" --set-string recoveryObjectStore=\"$DRILL_RECOVERY_STORE\" --set-string image.repository=ghcr.io/danielgaskins/cnpg-drill --set-string image.digest=sha256:139c1e5cd6a1188838aab7396945381b9d015bde56bff0ff360613aa210d286c --set suspended=true --set retainOnFailure=false --set timeoutSeconds=1800 | kubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" apply --dry-run=server -f -",
+        "failureHandling": "Stop on a missing or mismatched attestation, unexpected source commit, or failed registry access. Do not fall back to a mutable tag or skip verification. Failed downloads can leave small fetch directories for inspection. Correct values or namespace/API permissions before retrying. Reject plans with missing data assertions, an unverified recovery identity, insufficient storage, or permissions your policy does not allow."
+      },
+      {
+        "id": "step-03-install",
+        "title": "Install the pinned chart with scheduling suspended",
+        "description": "Install or update the dedicated Helm release after reviewing the preview. Scheduling stays suspended, so installation alone does not start a restore. Leave it suspended while running and reviewing the one-off drill.",
+        "commands": [
+          "set -euo pipefail\ngh attestation verify \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\" --repo danielgaskins/cnpg-drill --signer-workflow danielgaskins/cnpg-drill/.github/workflows/chart.yml --source-digest 86bad48b4d7c6d5aa6d47b4db751c8d85274da27 --deny-self-hosted-runners\nhelm upgrade --install \"$DRILL_RELEASE\" \"$DRILL_ARTIFACT_DIR/cnpg-drill-0.1.8.tgz\" --namespace \"$DRILL_NAMESPACE\" --values \"$DRILL_VALUES\" --set-string cluster=\"$DRILL_CLUSTER\" --set-string recoveryObjectStore=\"$DRILL_RECOVERY_STORE\" --set-string image.repository=ghcr.io/danielgaskins/cnpg-drill --set-string image.digest=sha256:139c1e5cd6a1188838aab7396945381b9d015bde56bff0ff360613aa210d286c --set suspended=true --set retainOnFailure=false --set timeoutSeconds=1800 --kube-context \"$DRILL_CONTEXT\" --wait --timeout 5m"
+        ],
+        "validation": "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get cronjob \"${DRILL_RELEASE}-cnpg-drill\" -o json | jq -e '.spec.suspend == true and .spec.concurrencyPolicy == \"Forbid\"'\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get configmap \"${DRILL_RELEASE}-cnpg-drill\" -o json | jq -e '.data[\"drill.json\"] | fromjson | .recoveryObjectStore == env.DRILL_RECOVERY_STORE and .retainOnFailure == false and (.checks | length > 0) and all(.checks[]; has(\"expected\") or has(\"maxAgeSeconds\"))'",
+        "failureHandling": "If installation fails, inspect the Helm status in the selected namespace and fix the values or permissions. Do not reuse a release belonging to another application. Do not unsuspend the CronJob until a successful one-off result and cleanup have been reviewed."
+      },
+      {
+        "id": "step-04-run",
+        "title": "Run one disposable backup restore",
+        "description": "Create one Job from the suspended CronJob. Use the same DRILL_JOB when retrying an interrupted mission so it does not start a second restore. Use a new job name to request a new drill. The job selects an eligible backup, creates a separate Cluster without spec.plugins, waits for recovery, runs the configured assertions in read-only transactions, and deletes the temporary Cluster and PVCs. retainOnFailure is disabled. Abrupt termination can still leave resources that need inspection. Changed values can cause an immutable Job-spec error on a retry; inspect the existing Job, then choose a new DRILL_JOB after reviewing any remaining drill resources.",
+        "commands": [
+          "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" create job \"$DRILL_JOB\" --from=\"cronjob/${DRILL_RELEASE}-cnpg-drill\" --dry-run=client -o yaml | kubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" apply -f -"
+        ],
+        "validation": "set -euo pipefail\nSECONDS=0\nwhile (( SECONDS < 2400 )); do\n  job=$(kubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get job \"$DRILL_JOB\" -o json)\n  if jq -e 'any(.status.conditions[]?; .type == \"Failed\" and .status == \"True\")' <<< \"$job\" >/dev/null; then\n    echo \"Restore Job failed; inspect its report before retrying.\" >&2\n    exit 1\n  fi\n  if jq -e 'any(.status.conditions[]?; .type == \"Complete\" and .status == \"True\")' <<< \"$job\" >/dev/null; then\n    exit 0\n  fi\n  sleep 5\ndone\necho \"Restore Job did not finish within 40 minutes; inspect its report and resources.\" >&2\nexit 1",
+        "failureHandling": "If the Job fails or times out, read its report with kubectl logs in the selected context and namespace. Treat the drill as failed even if PostgreSQL became ready. Use the report drillCluster to inspect recovery events and Pods; archive_access_denied or wal_unavailable require archive access or WAL investigation. A missing report after termination is an incomplete drill, not a pass. Inspect any cnpg-drill-managed temporary Cluster and its PVCs before retrying; never delete the source."
+      },
+      {
+        "id": "step-05-report",
+        "title": "Validate the data checks and cleanup report",
+        "description": "Require a passed report, at least one passing SQL assertion, and cluster-and-pvcs-deleted cleanup. Save the report with its source UID, backup ID, PITR target, and recovery time in the operator evidence store. Inspect the report drillCluster name and confirm its Cluster, Pods and PVCs are absent in the chosen namespace; inspect backing PVs or cloud disks under the storage reclaim policy. Keep the completed Job until the report has been saved. This proves only the selected archive path and configured assertions on this environment, not full application or regional disaster recovery. The suspended release remains installed for later checks.",
+        "commands": [
+          "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" logs \"job/$DRILL_JOB\" -c drill"
+        ],
+        "validation": "set -euo pipefail\nkubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" logs \"job/$DRILL_JOB\" -c drill | jq -e -s 'length == 1 and (.[0] | .source == (env.DRILL_NAMESPACE + \"/\" + env.DRILL_CLUSTER) and .status == \"passed\" and .cleanup == \"cluster-and-pvcs-deleted\" and (.checks | length > 0) and all(.checks[]; .passed == true))'",
+        "failureHandling": "If an assertion or cleanup fails, preserve the report and investigate before declaring recovery verified. Do not report success from Job completion alone. If volumes remain, inspect their claim references and reclaim policy, then remove only confirmed drill resources. Recheck the source Cluster health. Keep scheduling suspended until cleanup and the intended data checks are confirmed."
+      }
+    ],
+    "resolution": {
+      "summary": "A selected completed backup restored into a disposable Cluster, the configured application assertions passed, and the report confirmed Cluster/PVC cleanup. Backing-volume removal was inspected. The dedicated Helm release remains suspended for a future drill.",
+      "codeSnippets": [
+        "kubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" logs \"job/$DRILL_JOB\" -c drill",
+        "kubectl --context \"$DRILL_CONTEXT\" -n \"$DRILL_NAMESPACE\" get cronjob \"${DRILL_RELEASE}-cnpg-drill\""
+      ]
+    },
+    "references": [
+      {
+        "title": "cnpg-drill first-run guide",
+        "url": "https://github.com/danielgaskins/cnpg-drill/blob/8f4007a12518301c6b6b18f7f34fc0c236c0221f/docs/FIRST-RUN.md"
+      },
+      {
+        "title": "CloudNativePG recovery",
+        "url": "https://cloudnative-pg.io/docs/1.30/recovery/"
+      },
+      {
+        "title": "cnpg-drill release verification",
+        "url": "https://github.com/danielgaskins/cnpg-drill/blob/8f4007a12518301c6b6b18f7f34fc0c236c0221f/docs/VERIFY-RELEASE.md"
+      }
+    ]
+  },
+  "metadata": {
+    "tags": [
+      "cloudnativepg",
+      "postgresql",
+      "backup",
+      "restore",
+      "barman-cloud",
+      "runbook"
+    ],
+    "platform": "kubernetes",
+    "category": "runbook",
+    "cncfProjects": [
+      "cloudnativepg"
+    ],
+    "targetResourceKinds": [
+      "Cluster",
+      "ObjectStore",
+      "CronJob",
+      "Job",
+      "PersistentVolumeClaim"
+    ],
+    "supportedK8sVersions": [
+      "1.35"
+    ],
+    "difficulty": "intermediate",
+    "installMethods": [
+      "helm"
+    ],
+    "operationTypes": [
+      "restore",
+      "backup-verification"
+    ],
+    "sourceUrls": {
+      "docs": "https://github.com/danielgaskins/cnpg-drill/blob/8f4007a12518301c6b6b18f7f34fc0c236c0221f/docs/FIRST-RUN.md"
+    }
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.35",
+    "tools": [
+      "bash",
+      "kubectl",
+      "helm",
+      "jq",
+      "gh"
+    ],
+    "resources": "A healthy CloudNativePG Cluster using the Barman Cloud plugin, an eligible completed backup and its WAL archive, a separate read-only recovery ObjectStore, capacity for another database copy, and namespace-scoped permissions for the chart and temporary restore resources.",
+    "description": "Export KUBECONFIG to the readable kubeconfig used by both Helm and kubectl. Supply the context, namespace, source Cluster, recovery ObjectStore, trusted values path, short dedicated Helm release name, and unique Job name. Review application-data assertions and verify archive credential restrictions before execution. Supply DRILL_ARTIFACT_DIR and current GitHub CLI authentication for signed attestation verification. Run command blocks as scripts or subshells."
+  }
+}
