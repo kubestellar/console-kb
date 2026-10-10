@@ -90,7 +90,7 @@ function extractMetadata(content, filePath) {
 
     return entry;
   } catch (e) {
-    console.warn(`Skipping ${relPath}: ${e.message}`);
+    log.warn('Skipping file', { relPath, error: e.message });
     return null;
   }
 }
@@ -123,7 +123,7 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
   
   if (targetDir === SOLUTIONS_DIR) {
     const runbookFiles = await walkDir(RUNBOOKS_DIR).catch(() => {
-      console.warn('No runbooks/ directory found — skipping.');
+      log.warn('No runbooks/ directory found — skipping');
       return [];
     });
     allFiles = [...allFiles, ...runbookFiles];
