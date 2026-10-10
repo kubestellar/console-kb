@@ -188,13 +188,20 @@ runs `on: pull_request` only — neither a schedule nor a push to `master`,
 so neither the `event == 'schedule'` branch nor the `build-index.yml`-style
 name-based special case applies to it.
 
-Adding equivalent alerting for it requires a different trigger shape (e.g.
-an `if: failure()` step inside the workflow itself, since a failed
-required PR check does not produce a `workflow_run` completion the same
-way) and, either way, editing `.github/workflows/*.yml`, which needs
+Adding equivalent alerting for it requires a different trigger shape: a
+`workflow_run` completion *does* fire for `pull_request`-triggered runs,
+but gating on `conclusion == 'failure'` the way `build-index.yml` is
+special-cased would be wrong here — an ordinary scan rejection of bad
+mission content is an expected, frequent `failure` on this PR-only gate,
+not an incident. The correct signal is GitHub's distinct
+`conclusion == 'startup_failure'` value, which only occurs when the job
+never ran at all (the same failure class documented for `pr-verifier.yml`
+below), never when the scan step itself ran and found a violation. Either
+way, implementing it means editing `.github/workflows/*.yml`, which needs
 `workflows` permission this contribution's credentials do not have; filed
-separately as an `[operations]` issue instead of included in this
-docs-only change.
+as [#3774](https://github.com/kubestellar/console-kb/issues/3774), with
+the exact two-line diff included, instead of included in this docs-only
+change.
 
 `stale.yml` (daily, `0 0 * * *`) is now covered by the same alert and is
 worth calling out separately because it has a real-world precedent: it
