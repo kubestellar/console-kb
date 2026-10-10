@@ -38,7 +38,10 @@ describe('buildIndex() default-arg runbook fallback', () => {
   });
 
   it('warns about the missing runbooks/ directory and still writes fixes/index.json', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // build-index.mjs routes this warning through the shared structured
+    // logger (scripts/lib/logger.mjs), which writes one JSON line per event
+    // to process.stderr rather than calling console.warn.
+    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     // Fresh import so SOLUTIONS_DIR / RUNBOOKS_DIR resolve against workDir.
@@ -47,9 +50,10 @@ describe('buildIndex() default-arg runbook fallback', () => {
 
     const index = await buildIndex(); // no arg → defaults to SOLUTIONS_DIR
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('No runbooks/ directory found'),
-    );
+    expect(warnSpy.mock.calls.some(([line]) =>
+      typeof line === 'string' &&
+      JSON.parse(line).message === 'No runbooks/ directory found — skipping',
+    )).toBe(true);
     expect(index.version).toBe(1);
     expect(index.count).toBe(1);
     expect(index.missions[0].title).toBe('Sample Mission');
