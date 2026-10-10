@@ -24,6 +24,50 @@ const log = createLogger('command-sandbox')
 
 const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 
+/**
+ * Parses `hostname` as an alternate-notation IPv4 literal — decimal
+ * (`2130706433`), hex (`0x7f000001`), octal (`0177.0.0.1`), or shorthand
+ * dotted forms (`127.1`) — the way glibc's `inet_aton` (and therefore
+ * curl's own resolver) parses such strings. Returns the equivalent
+ * dotted-quad string, or `null` if `hostname` is not such a literal (e.g.
+ * a real DNS name).
+ *
+ * `net.isIP()` only recognises the canonical 4-part decimal-dotted form,
+ * so `169.254.169.254` is caught by the literal-IP check below but its
+ * decimal (`2852039166`), hex (`0xa9fea9fe`) and octal/shorthand
+ * equivalents are not — yet curl resolves all of them to the same cloud
+ * metadata address (CWE-918 bypass of the SSRF guard).
+ */
+function parseAltNotationIPv4(hostname) {
+  if (!/^(?:0x[0-9a-f]+|0[0-7]*|[1-9][0-9]*)(?:\.(?:0x[0-9a-f]+|0[0-7]*|[1-9][0-9]*)){0,3}$/i.test(hostname)) {
+    return null
+  }
+  const parts = hostname.split('.')
+  const nums = parts.map(p => {
+    if (/^0x/i.test(p)) return parseInt(p, 16)
+    if (/^0[0-7]+$/.test(p)) return parseInt(p, 8)
+    return parseInt(p, 10)
+  })
+  if (nums.some(n => !Number.isFinite(n) || n < 0)) return null
+
+  let value
+  if (nums.length === 1) {
+    if (nums[0] > 0xffffffff) return null
+    value = nums[0]
+  } else if (nums.length === 2) {
+    if (nums[0] > 0xff || nums[1] > 0xffffff) return null
+    value = (nums[0] << 24) | nums[1]
+  } else if (nums.length === 3) {
+    if (nums[0] > 0xff || nums[1] > 0xff || nums[2] > 0xffff) return null
+    value = (nums[0] << 24) | (nums[1] << 16) | nums[2]
+  } else {
+    if (nums.some(n => n > 0xff)) return null
+    value = (nums[0] << 24) | (nums[1] << 16) | (nums[2] << 8) | nums[3]
+  }
+  value = value >>> 0
+  return [24, 16, 8, 0].map(shift => (value >>> shift) & 0xff).join('.')
+}
+
 const ALLOWED_BASE_COMMANDS = new Set([
   'kubectl', 'helm', 'curl', 'cat', 'echo', 'grep',
   'jq', 'yq', 'kustomize', 'istioctl', 'date', 'ls',
@@ -108,10 +152,12 @@ function validateCommand(cmd) {
     // (http://169.254.169.254/...) instead of a public install artifact.
     // Unlike the upload/config flags above, a bare GET to such a host can
     // still leak metadata credentials via the command's stdout, which is
-    // echoed to CI logs and the mission report. This only catches literal
-    // IP targets (no DNS lookup is done here, so it is not a full defense
-    // against a hostname that resolves to a private address at connect
-    // time); it reuses the same reserved-range table as
+    // echoed to CI logs and the mission report. This catches literal IP
+    // targets in canonical dotted-decimal form and in curl/glibc's
+    // alternate decimal/hex/octal/shorthand notations (see
+    // `parseAltNotationIPv4` above); no DNS lookup is done here, so it is
+    // not a full defense against a hostname that resolves to a private
+    // address at connect time. It reuses the same reserved-range table as
     // `lib/url-fetch-guard.mjs`'s `safeFetch`.
     const urlMatches = cmd.match(/https?:\/\/[^\s'"]+/gi) || []
     for (const urlMatch of urlMatches) {
@@ -122,7 +168,12 @@ function validateCommand(cmd) {
         continue
       }
       const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
-      if (hostname === 'localhost' || (isIP(hostname) && isPrivateOrReservedIp(hostname))) {
+      const altIp = isIP(hostname) ? null : parseAltNotationIPv4(hostname)
+      if (
+        hostname === 'localhost' ||
+        (isIP(hostname) && isPrivateOrReservedIp(hostname)) ||
+        (altIp && isPrivateOrReservedIp(altIp))
+      ) {
         return {
           safe: false,
           reason: `curl target rejected (loopback/private/link-local/metadata address): ${urlMatch}`,
@@ -315,4 +366,5 @@ export {
   sanitizeArg,
   runBinary,
   execCommand,
+  parseAltNotationIPv4,
 }

@@ -95,6 +95,36 @@ describe('validateCommand — curl SSRF target rejection (CWE-918)', () => {
   })
 })
 
+describe('validateCommand — curl SSRF alt-notation IPv4 bypass (CWE-918)', () => {
+  // net.isIP() only recognises canonical dotted-decimal form, but curl
+  // (via glibc's inet_aton) also resolves decimal, hex, octal, and
+  // shorthand dotted notations to the same address. Without normalising
+  // these first, the literal-IP SSRF check above is a no-op for them.
+  const altNotationCases = [
+    ['curl -fsSL http://2130706433/', '127.0.0.1 as decimal'],
+    ['curl -fsSL http://0x7f000001/', '127.0.0.1 as hex'],
+    ['curl -fsSL http://0177.0.0.1/', '127.0.0.1 as octal first octet'],
+    ['curl -fsSL http://127.1/', '127.0.0.1 as shorthand a.b'],
+    ['curl -fsSL http://2852039166/latest/meta-data/', '169.254.169.254 as decimal'],
+    ['curl -fsSL http://0xa9fea9fe/latest/meta-data/', '169.254.169.254 as hex'],
+  ]
+  it.each(altNotationCases)('rejects %s (%s)', (cmd) => {
+    const r = validateCommand(cmd)
+    expect(r.safe).toBe(false)
+    expect(r.reason).toMatch(/loopback|private|link-local|metadata/i)
+  })
+
+  it('still permits a public IP expressed in canonical dotted-decimal form', () => {
+    const r = validateCommand('curl -fsSL http://8.8.8.8/')
+    expect(r.safe).toBe(true)
+  })
+
+  it('still permits a normal DNS hostname that happens to start with a digit', () => {
+    const r = validateCommand('curl -fsSL https://1password.com/')
+    expect(r.safe).toBe(true)
+  })
+})
+
 describe('sanitizeArg — @-prefixed file-read arguments (#3274)', () => {
   it('rejects @/absolute/path', () => {
     expect(() => sanitizeArg('@/home/runner/.docker/config.json')).toThrow(/file-read @path/)
