@@ -19,8 +19,8 @@
         "description": "Inspect the relevant litellm configuration:\n```bash\nkubectl get all -n litellm -l app.kubernetes.io/name=litellm\nkubectl get configmap -n litellm -l app.kubernetes.io/part-of=litellm\n```\n### Check for existing issues\n\n### What happened?\n\nDirect navigation to `/ui/chat` (or any UI sub-route like `/ui/logs`, `/ui/models-and-endpoints`) returns `{\"detail\":\"Not Found\"}` (HTTP 404)."
       },
       {
-        "title": "Apply the fix for [Bug]: /ui/chat returns 404 — Next.js static export missing…",
-        "description": "Apply the configuration change to resolve the issue:\n```yaml\nkubectl port-forward litellm-0 14000:4000\n\ncurl http://localhost:14000/ui/       → 200 ✅ (25528 bytes)\ncurl http://localhost:14000/ui/chat   → 404 ❌ ({\"detail\":\"Not Found\"})\ncurl http://localhost:14000/ui/chat/  → 404 ❌ ({\"detail\":\"Not Found\"})\n```"
+        "title": "Generate index.html for each exported UI page directory",
+        "description": "The Next.js static export emits `chat.html` instead of `chat/index.html`, so the proxy's static file handler finds nothing at `/ui/chat`. Fix it with a post-build step that creates a directory index for every exported page, then rebuild or patch the running image:\n```bash\n# Post-build step (run inside the UI build output directory, e.g. litellm/proxy/_experimental/out)\nfor f in *.html; do\n  page=\"${f%.html}\"\n  [ \"$page\" = \"index\" ] && continue\n  mkdir -p \"$page\"\n  cp \"$f\" \"$page/index.html\"\ndone\n```\nAlternatively, add a catch-all route in the proxy that serves `{page}.html` when `{page}/index.html` is not found. Restart the litellm pods afterwards:\n```bash\nkubectl rollout restart statefulset/litellm -n litellm\n```"
       },
       {
         "title": "Confirm [Bug]: /ui/chat returns 404 — Next.js static… is resolved",
@@ -28,10 +28,10 @@
       }
     ],
     "resolution": {
-      "summary": "See the source issue for the community-verified solution: https://github.com/BerriAI/litellm/issues/24037",
+      "summary": "Direct navigation to /ui/chat returned 404 because the Next.js static export produces flat files (chat.html) rather than per-directory index files (chat/index.html), and the LiteLLM proxy's static handler only resolves directory index files. Copying each exported page to <page>/index.html (or adding a catch-all route that falls back to <page>.html) makes every UI sub-route resolvable on direct load, so bookmarks and refreshes on /ui/chat, /ui/logs and /ui/models-and-endpoints work again.",
       "codeSnippets": [
-        "kubectl port-forward litellm-0 14000:4000\n\ncurl http://localhost:14000/ui/       → 200 ✅ (25528 bytes)\ncurl http://localhost:14000/ui/chat   → 404 ❌ ({\"detail\":\"Not Found\"})\ncurl http://localhost:14000/ui/chat/  → 404 ❌ ({\"detail\":\"Not Found\"})",
-        "### Steps to Reproduce\n\n1. Deploy LiteLLM v1.82.3-stable, v1.82.4-nightly, or main-latest (as of 2026-03-18)\n2. Navigate to `<litellm_url>/ui/` → works, dashboard loads\n3. Navigate to `<litellm_url>/ui/chat` directly (bookmark, URL bar, refresh while on chat page) → 404\n\n### Proposed Fix\n\nThe Next.js static export build step should generate `index.html` inside each page directory, or alternatively add a catch-all route that serves `{page}.html` when `{page}/index.html` is not found.\n\n**Option A** — Post-build step (simple):"
+        "# Post-build fix: create a directory index for every exported UI page\nfor f in *.html; do\n  page=\"${f%.html}\"\n  [ \"$page\" = \"index\" ] && continue\n  mkdir -p \"$page\"\n  cp \"$f\" \"$page/index.html\"\ndone",
+        "# Verify the fix\nkubectl port-forward litellm-0 14000:4000\ncurl -s -o /dev/null -w '%{http_code}\\n' http://localhost:14000/ui/       # 200\ncurl -s -o /dev/null -w '%{http_code}\\n' http://localhost:14000/ui/chat   # 200 after fix\ncurl -s -o /dev/null -w '%{http_code}\\n' http://localhost:14000/ui/chat/  # 200 after fix"
       ]
     }
   },
