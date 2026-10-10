@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "nats-8733-leafnode-with-server-name-never-receives-interest-and-drops-requests-r",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "nats: Leafnode with server_name never receives interest, and drops requests/replies, across account imports on its own links",
+    "description": "Leafnode with server_name never receives interest, and drops requests/replies, across account imports on its own links. Requested by 12+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current nats deployment",
+        "description": "Verify your nats version and configuration:\n```bash\nkubectl get pods -n nats -l app.kubernetes.io/name=nats\nhelm list -n nats 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working nats installation."
+      },
+      {
+        "title": "Review nats configuration",
+        "description": "Inspect the relevant nats configuration:\n```bash\nkubectl get all -n nats -l app.kubernetes.io/name=nats\nkubectl get configmap -n nats -l app.kubernetes.io/part-of=nats\n```\n### Observed behavior\n\nA leafnode server that solicits remotes, has no cluster block, and has a server_name takes its cluster name from server_name."
+      },
+      {
+        "title": "Apply the fix for Leafnode with server_name never receives interest, and…",
+        "description": "A leaf with solicited remotes and no cluster block takes its cluster name from server_name. The hub tags subscriptions from its links with that cluster as the origin, and the origin was wrongly applied to interest and messages that crossed an account import. With one link per account on the same\n```yaml\nport: -1\nleafnodes { port: -1 }\naccounts: {\n  FOO: {\n    users: [{user: foo, password: foo}]\n    exports: [\n      {stream: \"foo.>\", accounts: [BAR]}\n      {service: \"REPLY.foo.>\", accounts: [BAR]}\n    ]\n  }\n  BAR: {\n    users: [{user: bar, password: bar}]\n    imports: [\n      {stream: {account: FOO, subject: \"foo.>\"}}\n      {service: {account: FOO, subject: \"REPLY.foo.>\"}}\n    ]\n  }\n}\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n nats -l app.kubernetes.io/name=nats\nkubectl get events -n nats --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Leafnode with server_name never receives interest, and…\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "A leaf with solicited remotes and no cluster block takes its cluster name from server_name. The hub tags subscriptions from its links with that cluster as the origin, and the origin was wrongly applied to interest and messages that crossed an account import.",
+      "codeSnippets": [
+        "port: -1\nleafnodes { port: -1 }\naccounts: {\n  FOO: {\n    users: [{user: foo, password: foo}]\n    exports: [\n      {stream: \"foo.>\", accounts: [BAR]}\n      {service: \"REPLY.foo.>\", accounts: [BAR]}\n    ]\n  }\n  BAR: {\n    users: [{user: bar, password: bar}]\n    imports: [\n      {stream: {account: FOO, subject: \"foo.>\"}}\n      {service: {account: FOO, subject: \"REPLY.foo.>\"}}\n    ]\n  }\n}",
+        "server_name: leaf\nport: -1\nleafnodes {\n  remotes: [\n    {url: \"nats-leaf://foo:foo@<hub>:<leafport>\", account: FOO}\n    {url: \"nats-leaf://bar:bar@<hub>:<leafport>\", account: BAR}\n  ]\n}\naccounts: {\n  FOO: {users: [{user: foo, password: foo}]}\n  BAR: {users: [{user: bar, password: bar}]}\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "nats",
+      "incubating",
+      "networking",
+      "feature"
+    ],
+    "cncfProjects": [
+      "nats"
+    ],
+    "targetResourceKinds": [
+      "Pod",
+      "Deployment",
+      "Node"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/nats-io/nats-server/issues/8733",
+      "repo": "https://github.com/nats-io/nats-server",
+      "pr": "https://github.com/nats-io/nats-server/pull/8730"
+    },
+    "reactions": 12,
+    "comments": 1,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with nats installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-08T06:10:06.708Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
