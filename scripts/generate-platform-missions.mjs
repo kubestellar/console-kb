@@ -41,7 +41,7 @@ import {
   LLM_TIMEOUT_MS,
   TRUSTED_LLM_ENDPOINT,
 } from './lib/platform-llm-config.mjs'
-import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton } from './lib/mission-file.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -285,42 +285,26 @@ async function main() {
     }
 
     // Build mission object
-    const mission = {
-      version: 'kc-mission-v1',
+    const mission = buildMissionSkeleton({
       name: `platform-${slug}`,
       missionClass: llmResult.missionClass || 'installer',
       author: 'KubeStellar Bot',
       authorGithub: 'kubestellar',
-      mission: {
-        title: llmResult.mission?.title || `${platform.name}: Install Guide`,
-        description: llmResult.mission?.description || '',
-        type: llmResult.mission?.type || 'configuration',
-        status: 'completed',
-        steps: (llmResult.mission?.steps || []).map(s => ({
-          title: String(s.title || '').slice(0, 200),
-          description: String(s.description || '').slice(0, 5000),
-        })),
-        resolution: {
-          summary: String(llmResult.mission?.resolution?.summary || '').slice(0, 1000),
-          codeSnippets: (llmResult.mission?.resolution?.codeSnippets || []).slice(0, 10).map(c => String(c).slice(0, 2000)),
-        },
-      },
-      metadata: {
-        category: platform.category || 'platform',
-        installMethods: platform.installMethods || ['kubectl'],
-        cncfProjects: platform.cncfProjects || [],
-        qualityScore: 0,
-        generatedAt: new Date().toISOString(),
-      },
-      prerequisites: {
-        tools: platform.prerequisites?.tools || ['kubectl'],
-        permissions: ['cluster-admin'],
-      },
-      security: {
-        rbacRequired: true,
-        networkPolicies: false,
-      },
-    }
+      title: llmResult.mission?.title || `${platform.name}: Install Guide`,
+      description: llmResult.mission?.description || '',
+      type: llmResult.mission?.type || 'configuration',
+      steps: (llmResult.mission?.steps || []).map(s => ({
+        title: String(s.title || '').slice(0, 200),
+        description: String(s.description || '').slice(0, 5000),
+      })),
+      resolutionSummary: String(llmResult.mission?.resolution?.summary || '').slice(0, 1000),
+      codeSnippets: (llmResult.mission?.resolution?.codeSnippets || []).slice(0, 10).map(c => String(c).slice(0, 2000)),
+      category: platform.category || 'platform',
+      installMethods: platform.installMethods || ['kubectl'],
+      cncfProjects: platform.cncfProjects || [],
+      tools: platform.prerequisites?.tools || ['kubectl'],
+      permissions: ['cluster-admin'],
+    })
 
     // 1. Sanitize any real infra details that crept in via context
     const stepsText = JSON.stringify(mission.mission.steps)

@@ -22,7 +22,7 @@ import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } 
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
-import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile } from './lib/mission-file.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
 // Mission-tree sanitizer previously inlined inside `main()` — extracted to
 // `lib/mission-sanitizer.mjs` (kubestellar/console-kb#3641) so the policy
@@ -429,42 +429,26 @@ async function main() {
 
     // Build mission
     const authorConf = config.author || {}
-    const mission = {
-      version: 'kc-mission-v1',
+    const mission = buildMissionSkeleton({
       name: `install-${slug}`,
       missionClass: 'installer',
       author: authorConf.name || 'KubeStellar Bot',
       authorGithub: authorConf.github || 'kubestellar',
-      mission: {
-        title: String(llmResult.mission?.title || `${project.name}: Install Guide`).slice(0, 200),
-        description: String(llmResult.mission?.description || '').slice(0, 500),
-        type: 'configuration',
-        status: 'completed',
-        steps: (llmResult.mission?.steps || []).map(s => ({
-          title: String(s.title || '').slice(0, 200),
-          description: String(s.description || '').slice(0, 5000),
-        })),
-        resolution: {
-          summary: String(llmResult.mission?.resolution?.summary || '').slice(0, 1000),
-          codeSnippets: (llmResult.mission?.resolution?.codeSnippets || []).slice(0, 10).map(c => String(c).slice(0, 2000)),
-        },
-      },
-      metadata: {
-        category: project.category || 'cncf',
-        installMethods: project.installMethods || ['kubectl'],
-        cncfProjects: [project.name.toLowerCase()],
-        qualityScore: 0,
-        generatedAt: new Date().toISOString(),
-      },
-      prerequisites: {
-        tools: ['kubectl', ...((project.installMethods || []).includes('helm') ? ['helm'] : [])],
-        permissions: ['cluster-admin'],
-      },
-      security: {
-        rbacRequired: true,
-        networkPolicies: false,
-      },
-    }
+      title: String(llmResult.mission?.title || `${project.name}: Install Guide`).slice(0, 200),
+      description: String(llmResult.mission?.description || '').slice(0, 500),
+      type: 'configuration',
+      steps: (llmResult.mission?.steps || []).map(s => ({
+        title: String(s.title || '').slice(0, 200),
+        description: String(s.description || '').slice(0, 5000),
+      })),
+      resolutionSummary: String(llmResult.mission?.resolution?.summary || '').slice(0, 1000),
+      codeSnippets: (llmResult.mission?.resolution?.codeSnippets || []).slice(0, 10).map(c => String(c).slice(0, 2000)),
+      category: project.category || 'cncf',
+      installMethods: project.installMethods || ['kubectl'],
+      cncfProjects: [project.name.toLowerCase()],
+      tools: ['kubectl', ...((project.installMethods || []).includes('helm') ? ['helm'] : [])],
+      permissions: ['cluster-admin'],
+    })
 
     // Validate Helm repo URL
     if (llmResult.installMethods?.includes('helm') && llmResult.helmRepoUrl) {

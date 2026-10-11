@@ -34,6 +34,72 @@ export function assertSafePath(resolvedTarget, resolvedAllowedDir) {
 }
 
 /**
+ * Assembles the common `kc-mission-v1` object shape shared by
+ * `generate-cncf-install-missions.mjs` and `generate-platform-missions.mjs`.
+ *
+ * Both scripts previously carried a byte-near-identical inline literal for
+ * this structure (kubestellar/console-kb#3776) — the same duplication this
+ * module already consolidates `slugify`/`assertSafeSlug`/`assertSafePath`/
+ * `serializeSanitizedMissionForFile` against (console-kb#3134, #3333).
+ *
+ * This is a pure structural assembler: every field value (including any
+ * length-capping via `.slice()`) must be computed by the caller and passed
+ * in already-finalized, so each call site's existing behavior — including
+ * any divergence between the two scripts — is preserved exactly.
+ */
+export function buildMissionSkeleton({
+  name,
+  missionClass,
+  author,
+  authorGithub,
+  title,
+  description,
+  type,
+  steps,
+  resolutionSummary,
+  codeSnippets,
+  category,
+  installMethods,
+  cncfProjects,
+  tools,
+  permissions,
+}) {
+  return {
+    version: 'kc-mission-v1',
+    name,
+    missionClass,
+    author,
+    authorGithub,
+    mission: {
+      title,
+      description,
+      type,
+      status: 'completed',
+      steps,
+      resolution: {
+        summary: resolutionSummary,
+        codeSnippets,
+      },
+    },
+    metadata: {
+      category,
+      installMethods,
+      cncfProjects,
+      qualityScore: 0,
+      generatedAt: new Date().toISOString(),
+    },
+    prerequisites: {
+      tools,
+      permissions,
+    },
+    security: {
+      rbacRequired: true,
+      networkPolicies: false,
+    },
+  }
+}
+
+/**
  * Serializes a mission object for disk, refusing oversized payloads (>1MB)
  * and any post-sanitization payload that still contains a `<script>` tag or
  * an `on<event>=` attribute — the last line of defense before untrusted LLM
