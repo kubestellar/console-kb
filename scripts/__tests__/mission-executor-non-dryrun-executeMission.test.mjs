@@ -268,12 +268,29 @@ describe('executeMission — non-DRY_RUN branches', () => {
       },
     })
 
+    const errs = []
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation((m) => {
+      errs.push(String(m))
+      return true
+    })
+
     const mod = await loadModule()
     const report = await mod.executeMission(missionPath)
     // steps pass; verification-heuristic step passed → verdict='pass' even though
     // the LLM verify was skipped. This exercises the catch branch in
     // the final-verification try/catch.
     expect(['pass', 'pass_unverified']).toContain(report.verdict)
+
+    // The catch no longer discards the failure reason silently (previously
+    // only `console.log` ran here) — it must emit one structured JSON line
+    // via the shared logger (scripts/lib/logger.mjs) carrying the actual
+    // error message, matching every other failure path in this file.
+    const logLine = errs.map((e) => JSON.parse(e)).find((e) => e.message === 'final LLM verification skipped')
+    expect(logLine).toMatchObject({ level: 'warn', component: 'mission-executor' })
+    expect(typeof logLine.error_message).toBe('string')
+    expect(logLine.error_message.length).toBeGreaterThan(0)
+
+    errSpy.mockRestore()
   })
 })
 

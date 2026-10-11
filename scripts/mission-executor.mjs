@@ -299,7 +299,14 @@ async function executeMission(missionPath) {
       } else {
         console.log(`  ⚠️ LLM says: ${verifyResponse.summary || 'not fully installed'}`)
       }
-    } catch {
+    } catch (err) {
+      // Discarding err.message here (previous behaviour) made a real LLM
+      // API/auth/network failure indistinguishable from an ordinary
+      // "not installed" response in CI logs — nothing else in this run
+      // records why final verification was skipped. Match this file's
+      // existing structured-logging convention (see the log.error calls
+      // in main()) so the reason is machine-parseable from stderr.
+      log.warn('final LLM verification skipped', { error_message: err.message })
       console.log(`  ⚠️ Final LLM verification skipped`)
     }
   }
