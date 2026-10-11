@@ -308,6 +308,24 @@ carrying `continue-on-error: true`) is now resolved: PR
 flag and added coverage measurement, closing
 [#3199](https://github.com/kubestellar/console-kb/issues/3199).
 
+A new identity-gate gap surfaced in `ai-fix.yml`, the same class the
+"second known exception" patched in `copilot-automation.yml`: that
+workflow's `copilot-automation` job has carried an `if:` gate (PR
+[#3724](https://github.com/kubestellar/console-kb/pull/3724), closing
+[#3723](https://github.com/kubestellar/console-kb/issues/3723)) restricting
+its `pull_request_target` trigger to the exact `Copilot` PR author since
+2026-09, but `ai-fix.yml`'s `ai-fix` job — which also triggers on
+`pull_request_target: { types: [opened] }` and calls a reusable workflow
+with `contents: write`, `issues: write`, `pull-requests: write` — was never
+given the equivalent gate. Verified on current `master`:
+`.github/workflows/ai-fix.yml`'s `ai-fix` job has no `if:` key at all, so
+any externally-opened pull request unconditionally triggers the privileged
+job. Filed as `[operations]` issue
+[#3778](https://github.com/kubestellar/console-kb/issues/3778) with the
+exact one-line diff — editing `.github/workflows/*.yml` needs `workflows`
+permission this contribution's credentials do not have, the same
+constraint as the section 2/5 exceptions above.
+
 ## References
 
 
