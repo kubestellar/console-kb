@@ -178,5 +178,9 @@ export async function buildIndex(targetDir = SOLUTIONS_DIR) {
 
 // CLI entry point
 if (process.argv[1] && process.argv[1].endsWith('build-index.mjs')) {
-  buildIndex().catch(e => { console.error(e); process.exit(1); });
+  buildIndex().catch(e => {
+    console.error(e);
+    log.error('unhandled fatal error building index', { error_message: e.message });
+    process.exit(1);
+  });
 }
