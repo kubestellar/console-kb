@@ -326,6 +326,24 @@ exact one-line diff — editing `.github/workflows/*.yml` needs `workflows`
 permission this contribution's credentials do not have, the same
 constraint as the section 2/5 exceptions above.
 
+A deeper gap in the same job surfaced on inspection of `cncf-mission-gen.yml`'s
+`collect` job: the "Commit search state" step's 3-attempt retry loop for
+`git push origin master` has no check after the loop for whether any attempt
+actually succeeded. If every rebase/push attempt in the loop fails, the `for`
+loop still ends with exit 0 — no command outside an `if`/`||` guard returns
+non-zero — so the step, the `collect` job, and the whole scheduled run all
+report **success** even though `search-state.json` was never pushed. Because
+`scheduled-workflow-failure-issue.yml`'s alert only fires on
+`conclusion == 'failure'`, this exhaustion path produces no alert at all —
+a stronger gap than either of the two `runbooks/incident-response-search-state-corruption.md`
+"Prevention (tracked, not implemented)" items (a PR-time JSON check and an
+`if: failure()` alert), neither of which would catch a job that never
+fails. Filed as `[telemetry]` issue
+[#3785](https://github.com/kubestellar/console-kb/issues/3785) with the
+exact replacement diff (a `PUSHED` flag plus a final `exit 1` with an
+`::error::` annotation and step-summary warning if the loop exhausts) —
+same `workflows`-permission constraint as the exceptions above.
+
 ## References
 
 
