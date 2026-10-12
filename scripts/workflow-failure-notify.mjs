@@ -33,11 +33,14 @@
  * case), 1 on an unknown mode or a missing required env var.
  */
 import { execFileSync } from 'node:child_process'
+import { createLogger } from './lib/logger.mjs'
 import {
   renderCommentBody,
   renderIssueBody,
   joinFailedJobNames,
 } from './lib/workflow-failure-notify.mjs'
+
+const log = createLogger('workflow-failure-notify')
 
 function requireEnv(name, env) {
   const value = env[name]
@@ -98,8 +101,13 @@ export function main(mode, env = process.env) {
         )
         const { jobs } = JSON.parse(jobsJson)
         process.stdout.write(`${joinFailedJobNames(jobs)}\n`)
-      } catch {
-        // Swallow-on-error: matches the bash original's `2>/dev/null || echo ""`.
+      } catch (err) {
+        // Log the error with structured fields, then swallow-on-error to preserve stdout.
+        log.warn('gh run view failed', {
+          repository,
+          runId,
+          error: err instanceof Error ? err.message : String(err),
+        })
         process.stdout.write('\n')
       }
       return 0
