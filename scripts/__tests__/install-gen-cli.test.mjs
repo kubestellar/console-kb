@@ -132,49 +132,14 @@ describe('install-gen/security-scan-check.mjs', () => {
   })
 })
 
-describe('install-gen/average-quality-score.mjs', () => {
-  let workdir
-
-  beforeEach(() => {
-    workdir = mkdtempSync(join(tmpdir(), 'average-quality-score-'))
-    mkdirSync(join(workdir, 'fixes', 'cncf-install'), { recursive: true })
-  })
-
-  afterEach(() => {
-    rmSync(workdir, { recursive: true, force: true })
-  })
-
-  it('prints the average score across missions with a recorded score, excluding zero-score ones', async () => {
-    const dir = join(workdir, 'fixes', 'cncf-install')
-    writeFileSync(join(dir, 'a.json'), JSON.stringify({ metadata: { qualityScore: 80 } }))
-    writeFileSync(join(dir, 'b.json'), JSON.stringify({ metadata: { qualityScore: 60 } }))
-    writeFileSync(join(dir, 'c.json'), JSON.stringify({ metadata: { qualityScore: 0 } }))
-    writeFileSync(join(dir, '.gitkeep'), '')
-
-    const result = await runScript('average-quality-score.mjs', { cwd: workdir })
-
-    expect(result.stdout.trim()).toBe('70')
-  })
-
-  it('tolerates an unparseable mission file (JSON.parse catch branch) and still averages the rest', async () => {
-    const dir = join(workdir, 'fixes', 'cncf-install')
-    writeFileSync(join(dir, 'broken.json'), '{ not valid json')
-    writeFileSync(join(dir, 'good.json'), JSON.stringify({ metadata: { qualityScore: 90 } }))
-
-    const result = await runScript('average-quality-score.mjs', { cwd: workdir })
-
-    expect(result.stdout.trim()).toBe('90')
-  })
-
-  it('prints 0 when no mission has a recorded score', async () => {
-    const dir = join(workdir, 'fixes', 'cncf-install')
-    writeFileSync(join(dir, 'a.json'), JSON.stringify({}))
-
-    const result = await runScript('average-quality-score.mjs', { cwd: workdir })
-
-    expect(result.stdout.trim()).toBe('0')
-  })
-})
+// install-gen/average-quality-score.mjs's top-level execution was removed
+// behind an `import.meta.url` guard (see kubestellar/console-kb#3791), the
+// same refactor platform/average-quality-score.mjs received in #3587 — so
+// `runScript`'s bare `import()` no longer triggers it. Its CLI behavior
+// (directory read, .gitkeep/non-.json filtering, parse-error tolerance,
+// excludeZero semantics) is now covered in-process via the exported
+// `readMissionsFromDir`/`runCli` helpers by
+// __tests__/install-gen-average-quality-score.test.mjs instead.
 
 describe('install-gen/extract-commands.mjs', () => {
   let workdir
