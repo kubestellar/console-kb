@@ -49,11 +49,17 @@ vi.mock('node:dns', () => ({
 // want every resolved address instead of one). `lookupOptions` lets a test
 // simulate that real default shape instead of always exercising the
 // `{ all: true }` branch of `pinnedSafeLookup`.
-function makeFakeTransport(responder, lookupOptions = { all: true }) {
+// Node's dns module contract lets a custom `lookup` option be invoked as
+// either `lookup(hostname, options, callback)` or, when the caller omits
+// options, `lookup(hostname, callback)`. Real Node http/https always use
+// the 3-arg form, so `twoArgLookupForm` lets a test simulate the 2-arg
+// form to exercise pinnedSafeLookup's `typeof options === 'function'`
+// normalization branch, which is otherwise unreachable.
+function makeFakeTransport(responder, lookupOptions = { all: true }, twoArgLookupForm = false) {
   return (urlObj, options, callback) => {
     const req = new EventEmitter()
     req.end = () => {
-      options.lookup(urlObj.hostname, lookupOptions, (err) => {
+      const onLookup = (err) => {
         if (err) return req.emit('error', err)
         let result
         try {
@@ -69,7 +75,12 @@ function makeFakeTransport(responder, lookupOptions = { all: true }) {
           if (result.body) res.emit('data', Buffer.from(result.body))
           res.emit('end')
         })
-      })
+      }
+      if (twoArgLookupForm) {
+        options.lookup(urlObj.hostname, onLookup)
+      } else {
+        options.lookup(urlObj.hostname, lookupOptions, onLookup)
+      }
     }
     req.destroy = () => {}
     return req
@@ -80,8 +91,11 @@ let fakeTransportResponder = () => ({ status: 200, body: 'ok' })
 // Defaults to the real Node shape (no `all`); tests that specifically want
 // to exercise the `{ all: true }` branch set this before calling safeFetch.
 let fakeLookupOptions = {}
-vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
-vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions)(...args) }))
+// Set by a test to exercise pinnedSafeLookup's 2-arg `lookup(hostname,
+// callback)` normalization branch instead of the real 3-arg form.
+let fakeTwoArgLookupForm = false
+vi.mock('node:http', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions, fakeTwoArgLookupForm)(...args) }))
+vi.mock('node:https', () => ({ request: (...args) => makeFakeTransport(h => fakeTransportResponder(h), fakeLookupOptions, fakeTwoArgLookupForm)(...args) }))
 
 const { assertSafeFetchUrl, isSafeFetchUrl, safeFetch, isPrivateOrReservedIp } = await import('../lib/url-fetch-guard.mjs')
 
@@ -182,6 +196,7 @@ describe('assertSafeFetchUrl', () => {
 describe('safeFetch', () => {
   afterEach(() => {
     fakeLookupOptions = {}
+    fakeTwoArgLookupForm = false
   })
 
   it('fetches a public hostname successfully', async () => {
@@ -222,6 +237,29 @@ describe('safeFetch', () => {
 
   it('rejects a non-http(s) scheme before attempting any connection', async () => {
     await expect(safeFetch('file:///etc/passwd')).rejects.toThrow(/Unsafe URL rejected/)
+  })
+
+  it('rejects an unparseable URL on the initial safeFetch call, before attempting any connection', async () => {
+    // Exercises validateUrlForConnect's own `new URL(...)` try/catch — a
+    // distinct code path from assertSafeFetchUrl's (used only by
+    // isSafeFetchUrl, already covered above). Previously 0% covered
+    // because every existing safeFetch test started from an already-valid
+    // URL.
+    await expect(safeFetch('not a url')).rejects.toThrow(/Unsafe URL rejected \(unparseable\)/)
+  })
+
+  it('tolerates the 2-arg `lookup(hostname, callback)` call shape (options omitted)', async () => {
+    // pinnedSafeLookup is a custom Node `lookup` option; Node's dns module
+    // contract allows a custom lookup to be invoked as either
+    // `(hostname, options, callback)` or `(hostname, callback)` (options
+    // omitted). Real Node http/https always use the 3-arg form, so this
+    // defensive `typeof options === 'function'` normalization branch was
+    // previously unreachable via any existing test's fake transport.
+    fakeTwoArgLookupForm = true
+    fakeTransportResponder = () => ({ status: 200, body: 'two-arg-lookup-ok' })
+    const res = await safeFetch('http://public.example.com/index.yaml')
+    expect(res.ok).toBe(true)
+    expect(await res.text()).toBe('two-arg-lookup-ok')
   })
 
   it('connects when at least one resolved address is public, ignoring private ones in the same answer (all:true lookup shape)', async () => {
