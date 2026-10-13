@@ -19,7 +19,7 @@
  *
  * Refs kubestellar/console-kb#3791.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   readMissionsFromDir,
   runCli,
@@ -80,6 +80,25 @@ describe('readMissionsFromDir', () => {
     const hasEmpty = result.some((m) => Object.keys(m).length === 0)
     expect(hasEmpty).toBe(true)
     expect(Number.isNaN(averageQualityScore(result, { excludeZero: true }))).toBe(false)
+  })
+
+  it('emits a structured warn log (not silent) when a file fails to parse', () => {
+    const fs = makeFs({
+      'fixes/cncf-install': {
+        'mission-bad.json': 'NOT VALID JSON {{{',
+      },
+    })
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    readMissionsFromDir({ dir: 'fixes/cncf-install', ...fs })
+    expect(writeSpy).toHaveBeenCalledTimes(1)
+    const logged = JSON.parse(writeSpy.mock.calls[0][0])
+    expect(logged).toMatchObject({
+      level: 'warn',
+      component: 'install-gen-average-quality-score',
+      file: 'mission-bad.json',
+      dir: 'fixes/cncf-install',
+    })
+    writeSpy.mockRestore()
   })
 
   it('returns all missions when every file is a valid *.json', () => {

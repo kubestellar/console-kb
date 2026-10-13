@@ -17,7 +17,7 @@
  *
  * Refs kubestellar/console-kb#3587.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   readMissionsFromDir,
   runCli,
@@ -79,6 +79,25 @@ describe('readMissionsFromDir', () => {
     expect(hasEmpty).toBe(true)
     // averageQualityScore still works on the list — no NaN
     expect(Number.isNaN(averageQualityScore(result))).toBe(false)
+  })
+
+  it('emits a structured warn log (not silent) when a file fails to parse', () => {
+    const fs = makeFs({
+      'fixes/platform-install': {
+        'platform-bad.json': 'NOT VALID JSON {{{',
+      },
+    })
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    readMissionsFromDir({ dir: 'fixes/platform-install', ...fs })
+    expect(writeSpy).toHaveBeenCalledTimes(1)
+    const logged = JSON.parse(writeSpy.mock.calls[0][0])
+    expect(logged).toMatchObject({
+      level: 'warn',
+      component: 'platform-average-quality-score',
+      file: 'platform-bad.json',
+      dir: 'fixes/platform-install',
+    })
+    writeSpy.mockRestore()
   })
 
   it('returns all missions when every file is a valid platform-*.json', () => {

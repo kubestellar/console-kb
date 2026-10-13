@@ -20,13 +20,17 @@
 import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { averageQualityScore } from '../lib/mission-quality-stats.mjs'
+import { createLogger } from '../lib/logger.mjs'
 
 const DEFAULT_DIR = 'fixes/cncf-install'
+const log = createLogger('install-gen-average-quality-score')
 
 /**
  * Read and JSON-parse all non-`.gitkeep` `*.json` files from `dir`.
- * Files that fail to parse are silently treated as `{}` so a corrupt file
- * cannot produce NaN in the aggregate.
+ * Files that fail to parse are treated as `{}` so a corrupt file cannot
+ * produce NaN in the aggregate, but a structured warn is emitted first
+ * (console-kb's createLogger convention) so a silently-dropped file isn't
+ * invisible to CI log tooling.
  *
  * Exported for in-process unit testing.
  *
@@ -41,7 +45,12 @@ export function readMissionsFromDir({ dir, readdir, readFile }) {
   return files.map((f) => {
     try {
       return JSON.parse(readFile(join(dir, f), 'utf-8'))
-    } catch {
+    } catch (err) {
+      log.warn('failed to parse mission file, treating as empty', {
+        dir,
+        file: f,
+        error: err.message,
+      })
       return {}
     }
   })
