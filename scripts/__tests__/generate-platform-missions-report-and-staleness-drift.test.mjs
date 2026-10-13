@@ -1,5 +1,5 @@
 /**
- * Source-drift invariants for three currently untested module-internal
+ * Source-drift invariants for two currently untested module-internal
  * helpers of `scripts/generate-platform-missions.mjs`:
  *
  *   1. `formatReport(results)`     — assembles the Markdown platform
@@ -11,18 +11,7 @@
  *      shape. A quiet rename or an accidental drop of the `issues`
  *      dump would silently strip actionable info from the report.
  *
- *   2. `isMissionStale(filePath)`  — decides whether an existing
- *      mission on disk must be regenerated. Three branches must all
- *      survive refactors:
- *        (a) `FORCE_REGENERATE` short-circuits to `true`
- *        (b) missing or invalid `metadata.generatedAt` treats the
- *            mission as stale (fail-safe: regenerate)
- *        (c) an unreadable / non-JSON file returns `true`
- *      Any regression that flips the fail-safe polarity to `false`
- *      would let corrupt / unreadable missions be treated as fresh
- *      and never regenerated.
- *
- *   3. `checkVersionFreshness(...)` — before writing a mission, the
+ *   2. `checkVersionFreshness(...)` — before writing a mission, the
  *      generator checks the helm repo's `index.yaml` for the pinned
  *      chart version. The version string comes from an HTTP-fetched
  *      chart index and is interpolated into a `RegExp`. The module
@@ -39,6 +28,13 @@
  *
  * See kubestellar/console-kb#3182 (10% coverage — mostly-untested CLI
  * generator) for the tracking issue this suite is filed under.
+ *
+ * `isMissionStale(filePath)` used to be covered here too, but its body
+ * was byte-identical to the copy in `generate-cncf-install-missions.mjs`
+ * (differing only in the staleness threshold) and has been extracted to
+ * `lib/mission-file.mjs` (console-kb#3802). Its fail-safe-polarity source
+ * drift is now pinned by `lib-mission-file-staleness-drift.test.mjs`;
+ * this file only keeps a thin delegation check for the local wrapper.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -116,54 +112,26 @@ describe('formatReport source drift', () => {
   })
 })
 
-// ─── isMissionStale ─────────────────────────────────────────────────
+// ─── isMissionStale (thin wrapper around lib/mission-file.mjs) ───────
 
-describe('isMissionStale source drift', () => {
-  const body = functionBody(SOURCE, 'function isMissionStale(filePath)')
+describe('isMissionStale delegation drift', () => {
+  const body = functionBody(SOURCE, 'export function isMissionStale(filePath)')
 
-  it('short-circuits to true when FORCE_REGENERATE is set', () => {
-    // This must be the FIRST guard — swapping order would parse the
-    // file on every call even in a forced-regeneration run.
-    expect(body).toMatch(/^\s*if\s*\(FORCE_REGENERATE\)\s*return\s*true/m)
-    const forceIdx = body.indexOf('FORCE_REGENERATE')
-    const readIdx = body.indexOf('readFileSync')
-    expect(forceIdx).toBeGreaterThan(0)
-    expect(readIdx).toBeGreaterThan(forceIdx)
+  it('delegates to the shared implementation instead of reimplementing it', () => {
+    expect(body).toContain('sharedIsMissionStale(filePath')
   })
 
-  it('reads and JSON-parses the mission file', () => {
-    expect(body).toContain('readFileSync(filePath')
-    expect(body).toContain("JSON.parse")
+  it('forwards FORCE_REGENERATE as forceRegenerate', () => {
+    expect(body).toMatch(/forceRegenerate:\s*FORCE_REGENERATE/)
   })
 
-  it('treats a missing metadata.generatedAt as stale (fail-safe)', () => {
-    expect(body).toContain('metadata?.generatedAt')
-    // The `if (!generatedAt) return true` guard must remain.
-    expect(body).toMatch(/if\s*\(!generatedAt\)\s*return\s*true/)
-  })
-
-  it('compares age in days against STALENESS_THRESHOLD_DAYS', () => {
+  it('forwards the configurable STALENESS_THRESHOLD_DAYS as thresholdDays', () => {
     // The threshold constant name is part of the operator contract for
     // the STALENESS_DAYS env var — do not silently rename.
-    expect(body).toContain('STALENESS_THRESHOLD_DAYS')
-    // Age computation must be in days: divide by 1000 * 60 * 60 * 24.
-    expect(body).toMatch(/1000\s*\*\s*60\s*\*\s*60\s*\*\s*24/)
-  })
-
-  it('catches read/parse failures and returns true (fail-safe polarity)', () => {
-    // The catch block MUST return true — flipping to false would
-    // treat a corrupt / unreadable mission as fresh forever.
-    expect(body).toMatch(/catch\s*\{[\s\S]*?return\s+true[\s\S]*?\}/)
-    // And, crucially, must not silently `return false` in the catch.
-    const catchMatch = body.match(/catch\s*\{([\s\S]*?)\}/)
-    expect(catchMatch, 'isMissionStale must have a catch block').not.toBeNull()
-    expect(catchMatch[1]).not.toMatch(/return\s+false/)
+    expect(body).toMatch(/thresholdDays:\s*STALENESS_THRESHOLD_DAYS/)
   })
 
   it('is anchored to a top-level STALENESS_THRESHOLD_DAYS constant sourced from STALENESS_DAYS', () => {
-    // Kept in this file (not just the helper's own drift) because a
-    // rename of the constant without updating this helper would
-    // silently break staleness detection for every platform run.
     expect(SOURCE).toMatch(
       /const\s+STALENESS_THRESHOLD_DAYS\s*=\s*parseInt\(process\.env\.STALENESS_DAYS\s*\|\|\s*'14',\s*10\)/,
     )

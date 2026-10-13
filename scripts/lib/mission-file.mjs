@@ -13,6 +13,7 @@
  * `enrich-install-missions.mjs` keeps its own copy of `assertSafePath` for
  * now (out of scope for this refactor — see kubestellar/console-kb#3100).
  */
+import { readFileSync } from 'fs'
 
 /** Derives a filesystem-safe slug from an arbitrary display name. */
 export function slugify(name) {
@@ -105,6 +106,32 @@ export function buildMissionSkeleton({
  * an `on<event>=` attribute — the last line of defense before untrusted LLM
  * output is written to a JSON file.
  */
+/**
+ * Decides whether an on-disk mission must be regenerated.
+ *
+ * Extracted from `generate-cncf-install-missions.mjs` and
+ * `generate-platform-missions.mjs` (kubestellar/console-kb#3802), which
+ * each carried a byte-identical copy of this function differing only in
+ * the staleness threshold (install-missions hardcoded 14 days;
+ * platform-missions used the configurable `STALENESS_THRESHOLD_DAYS`).
+ * Callers now pass their own `forceRegenerate` flag and `thresholdDays`;
+ * the fail-safe polarity — a missing/unreadable/non-JSON mission, or one
+ * with no `metadata.generatedAt`, always counts as stale — is preserved
+ * exactly for both.
+ */
+export function isMissionStale(filePath, { forceRegenerate = false, thresholdDays = 14 } = {}) {
+  if (forceRegenerate) return true
+  try {
+    const mission = JSON.parse(readFileSync(filePath, 'utf-8'))
+    const generatedAt = mission.metadata?.generatedAt
+    if (!generatedAt) return true
+    const age = (Date.now() - new Date(generatedAt).getTime()) / (1000 * 60 * 60 * 24)
+    return age > thresholdDays
+  } catch {
+    return true
+  }
+}
+
 export function serializeSanitizedMissionForFile(mission) {
   // Trailing newline matches the install-missions copy of this guard and
   // POSIX text-file conventions; the platform-missions copy previously

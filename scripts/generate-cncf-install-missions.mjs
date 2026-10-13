@@ -22,7 +22,7 @@ import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } 
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
 import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
-import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton } from './lib/mission-file.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton, isMissionStale as sharedIsMissionStale } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
 // Mission-tree sanitizer previously inlined inside `main()` — extracted to
 // `lib/mission-sanitizer.mjs` (kubestellar/console-kb#3641) so the policy
@@ -293,17 +293,11 @@ async function validateAndFixHelmUrl(helmUrl, projectName) {
 
 // ─── Staleness check ─────────────────────────────────────────────────
 
+// Delegates to the shared implementation in lib/mission-file.mjs
+// (console-kb#3802, mirrors the slugify/assertSafePath/... extraction at
+// #3134, #3333). Fixed 14-day threshold preserved exactly.
 function isMissionStale(filePath) {
-  if (FORCE_REGENERATE) return true
-  try {
-    const mission = JSON.parse(readFileSync(filePath, 'utf-8'))
-    const generatedAt = mission.metadata?.generatedAt
-    if (!generatedAt) return true
-    const age = (Date.now() - new Date(generatedAt).getTime()) / (1000 * 60 * 60 * 24)
-    return age > 14
-  } catch {
-    return true
-  }
+  return sharedIsMissionStale(filePath, { forceRegenerate: FORCE_REGENERATE, thresholdDays: 14 })
 }
 
 function formatReport(report) {

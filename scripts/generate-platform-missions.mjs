@@ -41,7 +41,7 @@ import {
   LLM_TIMEOUT_MS,
   TRUSTED_LLM_ENDPOINT,
 } from './lib/platform-llm-config.mjs'
-import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton } from './lib/mission-file.mjs'
+import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton, isMissionStale as sharedIsMissionStale } from './lib/mission-file.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -156,17 +156,12 @@ export async function checkVersionFreshness(helmRepoUrl, chartName, version) {
 
 // ─── Staleness check ─────────────────────────────────────────────────
 
+// Delegates to the shared implementation in lib/mission-file.mjs
+// (console-kb#3802, mirrors the slugify/assertSafePath/... extraction at
+// #3134, #3333). STALENESS_THRESHOLD_DAYS (STALENESS_DAYS env var)
+// threshold preserved exactly.
 export function isMissionStale(filePath) {
-  if (FORCE_REGENERATE) return true
-  try {
-    const mission = JSON.parse(readFileSync(filePath, 'utf-8'))
-    const generatedAt = mission.metadata?.generatedAt
-    if (!generatedAt) return true
-    const age = (Date.now() - new Date(generatedAt).getTime()) / (1000 * 60 * 60 * 24)
-    return age > STALENESS_THRESHOLD_DAYS
-  } catch {
-    return true
-  }
+  return sharedIsMissionStale(filePath, { forceRegenerate: FORCE_REGENERATE, thresholdDays: STALENESS_THRESHOLD_DAYS })
 }
 
 // ─── Report ───────────────────────────────────────────────────────────
