@@ -29,14 +29,24 @@ failure in this repo (`startup_failure` due to an invalid `secrets:` token
 passed to `reusable-stale.yml`, see #3057/#3071) — a repeat of that failure
 mode today would again go unnoticed beyond the Actions tab.
 
-None of these workflows currently notify anyone when the job itself fails
-(no `if: failure()` step, issue/comment creation, or webhook — confirmed via
-`grep -n "if: failure\|create-issue\|slack\|notify\|issues.create\|actions/github-script" .github/workflows/*.yml`).
-A red run is visible only via the Actions tab or an easily-missed default
-GitHub notification email. Adding an automated alert requires editing
-`.github/workflows/*.yml` (tracked separately as a `[operations]` issue,
-since it needs `workflows` permission). Until that lands, use this runbook
-to manually check for and respond to a silent failure.
+**Fixed**: all ten workflows in the table above now page a maintainer
+automatically. `.github/workflows/scheduled-workflow-failure-issue.yml`
+("Open Issue on Scheduled Workflow Failure", added in
+[#3719](https://github.com/kubestellar/console-kb/pull/3719) and extended
+to full coverage in [#3728](https://github.com/kubestellar/console-kb/pull/3728)
+and [#3754](https://github.com/kubestellar/console-kb/pull/3754)/[#3762](https://github.com/kubestellar/console-kb/pull/3762))
+listens for `workflow_run` completion on every workflow name in this table
+and files (or comments on) a `kind/bug` + `lifecycle/frozen` tracking issue
+whenever `conclusion == 'failure'` — confirmed on current `master`: its
+`on.workflow_run.workflows` list contains all ten workflow names above.
+A red run is therefore no longer visible only via the Actions tab; it
+produces a tracked GitHub issue within minutes. This runbook's manual
+detection steps below remain useful as a fallback (e.g. to corroborate an
+auto-filed issue, or if the alerting workflow itself silently fails — it
+has the same `startup_failure` blind spot as everything else here), and as
+the only detection method for `mission-safety-scan.yml`, which this
+alerting workflow cannot safely cover (see `docs/slo.md`'s "Follow-up not
+covered by this document" section for why that one workflow is different).
 
 ## Event-triggered reusable-workflow callers (same gap, different trigger)
 
@@ -100,6 +110,13 @@ works.
 
 ## Detection
 
+An auto-filed `kind/bug` issue titled `Workflow failure: <name>` (see
+"Prevention" above) is the primary signal and normally arrives before any
+manual check below is needed. Use the manual history check as a fallback —
+to corroborate an auto-filed issue, to catch a failure in
+`mission-safety-scan.yml` (not covered by the automated alert), or in the
+unlikely case the alerting workflow itself failed silently:
+
 Manually check each workflow's recent run history (requires repo read
 access, run from a checkout or via `gh`):
 
@@ -158,11 +175,16 @@ incident — this is exactly how `stale.yml` failed previously (#3057).
    `startup_failure` from an invalid `secrets:` block that went undetected
    for 3 consecutive nightly runs before being filed as #3057.
 
-## Prevention (tracked, not implemented by this runbook)
+## Prevention (fixed for every workflow in the table above; one workflow outside it remains tracked separately)
 
-Adding an `if: failure()` step (e.g. via `actions/github-script`, matching
-the pattern already used for PR comments in `scan-missions.yml`) to each
-workflow above, to open/update a tracking issue on job failure, requires
-editing `.github/workflows/*.yml` — tracked as a separate `[operations]`
-issue since it needs `workflows` permission this runbook's authoring
-credentials do not have.
+An `if: failure()`-equivalent alert (`workflow_run` completion watching for
+`conclusion == 'failure'`) now exists for all ten scheduled/publish
+workflows in the table above — see "Fixed" in the Scope section. The one
+workflow in this repo that still has no automated alert, `mission-safety-scan.yml`,
+is not in that table at all — it runs `on: pull_request` only, with no
+schedule or push trigger, and gating it on plain `conclusion == 'failure'`
+would incorrectly alert on every routine content rejection. That gap is
+tracked as `[operations]`/`[telemetry]` issue
+[#3774](https://github.com/kubestellar/console-kb/issues/3774) with the
+exact `startup_failure`-gated diff, still blocked on `workflows`
+permission these contribution credentials don't have.
