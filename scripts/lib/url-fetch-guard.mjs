@@ -81,7 +81,15 @@ export async function assertSafeFetchUrl(urlString) {
     throw new Error(`Unsafe URL rejected (scheme ${parsed.protocol} not allowed): ${urlString}`)
   }
 
-  const hostname = parsed.hostname
+  // WHATWG URL brackets any IPv6 literal (`[::1]`, `[::ffff:127.0.0.1]`), but
+  // `net.isIP()` only recognises the unbracketed form — so an IPv6 literal
+  // (including an IPv4-mapped loopback/private/metadata address) would fall
+  // through to the DNS-lookup branch below instead of being checked as a
+  // literal IP. `lookup()` on a bracketed string currently fails closed
+  // (rejected as "DNS resolution failed"), but that is an accident of
+  // `dns.lookup`'s input handling, not a deliberate check; strip the
+  // brackets up front so the literal-IP branch evaluates it directly.
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
   if (hostname.toLowerCase() === 'localhost') {
     throw new Error(`Unsafe URL rejected (localhost): ${urlString}`)
   }
@@ -132,10 +140,21 @@ function validateUrlForConnect(urlString) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`Unsafe URL rejected (scheme ${parsed.protocol} not allowed): ${urlString}`)
   }
-  if (parsed.hostname.toLowerCase() === 'localhost') {
+  // Strip brackets from a literal IPv6 host (see matching comment in
+  // `assertSafeFetchUrl`): without this, a bracketed IPv4-mapped IPv6
+  // literal such as `[::ffff:127.0.0.1]` or `[::ffff:169.254.169.254]`
+  // fails `isIP()` here, skips this check entirely, AND is never passed
+  // through `pinnedSafeLookup` below — Node's http(s) client recognises an
+  // already-literal IP address and connects directly without invoking the
+  // custom `lookup`, so neither of `safeFetch`'s two defenses fires. This
+  // was a confirmed SSRF bypass of the TOCTOU-safe `safeFetch` path
+  // (CWE-918): a request to `http://[::ffff:127.0.0.1]/` reached a loopback
+  // listener and returned its body.
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
+  if (hostname.toLowerCase() === 'localhost') {
     throw new Error(`Unsafe URL rejected (localhost): ${urlString}`)
   }
-  if (isIP(parsed.hostname) && isPrivateOrReservedIp(parsed.hostname)) {
+  if (isIP(hostname) && isPrivateOrReservedIp(hostname)) {
     throw new Error(`Unsafe URL rejected (reserved/private IP literal): ${urlString}`)
   }
   return parsed

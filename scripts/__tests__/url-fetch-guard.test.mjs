@@ -181,6 +181,19 @@ describe('isSafeFetchUrl', () => {
   it('allows a hostname that DNS-resolves to a public IPv6 address', async () => {
     expect(await isSafeFetchUrl('http://ipv6-public.example.com/index.yaml')).toBe(true)
   })
+
+  it('rejects a bracketed IPv4-mapped IPv6 loopback literal (`[::ffff:127.0.0.1]`)', async () => {
+    // `new URL()` keeps the brackets on the parsed `.hostname` for any IPv6
+    // literal, but `net.isIP()` only recognises the unbracketed form. If the
+    // brackets aren't stripped before the literal-IP check, this host falls
+    // through to the DNS-lookup branch instead of being rejected as a
+    // private-IP literal.
+    expect(await isSafeFetchUrl('http://[::ffff:127.0.0.1]/index.yaml')).toBe(false)
+  })
+
+  it('rejects a bracketed IPv4-mapped IPv6 cloud-metadata literal (`[::ffff:169.254.169.254]`)', async () => {
+    expect(await isSafeFetchUrl('http://[::ffff:169.254.169.254]/latest/meta-data/')).toBe(false)
+  })
 })
 
 describe('assertSafeFetchUrl', () => {
@@ -190,6 +203,10 @@ describe('assertSafeFetchUrl', () => {
 
   it('throws for an unsafe URL', async () => {
     await expect(assertSafeFetchUrl('http://127.0.0.1/')).rejects.toThrow(/Unsafe URL rejected/)
+  })
+
+  it('throws for a bracketed IPv4-mapped IPv6 loopback literal with the literal-IP reason (not a DNS-failure reason)', async () => {
+    await expect(assertSafeFetchUrl('http://[::ffff:127.0.0.1]/')).rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
   })
 })
 
@@ -315,6 +332,25 @@ describe('safeFetch', () => {
 
   it('rejects a literal private IP on the initial safeFetch call, before attempting any connection', async () => {
     await expect(safeFetch('http://10.0.0.5/index.yaml')).rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
+  })
+
+  it('rejects a bracketed IPv4-mapped IPv6 loopback literal before attempting any connection (SSRF bypass regression)', async () => {
+    // Regression test: Node's http(s) client recognises an already-literal
+    // IP host (bracketed IPv6 included) and connects directly, *skipping*
+    // the custom `lookup` option entirely — so `pinnedSafeLookup` never
+    // runs for this URL. The only defense is the pre-connect check in
+    // `validateUrlForConnect`, which previously missed this because
+    // `isIP('[::ffff:127.0.0.1]')` (with brackets) returns 0. Fail this
+    // test by making the fake transport respond instead of throwing, so a
+    // reintroduced bypass shows up as a successful fetch rather than an
+    // unrelated error.
+    fakeTransportResponder = () => ({ status: 200, body: 'should-not-be-reached' })
+    await expect(safeFetch('http://[::ffff:127.0.0.1]/index.yaml')).rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
+  })
+
+  it('rejects a bracketed IPv4-mapped IPv6 cloud-metadata literal before attempting any connection (SSRF bypass regression)', async () => {
+    fakeTransportResponder = () => ({ status: 200, body: 'should-not-be-reached' })
+    await expect(safeFetch('http://[::ffff:169.254.169.254]/latest/meta-data/')).rejects.toThrow(/Unsafe URL rejected \(reserved\/private IP literal\)/)
   })
 
   it('rejects a redirect whose target is localhost (redirect-based SSRF bypass attempt)', async () => {
