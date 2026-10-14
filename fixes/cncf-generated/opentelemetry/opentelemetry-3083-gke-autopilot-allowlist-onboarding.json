@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "opentelemetry: GKE Autopilot allowlist onboarding",
-    "description": "GKE Autopilot allowlist onboarding. Requested by 6+ users.",
+    "description": "OpenTelemetry Collector DaemonSet pods are rejected on GKE Autopilot clusters because Autopilot's warden webhook blocks host ports, read-only hostPath mounts, and custom node affinities by default (e.g. \"autogke-no-write-mode-hostpath\" violations). Requested by 6+ users; fixed by onboarding OpenTelemetry into the GKE Autopilot partner workload allowlist program.",
     "type": "feature",
     "status": "completed",
     "steps": [
@@ -16,11 +16,11 @@
       },
       {
         "title": "Review opentelemetry configuration",
-        "description": "Inspect the relevant opentelemetry configuration:\n```bash\nkubectl get all -n opentelemetry -l app.kubernetes.io/name=opentelemetry\nkubectl get configmap -n opentelemetry -l app.kubernetes.io/part-of=opentelemetry\n```\nGrafana Beyla, which has been donated to OTel as https://opentelemetry.io/docs/zero-code/obi/, is [allowlisted by GKE"
+        "description": "Inspect the relevant opentelemetry configuration:\n```bash\nkubectl get all -n opentelemetry -l app.kubernetes.io/name=opentelemetry\nkubectl get configmap -n opentelemetry -l app.kubernetes.io/part-of=opentelemetry\n```\nGrafana Beyla, which has been donated to OTel as OBI (https://opentelemetry.io/docs/zero-code/obi/), is already allowlisted by GKE Autopilot via the partner workload allowlist program, so the OpenTelemetry Collector follows the same `WorkloadAllowlist` onboarding path."
       },
       {
-        "title": "Apply the fix for GKE Autopilot allowlist onboarding",
-        "description": "I created a project within the opentelemetry owned Google Cloud account, I provided  and myself with the necessary access to it. To do so I had to rework some of the policies across the opentelemetry.io organization:\n\n* Disable the legacy `iam.allowedPolicyMemberDomains`\n* Enable\n```yaml\napiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: ....\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\n\nexemptions:\n\n# Allow host ports for node-local OTLP traffic between monitored workloads and the OpenTelemetry collector DaemonSet pod\n# on the same node. (Disclaimer: For some reason the host port usage was not rejected by GKE AP's warden webhook even without a matching exemption, despite Google's documentation saying that host ports require an exemption.)\n- autogke-no-host-port\n\n# Allow read-only host volume mount and mapping for \"/\" to enable the OpenTelemetry hos\n```"
+        "title": "Apply a GKE Autopilot WorkloadAllowlist for the OpenTelemetry Collector",
+        "description": "Create a `WorkloadAllowlist` that exempts the OpenTelemetry Collector DaemonSet from the Autopilot restrictions it needs to operate, then sync it into the cluster with an `AllowlistSynchronizer`:\n```yaml\napiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: opentelemetry-collector-daemonset-exemptions\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\nexemptions:\n# Allow host ports for node-local OTLP traffic between monitored workloads and the\n# OpenTelemetry collector DaemonSet pod on the same node.\n- autogke-no-host-port\n# Allow read-only host volume mount of \"/\" for the OpenTelemetry host metrics receiver,\n# which requires mounting the node's file system as a read-only volume.\n- autogke-no-write-mode-hostpath\n# Allow custom node affinities, required if users configure the collector's affinity settings.\n- autogke-node-affinity-selector-limitation\n```\nApply it and verify the allowlist is accepted:\n```bash\nkubectl apply -f workload-allowlist.yaml\nkubectl get workloadallowlists.auto.gke.io\n```"
       },
       {
         "title": "Verify the feature works",
@@ -28,9 +28,9 @@
       }
     ],
     "resolution": {
-      "summary": "I created a project within the opentelemetry owned Google Cloud account, I provided  and myself with the necessary access to it.",
+      "summary": "The OpenTelemetry Collector DaemonSet failed to schedule on GKE Autopilot because Autopilot's warden webhook rejects host ports, hostPath volume mounts, and custom node affinities by default. The fix works because GKE Autopilot's partner workload allowlist program lets a vendor-published WorkloadAllowlist exempt specific workloads from those restrictions: onboarding OpenTelemetry (alongside the already-allowlisted Grafana Beyla/OBI) publishes exemptions for autogke-no-host-port, autogke-no-write-mode-hostpath, and node-affinity limits, so the collector's node-local OTLP host port and read-only \"/\" host metrics mount are admitted.",
       "codeSnippets": [
-        "apiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: ....\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\n\nexemptions:\n\n# Allow host ports for node-local OTLP traffic between monitored workloads and the OpenTelemetry collector DaemonSet pod\n# on the same node. (Disclaimer: For some reason the host port usage was not rejected by GKE AP's warden webhook even without a matching exemption, despite Google's documentation saying that host ports require an exemption.)\n- autogke-no-host-port\n\n# Allow read-only host volume mount and mapping for \"/\" to enable the OpenTelemetry host metrics receiver, which\n# requires mounting the node's file system as a read-only volume.\n- autogke-no-write-mode-hostpath\n\n# Allow the custom node affinities. Required if users configure the `affin"
+        "apiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: opentelemetry-collector-daemonset-exemptions\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\nexemptions:\n# Allow host ports for node-local OTLP traffic between monitored workloads and the\n# OpenTelemetry collector DaemonSet pod on the same node.\n- autogke-no-host-port\n# Allow read-only host volume mount of \"/\" for the OpenTelemetry host metrics receiver,\n# which requires mounting the node's file system as a read-only volume.\n- autogke-no-write-mode-hostpath\n# Allow custom node affinities, required if users configure the collector's affinity settings.\n- autogke-node-affinity-selector-limitation"
       ]
     }
   },
