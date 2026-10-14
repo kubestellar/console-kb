@@ -71,6 +71,63 @@ export async function waitForRateLimit() {
 }
 
 /**
+ * Shared retry scaffolding for both the REST (`githubApiResponse`) and
+ * GraphQL (`githubGraphql`) call paths — the two used to hand-roll
+ * identical copies of this loop (rate-limit bookkeeping, 403-exhausted
+ * wait, 5xx exponential backoff, network/timeout retry), which left them
+ * free to drift the way the lib's callers themselves used to before
+ * kubestellar/console-kb#3551/#3604 consolidated *those* into this file.
+ *
+ * `executeFetch()` issues one attempt and returns the raw `Response`.
+ * `handleResponse(response)` runs only once a response has cleared the
+ * 403/5xx retry checks; it decides the final return value (e.g. the raw
+ * Response for REST, or parsed+validated JSON for GraphQL) and is awaited
+ * inside the same try/catch as the fetch, so a parse failure there still
+ * triggers a retry rather than an unhandled rejection. Returns `undefined`
+ * (never a value a `handleResponse` could legitimately produce, including
+ * `null`) once MAX_RETRIES is exhausted, so callers can tell "ran out of
+ * retries" apart from "succeeded with a null/falsy result".
+ */
+async function githubRequestWithRetry(executeFetch, { serverErrorLabel, requestErrorLabel, handleResponse }) {
+  await waitForRateLimit()
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await executeFetch()
+
+      // Track rate limits from response headers
+      const remaining = response.headers?.get?.('x-ratelimit-remaining')
+      const reset = response.headers?.get?.('x-ratelimit-reset')
+      if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
+      if (reset != null) rateLimitReset = parseInt(reset, 10)
+
+      if (response.status === 403 && rateLimitRemaining === 0) {
+        const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
+        log.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
+        await sleep(waitMs)
+        continue
+      }
+
+      if (response.status >= 500) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+        log.warn(`  ${serverErrorLabel} ${response.status}, retrying in ${backoff}ms...`)
+        await sleep(backoff)
+        continue
+      }
+
+      return handleResponse ? await handleResponse(response) : response
+    } catch (err) {
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+      log.warn(`  ${requestErrorLabel} (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
+      if (attempt < MAX_RETRIES - 1) await sleep(backoff)
+    }
+  }
+
+  // Exhausted: fall through with an implicit `undefined`, distinct from
+  // any value a successful `handleResponse` could legitimately return.
+}
+
+/**
  * Low-level GitHub REST call that returns the raw `Response` (or `null`).
  *
  * Owns the shared rate-limit bookkeeping, per-request timeout, and retry
@@ -85,44 +142,18 @@ export async function waitForRateLimit() {
  * fetch helpers need the Response object (kubestellar/console-kb#3536).
  */
 export async function githubApiResponse(url, options = {}) {
-  await waitForRateLimit()
-
   const headers = githubHeaders()
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+  const response = await githubRequestWithRetry(
+    () => fetch(url, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+    { serverErrorLabel: 'Server error', requestErrorLabel: 'GitHub API request error' },
+  )
 
-      // Track rate limits from response headers
-      const remaining = response.headers.get('x-ratelimit-remaining')
-      const reset = response.headers.get('x-ratelimit-reset')
-      if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
-      if (reset != null) rateLimitReset = parseInt(reset, 10)
-
-      if (response.status === 403 && rateLimitRemaining === 0) {
-        const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-        log.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
-        await sleep(waitMs)
-        continue
-      }
-
-      if (response.status >= 500) {
-        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-        log.warn(`  Server error ${response.status}, retrying in ${backoff}ms...`)
-        await sleep(backoff)
-        continue
-      }
-
-      return response
-    } catch (err) {
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-      log.warn(`  GitHub API request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
-      if (attempt < MAX_RETRIES - 1) await sleep(backoff)
-    }
+  if (response === undefined) {
+    log.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
+    return null
   }
-
-  log.warn(`  GitHub API failed after ${MAX_RETRIES} retries: ${url}`)
-  return null
+  return response
 }
 
 /**
@@ -166,60 +197,44 @@ export const GRAPHQL_URL = 'https://api.github.com/graphql'
  * variables object; `options.headers` extends the default header set.
  */
 export async function githubGraphql(query, variables = {}, options = {}) {
-  await waitForRateLimit()
-
   const headers = githubHeaders()
   const body = JSON.stringify({ query, variables })
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json', ...options.headers },
-        body,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      })
+  const NOT_OK = Symbol('graphql-not-ok')
 
-      const remaining = response.headers?.get?.('x-ratelimit-remaining')
-      const reset = response.headers?.get?.('x-ratelimit-reset')
-      if (remaining != null) rateLimitRemaining = parseInt(remaining, 10)
-      if (reset != null) rateLimitReset = parseInt(reset, 10)
+  const result = await githubRequestWithRetry(
+    () => fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json', ...options.headers },
+      body,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }),
+    {
+      serverErrorLabel: 'GraphQL server error',
+      requestErrorLabel: 'GraphQL request error',
+      handleResponse: async response => {
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '')
+          log.warn(`  GraphQL ${response.status}: ${errText.slice(0, 200)}`)
+          return NOT_OK
+        }
 
-      if (response.status === 403 && rateLimitRemaining === 0) {
-        const waitMs = Math.max(0, (rateLimitReset * 1000) - Date.now()) + 1000
-        log.warn(`  Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`)
-        await sleep(waitMs)
-        continue
-      }
+        const json = await response.json()
+        if (json.errors) {
+          log.warn(`  GraphQL errors: ${json.errors[0]?.message}`)
+          return NOT_OK
+        }
+        return json.data ?? null
+      },
+    },
+  )
 
-      if (response.status >= 500) {
-        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-        log.warn(`  GraphQL server error ${response.status}, retrying in ${backoff}ms...`)
-        await sleep(backoff)
-        continue
-      }
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '')
-        log.warn(`  GraphQL ${response.status}: ${errText.slice(0, 200)}`)
-        return null
-      }
-
-      const result = await response.json()
-      if (result.errors) {
-        log.warn(`  GraphQL errors: ${result.errors[0]?.message}`)
-        return null
-      }
-      return result.data ?? null
-    } catch (err) {
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
-      log.warn(`  GraphQL request error (attempt ${attempt + 1}/${MAX_RETRIES}): ${err.message}`)
-      if (attempt < MAX_RETRIES - 1) await sleep(backoff)
-    }
+  if (result === NOT_OK) return null
+  if (result === undefined) {
+    log.warn(`  GraphQL failed after ${MAX_RETRIES} retries`)
+    return null
   }
-
-  log.warn(`  GraphQL failed after ${MAX_RETRIES} retries`)
-  return null
+  return result
 }
 
 async function findHighEngagementIssues(project) {
