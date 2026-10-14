@@ -1,0 +1,74 @@
+{
+  "version": "kc-mission-v1",
+  "name": "opentelemetry-3083-gke-autopilot-allowlist-onboarding",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "opentelemetry: GKE Autopilot allowlist onboarding",
+    "description": "GKE Autopilot allowlist onboarding. Requested by 6+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current opentelemetry deployment",
+        "description": "Verify your opentelemetry version and configuration:\n```bash\nkubectl get pods -n opentelemetry -l app.kubernetes.io/name=opentelemetry\nhelm list -n opentelemetry 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working opentelemetry installation."
+      },
+      {
+        "title": "Review opentelemetry configuration",
+        "description": "Inspect the relevant opentelemetry configuration:\n```bash\nkubectl get all -n opentelemetry -l app.kubernetes.io/name=opentelemetry\nkubectl get configmap -n opentelemetry -l app.kubernetes.io/part-of=opentelemetry\n```\nGrafana Beyla, which has been donated to OTel as https://opentelemetry.io/docs/zero-code/obi/, is [allowlisted by GKE"
+      },
+      {
+        "title": "Apply the fix for GKE Autopilot allowlist onboarding",
+        "description": "I created a project within the opentelemetry owned Google Cloud account, I provided  and myself with the necessary access to it. To do so I had to rework some of the policies across the opentelemetry.io organization:\n\n* Disable the legacy `iam.allowedPolicyMemberDomains`\n* Enable\n```yaml\napiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: ....\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\n\nexemptions:\n\n# Allow host ports for node-local OTLP traffic between monitored workloads and the OpenTelemetry collector DaemonSet pod\n# on the same node. (Disclaimer: For some reason the host port usage was not rejected by GKE AP's warden webhook even without a matching exemption, despite Google's documentation saying that host ports require an exemption.)\n- autogke-no-host-port\n\n# Allow read-only host volume mount and mapping for \"/\" to enable the OpenTelemetry hos\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n opentelemetry -l app.kubernetes.io/name=opentelemetry\nkubectl get events -n opentelemetry --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"GKE Autopilot allowlist onboarding\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "I created a project within the opentelemetry owned Google Cloud account, I provided  and myself with the necessary access to it.",
+      "codeSnippets": [
+        "apiVersion: auto.gke.io/v1\nkind: WorkloadAllowlist\nmetadata:\n  name: ....\n  annotations:\n    autopilot.gke.io/no-connect: \"true\"\n\nexemptions:\n\n# Allow host ports for node-local OTLP traffic between monitored workloads and the OpenTelemetry collector DaemonSet pod\n# on the same node. (Disclaimer: For some reason the host port usage was not rejected by GKE AP's warden webhook even without a matching exemption, despite Google's documentation saying that host ports require an exemption.)\n- autogke-no-host-port\n\n# Allow read-only host volume mount and mapping for \"/\" to enable the OpenTelemetry host metrics receiver, which\n# requires mounting the node's file system as a read-only volume.\n- autogke-no-write-mode-hostpath\n\n# Allow the custom node affinities. Required if users configure the `affin"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "opentelemetry",
+      "incubating",
+      "observability",
+      "feature"
+    ],
+    "cncfProjects": [
+      "opentelemetry"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "expert",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/open-telemetry/community/issues/3083",
+      "repo": "https://github.com/open-telemetry/community"
+    },
+    "reactions": 6,
+    "comments": 28,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with opentelemetry installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-14T06:12:39.074Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
