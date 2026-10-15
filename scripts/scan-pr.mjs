@@ -6,6 +6,55 @@ import { discoverMissionFiles } from './lib/mission-discovery.mjs';
 
 const log = createLogger('scan-pr');
 
+const CG = 'solutions/cncf-generated';
+
+/**
+ * Explicit allow-list of known false positives: quoted diagnostic/workaround
+ * snippets from upstream issue text embedded in mission descriptions
+ * (console-kb#3752). Each entry is scoped to one file, one finding type and a
+ * value regex tight enough that it cannot mask a different payload. No
+ * directory-wide skips.
+ */
+export const MALICIOUS_ALLOWLIST = [
+  // Upstream repro loop `for i in $(seq 1 10); do curl ...`; seq only prints numbers.
+  { file: `${CG}/caddy/caddy-1545-proxy-load-balance-using-multiple-a-records-per-single-hostname.json`,
+    type: 'Command injection: $() in string', value: /^\$\(seq 1 10\)$/ },
+  // Upstream cleanup recipe `find <caddy data dir> ... -exec sh -c ...` run by the user on their own cert metadata files.
+  { file: `${CG}/caddy/caddy-6481-no-matching-certificate-to-load-decoding-certificate-metadata-invalid.json`,
+    type: 'Allowlist escape via find -exec', value: /^Find (?:and remove corrupt metadata files\nfind \/var\/lib\/caddy\/|the certificate metadata files in Caddy's data directory\.)/ },
+  // Upstream `pacman -Q $(pactree -u docker)` package-version query; read-only.
+  { file: `${CG}/containerd/containerd-4509-containers-with-curl-based-health-checks-becoming-unresponsive.json`,
+    type: 'Command injection: $() in string', value: /^\$\(pactree -u docker\)$/ },
+  // Quoted upstream shebang line `#! /usr/bin/env sh`, not an invocation.
+  { file: `${CG}/containerd/containerd-5502-shim-v2-hangs-on-reboot-shutdown.json`,
+    type: 'Allowlist escape via env', value: /^env sh$/ },
+  // Prose "create the env and manually do this command" matched as `env ... sh`; no command is run.
+  { file: `${CG}/grpc/grpc-29262-a-solution-to-build-apple-silicon-m1-python-binary-wheels.json`,
+    type: 'Allowlist escape via env', value: /^env and manually do this command every time,/ },
+  // Quoted upstream Vue theme snippet (`<script>` in a code sample), not rendered HTML.
+  { file: `${CG}/open-webui/open-webui-316-feat-custom-themes.json`,
+    type: 'XSS: script tag', value: /^<script>$/ },
+  // Upstream query-log pretty-printer piping a log file into `python3 -c` json parsing; local read-only.
+  { file: `${CG}/prometheus/prometheus-1315-add-option-to-log-slow-queries-and-recording-rules.json`,
+    type: 'Interpreter -c/-e invokes shell primitive', value: /^python3 -c "\nimport sys, json\n/ },
+  // Upstream `curl localhost:9090/api/v1/status/tsdb | python3 -m json.tool` pretty-printer against local Prometheus.
+  { file: `${CG}/prometheus/prometheus-968-configurable-limit-for-prometheus-s-disk-space-usage.json`,
+    type: 'Suspicious curl pipe', value: /^curl -s http:\/\/localhost:9090\/api\/v1\/status\/tsdb \| python3$/ },
+];
+
+function normalizePath(file) {
+  return file.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function isAllowlisted(file, finding) {
+  const path = normalizePath(file);
+  return MALICIOUS_ALLOWLIST.some(
+    e => (path === e.file || path.endsWith(`/${e.file}`)) &&
+      e.type === finding.type &&
+      e.value.test(finding.value),
+  );
+}
+
 /**
  * Scans `files` and returns a result summary plus the rendered markdown
  * report. Exported for unit testing; does not call process.exit or write
@@ -30,6 +79,9 @@ export function runScan(files, { isFullScan } = {}) {
     }
 
     const result = scanMissionFile(content);
+    if (!result.error && result.scan?.malicious?.findings?.length) {
+      result.scan.malicious.findings = result.scan.malicious.findings.filter(f => !isAllowlisted(file, f));
+    }
     sections.push(formatScanResultAsMarkdown(file, result));
     scannedCount++;
 
