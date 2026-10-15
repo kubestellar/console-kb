@@ -1,8 +1,7 @@
 /**
  * Shared SSRF guard (CWE-918) for fetching attacker/LLM-influenceable URLs
  * that are *not* pinned to a fixed allowlist (unlike `lib/llm-endpoint-guard.mjs`,
- * which gates the operator-configured `LLM_ENDPOINT` against a small, fixed
- * set of trusted API hosts).
+ * which gates the fixed-host `ANTHROPIC_ENDPOINT` against a trusted prefix).
  *
  * Helm chart-repo URLs (`helmRepoUrl`) are LLM-synthesized from mission
  * content that is itself seeded from public, unauthenticated sources

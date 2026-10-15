@@ -10,12 +10,13 @@
  *   5. Clean up (delete namespace)
  *
  * Usage:
- *   GITHUB_TOKEN=xxx node scripts/mission-executor.mjs <mission.json> [mission2.json ...]
+ *   LLM_BASE_URL=https://proxy/v1 LLM_API_KEY=xxx node scripts/mission-executor.mjs <mission.json> [mission2.json ...]
  *
  * Environment:
- *   GITHUB_TOKEN     — GitHub Models API auth (required)
+ *   LLM_BASE_URL     — OpenAI-compatible LLM proxy base URL (required)
+ *   LLM_API_KEY      — LLM proxy API key (required)
+ *   LLM_MODEL        — model served by the proxy (default: see lib/llm-proxy-config.mjs)
  *   KUBECONFIG       — path to kubeconfig (default: ~/.kube/config)
- *   LLM_MODEL        — model to use (default: openai/gpt-4o-mini)
  *   MAX_RETRIES      — retries per step (default: 3)
  *   STEP_TIMEOUT_MS  — timeout per command (default: 120000)
  *   MISSION_TIMEOUT_MS — timeout per mission (default: 300000)
@@ -33,6 +34,7 @@ import {
   execCommand,
 } from './lib/command-sandbox.mjs'
 import { SYSTEM_PROMPT, llmChat } from './lib/executor-llm.mjs'
+import { requireLlmProxyConfig } from './lib/llm-proxy-config.mjs'
 
 const log = createLogger('mission-executor')
 
@@ -345,6 +347,9 @@ async function main() {
     log.error('no mission files provided', { argv_count: files.length })
     process.exit(1)
   }
+
+  // Fail loudly before touching the cluster if the LLM proxy env is unset (console-kb#3702).
+  requireLlmProxyConfig(log)
 
   // Verify cluster connectivity
   console.log('🔌 Checking cluster connectivity...')

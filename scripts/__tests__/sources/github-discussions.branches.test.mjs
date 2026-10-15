@@ -25,7 +25,8 @@ describe('GitHubDiscussionsSource — branch coverage', () => {
     delete process.env.USE_COPILOT
     delete process.env.COPILOT_TOKEN
     delete process.env.ANTHROPIC_API_KEY
-    delete process.env.LLM_TOKEN
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 

@@ -6,18 +6,13 @@ import { synthesizeMission } from '../../sources/llm-synthesizer.mjs'
  * synthesizeWithFallback and the two API-caller helpers.
  *
  * The existing suites cover the happy path (primary Copilot succeeds),
- * the retry path, and one fallback shape (Copilot exhausts + Anthropic
- * fetch throws + GitHub Models succeeds). That leaves these arms open:
+ * the retry path, and the Anthropic fallback shape. That leaves these arms open:
  *
  *   - line 185 truthy — Anthropic response.content is non-empty AND the
  *     parsed payload is a valid mission (synthesizeWithFallback returns
  *     validateAndClean(parsed))
  *   - line 187 falsy — Anthropic response.content is non-empty but
- *     parsed.skip is true → fall through to GitHub Models
- *   - line 200 falsy — GitHub Models response.content is empty → fall
- *     through to bottom `return null`
- *   - line 202 falsy — GitHub Models parsed payload lacks required
- *     fields → fall through to bottom `return null`
+ *     parsed.skip is true → fall through to bottom `return null`
  *   - line 111 falsy — response.rateLimited=true but retryAfterSec is
  *     absent → wait defaults to 5 (`retryAfterSec || 5`)
  *   - line 240 falsy — callAnthropic response body has no `content`
@@ -40,7 +35,7 @@ const ENV_KEYS = [
   'COPILOT_TOKEN',
   'GITHUB_TOKEN',
   'ANTHROPIC_API_KEY',
-  'LLM_TOKEN',
+  'LLM_BASE_URL', 'LLM_API_KEY',
   'LLM_MAX_TOKENS',
 ]
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
@@ -115,13 +110,13 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
 
   it('returns Anthropic-synthesized mission when Copilot exhausts and Anthropic succeeds', async () => {
     // Covers 185 truthy (content non-empty) AND 187 truthy (parsed valid),
-    // returning validateAndClean(parsed). GitHub Models must NOT be called
-    // in this path because the Anthropic branch already returned.
+    // returning validateAndClean(parsed).
     process.env.COPILOT_TOKEN = 'copilot-tok'
     delete process.env.USE_COPILOT
     process.env.ANTHROPIC_API_KEY = 'anthropic-tok'
-    // LLM_TOKEN intentionally unset — proves anthropic branch returned.
-    delete process.env.LLM_TOKEN
+    // LLM proxy intentionally unset so Copilot is primary.
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
 
     const payload = goodMissionPayload()
     const anthropicOk = {
@@ -148,7 +143,7 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
 
     expect(result).not.toBeNull()
     expect(result.type).toBe('troubleshoot')
-    // 3 copilot + 1 anthropic = 4 total; no GitHub Models call.
+    // 3 copilot + 1 anthropic = 4 total.
     expect(fetchMock).toHaveBeenCalledTimes(4)
     const [anthropicUrl] = fetchMock.mock.calls[3]
     expect(anthropicUrl).toContain('api.anthropic.com')
@@ -156,14 +151,14 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
 
   it('falls through Anthropic parsed.skip and returns null when nothing else set', async () => {
     // Covers 187 falsy (parsed.skip=true so no return) plus the bottom
-    // `return null` when neither GitHub Models nor further fallbacks are
-    // configured. This ALSO covers the `data.content || []` fallback in
+    // `return null` when no further fallbacks are configured. This ALSO covers the `data.content || []` fallback in
     // callAnthropic (line 240 falsy) — the Anthropic body has NO
     // content array at all.
     process.env.COPILOT_TOKEN = 'copilot-tok'
     delete process.env.USE_COPILOT
     process.env.ANTHROPIC_API_KEY = 'anthropic-tok'
-    delete process.env.LLM_TOKEN
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
 
     // No content array — callAnthropic returns { content: null }, so
     // synthesizeWithFallback's `if (response.content)` is falsy (line 185
@@ -192,73 +187,6 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 
-  it('falls through GitHub Models empty content and returns null', async () => {
-    // Covers 200 falsy (response.content is empty for github-models
-    // fallback) via a body with no `choices` — callOpenAICompatible
-    // returns { content: null }. Anthropic path must not be entered.
-    process.env.COPILOT_TOKEN = 'copilot-tok'
-    delete process.env.USE_COPILOT
-    delete process.env.ANTHROPIC_API_KEY
-    process.env.LLM_TOKEN = 'gh-tok'
-
-    const ghNoContent = {
-      ok: true,
-      status: 200,
-      json: async () => ({ id: 'chatcmpl_1' }),
-    }
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(ghNoContent)
-    globalThis.fetch = fetchMock
-
-    vi.useFakeTimers()
-    const p = synthesizeMission(BASE_PARAMS)
-    await vi.advanceTimersByTimeAsync(30_000)
-    const result = await p
-    vi.useRealTimers()
-
-    expect(result).toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-  })
-
-  it('falls through GitHub Models parsed.skip and returns null', async () => {
-    // Covers 202 falsy — parsed.skip=true means the inner `if` guard is
-    // false, so synthesizeWithFallback drops to the bottom return null.
-    process.env.COPILOT_TOKEN = 'copilot-tok'
-    delete process.env.USE_COPILOT
-    delete process.env.ANTHROPIC_API_KEY
-    process.env.LLM_TOKEN = 'gh-tok'
-
-    const ghSkip = {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        choices: [{ message: { content: JSON.stringify({ skip: true, reason: 'not a real bug' }) } }],
-      }),
-    }
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(ghSkip)
-    globalThis.fetch = fetchMock
-
-    vi.useFakeTimers()
-    const p = synthesizeMission(BASE_PARAMS)
-    await vi.advanceTimersByTimeAsync(30_000)
-    const result = await p
-    vi.useRealTimers()
-
-    expect(result).toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-  })
-
   it('handles 429 rate-limit with missing retry-after header (defaults to 5s)', async () => {
     // Covers line 111 falsy branch (`response.retryAfterSec || 5`) AND
     // line 264 falsy branch (`response.headers.get('retry-after') || '5'`)
@@ -267,7 +195,8 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     delete process.env.COPILOT_TOKEN
     delete process.env.GITHUB_TOKEN
     delete process.env.ANTHROPIC_API_KEY
-    process.env.LLM_TOKEN = 'gh-tok'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'gh-tok'
 
     const rateLimit = {
       ok: false,
@@ -297,6 +226,30 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('uses the LLM proxy as primary backend when configured, even with a Copilot token (console-kb#3702)', async () => {
+    process.env.COPILOT_TOKEN = 'copilot-tok'
+    delete process.env.USE_COPILOT
+    delete process.env.ANTHROPIC_API_KEY
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'proxy-key'
+
+    const good = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(goodMissionPayload()) } }],
+      }),
+    }
+    const fetchMock = vi.fn().mockResolvedValueOnce(good)
+    globalThis.fetch = fetchMock
+
+    const result = await synthesizeMission(BASE_PARAMS)
+
+    expect(result).not.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://llm-proxy.test/v1/chat/completions')
+  })
+
   it('logs and returns null when the Anthropic fallback fetch itself throws', async () => {
     // Before this fix, a thrown error in synthesizeWithFallback's Anthropic
     // branch was swallowed by a bare `catch { /* fall through */ }` with no
@@ -304,7 +257,8 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     process.env.COPILOT_TOKEN = 'copilot-tok'
     delete process.env.USE_COPILOT
     process.env.ANTHROPIC_API_KEY = 'anthropic-tok'
-    delete process.env.LLM_TOKEN
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
 
     const fetchMock = vi
       .fn()
@@ -326,32 +280,4 @@ describe('synthesizeMission — final synthesizeWithFallback branches', () => {
     expect(warnCall).toMatch(/Anthropic fallback error: anthropic network blip/)
   })
 
-  it('logs and returns null when the GitHub Models fallback fetch itself throws', async () => {
-    // Same silent-swallow gap as above, in the final `catch { /* give up */ }`
-    // arm for the GitHub Models fallback — the very last chance to explain
-    // why synthesis produced nothing.
-    process.env.COPILOT_TOKEN = 'copilot-tok'
-    delete process.env.USE_COPILOT
-    delete process.env.ANTHROPIC_API_KEY
-    process.env.LLM_TOKEN = 'gh-tok'
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockResolvedValueOnce(copilotFail())
-      .mockRejectedValueOnce(new Error('github models network blip'))
-    globalThis.fetch = fetchMock
-
-    vi.useFakeTimers()
-    const p = synthesizeMission(BASE_PARAMS)
-    await vi.advanceTimersByTimeAsync(30_000)
-    const result = await p
-    vi.useRealTimers()
-
-    expect(result).toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-    const warnCall = process.stderr.write.mock.calls.map((c) => c.join(' ')).join('\n')
-    expect(warnCall).toMatch(/GitHub Models fallback error: github models network blip/)
-  })
 })

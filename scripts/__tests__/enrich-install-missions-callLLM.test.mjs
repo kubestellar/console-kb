@@ -13,7 +13,7 @@
 // be exercised directly with:
 //   - vi.stubGlobal('fetch', ...) to inject responses without the network
 //   - vi.useFakeTimers() to make the retry-after/backoff sleeps instant
-//   - process.env.LLM_TOKEN to satisfy the token gate without touching auth
+//   - process.env.LLM_BASE_URL / LLM_API_KEY to configure the LLM proxy (#3702)
 //
 // Each test asserts both the return value and the fetch call shape (URL,
 // method, headers, body JSON structure, model, response_format), matching
@@ -59,27 +59,27 @@ function goodContentResponse(payload = { uninstall: [{ title: 'u', description: 
 // (scripts/lib/logger.mjs), which writes JSON lines directly to
 // process.stderr rather than calling console.warn — see #3599.
 let warnSpy
-let originalLLMToken
-let originalGithubToken
+const ENV_KEYS = ['LLM_BASE_URL', 'LLM_API_KEY', 'LLM_MODEL']
+const savedEnv = {}
 
 beforeEach(() => {
   warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   vi.useFakeTimers()
-  originalLLMToken = process.env.LLM_TOKEN
-  originalGithubToken = process.env.GITHUB_TOKEN
-  process.env.LLM_TOKEN = 'test-token'
-  // GITHUB_TOKEN was captured at module load; but callLLM reads LLM_TOKEN
-  // dynamically each call, so setting only LLM_TOKEN is enough here.
+  for (const k of ENV_KEYS) savedEnv[k] = process.env[k]
+  // callLLM reads the LLM proxy config per call (lib/llm-proxy-config.mjs).
+  process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+  process.env.LLM_API_KEY = 'test-token'
+  delete process.env.LLM_MODEL
 })
 
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   warnSpy.mockRestore()
-  if (originalLLMToken === undefined) delete process.env.LLM_TOKEN
-  else process.env.LLM_TOKEN = originalLLMToken
-  if (originalGithubToken === undefined) delete process.env.GITHUB_TOKEN
-  else process.env.GITHUB_TOKEN = originalGithubToken
+  for (const k of ENV_KEYS) {
+    if (savedEnv[k] === undefined) delete process.env[k]
+    else process.env[k] = savedEnv[k]
+  }
 })
 
 // Small helper: await a callLLM() promise while advancing fake timers so
@@ -97,29 +97,27 @@ async function runWithTimers(promise) {
   return result
 }
 
-describe('callLLM — token gate', () => {
-  it('returns null when neither LLM_TOKEN nor GITHUB_TOKEN is set', async () => {
-    delete process.env.LLM_TOKEN
-    delete process.env.GITHUB_TOKEN
+describe('callLLM — LLM proxy config gate', () => {
+  it('throws LlmConfigError without calling fetch when LLM_BASE_URL / LLM_API_KEY are unset', async () => {
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    const out = await callLLM(SANITIZED_MISSION)
-
-    expect(out).toBeNull()
+    await expect(callLLM(SANITIZED_MISSION)).rejects.toMatchObject({ name: 'LlmConfigError' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('prefers LLM_TOKEN over GITHUB_TOKEN when both are set', async () => {
-    process.env.LLM_TOKEN = 'llm-tok'
-    process.env.GITHUB_TOKEN = 'gh-tok'
+  it('sends LLM_API_KEY as the bearer token to the proxy endpoint', async () => {
+    process.env.LLM_API_KEY = 'proxy-key'
     const fetchMock = vi.fn().mockResolvedValue(goodContentResponse())
     vi.stubGlobal('fetch', fetchMock)
 
     await runWithTimers(callLLM(SANITIZED_MISSION))
 
-    const [, init] = fetchMock.mock.calls[0]
-    expect(init.headers['Authorization']).toBe('Bearer llm-tok')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://llm-proxy.test/v1/chat/completions')
+    expect(init.headers['Authorization']).toBe('Bearer proxy-key')
   })
 })
 
@@ -146,11 +144,11 @@ describe('callLLM — happy path', () => {
     await runWithTimers(callLLM(SANITIZED_MISSION))
 
     const [url, init] = fetchMock.mock.calls[0]
-    expect(String(url)).toMatch(/models\.github\.ai/)
+    expect(String(url)).toBe('https://llm-proxy.test/v1/chat/completions')
     expect(init.method).toBe('POST')
     expect(init.headers['Content-Type']).toBe('application/json')
     const body = JSON.parse(init.body)
-    expect(body.model).toBeTruthy()
+    expect(body.model).toBe('gpt-4o-mini')
     expect(body.temperature).toBe(0.3)
     expect(body.max_tokens).toBe(2500)
     expect(body.response_format).toEqual({ type: 'json_object' })
@@ -217,7 +215,7 @@ describe('callLLM — HTTP error handling', () => {
 })
 
 describe('callLLM — response validation (CWE-434 http-to-file gate)', () => {
-  it('returns null when Content-Type is not application/json', async () => {
+  it('throws LlmResponseError (no retry) when Content-Type is not application/json', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       status: 200,
       contentType: 'text/html; charset=utf-8',
@@ -225,13 +223,11 @@ describe('callLLM — response validation (CWE-434 http-to-file gate)', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const out = await runWithTimers(callLLM(SANITIZED_MISSION))
-
-    expect(out).toBeNull()
+    await expect(runWithTimers(callLLM(SANITIZED_MISSION))).rejects.toThrow(/unexpected Content-Type: text\/html.*gotcha/)
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null when Content-Type header is missing entirely', async () => {
+  it('throws LlmResponseError when Content-Type header is missing entirely', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       status: 200,
       ok: true,
@@ -240,9 +236,7 @@ describe('callLLM — response validation (CWE-434 http-to-file gate)', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const out = await runWithTimers(callLLM(SANITIZED_MISSION))
-
-    expect(out).toBeNull()
+    await expect(runWithTimers(callLLM(SANITIZED_MISSION))).rejects.toMatchObject({ name: 'LlmResponseError' })
   })
 
   it('accepts Content-Type with charset suffix (contains match)', async () => {

@@ -15,7 +15,7 @@ const ENV_KEYS = [
   'COPILOT_TOKEN',
   'GITHUB_TOKEN',
   'ANTHROPIC_API_KEY',
-  'LLM_TOKEN',
+  'LLM_BASE_URL', 'LLM_API_KEY',
   'LLM_MAX_TOKENS',
 ]
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
@@ -79,7 +79,8 @@ describe('synthesizeMission — third-wave branch coverage (#3124)', () => {
   })
 
   it('validateAndClean: unknown difficulty and type fall back to defaults (line 452, 454 false arms)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodPayload({ difficulty: 'planetary', type: 'wormhole' })
     globalThis.fetch = vi.fn().mockResolvedValue(llmResponse(JSON.stringify(payload)))
 
@@ -93,7 +94,8 @@ describe('synthesizeMission — third-wave branch coverage (#3124)', () => {
   it('validateAndClean: steps missing title or description are filtered out (line 432 filter arm)', async () => {
     // 5 raw steps, 2 of which lack title/description. The remaining 3 must
     // still be actionable and satisfy MIN_STEPS = 3.
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodPayload({
       steps: [
         { title: '', description: 'no title so drop me' },
@@ -123,7 +125,8 @@ describe('synthesizeMission — third-wave branch coverage (#3124)', () => {
     // A stripped-down payload avoids the ``` embedded in the goodPayload
     // step descriptions (which would otherwise flip closingFence past
     // contentStart and hit the TRUE arm instead).
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const plainPayload = {
       description: 'CrashLoopBackOff from bad image tag pulls fail.',
       steps: [
@@ -151,7 +154,8 @@ describe('synthesizeMission — third-wave branch coverage (#3124)', () => {
     // (buildPrompt is internal), so we assert the LLM still produces a
     // valid mission and inspect the fetch body to confirm the section header
     // never made it into the prompt.
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodPayload()
     const fetchMock = vi.fn().mockResolvedValue(llmResponse(JSON.stringify(payload)))
     globalThis.fetch = fetchMock
@@ -175,7 +179,8 @@ describe('synthesizeMission — third-wave branch coverage (#3124)', () => {
   it('cleanInput: empty solution text short-circuits and no "Solution / Resolution" section is emitted (line 370 falsy arm)', async () => {
     // solution === '' hits `if (!text) return ''` in cleanInput. The
     // section header must therefore be absent from the prompt.
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodPayload()
     const fetchMock = vi.fn().mockResolvedValue(llmResponse(JSON.stringify(payload)))
     globalThis.fetch = fetchMock

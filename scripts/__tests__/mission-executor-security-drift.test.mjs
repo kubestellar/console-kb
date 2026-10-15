@@ -27,9 +27,9 @@ import { fileURLToPath } from 'url'
 //     into spawnSync); the `[BLOCKED] Binary not in allowlist`
 //     message is the observable proof this second-stage guard is
 //     still wired.
-//   * assertTrustedEndpoint() enforces the LLM_ENDPOINT prefix
-//     allowlist at module load; a drift here would let LLM traffic
-//     be redirected to an attacker-controlled host.
+//   * LLM traffic goes only to the env-configured proxy validated by
+//     lib/llm-proxy-config.mjs (console-kb#3702); a drift here could
+//     reintroduce a hard-coded/attacker-controlled endpoint.
 //
 // None of these are meaningfully assertable via runtime alone —
 // e.g. we cannot enumerate every future novel injection pattern.
@@ -38,19 +38,13 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // The command-sandbox reject arms (validateCommand/sanitizeArg/execCommand)
-// and the endpoint-trust gate (assertTrustedEndpoint) were split out of
-// mission-executor.mjs into ./lib/command-sandbox.mjs and
-// ./lib/executor-llm.mjs respectively (console-kb#3151). mission-executor.mjs
-// re-exports the sandbox primitives unchanged, so we anchor the literals in
-// their new home.
-//
-// The `assertTrustedEndpoint` function body itself now lives in the shared
-// `lib/llm-endpoint-guard.mjs` (console-kb#3614); `lib/executor-llm.mjs`
-// still runs the module-load gate against `LLM_ENDPOINT`, so we pin the
-// gate literal there and the function body in the guard.
+// and the LLM client were split out of mission-executor.mjs into
+// ./lib/command-sandbox.mjs and ./lib/executor-llm.mjs respectively
+// (console-kb#3151). mission-executor.mjs re-exports the sandbox primitives
+// unchanged, so we anchor the literals in their new home.
 const SANDBOX_SRC = readFileSync(join(__dirname, '..', 'lib', 'command-sandbox.mjs'), 'utf8')
 const LLM_SRC = readFileSync(join(__dirname, '..', 'lib', 'executor-llm.mjs'), 'utf8')
-const GUARD_SRC = readFileSync(join(__dirname, '..', 'lib', 'llm-endpoint-guard.mjs'), 'utf8')
+const EXECUTOR_SRC = readFileSync(join(__dirname, '..', 'mission-executor.mjs'), 'utf8')
 const SRC = SANDBOX_SRC
 
 describe('mission-executor.mjs security-gate literals (drift guard)', () => {
@@ -127,14 +121,18 @@ describe('mission-executor.mjs security-gate literals (drift guard)', () => {
     })
   })
 
-  describe('assertTrustedEndpoint LLM prefix allowlist', () => {
-    it('rejects endpoints not matching an allowed prefix', () => {
-      expect(GUARD_SRC).toContain("if (!allowedPrefixes.some(prefix => endpoint.startsWith(prefix))) {")
-      expect(GUARD_SRC).toContain('throw new Error(`Untrusted ${name}: ${endpoint}. Must start with one of: ${allowedPrefixes.join(\', \')}`)')
+  describe('LLM endpoint configuration (console-kb#3702)', () => {
+    it('lib/executor-llm.mjs takes endpoint/key/model from lib/llm-proxy-config.mjs per call', () => {
+      expect(LLM_SRC).toContain("import { getLlmProxyConfig } from './llm-proxy-config.mjs'")
+      expect(LLM_SRC).toContain('getLlmProxyConfig()')
+      expect(LLM_SRC).not.toMatch(/models\.github\.ai/)
+      expect(LLM_SRC).not.toMatch(/process\.env\.LLM_/)
     })
 
-    it('runs the check at module load against LLM_ENDPOINT', () => {
-      expect(LLM_SRC).toContain('const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)')
+    it('main() fails loudly via requireLlmProxyConfig before touching the cluster', () => {
+      const gate = EXECUTOR_SRC.indexOf('requireLlmProxyConfig(log)')
+      expect(gate).toBeGreaterThan(-1)
+      expect(gate).toBeLessThan(EXECUTOR_SRC.indexOf("runBinary('kubectl', ['cluster-info'"))
     })
   })
 })

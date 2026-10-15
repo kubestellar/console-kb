@@ -60,7 +60,6 @@ vi.mock('node:http', () => ({ request: fakeHttpRequest }))
 vi.mock('node:https', () => ({ request: fakeHttpRequest }))
 
 import {
-  assertTrustedEndpoint,
   githubApi,
   fetchRawFile,
   fetchReadme,
@@ -93,12 +92,14 @@ function highRateLimitHeaders(extra = {}) {
   return { 'x-ratelimit-remaining': '4999', 'x-ratelimit-reset': '0', ...extra }
 }
 
-let originalLLMToken
+let originalLlmBaseUrl
+let originalLlmApiKey
 let originalGithubToken
 
 beforeEach(() => {
   vi.useFakeTimers()
-  originalLLMToken = process.env.LLM_TOKEN
+  originalLlmBaseUrl = process.env.LLM_BASE_URL
+  originalLlmApiKey = process.env.LLM_API_KEY
   originalGithubToken = process.env.GITHUB_TOKEN
   fakeHttpResponder = () => ({ status: 200 })
 })
@@ -117,32 +118,12 @@ afterEach(async () => {
 
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  if (originalLLMToken === undefined) delete process.env.LLM_TOKEN
-  else process.env.LLM_TOKEN = originalLLMToken
+  if (originalLlmBaseUrl === undefined) delete process.env.LLM_BASE_URL
+  else process.env.LLM_BASE_URL = originalLlmBaseUrl
+  if (originalLlmApiKey === undefined) delete process.env.LLM_API_KEY
+  else process.env.LLM_API_KEY = originalLlmApiKey
   if (originalGithubToken === undefined) delete process.env.GITHUB_TOKEN
   else process.env.GITHUB_TOKEN = originalGithubToken
-})
-
-// ─── assertTrustedEndpoint ─────────────────────────────────────────────
-
-describe('assertTrustedEndpoint (cncf-install-missions copy)', () => {
-  it('returns the endpoint unchanged when it matches an allowed prefix', () => {
-    expect(assertTrustedEndpoint('https://api.openai.com/v1/chat')).toBe(
-      'https://api.openai.com/v1/chat',
-    )
-  })
-
-  it('throws for an endpoint outside the allowlist', () => {
-    expect(() => assertTrustedEndpoint('https://evil.example.com/x')).toThrow(
-      /Untrusted LLM_ENDPOINT/,
-    )
-  })
-
-  it('accepts a caller-supplied allowlist override', () => {
-    expect(() =>
-      assertTrustedEndpoint('https://internal.example.com/', ['https://internal.example.com/']),
-    ).not.toThrow()
-  })
 })
 
 // ─── githubApi ──────────────────────────────────────────────────────────
@@ -545,19 +526,19 @@ describe('gatherProjectContext', () => {
 // ─── synthesizeInstallMission ───────────────────────────────────────────
 
 describe('synthesizeInstallMission', () => {
-  it('returns null immediately when no LLM token is configured', async () => {
-    delete process.env.LLM_TOKEN
-    delete process.env.GITHUB_TOKEN
+  it('throws LlmConfigError without fetching when the LLM proxy env is unset', async () => {
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await synthesizeInstallMission({ name: 'demo' }, {})
-    expect(result).toBeNull()
+    await expect(synthesizeInstallMission({ name: 'demo' }, {})).rejects.toMatchObject({ name: 'LlmConfigError' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('returns the parsed mission on a valid LLM response', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = { steps: [{ title: 's', description: 'd' }] }
     vi.stubGlobal(
       'fetch',
@@ -575,7 +556,8 @@ describe('synthesizeInstallMission', () => {
   })
 
   it('returns null when the LLM signals skip:true', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -590,22 +572,25 @@ describe('synthesizeInstallMission', () => {
   })
 
   it('returns null on a non-ok LLM response', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 500, headers: { 'content-type': 'application/json' } })))
     expect(await synthesizeInstallMission({ name: 'demo' }, {})).toBeNull()
   })
 
-  it('returns null when Content-Type is not application/json', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+  it('throws LlmResponseError when Content-Type is not application/json', async () => {
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => jsonResponse({ status: 200, body: 'not json', headers: { 'content-type': 'text/plain' } })),
     )
-    expect(await synthesizeInstallMission({ name: 'demo' }, {})).toBeNull()
+    await expect(synthesizeInstallMission({ name: 'demo' }, {})).rejects.toThrow(/text\/plain — body: not json/)
   })
 
   it('retries on 429 then succeeds', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = { steps: [{ title: 's', description: 'd' }] }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ status: 429, headers: { 'retry-after': '1' } }))

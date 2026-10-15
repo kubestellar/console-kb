@@ -25,7 +25,8 @@ import { join } from 'node:path'
 const ORIGINAL_FETCH = globalThis.fetch
 const ORIGINAL_ENV = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-  LLM_TOKEN: process.env.LLM_TOKEN,
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
   DRY_RUN: process.env.DRY_RUN,
   MAX_RETRIES: process.env.MAX_RETRIES,
   MISSION_TIMEOUT_MS: process.env.MISSION_TIMEOUT_MS,
@@ -91,7 +92,8 @@ describe('main — cluster preflight + execution loop (mission-executor.mjs)', (
     origErr = console.error
     console.log = vi.fn()
     console.error = vi.fn()
-    process.env.GITHUB_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     process.env.DRY_RUN = 'true'
     process.env.REPORT_PATH = join(tmpDir, 'report.json')
   })

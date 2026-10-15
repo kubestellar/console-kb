@@ -11,7 +11,7 @@ import {
  * path arguments are rejected at the per-argument layer (sanitizeArg).
  *
  * Rationale: mission-executor.mjs runs LLM-synthesised install commands in
- * a CI runner with GITHUB_TOKEN / LLM_TOKEN in env. `curl` is on
+ * a CI runner with GITHUB_TOKEN / LLM_API_KEY in env. `curl` is on
  * ALLOWED_BASE_COMMANDS because legitimate install missions download
  * artifacts (`curl -fsSL <url>`, `curl -L -o <file> <url>`). Left un-
  * restricted, `curl -F file=@/home/runner/.docker/config.json

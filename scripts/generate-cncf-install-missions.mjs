@@ -5,7 +5,10 @@
  * synthesizes via LLM, and applies a 7-gate quality gate.
  *
  * Environment variables:
- *   GITHUB_TOKEN       — GitHub API + GitHub Models auth
+ *   GITHUB_TOKEN       — GitHub API auth
+ *   LLM_BASE_URL       — OpenAI-compatible LLM proxy base URL (required)
+ *   LLM_API_KEY        — LLM proxy API key (required)
+ *   LLM_MODEL          — model served by the proxy (default: see lib/llm-proxy-config.mjs)
  *   TARGET_PROJECTS    — comma-separated project names (empty = all)
  *   BATCH_INDEX        — batch index for parallelism
  *   BATCH_SIZE         — projects per batch (default 20)
@@ -21,7 +24,10 @@ import { CNCF_PROJECTS } from './cncf-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'
-import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
+// LLM endpoint / key / model come from the env-configured proxy
+// (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL), owned and validated by
+// lib/llm-proxy-config.mjs (console-kb#3702).
+import { getLlmProxyConfig, getLlmModel, requireLlmProxyConfig, LlmConfigError, LlmResponseError } from './lib/llm-proxy-config.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton, isMissionStale as sharedIsMissionStale } from './lib/mission-file.mjs'
 import { checkHelmRepoUrl } from './lib/helm-sources.mjs'
 // Mission-tree sanitizer previously inlined inside `main()` — extracted to
@@ -70,15 +76,7 @@ const QUALITY_THRESHOLD = genQualityThreshold(60)
 const DRAFT_THRESHOLD = parseInt(process.env.DRAFT_THRESHOLD || '40', 10)
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '60000', 10)
-
-// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF).
-// ALLOWED_ENDPOINT_PREFIXES / assertTrustedEndpoint are shared with
-// generate-platform-missions.mjs via ./lib/llm-endpoint-guard.mjs
-// (kubestellar/console-kb#3134, #3333).
-const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
 function loadInstallSourcesConfig() {
   const configPath = join(__dirname, 'install-sources.yaml')
@@ -192,18 +190,19 @@ function buildInstallPrompt(project, context) {
 
 // ─── LLM call ────────────────────────────────────────────────────────
 
+// Throws LlmConfigError when the LLM proxy env is unset and LlmResponseError
+// on a non-JSON response (console-kb#3702); main() aborts the run on either.
 async function synthesizeInstallMission(project, context) {
-  const token = process.env.LLM_TOKEN || GITHUB_TOKEN
-  if (!token) return null
+  const { endpoint, apiKey, model } = getLlmProxyConfig()
 
   const prompt = buildInstallPrompt(project, context)
 
   // Request/retry/Content-Type/size-ceiling handling (CWE-434) lives in the
   // shared helper — see lib/llm-json-request.mjs for the full contract.
   const parsed = await requestLlmChatJson({
-    endpoint: TRUSTED_LLM_ENDPOINT,
-    model: LLM_MODEL,
-    token,
+    endpoint,
+    model,
+    token: apiKey,
     systemPrompt: INSTALL_SYSTEM_PROMPT,
     userPrompt: prompt,
     maxTokens: 3000,
@@ -304,7 +303,7 @@ function formatReport(report) {
   const lines = [
     '# CNCF Install Mission Generation Report',
     `Generated: ${new Date().toISOString()}`,
-    `Model: ${LLM_MODEL}`,
+    `Model: ${getLlmModel()}`,
     '',
     '## Summary',
     `- Published: ${report.published}`,
@@ -341,6 +340,7 @@ async function main() {
     log.error('GITHUB_TOKEN required')
     process.exit(1)
   }
+  requireLlmProxyConfig(log)
 
   const config = loadInstallSourcesConfig()
   mkdirSync(SOLUTIONS_DIR, { recursive: true })
@@ -408,6 +408,8 @@ async function main() {
     try {
       llmResult = await synthesizeInstallMission(project, context)
     } catch (err) {
+      // Proxy misconfiguration / non-JSON responses are fleet-wide: abort the run.
+      if (err instanceof LlmConfigError || err instanceof LlmResponseError) throw err
       log.error(`  LLM synthesis failed: ${err.message}`)
       report.errors++
       report.projects.push({ name: project.name, maturity: project.maturity, score: 0, tier: 'error', installMethods: 'N/A' })
@@ -546,7 +548,7 @@ async function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(err => {
-    log.error('Fatal error:', err)
+    log.error('Fatal error', { error: err?.message ?? String(err), name: err?.name ?? null })
     process.exit(1)
   })
 }
@@ -575,7 +577,6 @@ export { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFi
 // `callLLM` in enrich-install-missions.mjs. Refs kubestellar/console-kb#3165,
 // kubestellar/console-kb#3174.
 export {
-  assertTrustedEndpoint,
   githubApi,
   fetchRawFile,
   fetchReadme,

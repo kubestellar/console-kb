@@ -18,7 +18,8 @@ import { tmpdir } from 'os'
 const ORIGINAL_FETCH = globalThis.fetch
 const ORIGINAL_ENV = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-  LLM_TOKEN: process.env.LLM_TOKEN,
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
   DRY_RUN: process.env.DRY_RUN,
   MAX_RETRIES: process.env.MAX_RETRIES,
   MISSION_TIMEOUT_MS: process.env.MISSION_TIMEOUT_MS,
@@ -75,7 +76,8 @@ describe('executeMission — non-DRY_RUN branches', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'mission-exec-nodryrun-'))
     spawnCalls.length = 0
     spawnScript = []
-    process.env.GITHUB_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     process.env.MAX_RETRIES = '3'
     delete process.env.DRY_RUN
   })
@@ -294,17 +296,17 @@ describe('executeMission — non-DRY_RUN branches', () => {
   })
 })
 
-describe('assertTrustedEndpoint — module load rejects untrusted LLM_ENDPOINT', () => {
-  const savedEndpoint = process.env.LLM_ENDPOINT
+describe('mission-executor — LLM proxy config (console-kb#3702)', () => {
+  const saved = { LLM_ENDPOINT: process.env.LLM_ENDPOINT }
   afterEach(() => {
-    if (savedEndpoint === undefined) delete process.env.LLM_ENDPOINT
-    else process.env.LLM_ENDPOINT = savedEndpoint
+    if (saved.LLM_ENDPOINT === undefined) delete process.env.LLM_ENDPOINT
+    else process.env.LLM_ENDPOINT = saved.LLM_ENDPOINT
     vi.resetModules()
   })
 
-  it('throws at import when LLM_ENDPOINT is not one of the trusted prefixes', async () => {
+  it('module load ignores the legacy LLM_ENDPOINT env var (no hard-coded endpoint, no import-time gate)', async () => {
     process.env.LLM_ENDPOINT = 'https://evil.example.com/chat/completions'
     vi.resetModules()
-    await expect(import('../mission-executor.mjs')).rejects.toThrow(/Untrusted LLM_ENDPOINT/)
+    await expect(import('../mission-executor.mjs')).resolves.toBeDefined()
   })
 })

@@ -3,10 +3,6 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import {
-  ALLOWED_ENDPOINT_PREFIXES,
-  assertTrustedEndpoint,
-} from '../enrich-install-missions.mjs'
 
 // This module locks security-critical gates in enrich-install-missions.mjs
 // that live in module-internal functions (assertSafePath) or as
@@ -41,47 +37,19 @@ const SRC = readFileSync(join(HERE, '..', 'enrich-install-missions.mjs'), 'utf-8
 const MISSION_FILE_SRC = readFileSync(join(HERE, '..', 'lib', 'mission-file.mjs'), 'utf-8')
 
 describe('enrich-install-missions security-drift guards', () => {
-  describe('ALLOWED_ENDPOINT_PREFIXES', () => {
-    it('lists exactly the four approved LLM backends and no more', () => {
-      // A silently-added fifth prefix is the exact SSRF pathway
-      // this allowlist exists to block. Locking the count + set
-      // makes any expansion a review-visible source change.
-      expect(ALLOWED_ENDPOINT_PREFIXES).toEqual([
-        'https://models.github.ai/',
-        'https://models.inference.ai.azure.com/',
-        'https://api.openai.com/',
-        'https://api.githubcopilot.com/',
-      ])
+  describe('LLM endpoint source (console-kb#3702)', () => {
+    it('takes endpoint/key/model only from lib/llm-proxy-config.mjs', () => {
+      // The retired GitHub Models default and per-script env parsing must
+      // not creep back in; the proxy URL is validated in one place.
+      expect(SRC).toMatch(/from '\.\/lib\/llm-proxy-config\.mjs'/)
+      expect(SRC).toContain('getLlmProxyConfig()')
+      expect(SRC).not.toMatch(/models\.github\.ai/)
+      expect(SRC).not.toMatch(/process\.env\.LLM_(?:ENDPOINT|TOKEN|BASE_URL|API_KEY)\b/)
     })
 
-    it('every prefix ends with a trailing slash (no substring shadowing)', () => {
-      // Without the trailing '/', a prefix like
-      // 'https://api.openai.com' would match a hostile
-      // 'https://api.openai.com.attacker.example/'.
-      for (const p of ALLOWED_ENDPOINT_PREFIXES) {
-        expect(p.endsWith('/'), `prefix ${p} lacks trailing slash`).toBe(true)
-        expect(p.startsWith('https://'), `prefix ${p} not https`).toBe(true)
-      }
-    })
-
-    it('assertTrustedEndpoint rejects http:// even on an allowed host', () => {
-      expect(() =>
-        assertTrustedEndpoint('http://models.inference.ai.azure.com/chat'),
-      ).toThrow(/Untrusted LLM_ENDPOINT/)
-    })
-
-    it('assertTrustedEndpoint rejects a lookalike suffix host', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://api.openai.com.attacker.example/x'),
-      ).toThrow(/Untrusted LLM_ENDPOINT/)
-    })
-
-    it('assertTrustedEndpoint accepts each approved prefix + a path', () => {
-      for (const p of ALLOWED_ENDPOINT_PREFIXES) {
-        expect(assertTrustedEndpoint(p + 'chat/completions')).toBe(
-          p + 'chat/completions',
-        )
-      }
+    it('fails the run on proxy misconfiguration / non-JSON responses instead of skipping', () => {
+      expect(SRC).toContain('requireLlmProxyConfig(log)')
+      expect(SRC).toMatch(/err instanceof LlmConfigError \|\| err instanceof LlmResponseError\) throw err/)
     })
   })
 

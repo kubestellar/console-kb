@@ -1,13 +1,13 @@
 /**
  * LLM-powered mission synthesizer supporting multiple backends:
- *   1. GitHub Copilot API (Claude Opus/Sonnet) — preferred, included with Copilot subscription
- *   2. Anthropic API (direct) — if ANTHROPIC_API_KEY is set
- *   3. GitHub Models API (GPT-4o) — free fallback for GitHub Actions
+ *   1. Env-configured LLM proxy (OpenAI-compatible) — preferred when configured
+ *   2. GitHub Copilot API (Claude Opus/Sonnet) — included with Copilot subscription
+ *   3. Anthropic API (direct) — if ANTHROPIC_API_KEY is set
  *
  * Backend selection priority:
+ *   - LLM_BASE_URL + LLM_API_KEY (+ LLM_MODEL) → LLM proxy (lib/llm-proxy-config.mjs)
  *   - COPILOT_TOKEN or GITHUB_TOKEN + Copilot → api.enterprise.githubcopilot.com
  *   - ANTHROPIC_API_KEY → api.anthropic.com
- *   - LLM_TOKEN/GITHUB_TOKEN → models.github.ai (OpenAI models only)
  *
  * This is the orchestration barrel: it wires together backend config
  * selection, provider HTTP clients, prompt construction, and response
@@ -18,7 +18,7 @@
  * re-export shim so existing imports keep working unchanged.
  */
 
-import { getBackendConfig, ANTHROPIC_ENDPOINT, ANTHROPIC_MODEL, GITHUB_MODELS_ENDPOINT, GITHUB_MODELS_MODEL, LLM_MAX_RETRIES, LLM_TIMEOUT_MS } from './config.mjs'
+import { getBackendConfig, ANTHROPIC_ENDPOINT, ANTHROPIC_MODEL, LLM_MAX_RETRIES, LLM_TIMEOUT_MS } from './config.mjs'
 import { callAnthropic, callOpenAICompatible } from './providers.mjs'
 import { buildPrompt } from './prompt.mjs'
 import { extractJSON, validateAndClean, sleep } from './parse.mjs'
@@ -35,7 +35,7 @@ export { sleep } from './parse.mjs'
 export async function synthesizeMission(params) {
   const config = getBackendConfig()
   if (!config) {
-    log.warn('  [LLM] No API key found (set GITHUB_TOKEN, ANTHROPIC_API_KEY, or COPILOT_TOKEN)')
+    log.warn('  [LLM] No API key found (set LLM_BASE_URL + LLM_API_KEY, GITHUB_TOKEN, ANTHROPIC_API_KEY, or COPILOT_TOKEN)')
     return null
   }
 
@@ -48,7 +48,7 @@ export async function synthesizeMission(params) {
       if (config.backend === 'anthropic') {
         response = await callAnthropic(config, prompt)
       } else {
-        // Both copilot and github-models use OpenAI-compatible format
+        // Both proxy and copilot use OpenAI-compatible format
         response = await callOpenAICompatible(config, prompt)
       }
 
@@ -119,7 +119,10 @@ export async function synthesizeMission(params) {
   return null
 }
 
-/** Try fallback backends if primary (Copilot) fails */
+/**
+ * Try fallback backends if primary (Copilot) fails. The LLM proxy is not a
+ * fallback here: when configured it is always the primary backend.
+ */
 async function synthesizeWithFallback(params, prompt) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY
   if (anthropicKey) {
@@ -137,25 +140,6 @@ async function synthesizeWithFallback(params, prompt) {
       // Last-resort fallback: unlike the primary path above, nothing else
       // observes this failure, so it must be logged here or it vanishes.
       log.warn(`  [LLM] Anthropic fallback error: ${err.message}`)
-    }
-  }
-
-  const ghToken = process.env.LLM_TOKEN
-  if (ghToken) {
-    console.log('  [LLM] Falling back to GitHub Models')
-    const config = { backend: 'github-models', token: ghToken, endpoint: GITHUB_MODELS_ENDPOINT, model: GITHUB_MODELS_MODEL }
-    try {
-      const response = await callOpenAICompatible(config, prompt)
-      if (response.content) {
-        const parsed = JSON.parse(extractJSON(response.content))
-        if (!parsed.skip && parsed.description && parsed.steps?.length) {
-          return validateAndClean(parsed)
-        }
-      }
-    } catch (err) {
-      // Final fallback exhausted: log before giving up, since this is the
-      // last chance to record why synthesis produced no mission.
-      log.warn(`  [LLM] GitHub Models fallback error: ${err.message}`)
     }
   }
 

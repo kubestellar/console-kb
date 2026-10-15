@@ -4,7 +4,9 @@
  * Reads each install-*.json, calls LLM for the 3 missing sections, merges them back.
  *
  * Environment variables:
- *   GITHUB_TOKEN       — GitHub Models auth
+ *   LLM_BASE_URL       — OpenAI-compatible LLM proxy base URL (required)
+ *   LLM_API_KEY        — LLM proxy API key (required)
+ *   LLM_MODEL          — model served by the proxy (default: see lib/llm-proxy-config.mjs)
  *   TARGET_PROJECTS    — comma-separated file names to process (empty = all)
  *   BATCH_INDEX        — batch index for parallelism
  *   BATCH_SIZE         — files per batch (default 20)
@@ -17,7 +19,6 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 import { DRY_RUN, BATCH_INDEX, BATCH_SIZE } from './lib/batch-env.mjs'
 import { createLogger } from './lib/logger.mjs'
 const log = createLogger('enrich-install-missions')
@@ -27,23 +28,15 @@ const TARGET_PROJECTS = process.env.TARGET_PROJECTS
   : null
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
 const LLM_TIMEOUT_MS = 60_000
 
-// Shared SSRF guard: canonical copy lives in lib/llm-endpoint-guard.mjs
-// (kubestellar/console-kb#3614). Re-exported below so tests that import
-// these symbols from `enrich-install-missions.mjs` keep working unchanged
-// and `scripts/__tests__/enrich-install-missions-security-drift.test.mjs`
-// still runs the pinned-list check against the same runtime values.
-import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './lib/llm-endpoint-guard.mjs'
-export { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint }
+// LLM endpoint / key / model come from the env-configured proxy
+// (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL), owned and validated by
+// lib/llm-proxy-config.mjs (console-kb#3702).
+import { getLlmProxyConfig, requireLlmProxyConfig, LlmConfigError, LlmResponseError } from './lib/llm-proxy-config.mjs'
 // Shared defensive request/retry/Content-Type/size-ceiling handling: canonical
 // copy lives in lib/llm-json-request.mjs (console-kb architecture finding).
 import { requestLlmChatJson } from './lib/llm-json-request.mjs'
-
-// Validate LLM_ENDPOINT at module load time (CWE-441: prevent SSRF)
-const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
 
 // Shared path-traversal guard: canonical copy lives in lib/mission-file.mjs
 // (kubestellar/console-kb#3100/#3134/#3333). Re-exported below so tests that
@@ -154,23 +147,24 @@ export function sanitizeMissionForHTTP(mission) {
 
 // Exported for regression tests targeting the runtime branches
 // (429/retry-after, oversize body, Content-Type gate, HTTP error, JSON-parse
-// failure, missing content, abort/timeout, missing token). No behavior change.
+// failure, missing content, abort/timeout, unset proxy config).
+// Throws LlmConfigError when the LLM proxy env is unset and LlmResponseError
+// on a non-JSON response (console-kb#3702) — both abort the whole run.
 export async function callLLM(mission) {
   // codeql[js/file-access-to-http] - mission is pre-sanitized via sanitizeMissionForHTTP() at every call site; prompt derived from sanitized fields only
-  const token = process.env.LLM_TOKEN || GITHUB_TOKEN
-  if (!token) return null
+  const { endpoint, apiKey, model } = getLlmProxyConfig()
 
   const prompt = buildEnrichPrompt(mission)
 
   // codeql[js/file-access-to-http] mission is pre-sanitized via sanitizeMissionForHTTP()
-  // at every call site; LLM_ENDPOINT validated against allowlist by assertTrustedEndpoint()
-  // at module load (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896, #2909).
+  // at every call site; LLM_BASE_URL structurally validated by getLlmProxyConfig()
+  // (CWE-441); secret-pattern redaction in sanitizeMissionForHTTP (fixes #2896, #2909).
   // Request/retry/Content-Type/size-ceiling handling (CWE-434) lives in the
   // shared helper — see lib/llm-json-request.mjs for the full contract.
   return requestLlmChatJson({
-    endpoint: TRUSTED_LLM_ENDPOINT, // codeql[js/file-access-to-http]
-    model: LLM_MODEL,
-    token,
+    endpoint, // codeql[js/file-access-to-http]
+    model,
+    token: apiKey,
     systemPrompt: ENRICH_SYSTEM_PROMPT,
     userPrompt: prompt,
     maxTokens: 2500,
@@ -268,12 +262,8 @@ export async function enrichFile(filePath, fileName) {
 
 async function main() {
   console.log('=== Enrich Install Missions ===')
-  console.log(`Model: ${LLM_MODEL} | DRY_RUN: ${DRY_RUN} | Concurrency: ${CONCURRENCY}`)
-
-  if (!GITHUB_TOKEN && !process.env.LLM_TOKEN) {
-    log.error('GITHUB_TOKEN or LLM_TOKEN required')
-    process.exit(1)
-  }
+  const { model } = requireLlmProxyConfig(log)
+  console.log(`Model: ${model} | DRY_RUN: ${DRY_RUN} | Concurrency: ${CONCURRENCY}`)
 
   let files = readdirSync(SOLUTIONS_DIR)
     .filter(f => f.startsWith('install-') && f.endsWith('.json'))
@@ -315,6 +305,8 @@ async function main() {
           }
           return result
         } catch (err) {
+          // Proxy misconfiguration / non-JSON responses are fleet-wide: abort the run.
+          if (err instanceof LlmConfigError || err instanceof LlmResponseError) throw err
           log.error(`  ❌ ${fileName}: ${err.message}`)
           report.errors++
           return { status: 'error', reason: err.message }
@@ -336,7 +328,7 @@ async function main() {
 
 if (process.argv[1]?.endsWith('enrich-install-missions.mjs')) {
   main().catch(err => {
-    log.error('Fatal:', err)
+    log.error('Fatal', { error: err?.message ?? String(err), name: err?.name ?? null })
     process.exit(1)
   })
 }

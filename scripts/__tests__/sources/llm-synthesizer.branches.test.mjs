@@ -24,7 +24,7 @@ const ENV_KEYS = [
   'COPILOT_TOKEN',
   'GITHUB_TOKEN',
   'ANTHROPIC_API_KEY',
-  'LLM_TOKEN',
+  'LLM_BASE_URL', 'LLM_API_KEY',
   'LLM_MAX_TOKENS',
 ]
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
@@ -95,7 +95,7 @@ describe('synthesizeMission — additional branch coverage', () => {
 
   it('returns null and does not fetch when no backend token is present', async () => {
     // Clear every possible token so getBackendConfig() → null.
-    for (const k of ['COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']) {
+    for (const k of ['COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']) {
       delete process.env[k]
     }
     const fetchMock = vi.fn()
@@ -108,7 +108,7 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('uses the Anthropic backend when ANTHROPIC_API_KEY is set (no Copilot/LLM tokens)', async () => {
-    for (const k of ['COPILOT_TOKEN', 'GITHUB_TOKEN', 'LLM_TOKEN']) delete process.env[k]
+    for (const k of ['COPILOT_TOKEN', 'GITHUB_TOKEN', 'LLM_BASE_URL', 'LLM_API_KEY']) delete process.env[k]
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key'
 
     const payload = goodMissionPayload()
@@ -138,7 +138,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('OpenAI-compatible non-2xx returns { error } and retries LLM_MAX_RETRIES+1 times, then null', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
@@ -159,7 +160,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('OpenAI-compatible 429 → rate-limited path sleeps then retries', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
     const rateLimited = {
       ok: false,
@@ -191,7 +193,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('returns null when the LLM returns skip=true (non-actionable content)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -209,7 +212,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('returns null when response.content is empty (LLM returned nothing)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -223,7 +227,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('validateAndClean rejects payloads with fewer than 3 usable steps', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = {
       description: 'Only two real steps; one is a banned generic title.',
       steps: [
@@ -256,7 +261,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('validateAndClean rejects payloads with no actionable step (no command/code block)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = {
       description: 'Steps have no commands or code blocks anywhere.',
       steps: [
@@ -282,7 +288,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('extractJSON handles bare-object responses (no fences, no prose)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -300,7 +307,8 @@ describe('synthesizeMission — additional branch coverage', () => {
   })
 
   it('extractJSON falls back to brace-slice when JSON is embedded in prose without fences', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     // Use a payload whose step descriptions do NOT contain triple-backticks;
     // otherwise extractJSON's fence heuristic would kick in and truncate.
     const payload = goodMissionPayload({

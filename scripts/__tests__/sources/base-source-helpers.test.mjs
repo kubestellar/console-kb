@@ -5,7 +5,7 @@ import { buildMission, slugify } from '../../sources/base-source.mjs'
 // import of ./llm-synthesizer.mjs. We restore whatever the runner had so
 // no test bleeds a fake token into others (the fallback path requires all
 // of these to be absent).
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]))
 
 function clearLlmEnv() {

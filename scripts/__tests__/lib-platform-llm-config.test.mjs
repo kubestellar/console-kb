@@ -1,11 +1,12 @@
 // Behavioural tests for scripts/lib/platform-llm-config.mjs — the single
-// owner of the platform generator's env-derived LLM/GitHub config
-// (kubestellar/console-kb#3544). Uses vi.resetModules() + dynamic import so
+// owner of the platform generator's env-derived config (kubestellar/console-kb#3544).
+// LLM endpoint/key/model now come from lib/llm-proxy-config.mjs (#3702),
+// which this module re-exports. Uses vi.resetModules() + dynamic import so
 // each case observes a fresh module-load with its own process.env.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 const MODULE = '../lib/platform-llm-config.mjs'
-const ENV_KEYS = ['GITHUB_TOKEN', 'LLM_TOKEN', 'LLM_ENDPOINT', 'LLM_MODEL', 'LLM_TIMEOUT_MS']
+const ENV_KEYS = ['GITHUB_TOKEN', 'LLM_BASE_URL', 'LLM_API_KEY', 'LLM_MODEL', 'LLM_TIMEOUT_MS']
 const saved = {}
 
 beforeEach(() => {
@@ -24,40 +25,38 @@ afterEach(() => {
 })
 
 describe('platform-llm-config — module-load constants', () => {
-  it('falls back to the documented defaults when env is unset', async () => {
+  it('falls back to the documented timeout default when env is unset', async () => {
     const cfg = await import(MODULE)
-    expect(cfg.LLM_ENDPOINT).toBe(cfg.DEFAULT_LLM_ENDPOINT)
-    expect(cfg.LLM_ENDPOINT).toBe('https://models.github.ai/inference/chat/completions')
-    expect(cfg.LLM_MODEL).toBe('openai/gpt-4o-mini')
     expect(cfg.LLM_TIMEOUT_MS).toBe(90000)
-    expect(cfg.TRUSTED_LLM_ENDPOINT).toBe(cfg.LLM_ENDPOINT)
   })
 
-  it('reads LLM_ENDPOINT / LLM_MODEL / LLM_TIMEOUT_MS from env at load', async () => {
-    process.env.LLM_ENDPOINT = 'https://api.openai.com/v1/chat/completions'
-    process.env.LLM_MODEL = 'gpt-4.1'
+  it('reads LLM_TIMEOUT_MS from env at load', async () => {
     process.env.LLM_TIMEOUT_MS = '1234'
     const cfg = await import(MODULE)
-    expect(cfg.LLM_ENDPOINT).toBe('https://api.openai.com/v1/chat/completions')
-    expect(cfg.TRUSTED_LLM_ENDPOINT).toBe('https://api.openai.com/v1/chat/completions')
-    expect(cfg.LLM_MODEL).toBe('gpt-4.1')
     expect(cfg.LLM_TIMEOUT_MS).toBe(1234)
   })
 
-  it('runs the SSRF gate at module load and rejects an untrusted LLM_ENDPOINT', async () => {
-    process.env.LLM_ENDPOINT = 'https://evil.example.com/chat/completions'
-    await expect(import(MODULE)).rejects.toThrow('Untrusted LLM_ENDPOINT')
+  it('importing does not throw when the LLM proxy env is unset (config is read per call)', async () => {
+    await expect(import(MODULE)).resolves.toBeDefined()
   })
 
-  it('re-exports the shared guard so consumers need only one import', async () => {
+  it('no longer exports the retired GitHub Models endpoint / token getters', async () => {
     const cfg = await import(MODULE)
-    const guard = await import('../lib/llm-endpoint-guard.mjs')
-    expect(cfg.assertTrustedEndpoint).toBe(guard.assertTrustedEndpoint)
-    expect(cfg.ALLOWED_ENDPOINT_PREFIXES).toBe(guard.ALLOWED_ENDPOINT_PREFIXES)
+    expect(cfg.LLM_ENDPOINT).toBeUndefined()
+    expect(cfg.TRUSTED_LLM_ENDPOINT).toBeUndefined()
+    expect(cfg.getLlmToken).toBeUndefined()
+  })
+
+  it('re-exports the shared proxy config so consumers need only one import', async () => {
+    const cfg = await import(MODULE)
+    const proxy = await import('../lib/llm-proxy-config.mjs')
+    expect(cfg.getLlmProxyConfig).toBe(proxy.getLlmProxyConfig)
+    expect(cfg.requireLlmProxyConfig).toBe(proxy.requireLlmProxyConfig)
+    expect(cfg.assertJsonResponse).toBe(proxy.assertJsonResponse)
   })
 })
 
-describe('platform-llm-config — per-call token getters', () => {
+describe('platform-llm-config — per-call getters', () => {
   it('getGithubToken() reflects process.env mutations made after import', async () => {
     const cfg = await import(MODULE)
     expect(cfg.getGithubToken()).toBeUndefined()
@@ -65,13 +64,12 @@ describe('platform-llm-config — per-call token getters', () => {
     expect(cfg.getGithubToken()).toBe('ghp_after_import')
   })
 
-  it('getLlmToken() prefers LLM_TOKEN and falls back to GITHUB_TOKEN', async () => {
+  it('getLlmProxyConfig() throws when unset and reflects env set after import', async () => {
     const cfg = await import(MODULE)
-    expect(cfg.getLlmToken()).toBeUndefined()
-    process.env.GITHUB_TOKEN = 'ghp_fallback'
-    expect(cfg.getLlmToken()).toBe('ghp_fallback')
-    process.env.LLM_TOKEN = 'llm_preferred'
-    expect(cfg.getLlmToken()).toBe('llm_preferred')
+    expect(() => cfg.getLlmProxyConfig()).toThrow(cfg.LlmConfigError)
+    process.env.LLM_BASE_URL = 'https://proxy.test/v1'
+    process.env.LLM_API_KEY = 'k'
+    expect(cfg.getLlmProxyConfig().endpoint).toBe('https://proxy.test/v1/chat/completions')
   })
 })
 
@@ -88,24 +86,23 @@ describe('platform-llm-config — no reverse import from the orchestrator', () =
     vi.doUnmock('../generate-platform-missions.mjs')
   })
 
-  it('platform modules read tokens per-call via the shared getters', async () => {
+  it('platform modules read the LLM proxy key per-call', async () => {
     const calls = []
     vi.stubGlobal('fetch', vi.fn(async (url, options) => {
       calls.push({ url, options })
       return {
         ok: true,
         status: 200,
-        headers: { get: () => null },
-        json: async () => ({ choices: [{ message: { content: '{}' } }] }),
-        text: async () => '',
+        headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
+        text: async () => JSON.stringify({ choices: [{ message: { content: '{}' } }] }),
       }
     }))
     try {
-      // (platform/github-context.mjs no longer reads tokens itself — its
-      // GitHub fetch path is owned by lib/cncf-github-client.mjs.)
       const { synthesizePlatformMission } = await import('../platform/synthesize.mjs')
-      process.env.LLM_TOKEN = 'llm_late'
+      process.env.LLM_BASE_URL = 'https://proxy.test/v1'
+      process.env.LLM_API_KEY = 'llm_late'
       await synthesizePlatformMission({ name: 'Demo' }, {})
+      expect(calls.at(-1).url).toBe('https://proxy.test/v1/chat/completions')
       expect(calls.at(-1).options.headers.Authorization).toBe('Bearer llm_late')
     } finally {
       vi.unstubAllGlobals()

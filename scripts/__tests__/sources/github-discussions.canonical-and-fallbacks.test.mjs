@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GitHubDiscussionsSource } from '../../sources/github-discussions.mjs'
 
 const ORIGINAL_GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]))
 
 const TEST_PROJECT = {

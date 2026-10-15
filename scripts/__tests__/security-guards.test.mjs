@@ -10,10 +10,8 @@ import {
   assertSafePath as assertSafePathPlatform,
   slugify as slugifyPlatform,
 } from '../generate-platform-missions.mjs'
-import {
-  assertTrustedEndpoint,
-  ALLOWED_ENDPOINT_PREFIXES,
-} from '../enrich-install-missions.mjs'
+import { assertTrustedEndpoint, ANTHROPIC_POLICY } from '../lib/llm-endpoint-guard.mjs'
+import { chatCompletionsEndpoint } from '../lib/llm-proxy-config.mjs'
 
 // ─── assertSafeSlug (generate-cncf-install-missions) ────────────────
 
@@ -215,99 +213,47 @@ describe('slugify (platform-missions)', () => {
   })
 })
 
-// ─── assertTrustedEndpoint (enrich-install-missions) ─────────────────
+// ─── assertTrustedEndpoint (fixed-host ANTHROPIC_ENDPOINT gate) ──────
 
 describe('assertTrustedEndpoint', () => {
-  describe('happy path — allowed prefixes', () => {
-    it('accepts azure inference endpoint', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://models.inference.ai.azure.com/chat/completions')
-      ).not.toThrow()
-    })
-
-    it('accepts openai endpoint', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://api.openai.com/v1/chat/completions')
-      ).not.toThrow()
-    })
-
-    it('accepts github copilot endpoint', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://api.githubcopilot.com/chat/completions')
-      ).not.toThrow()
-    })
-
-    it('accepts any path under an allowed prefix', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://api.openai.com/v1/embeddings')
-      ).not.toThrow()
-    })
+  it('accepts any path under an allowed prefix', () => {
+    expect(() => assertTrustedEndpoint('https://api.anthropic.com/v1/messages', ANTHROPIC_POLICY)).not.toThrow()
   })
 
-  describe('rejects untrusted endpoints', () => {
-    it('throws for an arbitrary HTTP endpoint', () => {
-      expect(() =>
-        assertTrustedEndpoint('http://evil.com/steal')
-      ).toThrow('Untrusted LLM_ENDPOINT')
-    })
-
-    it('throws for an HTTPS endpoint not in the allowlist', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://attacker.example.com/api')
-      ).toThrow('Untrusted LLM_ENDPOINT')
-    })
-
-    it('throws for a localhost endpoint', () => {
-      expect(() =>
-        assertTrustedEndpoint('http://localhost:1234/inject')
-      ).toThrow('Untrusted LLM_ENDPOINT')
-    })
-
-    it('throws for an endpoint that only starts like a valid prefix', () => {
-      // Prefix spoofing: starts with allowed string but uses different host
-      expect(() =>
-        assertTrustedEndpoint('https://api.openai.com.evil.com/steal')
-      ).toThrow('Untrusted LLM_ENDPOINT')
-    })
+  it('throws for an HTTPS endpoint not in the allowlist', () => {
+    expect(() => assertTrustedEndpoint('https://attacker.example.com/api', ANTHROPIC_POLICY)).toThrow('Untrusted LLM_ENDPOINT')
   })
 
-  describe('edge cases', () => {
-    it('throws for an empty string', () => {
-      expect(() => assertTrustedEndpoint('')).toThrow('Untrusted LLM_ENDPOINT')
-    })
-
-    it('throws for a whitespace-only string', () => {
-      expect(() => assertTrustedEndpoint('   ')).toThrow('Untrusted LLM_ENDPOINT')
-    })
-
-    it('includes allowed prefixes in the error message', () => {
-      let msg = ''
-      try { assertTrustedEndpoint('https://evil.com') } catch (e) { msg = e.message }
-      expect(msg).toContain('https://models.inference.ai.azure.com/')
-      expect(msg).toContain('https://api.openai.com/')
-      expect(msg).toContain('https://api.githubcopilot.com/')
-    })
-
-    it('accepts a custom allowlist', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://custom.internal.corp/llm', ['https://custom.internal.corp/'])
-      ).not.toThrow()
-    })
-
-    it('rejects when custom allowlist does not match', () => {
-      expect(() =>
-        assertTrustedEndpoint('https://api.openai.com/v1', ['https://custom.internal.corp/'])
-      ).toThrow('Untrusted LLM_ENDPOINT')
-    })
+  it('throws for an endpoint that only starts like a valid prefix', () => {
+    expect(() =>
+      assertTrustedEndpoint('https://api.anthropic.com.evil.com/steal', ANTHROPIC_POLICY, 'ANTHROPIC_ENDPOINT')
+    ).toThrow('Untrusted ANTHROPIC_ENDPOINT')
   })
 
-  it('ALLOWED_ENDPOINT_PREFIXES contains exactly 4 entries', () => {
-    expect(ALLOWED_ENDPOINT_PREFIXES).toHaveLength(4)
+  it('throws for an empty string and lists the allowed prefixes', () => {
+    let msg = ''
+    try { assertTrustedEndpoint('', ANTHROPIC_POLICY) } catch (e) { msg = e.message }
+    expect(msg).toContain('Untrusted LLM_ENDPOINT')
+    expect(msg).toContain('https://api.anthropic.com/')
   })
 
-  it('ALLOWED_ENDPOINT_PREFIXES all use HTTPS', () => {
-    for (const prefix of ALLOWED_ENDPOINT_PREFIXES) {
-      expect(prefix.startsWith('https://')).toBe(true)
-    }
+  it('ANTHROPIC_POLICY is pinned and uses HTTPS', () => {
+    expect(ANTHROPIC_POLICY).toEqual(['https://api.anthropic.com/'])
+  })
+})
+
+// ─── LLM proxy endpoint validation (lib/llm-proxy-config.mjs, #3702) ──
+
+describe('chatCompletionsEndpoint (LLM_BASE_URL validation)', () => {
+  it('rejects plain http to a non-loopback host', () => {
+    expect(() => chatCompletionsEndpoint('http://evil.com/steal')).toThrow(/must use https/)
+  })
+
+  it('rejects embedded credentials', () => {
+    expect(() => chatCompletionsEndpoint('https://u:p@proxy.example.com/v1')).toThrow(/credentials/)
+  })
+
+  it('accepts an https proxy URL', () => {
+    expect(chatCompletionsEndpoint('https://proxy.example.com/v1')).toBe('https://proxy.example.com/v1/chat/completions')
   })
 })

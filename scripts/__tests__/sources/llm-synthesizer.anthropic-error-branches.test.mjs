@@ -20,7 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { synthesizeMission } from '../../sources/llm-synthesizer.mjs'
 
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
 const ORIGINAL_FETCH = globalThis.fetch
 
@@ -202,7 +202,8 @@ describe('llm-synthesizer — validateAndClean default arms', () => {
   })
 
   it('invalid difficulty falls back to "intermediate"; invalid type falls back to "troubleshoot"', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload({ difficulty: 'wizard', type: 'zzz-unknown' })
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -217,7 +218,8 @@ describe('llm-synthesizer — validateAndClean default arms', () => {
   })
 
   it('valid non-default difficulty and type pass through unchanged (expert + configure)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload({ difficulty: 'expert', type: 'configure' })
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -232,7 +234,8 @@ describe('llm-synthesizer — validateAndClean default arms', () => {
   })
 
   it('missing resolution falls back to "" via `|| ""` slice arm', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     // parsed.description is required by an outer guard in synthesizeMission
     // (!parsed.description → early return), so only resolution can be
     // omitted here to hit the `(parsed.resolution || '')` right-arm.
@@ -268,7 +271,8 @@ describe('llm-synthesizer — buildPrompt/cleanInput no-body arms', () => {
   })
 
   it('omits Labels/PR/Snippets sections when the corresponding params are falsy', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

@@ -27,7 +27,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const ORIGINAL_FETCH = globalThis.fetch
 const ORIGINAL_ENV = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-  LLM_TOKEN: process.env.LLM_TOKEN,
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
   DRY_RUN: process.env.DRY_RUN,
   MAX_RETRIES: process.env.MAX_RETRIES,
   LLM_ENDPOINT: process.env.LLM_ENDPOINT,
@@ -68,25 +69,27 @@ function chatResponse(contentObj) {
   })
 }
 
-describe('llmChat — no auth token', () => {
+describe('llmChat — LLM proxy not configured', () => {
   beforeEach(() => {
-    delete process.env.GITHUB_TOKEN
-    delete process.env.LLM_TOKEN
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
+    // A GitHub token alone must not be accepted any more (console-kb#3702).
+    process.env.GITHUB_TOKEN = 'ghp_ignored'
   })
   afterEach(restoreEnv)
 
-  it('throws when neither LLM_TOKEN nor GITHUB_TOKEN is set', async () => {
+  it('throws LlmConfigError when LLM_BASE_URL / LLM_API_KEY are unset', async () => {
     const mod = await loadModule()
     await expect(mod.llmChat([{ role: 'user', content: 'hi' }])).rejects.toThrow(
-      /No GITHUB_TOKEN set for LLM API/,
+      /LLM proxy is not configured: LLM_BASE_URL, LLM_API_KEY unset/,
     )
   })
 })
 
 describe('llmChat — HTTP paths', () => {
   beforeEach(() => {
-    process.env.GITHUB_TOKEN = 'test-token'
-    delete process.env.LLM_TOKEN
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
   })
   afterEach(() => {
     globalThis.fetch = ORIGINAL_FETCH
@@ -142,7 +145,8 @@ describe('llmChat — HTTP paths', () => {
 
 describe('executeStep — dry-run path (spawn-free)', () => {
   beforeEach(() => {
-    process.env.GITHUB_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     process.env.DRY_RUN = 'true'
     process.env.MAX_RETRIES = '3'
   })

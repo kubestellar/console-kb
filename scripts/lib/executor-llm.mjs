@@ -1,27 +1,17 @@
 /**
  * LLM client for mission-executor.mjs.
  *
- * Extracted from mission-executor.mjs (console-kb#3151): endpoint trust
- * check, token resolution, and the llmChat conversation helper used to
- * drive step extraction, failure diagnosis, and final verification.
+ * Extracted from mission-executor.mjs (console-kb#3151): the llmChat
+ * conversation helper used to drive step extraction, failure diagnosis,
+ * and final verification.
  *
- * The SSRF guard (`ALLOWED_ENDPOINT_PREFIXES` / `assertTrustedEndpoint`) is
- * imported from the canonical `lib/llm-endpoint-guard.mjs` and re-exported
- * unchanged (kubestellar/console-kb#3614), so mission-executor.mjs still
- * sees the same symbol names it used before the consolidation.
+ * Endpoint / key / model come from the env-configured LLM proxy
+ * (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL), read per-call and validated by
+ * ./llm-proxy-config.mjs (console-kb#3702).
  */
 
-import { ALLOWED_ENDPOINT_PREFIXES, assertTrustedEndpoint } from './llm-endpoint-guard.mjs'
+import { getLlmProxyConfig } from './llm-proxy-config.mjs'
 import { requestLlmChatJson } from './llm-json-request.mjs'
-
-const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://models.github.ai/inference/chat/completions'
-const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini'
-
-const TRUSTED_LLM_ENDPOINT = assertTrustedEndpoint(LLM_ENDPOINT)
-
-function getToken() {
-  return process.env.LLM_TOKEN || process.env.GITHUB_TOKEN
-}
 
 const SYSTEM_PROMPT = `You are a Kubernetes DevOps engineer executing installation missions on a Kind cluster.
 You receive mission steps and execute them one at a time. For each step:
@@ -59,13 +49,12 @@ const LLM_TIMEOUT_MS = 30000
 const LLM_MAX_RESPONSE_BYTES = 1024 * 1024
 
 async function llmChat(messages) {
-  const token = getToken()
-  if (!token) throw new Error('No GITHUB_TOKEN set for LLM API')
+  const { endpoint, apiKey, model } = getLlmProxyConfig()
 
   const result = await requestLlmChatJson({
-    endpoint: TRUSTED_LLM_ENDPOINT,
-    model: LLM_MODEL,
-    token,
+    endpoint,
+    model,
+    token: apiKey,
     messages,
     temperature: 0.2,
     maxTokens: 1500,
@@ -80,12 +69,6 @@ async function llmChat(messages) {
 }
 
 export {
-  LLM_ENDPOINT,
-  LLM_MODEL,
-  ALLOWED_ENDPOINT_PREFIXES,
-  assertTrustedEndpoint,
-  TRUSTED_LLM_ENDPOINT,
-  getToken,
   SYSTEM_PROMPT,
   llmChat,
 }

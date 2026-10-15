@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { synthesizeMission } from '../../sources/llm-synthesizer.mjs'
 
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]))
 const ORIGINAL_FETCH = globalThis.fetch
 const LONG_TITLE = 'Check '.repeat(30)
@@ -21,7 +21,8 @@ describe('synthesizeMission', () => {
   beforeEach(() => {
     restoreEnv()
     process.env.USE_COPILOT = 'false'
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -78,11 +79,11 @@ describe('synthesizeMission', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     const [url, options] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://models.github.ai/inference/chat/completions')
+    expect(url).toBe('https://llm-proxy.test/v1/chat/completions')
     expect(options.headers.Authorization).toBe('Bearer test-token')
 
     const body = JSON.parse(options.body)
-    expect(body.model).toBe('openai/gpt-4o')
+    expect(body.model).toBe('gpt-4o-mini')
 
     const prompt = body.messages[1].content
     expect(prompt).toContain('# Project: CoreDNS')

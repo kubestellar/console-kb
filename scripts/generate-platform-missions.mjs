@@ -10,7 +10,9 @@
  *
  * Environment variables:
  *   GITHUB_TOKEN       — GitHub API auth
- *   LLM_TOKEN          — GitHub Models PAT (falls back to GITHUB_TOKEN)
+ *   LLM_BASE_URL       — OpenAI-compatible LLM proxy base URL (required)
+ *   LLM_API_KEY        — LLM proxy API key (required)
+ *   LLM_MODEL          — model served by the proxy (default: see lib/llm-proxy-config.mjs)
  *   TARGET_PLATFORMS    — comma-separated platform names (empty = all)
  *   BATCH_INDEX / BATCH_SIZE — for parallelised workflow runs
  *   DRY_RUN            — if 'true', no files written
@@ -33,27 +35,19 @@ import { sanitizePlatformMission } from './lib/mission-sanitizer.mjs'
 import { gatherPlatformContext, checkHelmRepoUrl, sleep } from './platform/github-context.mjs'
 import { isSafeFetchUrl, safeFetch } from './lib/url-fetch-guard.mjs'
 import { synthesizePlatformMission } from './platform/synthesize.mjs'
-import {
-  getGithubToken,
-  getLlmToken,
-  LLM_ENDPOINT,
-  LLM_MODEL,
-  LLM_TIMEOUT_MS,
-  TRUSTED_LLM_ENDPOINT,
-} from './lib/platform-llm-config.mjs'
+import { getGithubToken, requireLlmProxyConfig, LLM_TIMEOUT_MS } from './lib/platform-llm-config.mjs'
 import { slugify, assertSafeSlug, assertSafePath, serializeSanitizedMissionForFile, buildMissionSkeleton, isMissionStale as sharedIsMissionStale } from './lib/mission-file.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ─── Config ──────────────────────────────────────────────────────────
-// GITHUB_TOKEN / LLM_TOKEN / LLM_* / TRUSTED_LLM_ENDPOINT are owned by
-// ./lib/platform-llm-config.mjs (console-kb#3544), which also runs the
-// module-load SSRF gate (assertTrustedEndpoint). They are re-exported below
-// for callers/tests that still import them from here; the extracted
-// ./platform/*.mjs modules import the lib directly.
+// GITHUB_TOKEN / LLM_TIMEOUT_MS are owned by ./lib/platform-llm-config.mjs
+// (console-kb#3544); the LLM proxy endpoint/key/model are owned by
+// ./lib/llm-proxy-config.mjs (console-kb#3702) and validated at the top of
+// main(). They are re-exported below for callers/tests that still import
+// them from here; the extracted ./platform/*.mjs modules import the lib directly.
 export const GITHUB_TOKEN = getGithubToken()
-export const LLM_TOKEN = getLlmToken()
-export { LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS, TRUSTED_LLM_ENDPOINT }
+export { LLM_TIMEOUT_MS }
 const TARGET_PLATFORMS = process.env.TARGET_PLATFORMS
   ? process.env.TARGET_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
   : null
@@ -222,10 +216,10 @@ function formatReport(results) {
 
 async function main() {
   console.log('=== Platform Mission Generator ===')
-  if (!LLM_TOKEN) {
-    log.error('LLM_TOKEN or GITHUB_TOKEN required')
-    process.exit(1)
-  }
+  // Fail loudly (structured log + exit 1) when the LLM proxy env is unset,
+  // instead of running every platform into a null result (console-kb#3702).
+  const llmConfig = requireLlmProxyConfig(log)
+  console.log(`LLM proxy model: ${llmConfig.model}`)
 
   mkdirSync(SOLUTIONS_DIR, { recursive: true })
 
@@ -397,7 +391,7 @@ async function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(err => {
-    log.error('Fatal error:', err)
+    log.error('Fatal error', { error: err?.message ?? String(err), name: err?.name ?? null })
     process.exit(1)
   })
 }

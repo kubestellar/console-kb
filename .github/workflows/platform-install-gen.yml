@@ -148,7 +148,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      models: read
     needs: plan
     runs-on: ubuntu-latest
     strategy:
@@ -175,7 +174,9 @@ jobs:
       - name: Generate platform missions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LLM_TOKEN: ${{ secrets.GH_MODELS_PAT || secrets.GITHUB_TOKEN }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4o-mini' }}
           TARGET_PLATFORMS: ${{ needs.plan.outputs.target_platforms }}
           BATCH_INDEX: ${{ matrix.batch_index }}
           BATCH_SIZE: ${{ needs.plan.outputs.batch_size }}
@@ -197,7 +198,7 @@ jobs:
       contents: write
       pull-requests: write
     needs: [plan, generate]
-    if: ${{ always() && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ !cancelled() && needs.generate.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

@@ -14,13 +14,12 @@ import { dirname, join } from 'node:path'
  * assert-safe-path-drift.test.mjs, sanitize-infra-details-drift.test.mjs), and
  * catches the exact refactor mistakes that black-box tests could not:
  *
- *   1. `ALLOWED_ENDPOINT_PREFIXES` — the SSRF (CWE-441) allowlist for the LLM
- *      endpoint MUST contain exactly the four approved backends. Silently
- *      appending a fourth (or dropping one) would let an untrusted
- *      `LLM_ENDPOINT` env var be accepted at module load.
- *   2. `assertTrustedEndpoint` — is called at module load time on the resolved
- *      `LLM_ENDPOINT`. A refactor that lazily evaluates the check would let a
- *      malicious endpoint through until first use.
+ *   1. LLM endpoint — the generator talks only to the env-configured LLM
+ *      proxy (`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`) validated by
+ *      `lib/llm-proxy-config.mjs`; no hard-coded endpoint (the retired
+ *      models.github.ai default) may creep back in (console-kb#3702).
+ *   2. Fail loudly — `main()` exits non-zero on missing proxy config before
+ *      processing any platform, and non-JSON responses abort the run.
  *   3. `serializeSanitizedMissionForFile` — hard-caps serialized mission size
  *      at 1_000_000 bytes AND refuses any post-sanitize payload that contains
  *      `<script>` tags or `on*=` inline event handlers. This is the last
@@ -45,16 +44,13 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SOURCE_PATH = join(__dirname, '../generate-platform-missions.mjs')
 const SOURCE = readFileSync(SOURCE_PATH, 'utf8')
-// assertTrustedEndpoint / ALLOWED_ENDPOINT_PREFIXES and
-// serializeSanitizedMissionForFile were consolidated into
-// scripts/lib/llm-endpoint-guard.mjs and scripts/lib/mission-file.mjs
-// respectively (kubestellar/console-kb#3134, #3333); the security-critical
-// bodies now live there, re-exported unchanged from generate-platform-missions.mjs.
-const ENDPOINT_GUARD_SOURCE = readFileSync(join(__dirname, '../lib/llm-endpoint-guard.mjs'), 'utf8')
-// The env-derived LLM config and the module-load SSRF gate moved to
-// scripts/lib/platform-llm-config.mjs (kubestellar/console-kb#3544);
-// generate-platform-missions.mjs imports (and re-exports) them from there.
-const LLM_CONFIG_SOURCE = readFileSync(join(__dirname, '../lib/platform-llm-config.mjs'), 'utf8')
+// serializeSanitizedMissionForFile was consolidated into
+// scripts/lib/mission-file.mjs (kubestellar/console-kb#3134, #3333).
+// The LLM proxy endpoint/key/model are owned and validated by
+// scripts/lib/llm-proxy-config.mjs (kubestellar/console-kb#3702), re-exported
+// to the platform modules via scripts/lib/platform-llm-config.mjs (#3544).
+const LLM_PROXY_CONFIG_SOURCE = readFileSync(join(__dirname, '../lib/llm-proxy-config.mjs'), 'utf8')
+const SYNTHESIZE_SOURCE = readFileSync(join(__dirname, '../platform/synthesize.mjs'), 'utf8')
 const MISSION_FILE_SOURCE = readFileSync(join(__dirname, '../lib/mission-file.mjs'), 'utf8')
 
 function functionBody(src, header) {
@@ -74,65 +70,32 @@ function functionBody(src, header) {
   throw new Error(`unterminated function body for ${header}`)
 }
 
-describe('generate-platform-missions.mjs — SSRF endpoint allowlist', () => {
-  it('ALLOWED_ENDPOINT_PREFIXES contains exactly the four approved backends', () => {
-    const m = ENDPOINT_GUARD_SOURCE.match(
-      /ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
-    )
-    expect(m, 'ALLOWED_ENDPOINT_PREFIXES declaration must exist').toBeTruthy()
-    const prefixes = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1])
-    expect([...prefixes].sort()).toEqual([
-      'https://api.githubcopilot.com/',
-      'https://api.openai.com/',
-      'https://models.github.ai/',
-      'https://models.inference.ai.azure.com/',
-    ])
-  })
-
-  it('every allowed prefix uses https and ends with a trailing slash', () => {
-    // Prevents "prefix minus trailing slash" bypass:
-    //   allowed:  https://api.openai.com
-    //   attacker: https://api.openai.com.evil.example/
-    // startsWith would accept the attacker URL without the "/".
-    const m = ENDPOINT_GUARD_SOURCE.match(
-      /ALLOWED_ENDPOINT_PREFIXES\s*=\s*\[([\s\S]*?)\]/
-    )
-    const prefixes = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1])
-    for (const p of prefixes) {
-      expect(p.startsWith('https://'), `prefix must be https: ${p}`).toBe(true)
-      expect(p.endsWith('/'), `prefix must end with '/': ${p}`).toBe(true)
+describe('generate-platform-missions.mjs — LLM proxy endpoint (console-kb#3702)', () => {
+  it('has no hard-coded endpoint and no legacy LLM_ENDPOINT / LLM_TOKEN env parsing', () => {
+    for (const src of [SOURCE, SYNTHESIZE_SOURCE]) {
+      expect(src).not.toMatch(/models\.github\.ai/)
+      expect(src).not.toMatch(/process\.env\.LLM_(?:ENDPOINT|TOKEN|BASE_URL|API_KEY)\b/)
     }
   })
 
-  it('assertTrustedEndpoint is called at module load time on LLM_ENDPOINT', () => {
-    // A refactor that defers this to first-use would let an untrusted
-    // endpoint sit in a module-scope constant until a request goes out.
-    expect(
-      /const\s+TRUSTED_LLM_ENDPOINT\s*=\s*assertTrustedEndpoint\s*\(\s*LLM_ENDPOINT\s*\)/.test(
-        LLM_CONFIG_SOURCE
-      ),
-      'assertTrustedEndpoint(LLM_ENDPOINT) must run at module load'
-    ).toBe(true)
+  it('main() fails loudly on missing proxy config before processing any platform', () => {
+    const body = functionBody(SOURCE, 'async function main()')
+    const gate = body.indexOf('requireLlmProxyConfig(log)')
+    expect(gate, 'requireLlmProxyConfig(log) must be called in main()').toBeGreaterThan(-1)
+    expect(gate).toBeLessThan(body.indexOf('for (const platform of platforms)'))
   })
 
-  it('generate-platform-missions.mjs imports TRUSTED_LLM_ENDPOINT from lib/platform-llm-config.mjs', () => {
-    // Importing the config module is what arms the gate; the orchestrator
-    // must not re-parse LLM_ENDPOINT from env and bypass it.
-    expect(
-      /import\s*\{[^}]*\bTRUSTED_LLM_ENDPOINT\b[^}]*\}\s*from\s*['"]\.\/lib\/platform-llm-config\.mjs['"]/.test(
-        SOURCE
-      ),
-      'TRUSTED_LLM_ENDPOINT must be imported from ./lib/platform-llm-config.mjs'
-    ).toBe(true)
-    expect(/process\.env\.LLM_ENDPOINT/.test(SOURCE)).toBe(false)
+  it('synthesizePlatformMission reads the proxy config per call and rethrows non-JSON responses', () => {
+    const body = functionBody(SYNTHESIZE_SOURCE, 'export async function synthesizePlatformMission')
+    expect(body).toContain('getLlmProxyConfig()')
+    expect(body).toContain('assertJsonResponse(response)')
+    expect(body).toMatch(/if \(err instanceof LlmResponseError\) throw err/)
   })
 
-  it('assertTrustedEndpoint throws (not warns) on a non-allowlisted endpoint', () => {
-    const body = functionBody(ENDPOINT_GUARD_SOURCE, 'function assertTrustedEndpoint')
-    // The failure mode of this gate MUST be a thrown Error — silently
-    // downgrading to console.warn / console.error would let an
-    // untrusted URL through at module load.
-    expect(/throw\s+new\s+Error/.test(body)).toBe(true)
+  it('LLM_BASE_URL validation throws (not warns) and requires https outside loopback', () => {
+    const body = functionBody(LLM_PROXY_CONFIG_SOURCE, 'export function chatCompletionsEndpoint')
+    expect(/throw\s+new\s+LlmConfigError/.test(body)).toBe(true)
+    expect(body).toMatch(/url\.protocol !== 'https:'/)
   })
 })
 

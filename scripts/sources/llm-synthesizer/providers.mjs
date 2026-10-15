@@ -1,6 +1,6 @@
 /**
- * Provider HTTP clients (Anthropic, OpenAI-compatible / Copilot / GitHub
- * Models) for the LLM synthesizer, plus the shared system prompt.
+ * Provider HTTP clients (Anthropic, OpenAI-compatible LLM proxy / Copilot)
+ * for the LLM synthesizer, plus the shared system prompt.
  * Extracted from scripts/sources/llm-synthesizer.mjs (console-kb#3196).
  */
 

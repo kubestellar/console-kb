@@ -20,12 +20,13 @@ import { join, resolve } from 'path'
 
 // The module captures SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 // at import time — vitest runs from scripts/, so ensure that path exists BEFORE
-// importing. We also set LLM_TOKEN so callLLM() does not short-circuit to null.
+// importing. We also configure the LLM proxy so callLLM() does not throw LlmConfigError.
 const SOLUTIONS_DIR = join(process.cwd(), 'fixes', 'cncf-install')
 const preexistingSolutionsDir = existsSync(SOLUTIONS_DIR)
 if (!preexistingSolutionsDir) mkdirSync(SOLUTIONS_DIR, { recursive: true })
 
-process.env.LLM_TOKEN = process.env.LLM_TOKEN || 'test-token-not-real'
+process.env.LLM_BASE_URL = process.env.LLM_BASE_URL || 'https://llm-proxy.test/v1'
+process.env.LLM_API_KEY = process.env.LLM_API_KEY || 'test-token-not-real'
 
 const { enrichFile } = await import('../enrich-install-missions.mjs')
 

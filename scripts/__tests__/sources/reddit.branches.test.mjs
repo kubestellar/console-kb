@@ -27,7 +27,7 @@ import { RedditSource } from '../../sources/reddit.mjs'
  *     thrown fetch all resolve to null without raising.
  */
 
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]))
 const ORIGINAL_FETCH = globalThis.fetch
 

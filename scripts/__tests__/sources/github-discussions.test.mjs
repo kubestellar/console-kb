@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GitHubDiscussionsSource } from '../../sources/github-discussions.mjs'
 
-const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_TOKEN']
+const ENV_KEYS = ['USE_COPILOT', 'COPILOT_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY']
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]))
 const ORIGINAL_FETCH = globalThis.fetch
 
@@ -27,7 +27,8 @@ describe('GitHubDiscussionsSource', () => {
     restoreEnv()
     delete process.env.COPILOT_TOKEN
     delete process.env.ANTHROPIC_API_KEY
-    delete process.env.LLM_TOKEN
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
     delete process.env.USE_COPILOT
     process.env.GITHUB_TOKEN = 'test-token'
     vi.spyOn(console, 'warn').mockImplementation(() => {})

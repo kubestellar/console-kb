@@ -29,8 +29,14 @@ function llmResponse(payload) {
 }
 
 let errorSpy
+const ENV_KEYS = ['LLM_BASE_URL', 'LLM_API_KEY', 'LLM_MODEL']
+const savedEnv = {}
 
 beforeEach(() => {
+  for (const k of ENV_KEYS) savedEnv[k] = process.env[k]
+  process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+  process.env.LLM_API_KEY = 'proxy-key'
+  delete process.env.LLM_MODEL
   // platform/synthesize.mjs logs these errors via the shared structured
   // logger (scripts/lib/logger.mjs), which writes JSON lines directly to
   // process.stderr rather than calling console.error — see #3599.
@@ -38,13 +44,17 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  for (const k of ENV_KEYS) {
+    if (savedEnv[k] === undefined) delete process.env[k]
+    else process.env[k] = savedEnv[k]
+  }
   vi.unstubAllGlobals()
   vi.useRealTimers()
   errorSpy.mockRestore()
 })
 
 describe('synthesizePlatformMission — happy path', () => {
-  it('posts to the trusted LLM endpoint with the built prompt and returns the parsed mission', async () => {
+  it('posts to the env-configured LLM proxy with the built prompt and returns the parsed mission', async () => {
     const payload = { mission: { title: 'Install Demo Platform' } }
     const fetchMock = vi.fn().mockResolvedValue(llmResponse(payload))
     vi.stubGlobal('fetch', fetchMock)
@@ -53,10 +63,12 @@ describe('synthesizePlatformMission — happy path', () => {
     expect(result).toEqual(payload)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, options] = fetchMock.mock.calls[0]
-    expect(url).toMatch(/^https:\/\//)
+    expect(url).toBe('https://llm-proxy.test/v1/chat/completions')
     expect(options.method).toBe('POST')
     expect(options.headers.Authorization).toMatch(/^Bearer /)
+    expect(options.headers.Authorization).toBe('Bearer proxy-key')
     const body = JSON.parse(options.body)
+    expect(body.model).toBe('gpt-4o-mini')
     expect(body.messages[1].content).toContain('Demo Platform')
     expect(body.response_format).toEqual({ type: 'json_object' })
   })
@@ -69,19 +81,31 @@ describe('synthesizePlatformMission — failure branches', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/LLM API error 500/))
   })
 
-  it('returns null when the Content-Type is not application/json', async () => {
+  it('throws (fails the run loudly) when the Content-Type is not application/json', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ contentType: 'text/html' })))
-    expect(await synthesizePlatformMission(PLATFORM, CONTEXT)).toBeNull()
+    await expect(synthesizePlatformMission(PLATFORM, CONTEXT)).rejects.toMatchObject({
+      name: 'LlmResponseError',
+      message: expect.stringMatching(/unexpected Content-Type: text\/html/),
+    })
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/unexpected Content-Type/))
   })
 
   it('logs a snippet of the body when the Content-Type is not application/json', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ contentType: 'text/plain', body: 'rate limit exceeded, try later' }))
+      vi.fn().mockResolvedValue(jsonResponse({ contentType: 'text/plain', body: 'OK' }))
     )
-    expect(await synthesizePlatformMission(PLATFORM, CONTEXT)).toBeNull()
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/rate limit exceeded, try later/))
+    await expect(synthesizePlatformMission(PLATFORM, CONTEXT)).rejects.toThrow(/text\/plain — body: OK/)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/text\/plain — body: OK/))
+  })
+
+  it('throws LlmConfigError without calling fetch when the LLM proxy env is unset', async () => {
+    delete process.env.LLM_BASE_URL
+    delete process.env.LLM_API_KEY
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(synthesizePlatformMission(PLATFORM, CONTEXT)).rejects.toMatchObject({ name: 'LlmConfigError' })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('returns null when the response body exceeds the 1MB ceiling', async () => {

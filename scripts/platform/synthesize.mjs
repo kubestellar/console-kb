@@ -2,14 +2,19 @@
  * LLM prompt-building and synthesis for the platform mission generator.
  *
  * Extracted from generate-platform-missions.mjs (console-kb#3163). The
- * trusted-endpoint / token / model config it depends on lives in
- * ../lib/platform-llm-config.mjs (console-kb#3544), which is the single
- * place those env-derived constants are validated (assertTrustedEndpoint
- * runs once, at module load, when that module is imported). This module
- * must not import from the orchestrator that calls it.
+ * LLM proxy endpoint / key / model come from the env-configured proxy
+ * (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL) via ../lib/platform-llm-config.mjs,
+ * which re-exports ../lib/llm-proxy-config.mjs (console-kb#3544, #3702).
+ * This module must not import from the orchestrator that calls it.
  */
 import { slugify } from '../lib/mission-file.mjs'
-import { getLlmToken, getGithubToken, TRUSTED_LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT_MS } from '../lib/platform-llm-config.mjs'
+import {
+  getLlmProxyConfig,
+  llmRequestHeaders,
+  assertJsonResponse,
+  LlmResponseError,
+  LLM_TIMEOUT_MS,
+} from '../lib/platform-llm-config.mjs'
 import { createLogger } from '../lib/logger.mjs'
 
 const log = createLogger('synthesize')
@@ -106,44 +111,37 @@ export function buildPlatformPrompt(platform, context) {
   return sections.join('\n')
 }
 
+/**
+ * Synthesizes one platform mission through the env-configured LLM proxy.
+ *
+ * Returns null for per-platform failures (HTTP error, timeout, oversize or
+ * empty response). Throws — so the run exits non-zero instead of skipping
+ * every platform — when the proxy env is unset (`LlmConfigError`) or the
+ * proxy answers with a non-JSON body (`LlmResponseError`), since both are
+ * fleet-wide misconfigurations, not per-platform flakes (console-kb#3702).
+ */
 export async function synthesizePlatformMission(platform, context) {
+  const { endpoint, apiKey, model } = getLlmProxyConfig()
   const prompt = buildPlatformPrompt(platform, context)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
 
-  const requestBody = JSON.stringify({
-    model: LLM_MODEL,
-    messages: [
-      { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0.2,
-    max_tokens: 6000,
-    response_format: { type: 'json_object' },
-  })
-  const post = (token) =>
-    fetch(TRUSTED_LLM_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token,
-      },
-      signal: controller.signal,
-      body: requestBody,
-    })
-  const isJson = (res) => (res.headers.get('content-type') || '').includes('application/json')
-
   try {
-    let response = await post(getLlmToken())
-
-    // A 200 text/plain "OK" body means the LLM_TOKEN PAT is not accepted by
-    // the Models endpoint (console-kb#3702, #3742). Retry once with the
-    // workflow's GITHUB_TOKEN (models: read) before giving up.
-    const fallbackToken = getGithubToken()
-    if (response.ok && !isJson(response) && fallbackToken && fallbackToken !== getLlmToken()) {
-      log.warn('  LLM response was not JSON with LLM_TOKEN; retrying with GITHUB_TOKEN')
-      response = await post(fallbackToken)
-    }
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: llmRequestHeaders(apiKey),
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: PLATFORM_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 6000,
+        response_format: { type: 'json_object' },
+      }),
+    })
 
     clearTimeout(timeout)
     if (!response.ok) {
@@ -152,21 +150,16 @@ export async function synthesizePlatformMission(platform, context) {
       return null
     }
 
-    // Validate Content-Type and enforce a response size ceiling before parsing
-    // HTTP-derived bytes into the mission object that will be written to disk (CWE-434).
-    const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('application/json')) {
-      // A 200 response with a non-JSON Content-Type carries no `!response.ok`
-      // signal, so without the body itself there is nothing to distinguish
-      // an upstream outage page from a proxy error from a provider-format
-      // change (console-kb#3702, where this branch fired 5 consecutive
-      // scheduled runs with only the Content-Type logged and no indication
-      // of what the body actually said).
-      const body = await response.text()
-      log.error(
-        `  LLM response has unexpected Content-Type: ${contentType.slice(0, 100)} — body: ${body.slice(0, 200)}`
-      )
-      return null
+    // Validate Content-Type before parsing HTTP-derived bytes into the
+    // mission object that will be written to disk (CWE-434). A 200 response
+    // with a non-JSON Content-Type carries no `!response.ok` signal, so the
+    // error carries a body snippet to distinguish an upstream outage page
+    // from a proxy error from a retired endpoint (console-kb#3702, #3709).
+    try {
+      await assertJsonResponse(response)
+    } catch (err) {
+      log.error(`  ${err.message}`, { status: err.status ?? null, contentType: err.contentType ?? null })
+      throw err
     }
     const MAX_LLM_RESPONSE_BYTES = 1_000_000
     const rawText = await response.text()
@@ -197,6 +190,7 @@ export async function synthesizePlatformMission(platform, context) {
     return JSON.parse(content)
   } catch (err) {
     clearTimeout(timeout)
+    if (err instanceof LlmResponseError) throw err
     log.error(`  LLM error: ${err.message}`)
     return null
   }

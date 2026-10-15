@@ -30,7 +30,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const ORIGINAL_FETCH = globalThis.fetch
 const ORIGINAL_ENV = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-  LLM_TOKEN: process.env.LLM_TOKEN,
+  LLM_BASE_URL: process.env.LLM_BASE_URL,
+  LLM_API_KEY: process.env.LLM_API_KEY,
   DRY_RUN: process.env.DRY_RUN,
   MAX_RETRIES: process.env.MAX_RETRIES,
   LLM_ENDPOINT: process.env.LLM_ENDPOINT,
@@ -84,7 +85,8 @@ async function loadModule() {
 beforeEach(() => {
   spawnCalls.length = 0
   spawnScript = []
-  process.env.GITHUB_TOKEN = 'test-token'
+  process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+  process.env.LLM_API_KEY = 'test-token'
   process.env.MAX_RETRIES = '3'
   // Explicitly disable DRY_RUN so executeStep goes through execCommand
   delete process.env.DRY_RUN

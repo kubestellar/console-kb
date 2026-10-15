@@ -15,8 +15,6 @@ import { synthesizeMission } from '../../sources/llm-synthesizer.mjs'
  *   - cleanInput empty-text branch (line 341)
  *   - isGarbageSnippet branches: diff --git prefix, "Invalid PR title" line,
  *     high quoted-line ratio, and multi-image markdown
- *   - synthesizeWithFallback: Copilot exhausts, Anthropic fetch throws
- *     inside the try/catch, GitHub Models fallback path is reached
  *
  * All tests exercise ONLY the exported synthesizeMission entry point —
  * no production changes required.
@@ -27,7 +25,7 @@ const ENV_KEYS = [
   'COPILOT_TOKEN',
   'GITHUB_TOKEN',
   'ANTHROPIC_API_KEY',
-  'LLM_TOKEN',
+  'LLM_BASE_URL', 'LLM_API_KEY',
   'LLM_MAX_TOKENS',
 ]
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
@@ -95,7 +93,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('retries when the LLM returns malformed JSON on the first attempt, then succeeds', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     const bad = {
@@ -127,7 +126,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('handles AbortError (timeout) name during fetch and retries', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' })
@@ -152,7 +152,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('handles a generic Error thrown by fetch and retries', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     const genericErr = new Error('ECONNRESET')
@@ -179,7 +180,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   it('extractJSON returns the trimmed text unchanged when there are no braces at all', async () => {
     // This exercises extractJSON's final `return trimmed` fallback.
     // Downstream JSON.parse then throws, retries exhaust, result is null.
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -200,7 +202,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('truncates very long issueBody in the prompt (text.length > max branch)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     let capturedBody
@@ -228,7 +231,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('handles empty issueBody / solution / prDiff (cleanInput early-return branch)', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -251,7 +255,8 @@ describe('synthesizeMission — remaining branch coverage', () => {
   })
 
   it('filters garbage snippets: diff --git, Invalid PR title, heavy-quoted, and multi-image', async () => {
-    process.env.LLM_TOKEN = 'test-token'
+    process.env.LLM_BASE_URL = 'https://llm-proxy.test/v1'
+    process.env.LLM_API_KEY = 'test-token'
     const payload = goodMissionPayload()
 
     let capturedBody
@@ -291,50 +296,4 @@ describe('synthesizeMission — remaining branch coverage', () => {
     expect(promptText).not.toContain('example.com/2.png')
   })
 
-  it('falls through to GitHub Models when Copilot exhausts and Anthropic fetch throws', async () => {
-    process.env.COPILOT_TOKEN = 'copilot-tok'
-    delete process.env.USE_COPILOT
-    process.env.ANTHROPIC_API_KEY = 'anthropic-tok'
-    process.env.LLM_TOKEN = 'gh-models-tok'
-
-    const payload = goodMissionPayload()
-
-    const copilotFail = {
-      ok: false,
-      status: 502,
-      text: async () => 'copilot down',
-    }
-    const anthropicThrow = new Error('anthropic network error')
-    const ghModelsOk = {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        choices: [{ message: { content: JSON.stringify(payload) } }],
-      }),
-    }
-
-    const fetchMock = vi
-      .fn()
-      // 3 Copilot attempts fail
-      .mockResolvedValueOnce(copilotFail)
-      .mockResolvedValueOnce(copilotFail)
-      .mockResolvedValueOnce(copilotFail)
-      // Anthropic fallback throws → caught, moves to GitHub Models
-      .mockRejectedValueOnce(anthropicThrow)
-      // GitHub Models fallback succeeds
-      .mockResolvedValueOnce(ghModelsOk)
-    globalThis.fetch = fetchMock
-
-    vi.useFakeTimers()
-    const p = synthesizeMission(BASE_PARAMS)
-    await vi.advanceTimersByTimeAsync(20_000)
-    const result = await p
-    vi.useRealTimers()
-
-    expect(result).not.toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(5)
-    // Last call = GitHub Models endpoint.
-    const [ghUrl] = fetchMock.mock.calls[4]
-    expect(ghUrl).toContain('models.github.ai')
-  })
 })

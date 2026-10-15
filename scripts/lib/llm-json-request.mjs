@@ -14,12 +14,18 @@
  * those are left as parameters here.
  *
  * Returns the parsed JSON body of `choices[0].message.content`, or `null`
- * if the call failed for any handled reason (rate-limited past the retry
- * budget, HTTP error, bad Content-Type, oversize body, missing/invalid
- * content). Callers may pass a full multi-turn `messages` array instead of
+ * if the call failed for any handled per-request reason (rate-limited past
+ * the retry budget, HTTP error, oversize body, missing/invalid content).
+ * A 2xx response whose Content-Type is not `application/json` throws
+ * `LlmResponseError` (from ./llm-proxy-config.mjs) instead: that signature
+ * means the endpoint itself is wrong/retired (console-kb#3702, where every
+ * call got a 200 `text/plain` "OK"), so callers must fail the run loudly
+ * rather than skip item after item. Callers may pass a full multi-turn `messages` array instead of
  * `systemPrompt`/`userPrompt`. Does not perform caller-specific post-parse validation
  * (e.g. required fields) — that remains the caller's responsibility.
  */
+import { assertJsonResponse, llmRequestHeaders, LlmResponseError } from './llm-proxy-config.mjs'
+
 export async function requestLlmChatJson({
   endpoint,
   model,
@@ -38,7 +44,7 @@ export async function requestLlmChatJson({
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: llmRequestHeaders(token),
         body: JSON.stringify({
           model,
           messages: messages ?? [
@@ -63,10 +69,11 @@ export async function requestLlmChatJson({
         return null
       }
 
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        log.warn(`  [LLM] Unexpected Content-Type: ${contentType.slice(0, 100)}`)
-        return null
+      try {
+        await assertJsonResponse(response)
+      } catch (err) {
+        log.error(`  [LLM] ${err.message}`)
+        throw err
       }
       const rawText = await response.text()
       if (rawText.length > maxResponseBytes) {
@@ -79,6 +86,7 @@ export async function requestLlmChatJson({
 
       return JSON.parse(content)
     } catch (err) {
+      if (err instanceof LlmResponseError) throw err
       log.warn(`  [LLM] ${err.name === 'AbortError' ? 'Timeout' : err.message} (attempt ${attempt + 1})`)
       if (attempt < 2) await sleep(3000 * (attempt + 1))
     }
