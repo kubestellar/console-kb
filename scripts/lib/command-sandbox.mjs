@@ -32,7 +32,10 @@ const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 // combined stdout+stderr is then forwarded verbatim to the external LLM
 // proxy as `error_output` in the diagnose_failure message — exfiltrating
 // any secret present in the child process's environment.
-const SENSITIVE_ENV_NAME_RE = /token|key|secret|password|credential|_pat$/i
+// NOTE: `_pat$` is deliberately anchored to end-of-string on its own (e.g.
+// GITHUB_PAT) while the other alternatives match anywhere in the name;
+// the explicit grouping below makes that precedence unambiguous.
+const SENSITIVE_ENV_NAME_RE = /(?:token|key|secret|password|credential)|_pat$/i
 
 /**
  * Builds the environment passed to a sandboxed child process: a copy of
