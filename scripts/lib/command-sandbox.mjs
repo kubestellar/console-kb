@@ -32,10 +32,12 @@ const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 // combined stdout+stderr is then forwarded verbatim to the external LLM
 // proxy as `error_output` in the diagnose_failure message — exfiltrating
 // any secret present in the child process's environment.
-// NOTE: `_pat$` is deliberately anchored to end-of-string on its own (e.g.
-// GITHUB_PAT) while the other alternatives match anywhere in the name;
-// the explicit grouping below makes that precedence unambiguous.
-const SENSITIVE_ENV_NAME_RE = /(?:token|key|secret|password|credential)|_pat$/i
+// `_pat` (e.g. GITHUB_PAT) is checked separately, anchored to end-of-string,
+// so it never combines with the other (unanchored) alternatives inside a
+// single regex — avoiding any ambiguity between anchored and unanchored
+// alternation branches.
+const SENSITIVE_ENV_NAME_RE = /token|key|secret|password|credential/i
+const SENSITIVE_ENV_NAME_SUFFIX_RE = /_pat$/i
 
 /**
  * Builds the environment passed to a sandboxed child process: a copy of
@@ -47,7 +49,7 @@ const SENSITIVE_ENV_NAME_RE = /(?:token|key|secret|password|credential)|_pat$/i
 function buildSandboxEnv() {
   const env = {}
   for (const [name, value] of Object.entries(process.env)) {
-    if (SENSITIVE_ENV_NAME_RE.test(name)) continue
+    if (SENSITIVE_ENV_NAME_RE.test(name) || SENSITIVE_ENV_NAME_SUFFIX_RE.test(name)) continue
     env[name] = value
   }
   env.TERM = 'dumb'
