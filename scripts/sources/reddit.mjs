@@ -8,7 +8,7 @@
 import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
-import { extractResourceKinds, extractSteps } from '../lib/text-utils.mjs'
+import { extractResourceKinds, extractSteps, extractCodeBlocks, detectType } from '../lib/text-utils.mjs'
 
 // Reddit requires descriptive User-Agent: platform:appid:version (by contact)
 const log = createLogger('reddit')
@@ -104,7 +104,7 @@ export class RedditSource extends BaseSource {
     if (!solution) return null
 
     // Extract YAML snippets
-    const yamlSnippets = extractCodeBlocks(body + '\n' + solution, ['yaml', 'yml'])
+    const yamlSnippets = extractCodeBlocks(body + '\n' + solution)
 
     // Detect labels and resource kinds
     const allText = `${title} ${body} ${solution}`
@@ -164,17 +164,6 @@ function cleanTitle(title) {
   return title.replace(/^\[.*?\]\s*/, '').replace(/\?$/, '').trim().slice(0, 120)
 }
 
-function extractCodeBlocks(text, langs) {
-  const blocks = []
-  const regex = /```(?:yaml|yml)?\n([\s\S]*?)```/gi
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    const block = match[1].trim()
-    if (block.length > 20 && block.length < 5000) blocks.push(block)
-  }
-  return blocks
-}
-
 function extractRedditLabels(text, project) {
   const labels = [project.name, project.category]
   const keywords = ['helm', 'kubectl', 'pod', 'deployment', 'service', 'ingress', 'configmap', 'secret', 'namespace', 'pvc', 'crd', 'operator']
@@ -182,13 +171,4 @@ function extractRedditLabels(text, project) {
     if (text.toLowerCase().includes(kw)) labels.push(kw)
   }
   return [...new Set(labels)]
-}
-
-function detectType(text) {
-  const lower = text.toLowerCase()
-  if (lower.includes('error') || lower.includes('crash') || lower.includes('fail')) return 'troubleshooting'
-  if (lower.includes('how to') || lower.includes('best practice') || lower.includes('recommend')) return 'best-practice'
-  if (lower.includes('performance') || lower.includes('slow') || lower.includes('latency')) return 'performance'
-  if (lower.includes('security') || lower.includes('rbac') || lower.includes('tls')) return 'security'
-  return 'troubleshooting'
 }

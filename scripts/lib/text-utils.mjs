@@ -58,6 +58,58 @@ export function extractSteps(text) {
   return steps
 }
 
+/** Default fenced-code-block languages captured by extractCodeBlocks. */
+export const CODE_FENCE_LANGS = Object.freeze(['yaml', 'yml', 'bash', 'sh'])
+
+/** Env var (comma-separated) overriding CODE_FENCE_LANGS. */
+export const CODE_FENCE_LANGS_ENV = 'CODE_FENCE_LANGS'
+
+const MIN_CODE_BLOCK_LENGTH = 20
+const MAX_CODE_BLOCK_LENGTH = 5000
+
+function resolveFenceLangs() {
+  const raw = process.env[CODE_FENCE_LANGS_ENV]
+  if (!raw) return CODE_FENCE_LANGS
+  const langs = raw.split(',').map((l) => l.trim().toLowerCase()).filter((l) => /^[a-z0-9_+-]+$/.test(l))
+  return langs.length > 0 ? langs : CODE_FENCE_LANGS
+}
+
+/**
+ * Extracts fenced code blocks (labelled with one of `langs`, or unlabelled)
+ * whose trimmed body is longer than 20 and shorter than 5000 characters.
+ * Shared by the github-discussions and reddit sources.
+ */
+export function extractCodeBlocks(text, langs = resolveFenceLangs()) {
+  const blocks = []
+  const regex = new RegExp('```(?:' + langs.join('|') + ')?\\n([\\s\\S]*?)```', 'gi')
+  let match
+  while ((match = regex.exec(text)) !== null) {
+    const block = match[1].trim()
+    if (block.length > MIN_CODE_BLOCK_LENGTH && block.length < MAX_CODE_BLOCK_LENGTH) blocks.push(block)
+  }
+  return blocks
+}
+
+/** Ordered [type, keywords] pairs used by detectType; first match wins. */
+export const TYPE_KEYWORDS = Object.freeze([
+  ['troubleshooting', Object.freeze(['error', 'crash', 'fail'])],
+  ['best-practice', Object.freeze(['how to', 'best practice', 'recommend'])],
+  ['performance', Object.freeze(['performance', 'slow', 'latency'])],
+  ['security', Object.freeze(['security', 'rbac', 'tls'])],
+])
+
+/** Fallback type when no TYPE_KEYWORDS entry matches. */
+export const DEFAULT_MISSION_TYPE = 'troubleshooting'
+
+/** Classifies community text into a mission type via TYPE_KEYWORDS. */
+export function detectType(text) {
+  const lower = text.toLowerCase()
+  for (const [type, keywords] of TYPE_KEYWORDS) {
+    if (keywords.some((k) => lower.includes(k))) return type
+  }
+  return DEFAULT_MISSION_TYPE
+}
+
 /**
  * Strip PR template boilerplate, HTML comments, image markdown, email reply
  * headers, emoji shortcodes, and other non-content noise from issue/PR text.

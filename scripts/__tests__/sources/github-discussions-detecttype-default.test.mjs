@@ -58,11 +58,11 @@ describe('GitHubDiscussionsSource.detectType default fall-through', () => {
     const mission = await source.extractMission(
       {
         title: 'Deployment strategy for streaming workloads',
-        body: 'We want to migrate our streaming pipeline to a new cluster and would like guidance on the recommended layout.',
+        body: 'We want to migrate our streaming pipeline to a new cluster and would like guidance on the layout.',
         url: 'https://example.com/streaming',
         upvoteCount: 5,
         answer: {
-          body: 'Adopt a topic-per-tenant layout with dedicated node pools per topic tier; keep the ingest side isolated from the analytics side and use a dedicated cluster autoscaler profile. Additional prose after the recommendation ensures the answer clears the minimum length threshold.',
+          body: 'Adopt a topic-per-tenant layout with dedicated node pools per topic tier; keep the ingest side isolated from the analytics side and use a dedicated cluster autoscaler profile. Additional prose after the layout description ensures the answer clears the minimum length threshold.',
         },
         labels: { nodes: [] },
         category: { slug: 'general' },
@@ -77,6 +77,28 @@ describe('GitHubDiscussionsSource.detectType default fall-through', () => {
     expect(mission.mission.type).toBe('troubleshooting')
   })
 
+  it('unified default: recommend/latency/tls keywords classify like reddit (#3807)', async () => {
+    delete process.env.GITHUB_TOKEN
+
+    const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
+    const make = (title) => ({
+      title,
+      body: 'We would like guidance on this topic for our clusters in production.',
+      url: 'https://example.com/unified',
+      upvoteCount: 5,
+      answer: {
+        body: 'Adopt a dedicated node pool per tier and keep the ingest side isolated from the analytics side with a dedicated autoscaler profile for each tier.',
+      },
+      labels: { nodes: [] },
+      category: { slug: 'general' },
+    })
+    const typeOf = async (title) => (await source.extractMission(make(title), TEST_PROJECT)).mission.type
+
+    expect(await typeOf('Recommended layout for streaming')).toBe('best-practice')
+    expect(await typeOf('Reducing latency between pods')).toBe('performance')
+    expect(await typeOf('Enforcing TLS between pods')).toBe('security')
+  })
+
   it('detectType keyword arms remain reachable via generic-category slug', async () => {
     // Sanity companion: a non-q-a discussion whose text does trigger a
     // keyword arm must reach that arm, proving the default fall-through
@@ -86,8 +108,8 @@ describe('GitHubDiscussionsSource.detectType default fall-through', () => {
     const source = new GitHubDiscussionsSource({ rateLimitDelay: 0 })
     const mission = await source.extractMission(
       {
-        title: 'RBAC scoping recommendation for multi-tenant workloads',
-        body: 'What is the recommended pattern to scope security boundaries across tenants?',
+        title: 'RBAC scoping for multi-tenant workloads',
+        body: 'What is the pattern to scope security boundaries across tenants?',
         url: 'https://example.com/rbac',
         upvoteCount: 5,
         answer: {

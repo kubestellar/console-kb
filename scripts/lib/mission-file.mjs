@@ -15,10 +15,8 @@
  */
 import { readFileSync } from 'fs'
 
-/** Derives a filesystem-safe slug from an arbitrary display name. */
-export function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
-}
+/** Re-exported from text-utils.mjs so there is a single slugify implementation. */
+export { slugify } from './text-utils.mjs'
 
 /** Refuses slugs that could escape the target directory. */
 export function assertSafeSlug(slug, source = 'unknown') {

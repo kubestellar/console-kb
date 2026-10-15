@@ -8,7 +8,7 @@ import { BaseSource, slugify, buildMission } from './base-source.mjs'
 import { computeSinceDate } from './search-state.mjs'
 import { createLogger } from '../lib/logger.mjs'
 import { githubGraphql } from '../lib/cncf-github-client.mjs'
-import { extractResourceKinds, extractSteps } from '../lib/text-utils.mjs'
+import { extractResourceKinds, extractSteps, extractCodeBlocks, detectType } from '../lib/text-utils.mjs'
 
 const log = createLogger('github-discussions')
 
@@ -172,25 +172,5 @@ export class GitHubDiscussionsSource extends BaseSource {
       return false
     }
   }
-}
-
-function extractCodeBlocks(text) {
-  const blocks = []
-  const regex = /```(?:yaml|yml|bash|sh)?\n([\s\S]*?)```/gi
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    const block = match[1].trim()
-    if (block.length > 20 && block.length < 5000) blocks.push(block)
-  }
-  return blocks
-}
-
-function detectType(text) {
-  const lower = text.toLowerCase()
-  if (lower.includes('error') || lower.includes('crash') || lower.includes('fail')) return 'troubleshooting'
-  if (lower.includes('how to') || lower.includes('best practice')) return 'best-practice'
-  if (lower.includes('performance') || lower.includes('slow')) return 'performance'
-  if (lower.includes('security') || lower.includes('rbac')) return 'security'
-  return 'troubleshooting'
 }
 
