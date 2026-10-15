@@ -24,6 +24,33 @@ const log = createLogger('command-sandbox')
 
 const STEP_TIMEOUT_MS = parseInt(process.env.STEP_TIMEOUT_MS || '120000', 10)
 
+// Env-var name shapes that commonly hold credentials (CI secrets such as
+// GITHUB_TOKEN, LLM_API_KEY, LLM_BASE_URL-adjacent keys, etc). Sandboxed
+// commands (console-kb#3824) must never see these: `cat`/`cp`/`mv` are
+// allowlisted binaries with no path restriction, and a mission step like
+// `cat /proc/self/environ /nonexistent` can force a nonzero exit whose
+// combined stdout+stderr is then forwarded verbatim to the external LLM
+// proxy as `error_output` in the diagnose_failure message — exfiltrating
+// any secret present in the child process's environment.
+const SENSITIVE_ENV_NAME_RE = /token|key|secret|password|credential|_pat$/i
+
+/**
+ * Builds the environment passed to a sandboxed child process: a copy of
+ * the current process env with any credential-shaped variable name
+ * stripped out, plus a forced `TERM=dumb`. Functional variables that
+ * install-mission commands legitimately need (PATH, HOME, KUBECONFIG,
+ * etc.) do not match the credential-shaped pattern and are preserved.
+ */
+function buildSandboxEnv() {
+  const env = {}
+  for (const [name, value] of Object.entries(process.env)) {
+    if (SENSITIVE_ENV_NAME_RE.test(name)) continue
+    env[name] = value
+  }
+  env.TERM = 'dumb'
+  return env
+}
+
 /**
  * Parses `hostname` as an alternate-notation IPv4 literal — decimal
  * (`2130706433`), hex (`0x7f000001`), octal (`0177.0.0.1`), or shorthand
@@ -271,7 +298,7 @@ function runBinary(binary, cmdArgs, { timeoutMs = STEP_TIMEOUT_MS, input } = {})
       encoding: 'utf-8',
       timeout: timeoutMs,
       shell: false,
-      env: { ...process.env, TERM: 'dumb' },
+      env: buildSandboxEnv(),
       input,
     })
 
@@ -367,4 +394,5 @@ export {
   runBinary,
   execCommand,
   parseAltNotationIPv4,
+  buildSandboxEnv,
 }
