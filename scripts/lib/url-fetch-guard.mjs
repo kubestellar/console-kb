@@ -63,12 +63,21 @@ export function isPrivateOrReservedIp(address) {
 }
 
 /**
- * Asserts that `urlString` is safe to fetch: http(s) only, and neither the
- * hostname itself nor anything it resolves to is a loopback/private/
- * link-local/metadata address. Throws on an unsafe URL; otherwise resolves
- * to void.
+ * Shared first pass for both `assertSafeFetchUrl` and `validateUrlForConnect`:
+ * parses `urlString`, rejects non-http(s) schemes, and rejects `localhost`
+ * or a literal IP that is loopback/private/link-local/metadata/reserved.
+ * Throws on any of those; otherwise returns the parsed URL and the
+ * bracket-stripped hostname for the caller's own remaining checks (DNS
+ * lookup for `assertSafeFetchUrl`, nothing further for connect-time pinning).
+ *
+ * Kept as a single implementation because this exact scheme/localhost/
+ * literal-IP logic was previously duplicated across both call sites, and a
+ * past fix (stripping brackets from a literal IPv6 host before the
+ * literal-IP check) had to be applied to both — missing one is a confirmed
+ * SSRF bypass (CWE-918): `http://[::ffff:127.0.0.1]/` reaching a loopback
+ * listener. A single implementation means there is no second copy to miss.
  */
-export async function assertSafeFetchUrl(urlString) {
+function validateSchemeAndLiteralHost(urlString) {
   let parsed
   try {
     parsed = new URL(urlString)
@@ -93,10 +102,24 @@ export async function assertSafeFetchUrl(urlString) {
     throw new Error(`Unsafe URL rejected (localhost): ${urlString}`)
   }
 
+  if (isIP(hostname) && isPrivateOrReservedIp(hostname)) {
+    throw new Error(`Unsafe URL rejected (reserved/private IP literal): ${urlString}`)
+  }
+
+  return { parsed, hostname }
+}
+
+/**
+ * Asserts that `urlString` is safe to fetch: http(s) only, and neither the
+ * hostname itself nor anything it resolves to is a loopback/private/
+ * link-local/metadata address. Throws on an unsafe URL; otherwise resolves
+ * to void.
+ */
+export async function assertSafeFetchUrl(urlString) {
+  const { hostname } = validateSchemeAndLiteralHost(urlString)
+
   if (isIP(hostname)) {
-    if (isPrivateOrReservedIp(hostname)) {
-      throw new Error(`Unsafe URL rejected (reserved/private IP literal): ${urlString}`)
-    }
+    // Literal IP already passed the private/reserved check above.
     return
   }
 
@@ -128,34 +151,13 @@ export async function isSafeFetchUrl(urlString) {
 
 const DEFAULT_MAX_REDIRECTS = 5
 
-/** Re-validates scheme/localhost/literal-IP for a redirect target; hostname safety is enforced at connect time by the pinned lookup. */
+/**
+ * Re-validates scheme/localhost/literal-IP for a redirect target via the
+ * shared `validateSchemeAndLiteralHost` check; hostname safety for a
+ * non-literal host is enforced at connect time by the pinned lookup below.
+ */
 function validateUrlForConnect(urlString) {
-  let parsed
-  try {
-    parsed = new URL(urlString)
-  } catch {
-    throw new Error(`Unsafe URL rejected (unparseable): ${urlString}`)
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Unsafe URL rejected (scheme ${parsed.protocol} not allowed): ${urlString}`)
-  }
-  // Strip brackets from a literal IPv6 host (see matching comment in
-  // `assertSafeFetchUrl`): without this, a bracketed IPv4-mapped IPv6
-  // literal such as `[::ffff:127.0.0.1]` or `[::ffff:169.254.169.254]`
-  // fails `isIP()` here, skips this check entirely, AND is never passed
-  // through `pinnedSafeLookup` below — Node's http(s) client recognises an
-  // already-literal IP address and connects directly without invoking the
-  // custom `lookup`, so neither of `safeFetch`'s two defenses fires. This
-  // was a confirmed SSRF bypass of the TOCTOU-safe `safeFetch` path
-  // (CWE-918): a request to `http://[::ffff:127.0.0.1]/` reached a loopback
-  // listener and returned its body.
-  const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
-  if (hostname.toLowerCase() === 'localhost') {
-    throw new Error(`Unsafe URL rejected (localhost): ${urlString}`)
-  }
-  if (isIP(hostname) && isPrivateOrReservedIp(hostname)) {
-    throw new Error(`Unsafe URL rejected (reserved/private IP literal): ${urlString}`)
-  }
+  const { parsed } = validateSchemeAndLiteralHost(urlString)
   return parsed
 }
 
