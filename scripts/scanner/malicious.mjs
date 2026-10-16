@@ -128,6 +128,25 @@ const CODE_FENCE_LANGS = new Set([
 ]);
 
 /**
+ * Splits a command string on `; && ||` separators and checks that every
+ * resulting segment's first word (the command being invoked, ignoring
+ * redirects/pipes/args) is in `SAFE_CLI_COMMANDS`. Shared by both branches
+ * of `isSafeCLIMatch` below — previously a byte-identical 13-line copy in
+ * each (console-kb#3826), which risked a future tightening of this check
+ * (CWE-078/CWE-088 guard) being applied to only one branch.
+ */
+function segmentsAreSafe(content) {
+  const segments = content.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
+  return segments.every(seg => {
+    // Extract the first word/command from each segment
+    // Handle potential bash redirects and arguments
+    const firstWord = seg.split(/[\s\|>]+/)[0].trim();
+    // Empty segments are safe (can happen with extra separators)
+    return !firstWord || SAFE_CLI_COMMANDS.has(firstWord);
+  });
+}
+
+/**
  * Checks if a matched string only contains safe CLI tool invocations.
  * Returns true if the match should be skipped (is safe).
  */
@@ -143,31 +162,16 @@ function isSafeCLIMatch(value) {
     // followed by a newline, it's a fenced code block — not injection.
     const firstLine = content.split(/\n/)[0].trim().toLowerCase();
     if (CODE_FENCE_LANGS.has(firstLine)) return true;
-    
-    // Split by command separators (; && ||) to get individual commands
-    const segments = content.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
-    
-    return segments.every(seg => {
-      // Extract the first word/command from each segment
-      // Handle potential bash redirects and arguments
-      const firstWord = seg.split(/[\s\|>]+/)[0].trim();
-      // Empty segments are safe (can happen with extra separators)
-      return !firstWord || SAFE_CLI_COMMANDS.has(firstWord);
-    });
+
+    return segmentsAreSafe(content);
   }
-  
+
   // For $() subshells — skip PowerShell variable access patterns like $variable.Property
   return subshells.every(inner => {
     // PowerShell $variable or $variable.Property is not command injection
     if (/^\$\w+/.test(inner)) return true;
 
-    // Split by command separators to get all commands in the pipeline
-    const segments = inner.split(/[\s]*(?:;|&&|\|\|)[\s]*/).map(s => s.trim()).filter(Boolean);
-    return segments.every(seg => {
-      // Extract the first word from each segment
-      const firstWord = seg.split(/[\s\|>]+/)[0].trim();
-      return !firstWord || SAFE_CLI_COMMANDS.has(firstWord);
-    });
+    return segmentsAreSafe(inner);
   });
 }
 
