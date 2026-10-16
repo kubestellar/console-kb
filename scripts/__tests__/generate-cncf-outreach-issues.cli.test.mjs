@@ -48,7 +48,7 @@ function withTempDir(fn) {
 // disk, so the "happy path" tests do not depend on the specific slug used for
 // the argo/istio/prometheus etc. — we discover it dynamically.
 async function pickProjectsWithMissions() {
-  const { CNCF_PROJECTS } = await import('../cncf-projects.mjs')
+  const { CNCF_PROJECTS } = await import('../catalogs/cncf-projects.mjs')
   const { slugify } = await import('../lib/outreach-helpers.mjs')
   const withMission = []
   for (const p of CNCF_PROJECTS) {
