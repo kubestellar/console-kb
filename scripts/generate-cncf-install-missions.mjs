@@ -20,7 +20,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 
 import { join, dirname, basename, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { parse as parseYaml } from 'yaml'
-import { CNCF_PROJECTS } from './cncf-projects.mjs'
+import { CNCF_PROJECTS } from './catalogs/cncf-projects.mjs'
 import { validateMissionExport, scanForSensitiveData, scanForMaliciousContent } from './scanner.mjs'
 import { scoreMission } from './quality-scorer.mjs'
 import { genQualityThreshold } from './lib/quality-thresholds.mjs'

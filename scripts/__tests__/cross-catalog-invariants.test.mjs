@@ -35,9 +35,9 @@
  * and catches new regressions — it does NOT curate the catalogs).
  */
 import { describe, it, expect } from 'vitest'
-import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../cncf-projects.mjs'
-import { K8S_PLATFORMS } from '../k8s-platforms.mjs'
-import { OTHER_PROJECTS } from '../other-projects.mjs'
+import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../catalogs/cncf-projects.mjs'
+import { K8S_PLATFORMS } from '../catalogs/k8s-platforms.mjs'
+import { OTHER_PROJECTS } from '../catalogs/other-projects.mjs'
 
 // ---------------------------------------------------------------------------
 // Known debt allowlists — captured from master at test-authoring time.

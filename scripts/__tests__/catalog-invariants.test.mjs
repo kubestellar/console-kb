@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CNCF_PROJECTS,
   CATEGORY_TO_DIR,
-} from '../cncf-projects.mjs'
+} from '../catalogs/cncf-projects.mjs'
 import {
   K8S_PLATFORMS,
   MANAGED_PLATFORMS,
@@ -29,11 +29,11 @@ import {
   OPERATORS,
   getPlatformByName,
   getPlatformNames,
-} from '../k8s-platforms.mjs'
+} from '../catalogs/k8s-platforms.mjs'
 import {
   OTHER_PROJECTS,
   getOtherProjectByName,
-} from '../other-projects.mjs'
+} from '../catalogs/other-projects.mjs'
 
 // ---------------------------------------------------------------------------
 // Shared invariant helpers

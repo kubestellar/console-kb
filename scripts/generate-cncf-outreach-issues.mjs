@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
-import { CNCF_PROJECTS } from './cncf-projects.mjs'
+import { CNCF_PROJECTS } from './catalogs/cncf-projects.mjs'
 import { runOutreachGenerator } from './lib/outreach-helpers.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

@@ -17,7 +17,7 @@
  * Prior to this file the module had zero direct tests.
  */
 import { describe, it, expect } from 'vitest'
-import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../cncf-projects.mjs'
+import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../catalogs/cncf-projects.mjs'
 
 const ALLOWED_MATURITIES = new Set(['graduated', 'incubating', 'sandbox'])
 const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/

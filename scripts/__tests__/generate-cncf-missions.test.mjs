@@ -12,7 +12,7 @@ import {
   buildDescription,
   buildResolutionSummary,
 } from '../generate-cncf-missions.mjs'
-import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../cncf-projects.mjs'
+import { CNCF_PROJECTS, CATEGORY_TO_DIR } from '../catalogs/cncf-projects.mjs'
 
 // Helper to create a mock issue
 function mockIssue(overrides = {}) {

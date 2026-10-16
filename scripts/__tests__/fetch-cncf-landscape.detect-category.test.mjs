@@ -36,7 +36,7 @@ import {
   detectCategory,
   CATEGORY_PATTERNS,
 } from '../fetch-cncf-landscape.mjs'
-import { CATEGORY_TO_DIR } from '../cncf-projects.mjs'
+import { CATEGORY_TO_DIR } from '../catalogs/cncf-projects.mjs'
 
 const KNOWN_CATEGORIES = new Set(Object.keys(CATEGORY_TO_DIR))
 
