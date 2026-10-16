@@ -69,6 +69,60 @@ function sleep(ms) {
 }
 
 /**
+ * Assembles the kc-mission-v1 object shared by both the LLM-synthesized and
+ * raw-extraction paths of `buildMission` below — the `mission.title`,
+ * `metadata.{tags,cncfProjects,targetResourceKinds,maturity,sourceUrls}`,
+ * `prerequisites`, and `security` blocks (console-kb#3828) were previously
+ * a byte-identical ~15-line copy in each path, differing only in the
+ * `description`/`type`/`steps`/`resolution`/`difficulty`/`issueTypes`/
+ * `synthesizedBy` values each path now passes in here.
+ */
+function buildCncfMission({ slug, title, description, type, steps, resolutionSummary, codeSnippets, labels, resourceKinds, difficulty, issueTypes, sourceUrl, sourceType, synthesizedBy, project }) {
+  return {
+    version: 'kc-mission-v1',
+    name: slug,
+    missionClass: 'fixer',
+    author: 'KubeStellar Bot',
+    authorGithub: 'kubestellar',
+    mission: {
+      title,
+      description,
+      type,
+      status: 'completed',
+      steps,
+      resolution: {
+        summary: resolutionSummary,
+        codeSnippets,
+      },
+    },
+    metadata: {
+      tags: [project.name, project.maturity, ...(labels || [])].filter((v, i, a) => a.indexOf(v) === i),
+      cncfProjects: [project.name],
+      targetResourceKinds: resourceKinds || [],
+      difficulty,
+      issueTypes,
+      maturity: project.maturity,
+      sourceUrls: {
+        [sourceType || 'source']: sourceUrl,
+        repo: `https://github.com/${project.repo}`,
+      },
+      synthesizedBy,
+    },
+    prerequisites: {
+      kubernetes: '>=1.24',
+      tools: ['kubectl'],
+      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
+    },
+    security: {
+      scannedAt: new Date().toISOString(),
+      scannerVersion: 'cncf-gen-2.0.0',
+      sanitized: true,
+      findings: [],
+    },
+  }
+}
+
+/**
  * Build the kc-mission-v1 JSON structure used by all sources.
  * If LLM synthesis is available, uses it to improve quality.
  */
@@ -99,48 +153,23 @@ export async function buildMission({ title, description, problem, solution, step
       title: s.title.slice(0, 120),
       description: (s.description || '').slice(0, 3000),
     }))
-    return {
-      version: 'kc-mission-v1',
-      name: slug,
-      missionClass: 'fixer',
-      author: 'KubeStellar Bot',
-      authorGithub: 'kubestellar',
-      mission: {
-        title,
-        description: llmResult.description,
-        type: llmResult.type || type || 'troubleshoot',
-        status: 'completed',
-        steps: missionSteps,
-        resolution: {
-          summary: llmResult.resolution,
-          codeSnippets: extractSnippetsFromSteps(missionSteps, yamlSnippets),
-        },
-      },
-      metadata: {
-        tags: [project.name, project.maturity, ...(labels || [])].filter((v, i, a) => a.indexOf(v) === i),
-        cncfProjects: [project.name],
-        targetResourceKinds: resourceKinds || [],
-        difficulty: llmResult.difficulty || difficulty || 'intermediate',
-        issueTypes: [llmResult.type || type || 'troubleshoot'],
-        maturity: project.maturity,
-        sourceUrls: {
-          [sourceType || 'source']: sourceUrl,
-          repo: `https://github.com/${project.repo}`,
-        },
-        synthesizedBy: 'llm',
-      },
-      prerequisites: {
-        kubernetes: '>=1.24',
-        tools: ['kubectl'],
-        description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
-      },
-      security: {
-        scannedAt: new Date().toISOString(),
-        scannerVersion: 'cncf-gen-2.0.0',
-        sanitized: true,
-        findings: [],
-      },
-    }
+    return buildCncfMission({
+      slug,
+      title,
+      description: llmResult.description,
+      type: llmResult.type || type || 'troubleshoot',
+      steps: missionSteps,
+      resolutionSummary: llmResult.resolution,
+      codeSnippets: extractSnippetsFromSteps(missionSteps, yamlSnippets),
+      labels,
+      resourceKinds,
+      difficulty: llmResult.difficulty || difficulty || 'intermediate',
+      issueTypes: [llmResult.type || type || 'troubleshoot'],
+      sourceUrl,
+      sourceType,
+      synthesizedBy: 'llm',
+      project,
+    })
   }
 
   // Fallback: raw extraction
@@ -148,48 +177,23 @@ export async function buildMission({ title, description, problem, solution, step
     const step = typeof s === 'string' ? { title: s, description: s } : s
     return { title: step.title.slice(0, 120), description: (step.description || '').slice(0, 3000) }
   })
-  return {
-    version: 'kc-mission-v1',
-    name: slug,
-    missionClass: 'fixer',
-    author: 'KubeStellar Bot',
-    authorGithub: 'kubestellar',
-    mission: {
-      title,
-      description: description || problem || title,
-      type: type || 'troubleshoot',
-      status: 'completed',
-      steps: rawSteps,
-      resolution: {
-        summary: solution || description || '',
-        codeSnippets: extractSnippetsFromSteps(rawSteps, yamlSnippets),
-      },
-    },
-    metadata: {
-      tags: [project.name, project.maturity, ...(labels || [])].filter((v, i, a) => a.indexOf(v) === i),
-      cncfProjects: [project.name],
-      targetResourceKinds: resourceKinds || [],
-      difficulty: difficulty || 'intermediate',
-      issueTypes: [type || 'troubleshoot'],
-      maturity: project.maturity,
-      sourceUrls: {
-        [sourceType || 'source']: sourceUrl,
-        repo: `https://github.com/${project.repo}`,
-      },
-      synthesizedBy: 'regex',
-    },
-    prerequisites: {
-      kubernetes: '>=1.24',
-      tools: ['kubectl'],
-      description: `A running Kubernetes cluster with ${project.name} installed or the issue environment reproducible.`,
-    },
-    security: {
-      scannedAt: new Date().toISOString(),
-      scannerVersion: 'cncf-gen-2.0.0',
-      sanitized: true,
-      findings: [],
-    },
-  }
+  return buildCncfMission({
+    slug,
+    title,
+    description: description || problem || title,
+    type: type || 'troubleshoot',
+    steps: rawSteps,
+    resolutionSummary: solution || description || '',
+    codeSnippets: extractSnippetsFromSteps(rawSteps, yamlSnippets),
+    labels,
+    resourceKinds,
+    difficulty: difficulty || 'intermediate',
+    issueTypes: [type || 'troubleshoot'],
+    sourceUrl,
+    sourceType,
+    synthesizedBy: 'regex',
+    project,
+  })
 }
 
 function extractSnippetsFromSteps(steps, yamlSnippets) {
