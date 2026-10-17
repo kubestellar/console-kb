@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubernetes-rollback-deployment-bad-image-imagepullbackoff",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubernetes: Rollback Deployment with kubectl rollout undo after bad image causes ImagePullBackOff",
+    "description": "After `kubectl set image` to a nonexistent tag, new pods show `ImagePullBackOff` / `ErrImagePull` (`manifest for web:v2.0.9 not found`) and the rollout stalls. Rollback with `kubectl rollout undo` restores the previous ReplicaSet.",
+    "type": "troubleshooting",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify the stalled rollout",
+        "description": "```bash\nkubectl rollout status deploy/web -n shop --timeout=60s\nkubectl get pods -n shop -l app=web\nkubectl describe pod -n shop -l app=web | grep -A3 -i 'Failed to pull'\n```"
+      },
+      {
+        "title": "Review revision history",
+        "description": "```bash\nkubectl rollout history deploy/web -n shop\nkubectl rollout history deploy/web -n shop --revision=2\n```\n\nConfirm the previous revision uses a working image."
+      },
+      {
+        "title": "Undo the rollout",
+        "description": "```bash\nkubectl rollout undo deploy/web -n shop\n# or a specific revision\nkubectl rollout undo deploy/web -n shop --to-revision=2\n```"
+      },
+      {
+        "title": "Verify recovery",
+        "description": "```bash\nkubectl rollout status deploy/web -n shop\nkubectl get deploy web -n shop -o jsonpath='{.spec.template.spec.containers[0].image}'\n```"
+      },
+      {
+        "title": "Fix the manifest to prevent re-applying the bad tag",
+        "description": "```bash\ngrep -rn 'image:' k8s/web-deployment.yaml\nkubectl apply -f k8s/web-deployment.yaml\n```\n\nAlso set `spec.revisionHistoryLimit: 10` so undo targets remain available."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is that the Deployment's pod template referenced an image tag that does not exist in the registry, so the new ReplicaSet's pods can never pull and the rollout stalls. `rollout undo` restores the previous pod template from the retained ReplicaSet, because old ReplicaSets keep their specs; healthy pods from it were never removed thanks to maxUnavailable.",
+      "codeSnippets": [
+        "kubectl rollout history deploy/web -n shop",
+        "kubectl rollout undo deploy/web -n shop --to-revision=2",
+        "kubectl rollout status deploy/web -n shop"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubernetes",
+      "rollback",
+      "rollout-undo",
+      "imagepullbackoff",
+      "deployment"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "Deployment",
+      "ReplicaSet",
+      "Pod"
+    ],
+    "difficulty": "beginner",
+    "issueTypes": [
+      "troubleshooting"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "repo": "https://github.com/kubestellar/console-kb"
+    },
+    "reactions": 0,
+    "comments": 0,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubernetes available or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-17T00:00:00.000Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

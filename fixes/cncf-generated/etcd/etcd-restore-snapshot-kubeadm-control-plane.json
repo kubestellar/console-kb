@@ -1,0 +1,85 @@
+{
+  "version": "kc-mission-v1",
+  "name": "etcd-restore-snapshot-kubeadm-control-plane",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "etcd: Restore etcd snapshot on a kubeadm control plane",
+    "description": "After etcd data loss or corruption, kube-apiserver fails with `etcdserver: mvcc: database space exceeded` or `Unable to connect to the server: EOF`, and etcd logs `database corrupted`. Restore from a snapshot taken with etcdctl.",
+    "type": "troubleshooting",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Verify the snapshot is valid",
+        "description": "```bash\nETCDCTL_API=3 etcdutl snapshot status /var/backups/etcd-snapshot.db -w table\n```\n\nShows hash, revision, total keys and size. Older versions: `etcdctl snapshot status`."
+      },
+      {
+        "title": "Stop static control plane pods",
+        "description": "```bash\nsudo mkdir -p /etc/kubernetes/manifests-stopped\nsudo mv /etc/kubernetes/manifests/etcd.yaml /etc/kubernetes/manifests/kube-apiserver.yaml /etc/kubernetes/manifests-stopped/\nsudo crictl ps | grep -E 'etcd|kube-apiserver'\n```"
+      },
+      {
+        "title": "Restore snapshot into a new data dir",
+        "description": "```bash\nsudo mv /var/lib/etcd /var/lib/etcd.broken\nsudo etcdutl snapshot restore /var/backups/etcd-snapshot.db --data-dir /var/lib/etcd\n```\n\nFor multi-member clusters, pass `--name`, `--initial-cluster`, `--initial-advertise-peer-urls` on each control plane node using the same snapshot."
+      },
+      {
+        "title": "Restart control plane and check etcd health",
+        "description": "```bash\nsudo mv /etc/kubernetes/manifests-stopped/*.yaml /etc/kubernetes/manifests/\nsudo ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key endpoint health\n```"
+      },
+      {
+        "title": "Verify cluster state",
+        "description": "```bash\nkubectl get nodes\nkubectl get pods -A | grep -v Running\n```\n\nRestart kubelet on workers if pods are stale: `sudo systemctl restart kubelet`."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is that the etcd data directory was corrupted or exceeded its quota, so the API server could not read cluster state. Restoring a snapshot into a fresh data dir works because it rebuilds the bbolt database and a new cluster identity from consistent data, while stopping static pods first prevents writes during the restore.",
+      "codeSnippets": [
+        "etcdutl snapshot status /var/backups/etcd-snapshot.db -w table",
+        "etcdutl snapshot restore /var/backups/etcd-snapshot.db --data-dir /var/lib/etcd",
+        "etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key endpoint health"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "etcd",
+      "restore",
+      "snapshot",
+      "kubeadm",
+      "disaster-recovery"
+    ],
+    "cncfProjects": [
+      "etcd"
+    ],
+    "targetResourceKinds": [
+      "Node",
+      "Pod"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshooting"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "repo": "https://github.com/kubestellar/console-kb"
+    },
+    "reactions": 0,
+    "comments": 0,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "etcdctl",
+      "kubectl",
+      "kubeadm"
+    ],
+    "description": "A running Kubernetes cluster with etcd available or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-17T00:00:00.000Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

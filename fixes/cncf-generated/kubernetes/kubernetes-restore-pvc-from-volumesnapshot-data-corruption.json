@@ -1,0 +1,83 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kubernetes-restore-pvc-from-volumesnapshot-data-corruption",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kubernetes: Restore a PVC from a VolumeSnapshot after data corruption",
+    "description": "An application reports `database disk image is malformed` after data corruption on its PVC. Restore the data by creating a new PVC from an existing VolumeSnapshot.",
+    "type": "storage",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "List available snapshots",
+        "description": "```bash\nkubectl get volumesnapshot -n data\nkubectl get volumesnapshotcontent\n```\n\nPick one with READYTOUSE `true` taken before the corruption."
+      },
+      {
+        "title": "Scale down the workload using the corrupted PVC",
+        "description": "```bash\nkubectl scale statefulset/db -n data --replicas=0\nkubectl get pods -n data\n```"
+      },
+      {
+        "title": "Create a new PVC from the snapshot",
+        "description": "```bash\nkubectl apply -f restore-pvc.yaml\n```\n\n```yaml\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: db-data-restored\n  namespace: data\nspec:\n  storageClassName: csi-standard\n  dataSource:\n    name: db-snap-20261016\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: 20Gi\n```\n\nSize must be >= the snapshot's restoreSize."
+      },
+      {
+        "title": "Point the workload at the restored PVC",
+        "description": "```bash\nkubectl patch statefulset db -n data --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/volumes/0/persistentVolumeClaim/claimName\",\"value\":\"db-data-restored\"}]'\nkubectl scale statefulset/db -n data --replicas=1\n```"
+      },
+      {
+        "title": "Verify data and clean up",
+        "description": "```bash\nkubectl get pvc db-data-restored -n data\nkubectl logs statefulset/db -n data --tail=20\nkubectl delete pvc db-data -n data\n```\n\nDelete the corrupted PVC only after validating the restored data."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is that the live volume contained corrupted blocks, so the application could not read its database. A VolumeSnapshot holds a point-in-time copy at the storage layer, and provisioning a new PVC with `dataSource` clones that copy, because the CSI driver creates the volume from the snapshot rather than from the damaged volume.",
+      "codeSnippets": [
+        "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: db-data-restored\n  namespace: data\nspec:\n  storageClassName: csi-standard\n  dataSource:\n    name: db-snap-20261016\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: 20Gi",
+        "kubectl scale statefulset/db -n data --replicas=0"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kubernetes",
+      "restore",
+      "volumesnapshot",
+      "pvc",
+      "csi"
+    ],
+    "cncfProjects": [
+      "kubernetes"
+    ],
+    "targetResourceKinds": [
+      "PersistentVolumeClaim",
+      "VolumeSnapshot",
+      "StatefulSet"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshooting"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "repo": "https://github.com/kubestellar/console-kb"
+    },
+    "reactions": 0,
+    "comments": 0,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kubernetes available or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-17T00:00:00.000Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

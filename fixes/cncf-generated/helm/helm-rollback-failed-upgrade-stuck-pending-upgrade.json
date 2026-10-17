@@ -1,0 +1,84 @@
+{
+  "version": "kc-mission-v1",
+  "name": "helm-rollback-failed-upgrade-stuck-pending-upgrade",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "helm: Rollback a failed chart upgrade stuck in pending-upgrade state",
+    "description": "After an interrupted `helm upgrade`, further upgrades fail with `Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress` because the release is stuck in `pending-upgrade`. Rollback to the last deployed revision is needed to recover.",
+    "type": "troubleshooting",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Inspect release status and history",
+        "description": "```bash\nhelm status myapp -n prod\nhelm history myapp -n prod\n```\n\nRevision with STATUS `pending-upgrade` blocks new operations; note the last revision with STATUS `deployed`."
+      },
+      {
+        "title": "Confirm no helm process is still running",
+        "description": "```bash\nps aux | grep '[h]elm upgrade'\nkubectl get secret -n prod -l owner=helm,name=myapp\n```\n\nRelease state is stored in `sh.helm.release.v1.myapp.vN` secrets. Do not edit while a live upgrade is running."
+      },
+      {
+        "title": "Roll back to the last good revision",
+        "description": "```bash\nhelm rollback myapp 3 -n prod --wait --timeout 5m\n```\n\nIf rollback also fails with the same error, go to the next step."
+      },
+      {
+        "title": "Mark the stuck revision as failed when rollback is blocked",
+        "description": "```bash\nkubectl get secret sh.helm.release.v1.myapp.v4 -n prod -o jsonpath='{.metadata.labels.status}'\nkubectl label secret sh.helm.release.v1.myapp.v4 -n prod status=failed --overwrite\nhelm rollback myapp 3 -n prod --wait\n```"
+      },
+      {
+        "title": "Verify workloads and retry upgrade",
+        "description": "```bash\nhelm history myapp -n prod\nkubectl rollout status deploy/myapp -n prod\nhelm upgrade myapp ./chart -n prod --atomic --timeout 5m\n```\n\nUse `--atomic` so future failed upgrades auto-rollback."
+      }
+    ],
+    "resolution": {
+      "summary": "The root cause is that Helm records the new revision as `pending-upgrade` before applying manifests; if the client is killed or times out, the status is never updated, so Helm refuses further operations. Rolling back creates a new revision from the last deployed one, and relabeling the stuck secret as failed unblocks it because Helm only locks on pending-* states.",
+      "codeSnippets": [
+        "helm history myapp -n prod\nhelm rollback myapp 3 -n prod --wait --timeout 5m",
+        "kubectl label secret sh.helm.release.v1.myapp.v4 -n prod status=failed --overwrite\nhelm rollback myapp 3 -n prod --wait",
+        "helm upgrade myapp ./chart -n prod --atomic --timeout 5m"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "helm",
+      "rollback",
+      "pending-upgrade",
+      "upgrade-failed",
+      "graduated"
+    ],
+    "cncfProjects": [
+      "helm"
+    ],
+    "targetResourceKinds": [
+      "Secret",
+      "Deployment"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "troubleshooting"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "repo": "https://github.com/kubestellar/console-kb"
+    },
+    "reactions": 0,
+    "comments": 0,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl",
+      "helm"
+    ],
+    "description": "A running Kubernetes cluster with helm available or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-17T00:00:00.000Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
