@@ -212,6 +212,30 @@ function formatReport(results) {
   return lines.join('\n')
 }
 
+/**
+ * Derives the on-disk mission filename for a platform from its slug and
+ * quality-gate verdict, refusing anything the allowlist regex doesn't
+ * recognize (CWE-73: untrusted/HTTP-derived verdict values must not be
+ * able to influence the filename beyond the known `.draft` infix).
+ *
+ * Extracted out of `main()`'s per-platform loop (previously inline and
+ * unreachable from vitest, kubestellar/console-kb#3182) so the guard can
+ * be exercised directly instead of only through the full generation run.
+ * `basename()` strips any residual path separators as a final safeguard
+ * before the regex check.
+ */
+export function buildPlatformMissionFilename(platformSlug, verdict) {
+  const VERDICT_SUFFIX_MAP = Object.freeze({ draft: '.draft', pass: '', review: '' })
+  const verdictSuffix = Object.prototype.hasOwnProperty.call(VERDICT_SUFFIX_MAP, verdict)
+    ? VERDICT_SUFFIX_MAP[verdict]
+    : ''
+  const finalFilename = basename(`platform-${platformSlug}${verdictSuffix}.json`)
+  if (!/^platform-[a-z0-9-]+(?:\.draft)?\.json$/.test(finalFilename)) {
+    throw new Error(`Unexpected output filename derived from HTTP-sourced verdict: ${finalFilename}`)
+  }
+  return finalFilename
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -338,17 +362,8 @@ async function main() {
     const platformSlug = slugify(platform.name)
     assertSafeSlug(platformSlug, 'platform.name')
     // Sanitize HTTP-derived verdict before using it to construct the file path (CWE-73).
-    // The verdict is computed from LLM output; use an explicit allowlist to prevent
-    // tainted data from influencing the filename beyond the '.draft.' infix.
-    // path.basename() strips any residual path separators as a final safeguard.
-    const VERDICT_SUFFIX_MAP = Object.freeze({ draft: '.draft', pass: '', review: '' })
-    const verdictSuffix = Object.prototype.hasOwnProperty.call(VERDICT_SUFFIX_MAP, gateResult.verdict)
-      ? VERDICT_SUFFIX_MAP[gateResult.verdict]
-      : ''
-    const finalFilename = basename(`platform-${platformSlug}${verdictSuffix}.json`)
-    if (!/^platform-[a-z0-9-]+(?:\.draft)?\.json$/.test(finalFilename)) {
-      throw new Error(`Unexpected output filename derived from HTTP-sourced verdict: ${finalFilename}`)
-    }
+    // See buildPlatformMissionFilename() for the allowlist/regex guard.
+    const finalFilename = buildPlatformMissionFilename(platformSlug, gateResult.verdict)
     const finalPath = join(SOLUTIONS_DIR, finalFilename)
 
     // Path traversal guard (CWE-22)
