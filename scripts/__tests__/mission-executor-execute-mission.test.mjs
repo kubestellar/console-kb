@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeFileSync, mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -43,6 +43,12 @@ async function loadModule() {
   vi.resetModules()
   return await import('../mission-executor.mjs')
 }
+
+// Warm the module cache once so the cold import cost is paid in a hook
+// (generous timeout) rather than inside the first test's timer.
+beforeAll(async () => {
+  await loadModule()
+}, 60000)
 
 function jsonResponse(status, bodyObj) {
   return {
@@ -144,16 +150,7 @@ describe('executeMission — dry-run end-to-end', () => {
     return p
   }
 
-  // Explicit 15s budget: this is the first `it` in the describe block, so
-  // it pays the one-time cost of vi.resetModules() + dynamic import of
-  // mission-executor.mjs on a cold CI worker. Vitest's default 5000ms budget
-  // has flaked twice on kb-master under fuzz.yml (runs 34812319287 @ 06:10Z
-  // and 34841329703 @ 12:05Z on 2026-09-14 — both PRs #3375 and #3380
-  // reported "Test timed out in 5000ms" here while every other test in this
-  // file finished in ~100–500ms). Local `vitest run` on this file
-  // consistently completes all 7 tests in ~500ms, so the extra budget is
-  // headroom for CI worker startup, not a slow assertion.
-  it('returns verdict=pass when every step passes AND a verify step succeeds', { timeout: 15000 }, async () => {
+  it('returns verdict=pass when every step passes AND a verify step succeeds', async () => {
     const missionPath = writeMission('happy', {
       name: 'Happy Path',
       mission: {
