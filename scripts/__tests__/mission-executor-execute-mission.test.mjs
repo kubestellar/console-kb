@@ -150,7 +150,14 @@ describe('executeMission — dry-run end-to-end', () => {
     return p
   }
 
-  it('returns verdict=pass when every step passes AND a verify step succeeds', async () => {
+  // Explicit budget: loadModule() calls vi.resetModules() before every
+  // dynamic import, so the beforeAll warm-up above does not avoid paying
+  // the cold-import cost here — each test still re-imports
+  // mission-executor.mjs from scratch. Vitest's default 5000ms budget has
+  // flaked on this test under CI load even with the warm-up in place
+  // (see #3852, #3375, #3380), so give it headroom explicitly rather than
+  // relying on module caching that resetModules() defeats.
+  it('returns verdict=pass when every step passes AND a verify step succeeds', { timeout: 15000 }, async () => {
     const missionPath = writeMission('happy', {
       name: 'Happy Path',
       mission: {
