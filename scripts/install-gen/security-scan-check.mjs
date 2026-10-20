@@ -8,14 +8,11 @@
 import { readFileSync } from 'fs';
 import { scanMissionFile } from '../scanner.mjs';
 import { createLogger } from '../lib/logger.mjs';
+import { requireFileEnv } from '../lib/cli-file-env.mjs';
 
 const log = createLogger('security-scan-check');
 
-const file = process.env.FILE;
-if (!file) {
-  log.error('FILE env var is required');
-  process.exit(2);
-}
+const file = requireFileEnv(log);
 
 const r = scanMissionFile(readFileSync(file, 'utf-8'));
 const s = r.scan?.sensitive?.findings?.length || 0;

@@ -9,14 +9,11 @@
 // it directly into inline JS source, removing a script-injection surface.
 import { readFileSync } from 'fs';
 import { createLogger } from '../lib/logger.mjs';
+import { requireFileEnv } from '../lib/cli-file-env.mjs';
 
 const log = createLogger('extract-freshness-info');
 
-const file = process.env.FILE;
-if (!file) {
-  log.error('FILE env var is required');
-  process.exit(2);
-}
+const file = requireFileEnv(log);
 
 const d = JSON.parse(readFileSync(file, 'utf-8'));
 const repo = (d.metadata?.sourceUrls?.repo || '').replace('https://github.com/', '');
