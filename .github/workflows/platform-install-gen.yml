@@ -32,7 +32,8 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
+      configured: ${{ steps.llm.outputs.configured }}
+      matrix: ${{ steps.plan.outputs.matrix || '[0]' }}
       batch_count: ${{ steps.plan.outputs.batch_count }}
       is_targeted: ${{ steps.plan.outputs.is_targeted }}
       target_platforms: ${{ steps.sanitize.outputs.target_platforms }}
@@ -46,9 +47,23 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: '22'
-      
+
+      - name: Check LLM secrets
+        id: llm
+        env:
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "$LLM_BASE_URL" ] || [ -z "$LLM_API_KEY" ]; then
+            echo "::warning::LLM_BASE_URL/LLM_API_KEY repo secrets are unset — skipping mission generation (see scripts/lib/llm-proxy-config.mjs)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Sanitize workflow inputs
         id: sanitize
+        if: steps.llm.outputs.configured == 'true'
         env:
           RAW_TARGET_PLATFORMS: ${{ inputs.platforms || '' }}
           RAW_BATCH_SIZE: ${{ inputs.batch_size || '20' }}
@@ -105,6 +120,7 @@ jobs:
           printf 'force_regenerate=%s\n' "$RAW_FORCE_REGENERATE" >> "$GITHUB_OUTPUT"
       - name: Plan batches
         id: plan
+        if: steps.llm.outputs.configured == 'true'
         env:
           BATCH_SIZE: ${{ steps.sanitize.outputs.batch_size }}
           TARGET: ${{ steps.sanitize.outputs.target_platforms }}
@@ -149,6 +165,7 @@ jobs:
       contents: read
       pull-requests: read
     needs: plan
+    if: ${{ needs.plan.outputs.configured == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -198,7 +215,7 @@ jobs:
       contents: write
       pull-requests: write
     needs: [plan, generate]
-    if: ${{ !cancelled() && needs.generate.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ !cancelled() && needs.plan.outputs.configured == 'true' && needs.generate.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
