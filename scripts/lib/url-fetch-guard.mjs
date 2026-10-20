@@ -46,6 +46,13 @@ export function isPrivateOrReservedIp(address) {
     if (a === 169 && b === 254) return true // link-local / cloud metadata
     if (a === 172 && b >= 16 && b <= 31) return true // private
     if (a === 192 && b === 168) return true // private
+    // RFC 6598 100.64.0.0/10 "shared address space" (CGNAT). Not covered by
+    // any of the RFC 1918 ranges above, but routable on a cloud provider's
+    // internal network — Alibaba Cloud's ECS metadata service listens on
+    // 100.100.100.200 inside this exact range, so without this check an
+    // LLM-synthesized URL could reach it the same way 169.254.169.254
+    // reaches AWS/GCP metadata.
+    if (a === 100 && b >= 64 && b <= 127) return true // CGNAT shared address space
     if (a === 0) return true // "this" network / unspecified
     if (a >= 224) return true // multicast + reserved
     return false

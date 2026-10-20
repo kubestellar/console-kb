@@ -386,4 +386,17 @@ describe('isPrivateOrReservedIp', () => {
   it('treats a non-IP string as unsafe (fail-safe default)', () => {
     expect(isPrivateOrReservedIp('not-an-ip')).toBe(true)
   })
+
+  // RFC 6598 100.64.0.0/10 (CGNAT shared address space) — Alibaba Cloud's
+  // ECS metadata service listens on 100.100.100.200, inside this range.
+  it('treats 100.64.0.0/10 CGNAT addresses as unsafe', () => {
+    expect(isPrivateOrReservedIp('100.64.0.0')).toBe(true)
+    expect(isPrivateOrReservedIp('100.100.100.200')).toBe(true) // Alibaba Cloud metadata
+    expect(isPrivateOrReservedIp('100.127.255.255')).toBe(true)
+  })
+
+  it('does not treat addresses just outside 100.64.0.0/10 as unsafe', () => {
+    expect(isPrivateOrReservedIp('100.63.255.255')).toBe(false)
+    expect(isPrivateOrReservedIp('100.128.0.0')).toBe(false)
+  })
 })
