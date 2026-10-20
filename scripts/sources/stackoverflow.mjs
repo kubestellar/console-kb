@@ -136,7 +136,7 @@ export class StackOverflowSource extends BaseSource {
     const difficulty = item.score > 50 ? 'advanced' : item.score > 20 ? 'intermediate' : 'beginner'
 
     return await buildMission({
-      title: `${project.name}: ${cleanHtmlEntities(title)}`,
+      title: `${project.name}: ${decodeHtmlEntities(title)}`,
       description: problem,
       problem,
       solution,
@@ -176,25 +176,9 @@ function stripHtml(html) {
   return sanitizeHtml(html, {
     allowedTags: [],
     allowedAttributes: {},
-    textFilter: (text) => {
-      // Decode HTML entities and clean up whitespace
-      return text
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
-    }
+    // Decode HTML entities and clean up whitespace
+    textFilter: (text) => decodeHtmlEntities(text),
   }).replace(/\s+/g, ' ').trim()
-}
-
-function cleanHtmlEntities(text) {
-  return text
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
 }
 
 function extractHtmlCodeBlocks(html) {
