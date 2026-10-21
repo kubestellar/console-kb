@@ -32,7 +32,8 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.calc.outputs.matrix }}
+      configured: ${{ steps.llm.outputs.configured }}
+      matrix: ${{ steps.calc.outputs.matrix || '{"batch":[0]}' }}
       batch_count: ${{ steps.calc.outputs.batch_count }}
       is_targeted: ${{ steps.calc.outputs.is_targeted }}
       target_projects: ${{ steps.sanitize.outputs.target_projects }}
@@ -45,16 +46,20 @@ jobs:
         with:
           node-version: '22'
       - name: Check LLM proxy secrets are configured
+        id: llm
         env:
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: |
           if [ -z "$LLM_BASE_URL" ] || [ -z "$LLM_API_KEY" ]; then
-            echo "::error::LLM_BASE_URL/LLM_API_KEY repo secrets are unset — skipping run (see scripts/lib/llm-proxy-config.mjs)"
-            exit 1
+            echo "::warning::LLM_BASE_URL/LLM_API_KEY repo secrets are unset — skipping mission generation (see scripts/lib/llm-proxy-config.mjs)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Sanitize workflow inputs
         id: sanitize
+        if: steps.llm.outputs.configured == 'true'
         env:
           RAW_TARGET_PROJECTS: ${{ inputs.projects || '' }}
           RAW_BATCH_SIZE: ${{ inputs.batch_size || '20' }}
@@ -111,6 +116,7 @@ jobs:
           printf 'force_regenerate=%s\n' "$RAW_FORCE_REGENERATE" >> "$GITHUB_OUTPUT"
       - name: Calculate batches
         id: calc
+        if: steps.llm.outputs.configured == 'true'
         env:
           BATCH_SIZE: ${{ steps.sanitize.outputs.batch_size }}
           TARGET: ${{ steps.sanitize.outputs.target_projects }}
@@ -135,6 +141,7 @@ jobs:
       contents: read
       pull-requests: read
     needs: plan
+    if: ${{ needs.plan.outputs.configured == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
@@ -175,7 +182,7 @@ jobs:
       contents: read
       pull-requests: read
     needs: [plan, generate]
-    if: always() && needs.plan.outputs.dry_run != 'true'
+    if: "!cancelled() && needs.plan.outputs.configured == 'true' && needs.plan.outputs.dry_run != 'true'"
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.report.outputs.published }}
@@ -570,6 +577,7 @@ jobs:
       pull-requests: read
     needs: [plan, collect]
     if: |
+      needs.plan.outputs.configured == 'true' &&
       needs.plan.outputs.dry_run != 'true' &&
       needs.collect.outputs.mission_count != '0'
     runs-on: ubuntu-latest
@@ -712,7 +720,8 @@ jobs:
       pull-requests: write
     needs: [plan, collect, integration-test]
     if: |
-      always() &&
+      !cancelled() &&
+      needs.plan.outputs.configured == 'true' &&
       needs.plan.outputs.dry_run != 'true' &&
       needs.collect.outputs.mission_count != '0'
     runs-on: ubuntu-latest
