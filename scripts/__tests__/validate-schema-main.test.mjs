@@ -22,7 +22,7 @@ function stageScript(dir) {
   cpSync(join(scriptsDir, 'scanner'), join(dir, 'scanner'), { recursive: true })
   mkdirSync(join(dir, 'lib'), { recursive: true })
   cpSync(join(scriptsDir, 'lib'), join(dir, 'lib'), { recursive: true })
-  // Symlink node_modules so `import 'js-yaml'` resolves. Symlinks avoid a
+  // Symlink node_modules so `import 'yaml'` resolves. Symlinks avoid a
   // multi-MB copy and are fine because the script only reads from it.
   symlinkSync(join(scriptsDir, 'node_modules'), join(dir, 'node_modules'), 'dir')
 }

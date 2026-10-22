@@ -35,7 +35,7 @@ mission:
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('parses a .yaml mission via js-yaml', () => {
+  it('parses a .yaml mission via the yaml package', () => {
     const f = join(dir, 'ok.yaml')
     writeFileSync(f, validYaml)
     const result = runValidation([f])
@@ -47,7 +47,7 @@ mission:
     })
   })
 
-  it('parses a .yml mission via js-yaml', () => {
+  it('parses a .yml mission via the yaml package', () => {
     const f = join(dir, 'ok.yml')
     writeFileSync(f, validYaml)
     const result = runValidation([f])
@@ -61,7 +61,7 @@ mission:
 
   it('reports invalid .yaml parse errors as invalid', () => {
     const f = join(dir, 'bad.yaml')
-    // Unclosed flow mapping — js-yaml will throw.
+    // Unclosed flow mapping — the yaml package will throw.
     writeFileSync(f, 'mission: {name: T\n')
     const result = runValidation([f])
     expect(result).toEqual({
@@ -102,7 +102,7 @@ mission:
   it('reports invalid unknown-extension content (neither JSON nor YAML) as invalid', () => {
     const f = join(dir, 'mission.data')
     // ':::' is invalid JSON AND invalid YAML (block mapping with empty key + weird
-    // syntax makes js-yaml throw).
+    // syntax makes the yaml package throw).
     writeFileSync(f, ':::\n\t: [')
     const result = runValidation([f])
     expect(result.hasErrors).toBe(true)

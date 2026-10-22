@@ -54,7 +54,7 @@ describe('runValidation', () => {
     expect(logs.some(l => l.includes('Valid kc-mission-v1'))).toBe(true)
   })
 
-  it('parses .yaml missions via yaml.load (non-JSON dispatch arm)', () => {
+  it('parses .yaml missions via parseYaml (non-JSON dispatch arm)', () => {
     const p = join(tmp, 'ok.yaml')
     writeFileSync(
       p,
@@ -65,7 +65,7 @@ describe('runValidation', () => {
     expect(res.validCount).toBe(1)
   })
 
-  it('parses .yml missions via yaml.load (non-JSON dispatch arm)', () => {
+  it('parses .yml missions via parseYaml (non-JSON dispatch arm)', () => {
     const p = join(tmp, 'ok.yml')
     writeFileSync(
       p,
@@ -78,7 +78,7 @@ describe('runValidation', () => {
 
   it('falls back to YAML parsing for extensionless files', () => {
     // File with no recognized extension → hits the else-branch that tries
-    // JSON.parse first and falls through to yaml.load on failure.
+    // JSON.parse first and falls through to parseYaml on failure.
     const p = join(tmp, 'ok')
     writeFileSync(
       p,
@@ -107,7 +107,7 @@ describe('runValidation', () => {
 
   it('reports a YAML parse error and counts the file as invalid', () => {
     const p = join(tmp, 'bad.yaml')
-    // Unclosed flow mapping — reliably rejected by js-yaml.
+    // Unclosed flow mapping — reliably rejected by the yaml package.
     writeFileSync(p, ': :\n\t: unbalanced\n{a: [')
     const res = runValidation([p])
     expect(res.hasErrors).toBe(true)
