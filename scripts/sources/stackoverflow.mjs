@@ -22,6 +22,17 @@ export class StackOverflowSource extends BaseSource {
     return `so:${item.question_id}`
   }
 
+  // Shared qualification check for both the tag-search and text-search
+  // passes in search(): a question must meet the minVotes/is_answered bar
+  // and not already be processed in a prior run.
+  qualifies(q, sourceState) {
+    if (q.score < this.minVotes) return false
+    if (!q.is_answered) return false
+    const cid = this.canonicalId(q)
+    if (sourceState.processedIds.includes(cid)) return false
+    return true
+  }
+
   async search(project, sourceState) {
     const sinceDate = computeSinceDate(sourceState, this.searchWindow)
     const items = []
@@ -66,11 +77,7 @@ export class StackOverflowSource extends BaseSource {
       }
 
       for (const q of data.items || []) {
-        if (q.score < this.minVotes) continue
-        if (!q.is_answered) continue
-
-        const cid = this.canonicalId(q)
-        if (sourceState.processedIds.includes(cid)) continue
+        if (!this.qualifies(q, sourceState)) continue
 
         items.push(q)
         if (items.length >= this.maxPerProject) break
@@ -99,10 +106,7 @@ export class StackOverflowSource extends BaseSource {
           const existingIds = new Set(items.map(i => i.question_id))
           for (const q of data.items || []) {
             if (existingIds.has(q.question_id)) continue
-            if (q.score < this.minVotes) continue
-            if (!q.is_answered) continue
-            const cid = this.canonicalId(q)
-            if (sourceState.processedIds.includes(cid)) continue
+            if (!this.qualifies(q, sourceState)) continue
             items.push(q)
             if (items.length >= this.maxPerProject) break
           }
