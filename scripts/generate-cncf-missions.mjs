@@ -12,6 +12,7 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { parse as parseYaml } from 'yaml'
 import { CNCF_PROJECTS, CATEGORY_TO_DIR } from './catalogs/cncf-projects.mjs'
 import { OTHER_PROJECTS } from './catalogs/other-projects.mjs'
 import { loadSearchState, saveSearchState, getSourceState, updateSourceState, isProcessed } from './sources/search-state.mjs'
@@ -81,74 +82,12 @@ const COPILOT_REPO_NAME = process.env.COPILOT_REPO_NAME || 'console-kb'
 /**
  * Load knowledge-sources.yaml config. Falls back to defaults if missing.
  */
-function loadSourcesConfig() {
-  const configPath = join(__dirname, 'knowledge-sources.yaml')
+function loadSourcesConfig(configPath = join(__dirname, 'knowledge-sources.yaml')) {
   if (!existsSync(configPath)) {
     log.warn('Warning: knowledge-sources.yaml not found, using defaults')
     return { sources: { 'github-issues': { enabled: true, minReactions: 10, maxPerProject: 20, searchWindow: '90d' } } }
   }
-  // Simple YAML parser for our flat structure (avoids needing js-yaml dependency)
-  const raw = readFileSync(configPath, 'utf-8')
-  return parseSimpleYaml(raw)
-}
-
-/**
- * Minimal YAML parser for our config format (no nested objects beyond 2 levels).
- */
-export function parseSimpleYaml(yaml) {
-  const config = { sources: {} }
-  let currentSource = null
-  let lastArrayKey = null
-  for (const line of yaml.split('\n')) {
-    const indent = line.length - line.trimStart().length
-    const trimmed = line.trim().replace(/#.*$/, '').trimEnd()
-    if (!trimmed) continue
-
-    if (indent === 0 && trimmed === 'sources:') continue
-
-    // Source name at 2-space indent
-    if (indent === 2 && trimmed.endsWith(':') && !trimmed.includes(' ')) {
-      currentSource = trimmed.replace(/:$/, '')
-      config.sources[currentSource] = {}
-      lastArrayKey = null
-      continue
-    }
-
-    // Key-value pair at 4-space indent
-    if (indent === 4 && currentSource) {
-      // Bare key for array below (e.g. subreddits:)
-      if (trimmed.endsWith(':') && !trimmed.includes(' ')) {
-        lastArrayKey = trimmed.replace(/:$/, '')
-        config.sources[currentSource][lastArrayKey] = []
-        continue
-      }
-
-      const colonIdx = trimmed.indexOf(':')
-      if (colonIdx > 0) {
-        const key = trimmed.slice(0, colonIdx).trim()
-        let val = trimmed.slice(colonIdx + 1).trim()
-        lastArrayKey = null
-
-        if (val === 'true') config.sources[currentSource][key] = true
-        else if (val === 'false') config.sources[currentSource][key] = false
-        else if (/^\d+$/.test(val)) config.sources[currentSource][key] = parseInt(val, 10)
-        else if (val.startsWith('[') && val.endsWith(']')) {
-          config.sources[currentSource][key] = val.slice(1, -1).split(',').map(s => s.trim())
-        } else {
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1)
-          }
-          config.sources[currentSource][key] = val
-        }
-      }
-    }
-
-    // Array items at 6-space indent
-    if (indent === 6 && trimmed.startsWith('- ') && currentSource && lastArrayKey) {
-      config.sources[currentSource][lastArrayKey].push(trimmed.replace(/^- /, '').trim())
-    }
-  }
-  return config
+  return parseYaml(readFileSync(configPath, 'utf-8'))
 }
 
 /**
