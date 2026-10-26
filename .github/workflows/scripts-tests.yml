@@ -53,3 +53,29 @@ jobs:
             echo "## Scripts Test Coverage" >> $GITHUB_STEP_SUMMARY
             node -e "const fs = require('fs'); const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json')); const totals = summary.total; console.log('| Metric | Coverage |'); console.log('|--------|----------|'); console.log(\`| Lines | \${totals.lines.pct}% |\`); console.log(\`| Statements | \${totals.statements.pct}% |\`); console.log(\`| Functions | \${totals.functions.pct}% |\`); console.log(\`| Branches | \${totals.branches.pct}% |\`)" >> $GITHUB_STEP_SUMMARY
           fi
+
+  duplication-check:
+    name: scripts/ duplication ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Warning-only until 2026-11-08 (two weeks after landing, per #3869);
+    # flip to `continue-on-error: false` (or drop the line) to enforce.
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm ci
+
+      - name: Duplication check (jscpd ratchet vs scripts/jscpd-baseline.json)
+        working-directory: scripts
+        run: npm run duplication-check
