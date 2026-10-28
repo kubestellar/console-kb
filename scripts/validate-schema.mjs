@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, existsSync } from 'fs';
-import * as yaml from 'js-yaml';
+import { parse as parseYaml } from 'yaml';
 import { validateMissionExport } from './scanner.mjs';
 import { createLogger } from './lib/logger.mjs';
 import { discoverMissionFiles } from './lib/mission-discovery.mjs';
@@ -41,13 +41,13 @@ export function runValidation(files) {
       if (file.endsWith('.json')) {
         data = JSON.parse(content);
       } else if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-        data = yaml.load(content);
+        data = parseYaml(content);
       } else {
         // Try JSON first, then YAML
         try {
           data = JSON.parse(content);
         } catch {
-          data = yaml.load(content);
+          data = parseYaml(content);
         }
       }
     } catch (err) {

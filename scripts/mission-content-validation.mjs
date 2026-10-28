@@ -35,7 +35,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import * as yaml from 'js-yaml'
+import { parse as parseYaml } from 'yaml'
 import { createLogger } from './lib/logger.mjs'
 
 const log = createLogger('mission-content-validation')
@@ -68,7 +68,7 @@ const MAX_URLS_PER_FILE = 10
 export function loadMission(path) {
   const raw = readFileSync(path, 'utf8')
   if (path.endsWith('.yaml') || path.endsWith('.yml')) {
-    return yaml.load(raw)
+    return parseYaml(raw)
   }
   return JSON.parse(raw)
 }
