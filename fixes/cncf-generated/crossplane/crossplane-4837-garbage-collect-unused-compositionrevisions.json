@@ -1,0 +1,80 @@
+{
+  "version": "kc-mission-v1",
+  "name": "crossplane-4837-garbage-collect-unused-compositionrevisions",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "crossplane: Garbage collect unused CompositionRevisions",
+    "description": "Crossplane never deletes old CompositionRevisions: every Composition update appends a new revision, so `kubectl get compositionrevision | wc -l` grows unbounded (users reported counts climbing from 1415 to 10135), bloating etcd and slowing API listings.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Measure CompositionRevision accumulation",
+        "description": "Confirm the symptom — an ever-growing number of revisions:\n```bash\nkubectl get compositionrevision | wc -l\nkubectl get compositionrevisions -o jsonpath='{range .items[*].spec.compositeTypeRef}{.kind}{\"\\n\"}{end}' | sort | uniq -c | sort -rn | head\n```\nIf the count keeps rising after each Composition update and old revisions are never removed, this mission applies. Affected environments have reported 1415 → 10135 revisions."
+      },
+      {
+        "title": "Identify revisions still referenced by composite resources",
+        "description": "Only revisions pinned by a composite's `spec.crossplane.compositionRevisionRef` (or the latest revision per Composition) are in use. For each composite type, find the latest revision:\n```bash\nkubectl get compositionrevision --sort-by='{.spec.revision}' -l crossplane.io/composition-name=<composition-name>\n```\nThe highest `.spec.revision` per Composition is the live one; earlier revisions with no composite referencing them are garbage."
+      },
+      {
+        "title": "Upgrade to a Crossplane release with CompositionRevision garbage collection",
+        "description": "crossplane/crossplane#6195 adds automatic garbage collection of unused CompositionRevisions. Upgrade the core Helm release:\n```bash\nhelm repo update\nhelm upgrade crossplane crossplane-stable/crossplane -n crossplane-system --version <release-with-fix>\n```\nAfter the upgrade, the Composition controller prunes revisions that are neither the latest for their Composition nor referenced by any composite resource."
+      },
+      {
+        "title": "Clean up pre-existing unused revisions on older versions",
+        "description": "On versions without the fix, delete unreferenced revisions with the community cleanup function (see codeSnippets): it walks each composite type, keeps the latest revision plus any revision still referenced by a composite's `spec.crossplane.compositionRevisionRef`, and deletes the rest:\n```bash\nk8s-remove-unused-composition-revisions\n```\nAlways verify the kubectl context prompt before confirming."
+      },
+      {
+        "title": "Verify the revision count stays bounded",
+        "description": "Re-check after a few Composition updates:\n```bash\nkubectl get compositionrevision | wc -l\nkubectl get events -n crossplane-system --sort-by='.lastTimestamp' | tail -10\n```\nThe count should now track the number of Compositions (plus any revisions pinned by composites), not grow monotonically."
+      }
+    ],
+    "resolution": {
+      "summary": "Old CompositionRevisions accumulated because Crossplane created a new revision on every Composition change but shipped no garbage collector for superseded ones — the root cause was a missing deletion path, not a misconfiguration. crossplane/crossplane#6195 resolves crossplane/crossplane#4837 by pruning revisions that are not the latest for their Composition and are not referenced by any composite resource's compositionRevisionRef, so etcd usage and list latency stay bounded. On older releases, the cleanup script below removes unused revisions safely because it preserves the latest and any still-referenced revision per composite type.",
+      "codeSnippets": [
+        "# Symptom: unbounded growth across Composition updates\nkubectl get compositionrevision | wc -l   # e.g. 1415 ... later 10135",
+        "function k8s-remove-unused-composition-revisions() {\n  _CONTEXT=\"$(kubectl config current-context)\"\n  echo \"Running against context: ${_CONTEXT}\"\n  read -p \"is this correct? (Y/n): \" line\n  if [ -z \"$line\" -o \"$line\" = \"Y\" -o \"$line\" = \"y\" ]; then\n    types=$(kubectl get compositionrevisions -o jsonpath='{range .items[*].spec.compositeTypeRef}{.kind}{\"\\n\"}{end}' | sort -u)\n    for type in ${types}; do\n      echo \"Removing unused compositionrevisions for ${type}\"\n      latest=$(kubectl get compositionrevision --sort-by='{.spec.revision}' | grep ${type} | tail -1 | awk '{print $1}')\n      echo \"   (latest revision is ${latest})\"\n      referenced=$(kubectl get ${type} -o jsonpath='{range .items[*]}{.spec.crossplane.compositionRevisionRef.name}{\"\\n\"}{end}' | sort -u)\n      for revision in $(kubectl get compositionrevisions | grep ${type} | awk '{print $1}'); do\n        if [ \"${revision}\" != \"${latest}\" ] && ! echo \"${referenced}\" | grep -qx \"${revision}\"; then\n          kubectl delete compositionrevision \"${revision}\"\n        fi\n      done\n    done\n  fi\n}"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "crossplane",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "crossplane"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "expert",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/crossplane/crossplane/issues/4837",
+      "repo": "https://github.com/crossplane/crossplane",
+      "pr": "https://github.com/crossplane/crossplane/pull/6195"
+    },
+    "reactions": 24,
+    "comments": 39,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with crossplane installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-10-28T06:05:45.774Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
