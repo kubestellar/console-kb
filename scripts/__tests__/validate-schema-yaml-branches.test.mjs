@@ -7,7 +7,7 @@ import { runValidation } from '../validate-schema.mjs'
 /**
  * Covers the previously-uncovered YAML/YML/unknown-extension parse branches
  * in scripts/validate-schema.mjs (lines 66-77). Existing runValidation
- * tests only exercised .json files, so the yaml.load arms and the
+ * tests only exercised .json files, so the parseYaml arms and the
  * unknown-extension "try JSON first, then YAML" fallback were never
  * executed.
  */
@@ -35,7 +35,7 @@ mission:
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('parses a .yaml mission via js-yaml', () => {
+  it('parses a .yaml mission via the yaml package', () => {
     const f = join(dir, 'ok.yaml')
     writeFileSync(f, validYaml)
     const result = runValidation([f])
@@ -47,7 +47,7 @@ mission:
     })
   })
 
-  it('parses a .yml mission via js-yaml', () => {
+  it('parses a .yml mission via the yaml package', () => {
     const f = join(dir, 'ok.yml')
     writeFileSync(f, validYaml)
     const result = runValidation([f])
@@ -61,7 +61,7 @@ mission:
 
   it('reports invalid .yaml parse errors as invalid', () => {
     const f = join(dir, 'bad.yaml')
-    // Unclosed flow mapping — js-yaml will throw.
+    // Unclosed flow mapping — the yaml package will throw.
     writeFileSync(f, 'mission: {name: T\n')
     const result = runValidation([f])
     expect(result).toEqual({
@@ -74,7 +74,7 @@ mission:
 
   it('accepts JSON content in a file with an unknown extension (JSON-first fallback)', () => {
     // Non-.json/.yaml/.yml file — exercises the "try JSON first, then YAML"
-    // else-branch. JSON.parse succeeds so yaml.load is not called.
+    // else-branch. JSON.parse succeeds so parseYaml is not called.
     const f = join(dir, 'mission.txt')
     writeFileSync(f, JSON.stringify(VALID))
     const result = runValidation([f])
@@ -87,7 +87,7 @@ mission:
   })
 
   it('falls back to YAML for unknown-extension files whose content is not JSON', () => {
-    // Unknown extension, YAML content — JSON.parse throws, yaml.load succeeds.
+    // Unknown extension, YAML content — JSON.parse throws, parseYaml succeeds.
     const f = join(dir, 'mission.data')
     writeFileSync(f, validYaml)
     const result = runValidation([f])
@@ -102,7 +102,7 @@ mission:
   it('reports invalid unknown-extension content (neither JSON nor YAML) as invalid', () => {
     const f = join(dir, 'mission.data')
     // ':::' is invalid JSON AND invalid YAML (block mapping with empty key + weird
-    // syntax makes js-yaml throw).
+    // syntax makes the yaml package throw).
     writeFileSync(f, ':::\n\t: [')
     const result = runValidation([f])
     expect(result.hasErrors).toBe(true)

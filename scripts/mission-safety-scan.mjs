@@ -29,13 +29,13 @@
  *   - name: Scan for dangerous commands
  *     run: node scripts/mission-safety-scan.mjs "$FILES"
  *
- * No new dependency beyond the `js-yaml` already used by
- * `validate-schema.mjs`, no network calls, no exporter — only formats
+ * No new dependency beyond the `yaml` package already used by
+ * `build-index.mjs`, no network calls, no exporter — only formats
  * already-computed local counts for the Actions step log / a future
  * $GITHUB_STEP_SUMMARY consumer.
  */
 import { readFileSync } from 'node:fs'
-import * as yaml from 'js-yaml'
+import { parse as parseYaml } from 'yaml'
 import { createLogger } from './lib/logger.mjs'
 import { CURL_PIPE_TO_SHELL, WGET_PIPE_TO_SHELL } from './lib/shell-interpreters.mjs'
 
@@ -79,7 +79,7 @@ function tryLoadMissionSteps(content) {
     data = JSON.parse(content)
   } catch {
     try {
-      data = yaml.load(content)
+      data = parseYaml(content)
     } catch {
       return null
     }

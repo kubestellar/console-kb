@@ -36,7 +36,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as yaml from 'js-yaml'
+import { parse as parseYaml } from 'yaml'
 
 import { validateMissionExport } from '../scanner.mjs'
 
@@ -58,7 +58,7 @@ describe('docs/fixer-schema.yaml (contributor reference)', () => {
     expect(raw.length).toBeGreaterThan(0)
   })
 
-  const parsed = yaml.load(raw)
+  const parsed = parseYaml(raw)
 
   it('parses cleanly as YAML (no partial fenced snippets, no tab indentation)', () => {
     expect(parsed).not.toBeNull()
@@ -148,7 +148,7 @@ describe('docs/fixer-schema.yaml (contributor reference)', () => {
 // -----------------------------------------------------------------------------
 
 describe('docs/fixer-schema.yaml required-field enforcement mirror', () => {
-  const parsed = yaml.load(fs.readFileSync(SCHEMA_DOC, 'utf-8'))
+  const parsed = parseYaml(fs.readFileSync(SCHEMA_DOC, 'utf-8'))
 
   for (const field of CODE_REQUIRED_FIELDS) {
     it(`removing "${field}" causes validateMissionExport to fail`, () => {
