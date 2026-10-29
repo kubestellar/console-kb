@@ -6,7 +6,7 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "dapr: allow annotation to specify shutdown pause",
-    "description": "allow annotation to specify shutdown pause. Requested by 7+ users.",
+    "description": "During pod termination the Dapr sidecar (daprd) can begin shutting down before the application has finished draining in-flight work, because `dapr.io/graceful-shutdown-seconds` only bounds how long daprd waits AFTER shutdown starts. Users needed a way to pause the start of sidecar shutdown itself; Dapr added the `dapr.io/block-shutdown-duration` annotation for this. Requested by 7+ users.",
     "type": "feature",
     "status": "completed",
     "steps": [
@@ -16,20 +16,22 @@
       },
       {
         "title": "Review dapr configuration",
-        "description": "Inspect the relevant dapr configuration:\n```bash\nkubectl get all -n dapr -l app.kubernetes.io/name=dapr\nkubectl get configmap -n dapr -l app.kubernetes.io/part-of=dapr\n```\n## In what area(s)?\r\n\n## Describe the feature\nWe're struggling with making dapr lifecycle robust, especially during shutdown."
+        "description": "Inspect the existing shutdown-related annotations on your Dapr-enabled workloads:\n```bash\nkubectl get all -n dapr -l app.kubernetes.io/name=dapr\nkubectl get deployment <your-app> -o jsonpath='{.spec.template.metadata.annotations}' | tr ',' '\\n' | grep -E 'dapr.io/(graceful-shutdown-seconds|block-shutdown-duration)'\n```\nNote that `dapr.io/graceful-shutdown-seconds` only bounds how long daprd waits for in-flight work AFTER its shutdown begins — it does not delay the start of shutdown while the app is still healthy, which is the gap this mission addresses."
       },
       {
-        "title": "Apply the fix for allow annotation to specify shutdown pause",
-        "description": "I don't think `graceful-shutdown-seconds` covers the use case as described in the feature request as they are subtly but importantly different. Reoppening this issue as there are [requests](https://github.com/dapr/dapr/issues/7211) for it to be implemented.\n\nI propose adding a `block-shutdown-seconds` option (default disabled) that will block the entire shutdown procedure until either 1. the app reports as unhealthy, or 2. the number of seconds has been reached on the block.\n\nSee the source issue for community-verified solutions."
+        "title": "Add the dapr.io/block-shutdown-duration annotation to the workload",
+        "description": "Upgrade to Dapr >=1.13 (the release that shipped this feature, tracked in dapr/dapr#4313 and dapr/dapr#7211), then set the `dapr.io/block-shutdown-duration` annotation on the pod template. It blocks the start of daprd's shutdown until either the app reports unhealthy or the duration elapses — distinct from `dapr.io/graceful-shutdown-seconds`, which caps the drain time once shutdown has begun:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: my-app\nspec:\n  template:\n    metadata:\n      annotations:\n        dapr.io/enabled: \"true\"\n        dapr.io/app-id: \"my-app\"\n        dapr.io/block-shutdown-duration: \"30s\"\n        dapr.io/graceful-shutdown-seconds: \"15\"\n```\nApply it:\n```bash\nkubectl apply -f deployment.yaml\nkubectl rollout status deployment/my-app\n```"
       },
       {
         "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n dapr -l app.kubernetes.io/name=dapr\nkubectl get events -n dapr --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"allow annotation to specify shutdown pause\" is functioning correctly."
+        "description": "Delete a pod of the annotated workload and confirm daprd pauses before shutting down:\n```bash\nkubectl delete pod -l app=my-app --wait=false\nkubectl logs -l app=my-app -c daprd --tail=20 | grep -i shutdown\nkubectl get events --sort-by='.lastTimestamp' | tail -10\n```\nThe daprd log should show the shutdown being blocked for up to the configured duration (e.g. 30s) while the app health check still passes, and only then beginning the graceful drain."
       }
     ],
     "resolution": {
-      "summary": "I don't think `graceful-shutdown-seconds` covers the use case as described in the feature request as they are subtly but importantly different. Reoppening this issue as there are [requests](https://github.com/dapr/dapr/issues/7211) for it to be implemented.\n\nI propose adding a `block-shutdown-seconds` option (default disabled) that will block the entire shutdown procedure until either 1.",
-      "codeSnippets": []
+      "summary": "The root cause is that `dapr.io/graceful-shutdown-seconds` only limits how long daprd waits for in-flight work after its shutdown has already begun, so there was no way to delay the start of sidecar shutdown while the application was still draining. Dapr resolved this by adding the `dapr.io/block-shutdown-duration` annotation (disabled by default): it blocks the entire shutdown procedure until either (1) the app reports as unhealthy, or (2) the configured duration elapses. Because the sidecar stays fully functional during the block, the application keeps access to Dapr APIs while it finishes its own drain, after which the normal graceful shutdown (bounded by graceful-shutdown-seconds) proceeds.",
+      "codeSnippets": [
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: my-app\nspec:\n  template:\n    metadata:\n      annotations:\n        dapr.io/enabled: \"true\"\n        dapr.io/app-id: \"my-app\"\n        dapr.io/block-shutdown-duration: \"30s\"\n        dapr.io/graceful-shutdown-seconds: \"15\""
+      ]
     }
   },
   "metadata": {
