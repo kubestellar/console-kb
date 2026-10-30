@@ -113,7 +113,12 @@ const SAFE_CLI_COMMANDS = new Set([
   'kubectl', 'helm', 'jq', 'awk', 'grep', 'sed', 'cut', 'tr', 'sort',
   'uniq', 'wc', 'head', 'tail', 'cat', 'echo', 'date', 'basename',
   'dirname', 'xargs', 'find', 'ls', 'yq', 'kustomize', 'istioctl',
-  'age', 'sops', 'systemd-run',  // encryption/secret management tools in CNCF docs
+  'age', 'sops',  // encryption/secret management tools in CNCF docs
+  // NOTE: 'systemd-run' must NOT be added here. It accepts an arbitrary
+  // target command the same way env/xargs/find do (`systemd-run ... bash -c
+  // '<anything>'`), so allowlisting its first token would defeat
+  // segmentsAreSafe exactly like an unguarded env/xargs/find entry would
+  // (see the "Allowlist escape via env/xargs/find" detectors below).
   'curl', 'wget', 'podman', 'docker', 'openssl', 'sha256sum', 'md5sum',  // common CNCF doc CLI tools
 ]);
 
