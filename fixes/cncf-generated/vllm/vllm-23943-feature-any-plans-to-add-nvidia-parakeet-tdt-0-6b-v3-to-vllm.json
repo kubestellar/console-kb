@@ -1,0 +1,75 @@
+{
+  "version": "kc-mission-v1",
+  "name": "vllm-23943-feature-any-plans-to-add-nvidia-parakeet-tdt-0-6b-v3-to-vllm",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "vllm: [Feature]: Any plans to add nvidia/parakeet-tdt-0.6b-v3 to vllm?",
+    "description": "[Feature]: Any plans to add nvidia/parakeet-tdt-0.6b-v3 to vllm?. Requested by 46+ users. Upstream has not shipped support: attempting to serve the model fails because its TDT (token-and-duration transducer) decoder is not a supported vLLM architecture.",
+    "type": "feature",
+    "status": "proposed",
+    "steps": [
+      {
+        "title": "Check current vllm setup",
+        "description": "Verify your vllm version and confirm the model is not yet supported:\n```bash\npip show vllm | grep Version\npython -c \"from vllm import LLM; LLM(model='nvidia/parakeet-tdt-0.6b-v3')\"\n```\nThe second command fails with an unsupported-architecture error because vLLM has no TDT/RNN-T decoder implementation."
+      },
+      {
+        "title": "Review why the model outperforms Whisper for ASR",
+        "description": "nvidia/parakeet-tdt-0.6b-v3 is faster than whisper-large-v3 distill 3.5 and more accurate per the Open ASR Leaderboard (https://huggingface.co/spaces/hf-audio/open_asr_leaderboard), which is why 46+ users requested vLLM support in https://github.com/vllm-project/vllm/issues/23943."
+      },
+      {
+        "title": "Understand the decoding gap blocking vLLM support",
+        "description": "Standard transformer models sample one token, append it to the input, and loop. The parakeet TDT decoder instead uses an LSTM prediction network with an inner loop that can emit multiple tokens per encoder frame and skips frames by a predicted duration:\n```\nstate ← None             # LSTM state of the prediction network\nlast  ← BLANK            # last emitted label (start with blank as SOS)\nt     ← 0\ntokens ← []\nwhile t < T_enc:\n    repeat:\n        g, next_state ← decoder.predict(last, state)   # one prediction step\n        logits ← joint(enc[t], g)                       # one joint step (8198,)\n        tok    ← argmax( logits[ : 8193] )\n        d_idx  ← argmax( logits[8193 : ] )\n        skip   ← durations[d_idx]                       # ∈ {0, 1, 2, 3, 4}\n        if tok ≠ BLANK:\n            tokens.append(tok)\n            state ← next_state                           # state advances ONLY here\n```\nThis loop does not fit vLLM's autoregressive one-token-per-step scheduler, so support requires new decoder plumbing upstream."
+      },
+      {
+        "title": "Track upstream progress and use an interim serving path",
+        "description": "Watch the upstream request and serve the model with NVIDIA's own stack until vLLM lands support:\n```bash\n# follow upstream status\ngh issue view 23943 --repo vllm-project/vllm\n# interim: serve parakeet with NeMo instead of vLLM\npip install -U nemo_toolkit[asr]\npython -c \"import nemo.collections.asr as nemo_asr; m=nemo_asr.models.ASRModel.from_pretrained('nvidia/parakeet-tdt-0.6b-v3'); print(m.transcribe(['sample.wav']))\"\n```\nRe-test the vLLM load command from step 1 after each vLLM release."
+      }
+    ],
+    "resolution": {
+      "summary": "This feature is still an open upstream request — vLLM has not shipped parakeet-tdt-0.6b-v3 support, because the root cause is an architecture mismatch: the model's TDT (token-and-duration transducer) decoder uses an LSTM prediction network with an inner loop emitting a variable number of tokens per encoder frame, while vLLM's scheduler assumes one-token-per-step autoregressive transformer decoding. Until upstream adds a TDT decode path, serve the model with NVIDIA NeMo (or Riva/NIM) and track https://github.com/vllm-project/vllm/issues/23943 for support landing.",
+      "codeSnippets": [
+        "pip install -U nemo_toolkit[asr]\npython -c \"import nemo.collections.asr as nemo_asr; m=nemo_asr.models.ASRModel.from_pretrained('nvidia/parakeet-tdt-0.6b-v3'); print(m.transcribe(['sample.wav']))\"",
+        "state ← None             # LSTM state of the prediction network\nlast  ← BLANK            # last emitted label (start with blank as SOS)\nt     ← 0\ntokens ← []\nwhile t < T_enc:\n    symbols ← 0\n    repeat:\n        # 1. one prediction step (always)\n        g, next_state ← decoder.predict(last, state)            # g: (1, 640)\n\n        # 2. one joint step (always)\n        logits ← joint(enc[t], g)                                # (8198,)\n        tok    ← argmax( logits[ : 8193] )\n        d_idx  ← argmax( logits[8193 : ] )\n        skip   ← durations[d_idx]                                # ∈ {0, 1, 2, 3, 4}\n\n        # 3. emit token only if non-blank\n        if tok ≠ BLANK:\n            tokens.append(tok)\n            state ← next_state                                   # ← state advances ONLY here\n "
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "vllm",
+      "community",
+      "llm-serving",
+      "feature"
+    ],
+    "cncfProjects": [
+      "vllm"
+    ],
+    "targetResourceKinds": [],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "community",
+    "sourceUrls": {
+      "issue": "https://github.com/vllm-project/vllm/issues/23943",
+      "repo": "https://github.com/vllm-project/vllm"
+    },
+    "reactions": 46,
+    "comments": 27,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "tools": [
+      "python",
+      "pip"
+    ],
+    "description": "A working vllm installation or development environment."
+  },
+  "security": {
+    "scannedAt": "2026-11-03T06:24:25.492Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}

