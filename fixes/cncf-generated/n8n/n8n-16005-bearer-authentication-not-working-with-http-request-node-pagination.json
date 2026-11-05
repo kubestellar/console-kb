@@ -6,31 +6,36 @@
   "authorGithub": "kubestellar",
   "mission": {
     "title": "n8n: Bearer Authentication Not Working with HTTP Request Node Pagination",
-    "description": "Bearer Authentication Not Working with HTTP Request Node Pagination. This issue affects 22+ users.",
+    "description": "When the HTTP Request node uses a predefined credential with Bearer Auth and pagination is enabled, the Authorization header is only sent on the first request. Subsequent paginated requests are missing the Bearer token, so the API responds with 401 \"Unauthorized\" on page 2 and beyond.",
     "type": "troubleshoot",
     "status": "completed",
     "steps": [
       {
-        "title": "Identify n8n troubleshoot symptoms",
-        "description": "Check for the issue in your n8n deployment:\n```bash\nkubectl get pods -n n8n -l app.kubernetes.io/name=n8n\nkubectl logs -l app.kubernetes.io/name=n8n -n n8n --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+        "title": "Reproduce the 401 on paginated requests",
+        "description": "In the n8n editor, open the failing workflow's HTTP Request node. It is configured with Authentication: \"Predefined Credential Type\" (e.g. Bearer Auth) and Options > Pagination enabled. Execute the node: the first request succeeds, but the second page fails with `401 - \"Unauthorized\"`. If n8n runs in Kubernetes, confirm the error in the logs:\n```bash\nkubectl logs -l app.kubernetes.io/name=n8n -n n8n --tail=100 | grep -i \"unauthorized\\|401\"\n```"
       },
       {
-        "title": "Review n8n configuration",
-        "description": "Inspect the relevant n8n configuration:\n```bash\nkubectl get all -n n8n -l app.kubernetes.io/name=n8n\nkubectl get configmap -n n8n -l app.kubernetes.io/part-of=n8n\n```\n### Bug Description\n\nWhen using the HTTP Request node with Bearer authentication and pagination enabled, the authorization header is not passed through, resulting in a 401 \"Unauthorized\" error."
+        "title": "Confirm the Authorization header is dropped on page 2+",
+        "description": "Point the node at a request inspector (e.g. a local echo server) or enable debug logging to compare requests:\n```bash\nkubectl set env deployment/n8n -n n8n N8N_LOG_LEVEL=debug\nkubectl logs -l app.kubernetes.io/name=n8n -n n8n -f | grep -i \"authorization\\|pagination\"\n```\nThe first request includes `Authorization: Bearer <token>`; the follow-up requests built from the pagination options do not. This confirms the pagination mechanism is not re-applying the predefined credential's auth header."
       },
       {
-        "title": "Apply the fix for Bearer Authentication Not Working with HTTP Request Node…",
-        "description": "Apply the configuration change to resolve the issue:\n```yaml\n{\n  \"bookmarks\": [\n    {\n      \"id\": \"string\",\n      \"createdAt\": \"string\",\n      \"modifiedAt\": \"string\",\n      \"title\": \"string\",\n      \"archived\": true,\n      \"favourited\": true,\n      \"taggingStatus\": \"success\",\n      \"summarizationStatus\": \"success\",\n      \"note\": \"string\",\n      \"summary\": \"string\",\n      \"tags\": [\n        {\n          \"id\": \"string\",\n          \"name\": \"string\",\n          \"attachedBy\": \"ai\"\n        }\n      ],\n      \"content\": {\n        \"type\": \"link\",\n        \"url\": \"string\",\n        \"title\": \"string\",\n        \"description\": \"string\",\n        \"imageUrl\": \"string\",\n        \n```"
+        "title": "Add the Authorization header explicitly to the node's header parameters",
+        "description": "Workaround: send the header on every request yourself instead of relying on the predefined credential. In the HTTP Request node enable \"Send Headers\" and add a header parameter:\n```json\n{\n  \"sendHeaders\": true,\n  \"headerParameters\": {\n    \"parameters\": [\n      {\n        \"name\": \"Authorization\",\n        \"value\": \"Bearer <your-api-token>\"\n      }\n    ]\n  }\n}\n```\nNote: `{{ $credentials }}` expressions are NOT available in HTTP Request node parameters, so you cannot reference the stored credential's token here — use a literal header value, or switch the credential to \"Generic Credential Type\" > \"Header Auth\" with name `Authorization` and value `Bearer <your-api-token>`, which is applied to every paginated request."
       },
       {
-        "title": "Confirm Bearer Authentication Not Working with HTTP… is resolved",
-        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=n8n -n n8n --tail=50 --since=5m\nkubectl get events -n n8n --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+        "title": "Alternatively, set the Authorization header in the pagination request options",
+        "description": "Instead of (or in addition to) the node-level header, add the header inside Options > Pagination so it is attached to each generated page request. With Pagination Mode \"Update a Parameter in Each Request\", add a second parameter of type `header`:\n```json\n{\n  \"paginationMode\": \"updateAParameterInEachRequest\",\n  \"parameters\": {\n    \"parameters\": [\n      {\n        \"type\": \"qs\",\n        \"name\": \"page\",\n        \"value\": \"={{ $pageCount + 1 }}\"\n      },\n      {\n        \"type\": \"header\",\n        \"name\": \"Authorization\",\n        \"value\": \"Bearer <your-api-token>\"\n      }\n    ]\n  }\n}\n```"
+      },
+      {
+        "title": "Verify all pages return 200",
+        "description": "Re-execute the node and confirm every paginated request now succeeds and returns the full result set instead of failing after page 1:\n```bash\nkubectl logs -l app.kubernetes.io/name=n8n -n n8n --tail=50 --since=5m | grep -i \"401\\|unauthorized\"\n```\nNo further 401 errors should appear, and the node output should contain items from all pages."
       }
     ],
     "resolution": {
-      "summary": "See the source issue for the community-verified solution: https://github.com/n8n-io/n8n/issues/16005",
+      "summary": "The fix works because the paginated follow-up requests are built from the node's pagination options, and the root cause is that this request-building path does not re-apply the predefined credential's authentication — the Bearer token is attached only to the initial request and is dropped from every subsequent page request, producing 401 errors. Setting the Authorization header explicitly — as a node header parameter, via a Generic \"Header Auth\" credential, or as a header-type parameter inside the pagination options — puts the token into the request definition itself, so it is sent on every page request. Because {{ $credentials }} expressions are not available in node parameters, the token must be provided directly in the header value. Source: https://github.com/n8n-io/n8n/issues/16005",
       "codeSnippets": [
-        "{\n  \"bookmarks\": [\n    {\n      \"id\": \"string\",\n      \"createdAt\": \"string\",\n      \"modifiedAt\": \"string\",\n      \"title\": \"string\",\n      \"archived\": true,\n      \"favourited\": true,\n      \"taggingStatus\": \"success\",\n      \"summarizationStatus\": \"success\",\n      \"note\": \"string\",\n      \"summary\": \"string\",\n      \"tags\": [\n        {\n          \"id\": \"string\",\n          \"name\": \"string\",\n          \"attachedBy\": \"ai\"\n        }\n      ],\n      \"content\": {\n        \"type\": \"link\",\n        \"url\": \"string\",\n        \"title\": \"string\",\n        \"description\": \"string\",\n        \"imageUrl\": \"string\",\n        \"imageAssetId\": \"string\",\n        \"screenshotAssetId\": \"string\",\n        \"fullPageArchiveAssetId\": \"string\",\n        \"precrawledArchiveAssetId\": \"string\",\n        \"videoAssetId\": \"string\",\n        \"fa"
+        "{\n  \"sendHeaders\": true,\n  \"headerParameters\": {\n    \"parameters\": [\n      {\n        \"name\": \"Authorization\",\n        \"value\": \"Bearer <your-api-token>\"\n      }\n    ]\n  }\n}",
+        "{\n  \"options\": {\n    \"pagination\": {\n      \"pagination\": {\n        \"paginationMode\": \"updateAParameterInEachRequest\",\n        \"parameters\": {\n          \"parameters\": [\n            {\n              \"type\": \"qs\",\n              \"name\": \"page\",\n              \"value\": \"={{ $pageCount + 1 }}\"\n            },\n            {\n              \"type\": \"header\",\n              \"name\": \"Authorization\",\n              \"value\": \"Bearer <your-api-token>\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}"
       ]
     }
   },
