@@ -39,15 +39,20 @@ function restoreEnv() {
   }
 }
 
-async function loadModule() {
-  vi.resetModules()
-  return await import('../mission-executor.mjs')
-}
+let mod
 
-// Warm the module cache once so the cold import cost is paid in a hook
-// (generous timeout) rather than inside the first test's timer.
+// DRY_RUN, MAX_RETRIES and MISSION_TIMEOUT_MS are captured at import time.
+// Import the common configuration once outside the individual test timers;
+// only the timeout test below needs a fresh module graph.
 beforeAll(async () => {
-  await loadModule()
+  process.env.DRY_RUN = 'true'
+  process.env.MAX_RETRIES = '3'
+  delete process.env.MISSION_TIMEOUT_MS
+  try {
+    mod = await import('../mission-executor.mjs')
+  } finally {
+    restoreEnv()
+  }
 }, 60000)
 
 function jsonResponse(status, bodyObj) {
@@ -107,7 +112,6 @@ describe('executeStep — retry / diagnosis branches (DRY_RUN)', () => {
         adaptations: 'use test namespace',
       }),
     ])
-    const mod = await loadModule()
     const conv = []
     const result = await mod.executeStep(
       { title: 'Inspect', description: 'Look around' },
@@ -139,6 +143,7 @@ describe('executeMission — dry-run end-to-end', () => {
     process.env.MAX_RETRIES = '3'
   })
   afterEach(() => {
+    vi.restoreAllMocks()
     globalThis.fetch = ORIGINAL_FETCH
     rmSync(tmpDir, { recursive: true, force: true })
     restoreEnv()
@@ -150,13 +155,6 @@ describe('executeMission — dry-run end-to-end', () => {
     return p
   }
 
-  // Explicit budget: loadModule() calls vi.resetModules() before every
-  // dynamic import, so the beforeAll warm-up above does not avoid paying
-  // the cold-import cost here — each test still re-imports
-  // mission-executor.mjs from scratch. Vitest's default 5000ms budget has
-  // flaked on this test under CI load even with the warm-up in place
-  // (see #3852, #3375, #3380), so give it headroom explicitly rather than
-  // relying on module caching that resetModules() defeats.
   it('returns verdict=pass when every step passes AND a verify step succeeds', { timeout: 15000 }, async () => {
     const missionPath = writeMission('happy', {
       name: 'Happy Path',
@@ -176,7 +174,6 @@ describe('executeMission — dry-run end-to-end', () => {
       chatResponse({ installed: true, healthy: true, summary: 'all good' }),
     ])
 
-    const mod = await loadModule()
     const report = await mod.executeMission(missionPath)
 
     expect(report.verdict).toBe('pass')
@@ -205,7 +202,6 @@ describe('executeMission — dry-run end-to-end', () => {
       chatResponse({ installed: false, healthy: false, summary: 'nothing installed' }),
     ])
 
-    const mod = await loadModule()
     const report = await mod.executeMission(missionPath)
 
     expect(report.verdict).toBe('pass_unverified')
@@ -249,7 +245,6 @@ describe('executeMission — dry-run end-to-end', () => {
       mission: { title: 'Empty mission', steps: [] },
     })
 
-    const mod = await loadModule()
     const report = await mod.executeMission(missionZero)
 
     // zero steps → allPassed stays true; verificationPassed stays false;
@@ -262,18 +257,13 @@ describe('executeMission — dry-run end-to-end', () => {
     const missionPath = join(tmpDir, 'not-json.json')
     writeFileSync(missionPath, '{not valid json')
 
-    const mod = await loadModule()
     await expect(mod.executeMission(missionPath)).rejects.toThrow()
   })
 
   it('mission timeout: aborts remaining steps when MISSION_TIMEOUT_MS is 0', async () => {
-    // Setting the timeout to 0 forces the very first "Date.now() - start
-    // > TIMEOUT" check to fire → step gets status='timeout' and the
-    // loop breaks. This covers the mission-timeout branch cleanly
-    // without an actual sleep.
+    // This test alone needs a different import-time timeout configuration.
+    // Advance the clock deterministically after executeMission starts.
     process.env.MISSION_TIMEOUT_MS = '0'
-    // Small delay to guarantee Date.now() advances past startTime.
-    await new Promise(resolve => setTimeout(resolve, 5))
 
     const missionPath = writeMission('timeout', {
       name: 'TimeoutMission',
@@ -292,8 +282,11 @@ describe('executeMission — dry-run end-to-end', () => {
       chatResponse({ installed: false, healthy: false }),
     ])
 
-    const mod = await loadModule()
-    const report = await mod.executeMission(missionPath)
+    vi.resetModules()
+    const timeoutMod = await import('../mission-executor.mjs')
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    const report = await timeoutMod.executeMission(missionPath)
 
     expect(report.steps.length).toBeGreaterThanOrEqual(1)
     expect(report.steps[0].status).toBe('timeout')
@@ -335,7 +328,6 @@ describe('main — mission execution wrapper', () => {
     // We can't exercise `main()` directly without spawning kubectl, but
     // we CAN wrap executeMission and observe the catch branch by
     // invoking it from the composition.
-    const mod = await loadModule()
     // sanity: bad path throws
     await expect(mod.executeMission('/does/not/exist.json')).rejects.toThrow()
   })

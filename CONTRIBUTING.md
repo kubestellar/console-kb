@@ -118,6 +118,12 @@ cd scripts
 npm run test
 ```
 
+The `mission-executor-execute-mission` tests import the executor once with
+dry-run settings for their common cases. Its timeout case imports a separate
+module graph because `MISSION_TIMEOUT_MS` is captured at import time. When
+adding cases that change import-time settings, isolate that import rather than
+resetting the shared module graph before every test.
+
 #### Run integration testing for install missions
 
 For install missions, run the mission executor against a disposable cluster (for example, Kind) before opening your PR. This mirrors the integration-style validation done by automation.
