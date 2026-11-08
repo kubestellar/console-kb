@@ -5,32 +5,38 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "openyurt: [feature request] Add Claude Code Skills for deploying OpenYurt and configuring Raven",
-    "description": "[feature request] Add Claude Code Skills for deploying OpenYurt and configuring Raven. Community-requested feature.",
+    "title": "openyurt: Add Claude Code Skills for deploying OpenYurt and configuring Raven",
+    "description": "Deploying OpenYurt and configuring Raven today requires a long sequence of manual Helm and kubectl steps spread across docs, and openyurtio/openyurt#2559 reports that \"Add Claude Code Skills for deploying OpenYurt and configuring Raven\" is needed so an AI assistant can drive the deployment. This mission adds a Claude Code skill (`.claude/skills/deploy-openyurt/`) to the repository: a short SKILL.md entrypoint plus reference docs covering the Helm install and Raven gateway setup.",
     "type": "deploy",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current openyurt deployment",
-        "description": "Verify your openyurt version and configuration:\n```bash\nkubectl get pods -n openyurt -l app.kubernetes.io/name=openyurt\nhelm list -n openyurt 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working openyurt installation."
+        "title": "Scaffold the skill directory in the openyurt repository",
+        "description": "Create the Claude Code skill layout proposed in the issue — a short entrypoint file with detailed reference docs beside it:\n```bash\nmkdir -p .claude/skills/deploy-openyurt/references\ntouch .claude/skills/deploy-openyurt/SKILL.md\ntouch .claude/skills/deploy-openyurt/references/helm-install.md\ntouch .claude/skills/deploy-openyurt/references/raven-config.md\n```\nThe skill format (one `SKILL.md` per directory) is used instead of flat `.claude/commands/` files so the entrypoint stays short while the reference docs hold the detail."
       },
       {
-        "title": "Review openyurt configuration",
-        "description": "Inspect the relevant openyurt configuration:\n```bash\nkubectl get all -n openyurt -l app.kubernetes.io/name=openyurt\nkubectl get configmap -n openyurt -l app.kubernetes.io/part-of=openyurt\n```\n[Claude Code](https://claude.ai/code) is an AI coding assistant that supports **Skills** — slash commands defined as Markdown files in `.claude/commands/`."
+        "title": "Write the SKILL.md entrypoint with scoped frontmatter",
+        "description": "Define the skill with frontmatter that scopes `allowed-tools` to only what the deployment needs (read-only kubectl plus helm), keeping the AI from running arbitrary commands:\n```markdown\n---\nname: deploy-openyurt\ndescription: Deploy OpenYurt via Helm and configure Raven cross-network communication\nallowed-tools: Bash(helm:*), Bash(kubectl:*), Read, Grep\n---\n\nDeploy OpenYurt into the current cluster, then configure Raven.\nFollow references/helm-install.md for the Helm steps and\nreferences/raven-config.md for the Raven gateway setup.\nVerify each phase before moving to the next.\n```"
       },
       {
-        "title": "Apply the fix for [feature request] Add Claude Code Skills for deploying…",
-        "description": "## Proposal: Implement Claude Code Skills for OpenYurt Deployment\n\nHi, I'm the author of this issue. I want to propose a concrete implementation for team discussion before opening a PR.\n\n---\n\n### Proposed Implementation\n\n#### Structure\n\nI propose using the Claude Code **skill** format rather than\n```yaml\nThe entrypoint file stays short; the reference docs hold the detail. This keeps the skill maintainable: a Helm chart parameter change only requires editing one reference file, not hunting through a monolithic command file.\n\n#### Frontmatter and `allowed-tools` scope\n```"
+        "title": "Add the Helm deployment reference for yurt-manager and raven-agent",
+        "description": "Fill `references/helm-install.md` with the exact chart commands the skill should execute:\n```bash\nhelm repo add openyurt https://openyurtio.github.io/openyurt-helm\nhelm repo update\nhelm upgrade --install yurt-manager openyurt/yurt-manager -n kube-system\nhelm upgrade --install raven-agent openyurt/raven-agent -n kube-system\nkubectl get pods -n kube-system -l 'app.kubernetes.io/name in (yurt-manager,raven-agent)'\n```\nKeeping these commands in one reference file means a chart parameter change only requires editing this file, not hunting through a monolithic command file."
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n openyurt -l app.kubernetes.io/name=openyurt\nkubectl get events -n openyurt --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"[feature request] Add Claude Code Skills for deploying…\" is functioning correctly."
+        "title": "Add the Raven gateway configuration reference",
+        "description": "Fill `references/raven-config.md` with the Gateway custom resource and the node labelling Raven needs to route cross-network traffic between cloud and edge node pools:\n```bash\nkubectl label node <gateway-node> raven.openyurt.io/gateway=gw-cloud\nkubectl apply -f - <<'YAML'\napiVersion: raven.openyurt.io/v1beta1\nkind: Gateway\nmetadata:\n  name: gw-cloud\nspec:\n  exposeType: PublicIP\n  endpoints:\n    - nodeName: <gateway-node>\n      underNAT: false\nYAML\nkubectl get gateways.raven.openyurt.io gw-cloud -o yaml\n```"
+      },
+      {
+        "title": "Validate the skill end-to-end with Claude Code",
+        "description": "From the repository root, invoke the skill and confirm it drives a working deployment:\n```bash\nclaude \"/deploy-openyurt\"\nkubectl get pods -n kube-system -l app.kubernetes.io/name=yurt-manager\nkubectl get pods -n kube-system -l app.kubernetes.io/name=raven-agent\nkubectl get gateways.raven.openyurt.io\n```\nAll pods should be Running and the Gateway should list an active endpoint; if the skill stalls, check that `allowed-tools` in SKILL.md covers every command the reference docs use."
       }
     ],
     "resolution": {
-      "summary": "## Proposal: Implement Claude Code Skills for OpenYurt Deployment\n\nHi, I'm the author of this issue. I want to propose a concrete implementation for team discussion before opening a PR.\n\n---\n\n### Proposed Implementation\n\n#### Structure\n\nI propose using the Claude Code **skill** format rather than flat command files.",
+      "summary": "The repository had no agent-readable deployment instructions, so AI assistants could not reliably deploy OpenYurt or configure Raven — the knowledge lived only in scattered human docs. Adding a Claude Code skill fixes this because the short SKILL.md entrypoint gives the assistant a stable contract while the reference docs hold the operational detail: a Helm chart parameter change only requires editing one reference file, not hunting through a monolithic command file. Scoping `allowed-tools` in the frontmatter works as the safety boundary because Claude Code refuses any tool invocation outside that list, limiting the skill to helm/kubectl operations.",
       "codeSnippets": [
-        "The entrypoint file stays short; the reference docs hold the detail. This keeps the skill maintainable: a Helm chart parameter change only requires editing one reference file, not hunting through a monolithic command file.\n\n#### Frontmatter and `allowed-tools` scope"
+        "---\nname: deploy-openyurt\ndescription: Deploy OpenYurt via Helm and configure Raven cross-network communication\nallowed-tools: Bash(helm:*), Bash(kubectl:*), Read, Grep\n---\n\nDeploy OpenYurt into the current cluster, then configure Raven.\nFollow references/helm-install.md for the Helm steps and\nreferences/raven-config.md for the Raven gateway setup.",
+        "helm repo add openyurt https://openyurtio.github.io/openyurt-helm\nhelm repo update\nhelm upgrade --install yurt-manager openyurt/yurt-manager -n kube-system\nhelm upgrade --install raven-agent openyurt/raven-agent -n kube-system",
+        "apiVersion: raven.openyurt.io/v1beta1\nkind: Gateway\nmetadata:\n  name: gw-cloud\nspec:\n  exposeType: PublicIP\n  endpoints:\n    - nodeName: <gateway-node>\n      underNAT: false"
       ]
     }
   },
@@ -65,9 +71,10 @@
   "prerequisites": {
     "kubernetes": ">=1.24",
     "tools": [
-      "kubectl"
+      "kubectl",
+      "helm"
     ],
-    "description": "A running Kubernetes cluster with openyurt installed or the issue environment reproducible."
+    "description": "A running Kubernetes cluster, Helm 3, and Claude Code installed locally for skill validation."
   },
   "security": {
     "scannedAt": "2026-11-06T06:13:07.307Z",
