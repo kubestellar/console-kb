@@ -59,9 +59,17 @@ jobs:
           # The concurrency guard above serializes runs of this workflow,
           # but master can still move between another workflow's push and
           # this step (e.g. a human/bot commit unrelated to the index).
-          # Rebase onto the latest master and retry a few times with a
-          # short backoff before giving up, instead of failing outright on
-          # the first "fetch first" rejection (#3189).
+          # Retry a few times with a short backoff before giving up, instead
+          # of failing outright on the first "fetch first" rejection (#3189).
+          #
+          # A rejection means master moved, so mission files may now differ
+          # from what build-index.mjs saw. Do NOT rebase the already-made
+          # commit: that replays a stale fixes/index.json diff onto the new
+          # tree and silently drops whatever landed meanwhile (falco-3733 was
+          # dropped this way, fixed ad hoc in #3917; see #3918). Instead,
+          # reset to the latest master, rebuild the index from that tree, and
+          # commit the fresh result. This also avoids rebase conflicts on
+          # fixes/index.json when master's copy changed underneath us.
           attempt=1
           max_attempts=5
           until git push; do
@@ -69,10 +77,17 @@ jobs:
               echo "::error::git push failed after ${max_attempts} attempts"
               exit 1
             fi
-            echo "Push rejected (attempt ${attempt}/${max_attempts}); rebasing onto latest master and retrying..."
-            git fetch origin master
-            git rebase origin/master
+            echo "Push rejected (attempt ${attempt}/${max_attempts}); rebuilding index on latest master and retrying..."
             attempt=$((attempt + 1))
             sleep $((attempt * 3))
+            git fetch origin master
+            git reset --hard origin/master
+            node scripts/build-index.mjs
+            if git diff --quiet fixes/index.json; then
+              echo "fixes/index.json on latest master already matches the rebuilt index; nothing to push."
+              exit 0
+            fi
+            git add fixes/index.json
+            git commit -s -m "🌱 Auto-update mission index"
           done
 
