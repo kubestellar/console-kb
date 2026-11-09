@@ -53,26 +53,41 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add fixes/index.json
-          git commit -s -m "🌱 Auto-update mission index"
 
           # The concurrency guard above serializes runs of this workflow,
-          # but master can still move between another workflow's push and
-          # this step (e.g. a human/bot commit unrelated to the index).
-          # Rebase onto the latest master and retry a few times with a
-          # short backoff before giving up, instead of failing outright on
-          # the first "fetch first" rejection (#3189).
+          # but master can still move between this run's checkout and its
+          # push: actions/checkout pins the triggering SHA, so a run queued
+          # behind another one starts from a tree that predates the earlier
+          # run's auto-index commit, and any other push to master (human or
+          # bot) has the same effect. fixes/index.json is a generated file,
+          # so rebasing our copy onto a master that also changed it produces
+          # a content conflict (#3914). On a "fetch first" rejection, reset
+          # to the latest master and regenerate the index from that tree
+          # instead, then retry with a short backoff (#3189).
           attempt=1
           max_attempts=5
-          until git push; do
+          while :; do
+            git add fixes/index.json
+            git commit -s -m "🌱 Auto-update mission index"
+            if git push; then
+              break
+            fi
             if [ "$attempt" -ge "$max_attempts" ]; then
               echo "::error::git push failed after ${max_attempts} attempts"
               exit 1
             fi
-            echo "Push rejected (attempt ${attempt}/${max_attempts}); rebasing onto latest master and retrying..."
-            git fetch origin master
-            git rebase origin/master
+            echo "Push rejected (attempt ${attempt}/${max_attempts}); regenerating index on latest master and retrying..."
             attempt=$((attempt + 1))
             sleep $((attempt * 3))
+            git fetch origin master
+            git reset --hard origin/master
+            node scripts/build-index.mjs
+            # generatedAt changes on every build; ignore it so a run whose
+            # missions are already indexed on master does not push a
+            # timestamp-only commit.
+            if git diff --quiet -I '"generatedAt":' fixes/index.json; then
+              echo "fixes/index.json on latest master already indexes every mission; nothing to push."
+              break
+            fi
           done
 
