@@ -72,6 +72,15 @@ jobs:
             echo "Push rejected (attempt ${attempt}/${max_attempts}); rebasing onto latest master and retrying..."
             git fetch origin master
             git rebase origin/master
+            # The index committed above was built from the pre-rebase tree, and a
+            # push is only ever rejected because master moved underneath us — so
+            # mission files may now differ from what build-index.mjs saw. Rebuild
+            # and amend before retrying the push, or the committed index can
+            # silently drop/staleify whatever landed on master in the meantime
+            # (see falco-3733 dropped from the index, fixed ad hoc in #3917).
+            node scripts/build-index.mjs
+            git add fixes/index.json
+            git commit --amend -s --no-edit
             attempt=$((attempt + 1))
             sleep $((attempt * 3))
           done
