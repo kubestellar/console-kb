@@ -38,7 +38,7 @@ export const CNCF_PROJECTS = [
   { name: "kubeedge", repo: "kubeedge/kubeedge", maturity: "graduated", category: "app-definition", sources: { stackoverflow: { tags: ["kubeedge"] } } },
   { name: "kubernetes", repo: "kubernetes/kubernetes", maturity: "graduated", category: "orchestration", aliases: ["k8s", "kubectl", "kube"], sources: { stackoverflow: { tags: ["kubernetes", "kubectl", "k8s"] }, reddit: { subreddits: ["kubernetes", "k8s", "devops"] } } },
   { name: "linkerd", repo: "linkerd/linkerd2", maturity: "graduated", category: "networking", sources: { stackoverflow: { tags: ["linkerd", "linkerd2"] }, reddit: { subreddits: ["kubernetes"] } } },
-  { name: "open-policy-agent-opa-", repo: "open-policy-agent/opa", maturity: "graduated", category: "security", sources: { stackoverflow: { tags: ["open-policy-agent", "opa", "rego"] } } },
+  { name: "open-policy-agent-opa", repo: "open-policy-agent/opa", maturity: "graduated", category: "security", sources: { stackoverflow: { tags: ["open-policy-agent", "opa", "rego"] } } },
   { name: "prometheus", repo: "prometheus/prometheus", maturity: "graduated", category: "observability", aliases: ["prom", "promql"], sources: { stackoverflow: { tags: ["prometheus", "promql"] }, reddit: { subreddits: ["kubernetes", "devops", "prometheus"] } } },
   { name: "alertmanager", repo: "prometheus/alertmanager", maturity: "graduated", category: "observability", parentProject: "prometheus", sources: { stackoverflow: { tags: ["alertmanager", "prometheus-alertmanager"] } } },
   { name: "node-exporter", repo: "prometheus/node_exporter", maturity: "graduated", category: "observability", parentProject: "prometheus" },

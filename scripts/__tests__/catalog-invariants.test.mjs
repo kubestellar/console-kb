@@ -79,14 +79,13 @@ describe('CNCF_PROJECTS catalog', () => {
   })
 
   it('every name is kebab-case (used verbatim in generated file paths)', () => {
-    // Existing catalog debt: 5 entries currently have a trailing hyphen
+    // Existing catalog debt: 4 entries currently have a trailing hyphen
     // because the auto-generator that seeded this file appended a
     // parenthetical (e.g. `Open Policy Agent (OPA)` -> slug ending in
     // '-opa-'). Allowlist locks the debt in place so new entries can
     // never introduce more, and the allowlist can be shrunk as entries
     // are fixed. Filed separately as a data-quality bead.
     const KNOWN_TRAILING_HYPHEN_DEBT = new Set([
-      'open-policy-agent-opa-',
       'the-update-framework-tuf-',
       'container-network-interface-cni-',
       'cdk-for-kubernetes-cdk8s-',

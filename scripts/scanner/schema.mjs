@@ -5,6 +5,8 @@
 
 const REQUIRED_FIELDS = ['version', 'name', 'mission'];
 const VALID_VERSIONS = ['kc-mission-v1'];
+const RFC1123_LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+const NAMESPACE_FLAG = /(?:^|\s)(?:-n|--namespace)[ =]([^\s`"'\\]+)/g;
 
 /**
  * Validates that `data` conforms to the kc-mission-v1 export schema.
@@ -40,6 +42,18 @@ export function validateMissionExport(data) {
       }
       if (!data.mission.steps || !Array.isArray(data.mission.steps)) {
         errors.push('"mission.steps" is required and must be an array');
+      }
+      if (Array.isArray(data.mission.steps)) {
+        const badNamespaces = new Set();
+        for (const step of data.mission.steps) {
+          const text = `${step?.description ?? ''}`;
+          for (const m of text.matchAll(NAMESPACE_FLAG)) {
+            if (!m[1].startsWith('$') && !/^<[^<>]+>$/.test(m[1]) && !RFC1123_LABEL.test(m[1])) badNamespaces.add(m[1]);
+          }
+        }
+        for (const ns of badNamespaces) {
+          errors.push(`Invalid namespace "${ns}" in step command (must be an RFC 1123 label)`);
+        }
       }
     }
   }
