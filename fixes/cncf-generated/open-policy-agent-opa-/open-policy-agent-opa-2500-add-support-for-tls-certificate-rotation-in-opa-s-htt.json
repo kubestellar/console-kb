@@ -5,34 +5,33 @@
   "author": "KubeStellar Bot",
   "authorGithub": "kubestellar",
   "mission": {
-    "title": "open-policy-agent-opa-: Add support for TLS certificate rotation in OPA's HTTP server",
-    "description": "Add support for TLS certificate rotation in OPA's HTTP server. Requested by 5+ users.",
+    "title": "open-policy-agent/opa: Add support for TLS certificate rotation in OPA's HTTP server",
+    "description": "OPA's HTTPS server loads the certificate given by --tls-cert-file only once at startup, so when the certificate file on disk is rotated (for example by cert-manager), OPA keeps serving the old, eventually expired certificate until the process is restarted. Upstream issue open-policy-agent/opa#2500 asked for a reload mechanism; OPA added the --tls-cert-refresh-period flag that polls the cert and key files and reloads them on change.",
     "type": "feature",
     "status": "completed",
     "steps": [
       {
-        "title": "Check current open-policy-agent-opa- deployment",
-        "description": "Verify your open-policy-agent-opa- version and configuration:\n```bash\nkubectl get pods -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nhelm list -n open-policy-agent-opa- 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working open-policy-agent-opa- installation."
+        "title": "Check current OPA deployment and version",
+        "description": "Verify your OPA version and how it is deployed (the TLS certificate refresh flag requires OPA v0.39.0 or later):\n```bash\nkubectl get pods -n opa -l app=opa\nkubectl exec -n opa deploy/opa -- opa version\nhelm list -n opa 2>/dev/null || echo \"Not installed via Helm\"\n```\nAdjust the namespace and label selector to match your installation."
       },
       {
-        "title": "Review open-policy-agent-opa- configuration",
-        "description": "Inspect the relevant open-policy-agent-opa- configuration:\n```bash\nkubectl get all -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nkubectl get configmap -n open-policy-agent-opa- -l app.kubernetes.io/part-of=open-policy-agent-opa-\n```\n# Expected Behavior\n\nIf an OPA server is running HTTPS (i.e. with `--tls-cert-file`) and the file on disk changes, OPA should have a mechanism for reloading the cert."
+        "title": "Confirm OPA serves TLS and identify the certificate files",
+        "description": "Inspect the OPA server arguments to confirm it runs HTTPS with a static certificate:\n```bash\nkubectl get deploy opa -n opa -o jsonpath='{.spec.template.spec.containers[0].args}'\n```\nLook for `--tls-cert-file` and `--tls-private-key-file`. The symptom from open-policy-agent/opa#2500: if the files these flags point at change on disk (certificate rotation), OPA does not reload them — connections keep getting the certificate loaded at startup, which eventually expires."
       },
       {
-        "title": "Apply the fix for Add support for TLS certificate rotation in OPA's HTTP…",
-        "description": "Related to #4107, I ran a quick benchmark of what the costs of different scenarios, given the certs _have not changed_, would be:\n\n```\nU @ 2.30GHz\nBenchmarkCertReload\nBenchmarkCertReload/Load_and_Store\nBenchmarkCertReload/Load_and_Store-16         \t   17380\t     67021 ns/op\t   17740 B/op\t     156\n```yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: echo\n  namespace: default\nspec:\n  containers:\n  - name: echo\n    image: hashicorp/http-echo:latest\n    args:\n    - -listen\n    - \":8080\"\n    - -text\n    - \"hello world\"\n```"
+        "title": "Add --tls-cert-refresh-period to the OPA server arguments",
+        "description": "Enable periodic certificate reloading by adding the refresh flag to the OPA container args:\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: opa\n  namespace: opa\nspec:\n  template:\n    spec:\n      containers:\n      - name: opa\n        image: openpolicyagent/opa:latest\n        args:\n        - \"run\"\n        - \"--server\"\n        - \"--addr=https://0.0.0.0:8443\"\n        - \"--tls-cert-file=/certs/tls.crt\"\n        - \"--tls-private-key-file=/certs/tls.key\"\n        - \"--tls-cert-refresh-period=5m\"\n        volumeMounts:\n        - name: certs\n          mountPath: /certs\n          readOnly: true\n      volumes:\n      - name: certs\n        secret:\n          secretName: opa-server-cert\n```\nWith `--tls-cert-refresh-period=5m`, OPA re-reads the cert and key files every 5 minutes and swaps them in only when their content hash changes:\n```bash\nkubectl apply -f opa-deployment.yaml\nkubectl rollout status deploy/opa -n opa\n```"
       },
       {
-        "title": "Verify the feature works",
-        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n open-policy-agent-opa- -l app.kubernetes.io/name=open-policy-agent-opa-\nkubectl get events -n open-policy-agent-opa- --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Add support for TLS certificate rotation in OPA's HTTP…\" is functioning correctly."
+        "title": "Rotate the certificate and verify OPA picks it up without a restart",
+        "description": "Trigger a rotation (with cert-manager: `kubectl delete secret opa-server-cert -n opa` forces reissuance, or renew via `cmctl renew`) and confirm the served certificate changes while the pod keeps running:\n```bash\nkubectl get pods -n opa -l app=opa -o jsonpath='{.items[0].status.startTime}'\nkubectl exec -n opa deploy/opa -- sh -c 'cat /certs/tls.crt | head -2'\necho | openssl s_client -connect $(kubectl get svc opa -n opa -o jsonpath='{.spec.clusterIP}'):8443 2>/dev/null | openssl x509 -noout -serial -enddate\n```\nThe serial/notAfter reported by `openssl s_client` should match the new certificate within one refresh period, and the pod start time should be unchanged (no restart happened)."
       }
     ],
     "resolution": {
-      "summary": "Related to #4107, I ran a quick benchmark of what the costs of different scenarios, given the certs _have not changed_, would be:\n\n```\nU @ 2.30GHz\nBenchmarkCertReload\nBenchmarkCertReload/Load_and_Store\nBenchmarkCertReload/Load_and_Store-16         \t   17380\t     67021 ns/op\t   17740 B/op\t     156 allocs/op\nBenchmarkCertReload/Load_and_Compare_bytes\nBenchmarkCertReload/Load_and_Compare_bytes-16 \t ",
+      "summary": "The root cause is that OPA's HTTP server called tls.LoadX509KeyPair once at startup, so a certificate rotated on disk was never re-read and clients kept being served the stale certificate until the process restarted. Upstream resolved open-policy-agent/opa#2500 by adding the --tls-cert-refresh-period flag (OPA v0.39.0): the server polls the cert and key files on that interval, compares their content hashes, and atomically swaps the keypair via the tls.Config GetCertificate callback when they change. Setting the flag on the OPA container makes rotations by cert-manager or any file-based issuer take effect without a pod restart.",
       "codeSnippets": [
-        "apiVersion: v1\nkind: Pod\nmetadata:\n  name: echo\n  namespace: default\nspec:\n  containers:\n  - name: echo\n    image: hashicorp/http-echo:latest\n    args:\n    - -listen\n    - \":8080\"\n    - -text\n    - \"hello world\"",
-        "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: opa\n  labels:\n    opa-control-plane: \"true\"\n---\napiVersion: cert-manager.io/v1alpha2\nkind: ClusterIssuer\nmetadata:\n  name: selfsigning-issuer\nspec:\n  selfSigned: {}\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: opa-role\nrules:\n- apiGroups:\n  - '*'\n  resources:\n  - '*'\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - \"\"\n  resources:\n  - configmaps\n  verbs:\n  - get\n  - list\n  - watch\n  - create\n  - update\n  - patch\n---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: opa\n  namespace: opa\n  labels:\n    opa-control-plane: \"true\"\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  creationTimestamp: null\n  name: opa-rolebinding\nroleRef:\n  apiGroup: rbac.authorization.k8s.io",
-        "U @ 2.30GHz\nBenchmarkCertReload\nBenchmarkCertReload/Load_and_Store\nBenchmarkCertReload/Load_and_Store-16         \t   17380\t     67021 ns/op\t   17740 B/op\t     156 allocs/op\nBenchmarkCertReload/Load_and_Compare_bytes\nBenchmarkCertReload/Load_and_Compare_bytes-16 \t   16795\t     71509 ns/op\t   17612 B/op\t     155 allocs/op\nBenchmarkCertReload/Compare_sums_of_files\nBenchmarkCertReload/Compare_sums_of_files-16  \t   25821\t     44358 ns/op\t   66176 B/op\t      12 allocs/op"
+        "args:\n- \"run\"\n- \"--server\"\n- \"--addr=https://0.0.0.0:8443\"\n- \"--tls-cert-file=/certs/tls.crt\"\n- \"--tls-private-key-file=/certs/tls.key\"\n- \"--tls-cert-refresh-period=5m\"",
+        "apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata:\n  name: opa-server-cert\n  namespace: opa\nspec:\n  secretName: opa-server-cert\n  dnsNames:\n  - opa.opa.svc\n  - opa.opa.svc.cluster.local\n  duration: 2160h\n  renewBefore: 360h\n  issuerRef:\n    name: selfsigning-issuer\n    kind: ClusterIssuer"
       ]
     }
   },
@@ -47,9 +46,9 @@
       "open-policy-agent-opa-"
     ],
     "targetResourceKinds": [
-      "Pod",
       "Deployment",
-      "Configmap"
+      "Secret",
+      "Certificate"
     ],
     "difficulty": "beginner",
     "issueTypes": [
