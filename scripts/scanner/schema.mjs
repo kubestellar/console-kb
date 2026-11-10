@@ -48,7 +48,7 @@ export function validateMissionExport(data) {
         for (const step of data.mission.steps) {
           const text = `${step?.description ?? ''}`;
           for (const m of text.matchAll(NAMESPACE_FLAG)) {
-            if (!m[1].startsWith('$') && !RFC1123_LABEL.test(m[1])) badNamespaces.add(m[1]);
+            if (!m[1].startsWith('$') && !/^<[^<>]+>$/.test(m[1]) && !RFC1123_LABEL.test(m[1])) badNamespaces.add(m[1]);
           }
         }
         for (const ns of badNamespaces) {
