@@ -283,6 +283,7 @@ jobs:
         run: |
           echo "## Schema Validation" >> install-report.md
           FAIL=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep'); do
             if ! node scripts/validate-schema.mjs "$f" >> install-report.md 2>&1; then
               FAIL=$((FAIL + 1))
@@ -308,6 +309,7 @@ jobs:
           echo "" >> install-report.md
           echo "## Security Scan" >> install-report.md
           FINDINGS=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep'); do
             RESULT=$(FILE="$f" node scripts/install-gen/security-scan-check.mjs 2>&1) || FINDINGS=$((FINDINGS + 1))
             echo "  $f: $RESULT" | tee -a install-report.md
@@ -330,6 +332,7 @@ jobs:
           echo "## Link Validation" >> install-report.md
           BROKEN=0
           CHECKED=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             REPO_URL=$(node -e "const d=JSON.parse(require('fs').readFileSync('$f','utf-8')); console.log(d.metadata?.sourceUrls?.repo || '')")
             if [ -n "$REPO_URL" ]; then
@@ -361,7 +364,9 @@ jobs:
           echo "## Version Freshness" >> install-report.md
           STALE=0
           CHECKED=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
+            # shellcheck disable=SC2046 # helper prints two space-separated fields
             read -r REPO VERSION <<< $(FILE="$f" node scripts/install-gen/extract-freshness-info.mjs)
             if [ "$VERSION" != "latest" ] && [ -n "$REPO" ]; then
               CHECKED=$((CHECKED + 1))
@@ -407,6 +412,7 @@ jobs:
           echo "## Command Smoke Test" >> install-report.md
           BAD=0
           TOTAL=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             TOTAL=$((TOTAL + 1))
             CMDS=$(FILE="$f" node scripts/install-gen/extract-commands.mjs)
@@ -435,6 +441,7 @@ jobs:
           echo "## Section Completeness" >> install-report.md
           TOTAL=0
           COMPLETE=0
+          # shellcheck disable=SC2044 # filenames are repo slugs without whitespace
           for f in $(find fixes/cncf-install -name '*.json' ! -name '.gitkeep' ! -name '*.draft.json'); do
             TOTAL=$((TOTAL + 1))
             SECTIONS=$(FILE="$f" node scripts/install-gen/section-completeness.mjs)
@@ -657,7 +664,6 @@ jobs:
         run: |
           set +e
           node scripts/mission-executor.mjs $MISSION_FILES
-          EXIT_CODE=$?
           set -e
 
           # Parse results
@@ -665,7 +671,6 @@ jobs:
             PASSED=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.passed)")
             FAILED=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.failed)")
             TOTAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.total)")
-            PARTIAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('mission-execution-report.json','utf-8')); console.log(r.summary.partial)")
             echo "passed=$PASSED" >> $GITHUB_OUTPUT
             echo "failed=$FAILED" >> $GITHUB_OUTPUT
             echo "total=$TOTAL" >> $GITHUB_OUTPUT
