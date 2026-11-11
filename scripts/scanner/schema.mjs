@@ -6,7 +6,14 @@
 const REQUIRED_FIELDS = ['version', 'name', 'mission'];
 const VALID_VERSIONS = ['kc-mission-v1'];
 const RFC1123_LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+// Only lines invoking a namespace-scoped CLI (kubectl/helm/oc) are checked for
+// -n/--namespace values; this avoids false positives on unrelated flags that
+// happen to be spelled "-n" (e.g. `echo -n`, `systemd-ask-password -n`).
+const NAMESPACE_SCOPED_COMMAND = /\b(?:kubectl|helm|oc)\b/;
 const NAMESPACE_FLAG = /(?:^|\s)(?:-n|--namespace)[ =]([^\s`"'\\]+)/g;
+// Trailing sentence/markdown punctuation is never part of the namespace value
+// itself (e.g. "...kubectl get pods -n olm." ends a sentence, not "olm.").
+const TRAILING_PUNCTUATION = /[.,;:)\]}]+$/;
 
 /**
  * Validates that `data` conforms to the kc-mission-v1 export schema.
@@ -47,8 +54,13 @@ export function validateMissionExport(data) {
         const badNamespaces = new Set();
         for (const step of data.mission.steps) {
           const text = `${step?.description ?? ''}`;
-          for (const m of text.matchAll(NAMESPACE_FLAG)) {
-            if (!m[1].startsWith('$') && !/^<[^<>]+>$/.test(m[1]) && !RFC1123_LABEL.test(m[1])) badNamespaces.add(m[1]);
+          for (const line of text.split('\n')) {
+            if (!NAMESPACE_SCOPED_COMMAND.test(line)) continue;
+            for (const m of line.matchAll(NAMESPACE_FLAG)) {
+              const ns = m[1].replace(TRAILING_PUNCTUATION, '');
+              if (!ns || ns.startsWith('$') || /^<[^<>]+>$/.test(ns) || RFC1123_LABEL.test(ns)) continue;
+              badNamespaces.add(ns);
+            }
           }
         }
         for (const ns of badNamespaces) {
