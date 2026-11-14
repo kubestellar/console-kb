@@ -1,0 +1,78 @@
+{
+  "version": "kc-mission-v1",
+  "name": "kyverno-15116-bug-argo-cd-v3-3-0-kyverno-helm-chart-3-7-0-crds-remain-outofsync-",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "kyverno: [Bug] Argo CD v3.3.0 + Kyverno Helm chart 3.7.0: CRDs remain OutOfSync after upgrade due to empty metadata maps",
+    "description": "[Bug] Argo CD v3.3.0 + Kyverno Helm chart 3.7.0: CRDs remain OutOfSync after upgrade due to empty metadata maps. This issue affects 28+ users.",
+    "type": "troubleshoot",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Identify kyverno troubleshoot symptoms",
+        "description": "Check for the issue in your kyverno deployment:\n```bash\nkubectl get pods -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=100 | grep -i error\n```\nLook for errors or warnings in the logs that may indicate the issue."
+      },
+      {
+        "title": "Review kyverno configuration",
+        "description": "Inspect the relevant kyverno configuration:\n```bash\nkubectl get all -n kyverno -l app.kubernetes.io/name=kyverno\nkubectl get configmap -n kyverno -l app.kubernetes.io/part-of=kyverno\n```\nWhen deploying Kyverno via Argo CD + Helm, upgrading the Kyverno Helm chart from 3.6.2 to 3.7.0 consistently leaves the application OutOfSync.\n\nThe diff reported by Argo CD is always on Kyverno CRDs and does not converge."
+      },
+      {
+        "title": "Apply the fix for [Bug] Argo CD v3.3.0 + Kyverno Helm chart 3.7.0: CRDs…",
+        "description": "with the switch to the kyverno-api chart for the CRDs the labels are set via https://github.com/kyverno/api/blob/7b64bcf2b1f717ae3ce3987ccdaec7355d879755/charts/kyverno-api/templates/_helpers.tpl#L7-L9 so for the kyverno umbrella chart it means a possible workaround could be to set this (Update: I\n```yaml\nmetadata:\n  annotations: {}\n  labels: {}\n```"
+      },
+      {
+        "title": "Confirm [Bug] Argo CD v3.3.0 + Kyverno Helm chart 3.7.0:… is resolved",
+        "description": "Verify the fix by checking that the original error no longer occurs:\n```bash\nkubectl logs -l app.kubernetes.io/name=kyverno -n kyverno --tail=50 --since=5m\nkubectl get events -n kyverno --sort-by='.lastTimestamp' | tail -10\n```\nConfirm that the issue symptoms are gone."
+      }
+    ],
+    "resolution": {
+      "summary": "with the switch to the kyverno-api chart for the CRDs the labels are set via https://github.com/kyverno/api/blob/7b64bcf2b1f717ae3ce3987ccdaec7355d879755/charts/kyverno-api/templates/_helpers.tpl#L7-L9 so for the kyverno umbrella chart it means a possible workaround could be to set this (Update: I am afraid there is the same problem with annotations, so we added also some dummy",
+      "codeSnippets": [
+        "metadata:\n  annotations: {}\n  labels: {}",
+        "metadata:\n  annotations: {}\n  labels: {}",
+        "syncPolicy:\n  syncOptions:\n    - CreateNamespace=true\n    - ApplyOutOfSyncOnly=true\n    - ServerSideApply=true\n    - RespectIgnoreDifferences=true"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "kyverno",
+      "incubating",
+      "security",
+      "troubleshoot"
+    ],
+    "cncfProjects": [
+      "kyverno"
+    ],
+    "targetResourceKinds": [
+      "Deployment"
+    ],
+    "difficulty": "advanced",
+    "issueTypes": [
+      "troubleshoot"
+    ],
+    "maturity": "incubating",
+    "sourceUrls": {
+      "issue": "https://github.com/kyverno/kyverno/issues/15116",
+      "repo": "https://github.com/kyverno/kyverno"
+    },
+    "reactions": 28,
+    "comments": 16,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with kyverno installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-11-14T06:09:12.060Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
