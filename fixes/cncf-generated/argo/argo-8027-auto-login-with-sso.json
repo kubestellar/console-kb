@@ -1,0 +1,76 @@
+{
+  "version": "kc-mission-v1",
+  "name": "argo-8027-auto-login-with-sso",
+  "missionClass": "fixer",
+  "author": "KubeStellar Bot",
+  "authorGithub": "kubestellar",
+  "mission": {
+    "title": "argo: Auto-login with SSO",
+    "description": "Auto-login with SSO. Requested by 68+ users.",
+    "type": "feature",
+    "status": "completed",
+    "steps": [
+      {
+        "title": "Check current argo deployment",
+        "description": "Verify your argo version and configuration:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nhelm list -n argo 2>/dev/null || echo \"Not installed via Helm\"\n```\nThis feature requires a working argo installation."
+      },
+      {
+        "title": "Review argo configuration",
+        "description": "Inspect the relevant argo configuration:\n```bash\nkubectl get all -n argo -l app.kubernetes.io/name=argo\nkubectl get configmap -n argo -l app.kubernetes.io/part-of=argo\n```\nThere should be a way to automatically log-in users when there is only one OIDC provider configured, so users don't have to click one extra button (or effectively re-login when they're already logged in)"
+      },
+      {
+        "title": "Apply the fix for Auto-login with SSO",
+        "description": "ArgoCD uses DexIDP and it supports [authenticating proxy](https://dexidp.io/docs/connectors/authproxy/). I use it with [Vouch](https://github.com/vouch/vouch-proxy), Okta and Nginx. Basically, ArgoCD is gated by nginx that does setup user roles based on Vouch HTTP headers. e.g. \n```\n    map\n```yaml\nmap $http_x_vouch_user $__argocd_role {\n      default Engineers;\n      admin@example.com Administrators;\n    }\n\n    server {\n      listen 80 default_server;\n      server_name _;\n\n      location / {\n        proxy_read_timeout 300s;\n\n        proxy_set_header X-Remote-User $http_x_vouch_user;\n        proxy_set_header X-Remote-Group $__argocd_role;\n        proxy_set_header Host $FQDN;\n        proxy_set_header Authorization \"\";\n\n        proxy_pass http://argocd-server.argocd.svc.cluster.local./;\n      }\n    }\n```"
+      },
+      {
+        "title": "Verify the feature works",
+        "description": "Test that the new capability is working as expected:\n```bash\nkubectl get pods -n argo -l app.kubernetes.io/name=argo\nkubectl get events -n argo --sort-by='.lastTimestamp' | tail -10\n```\nConfirm the feature described in \"Auto-login with SSO\" is functioning correctly."
+      }
+    ],
+    "resolution": {
+      "summary": "ArgoCD uses DexIDP and it supports [authenticating proxy](https://dexidp.io/docs/connectors/authproxy/). I use it with [Vouch](https://github.com/vouch/vouch-proxy), Okta and Nginx. Basically, ArgoCD is gated by nginx that does setup user roles based on Vouch HTTP headers. e.g.",
+      "codeSnippets": [
+        "map $http_x_vouch_user $__argocd_role {\n      default Engineers;\n      admin@example.com Administrators;\n    }\n\n    server {\n      listen 80 default_server;\n      server_name _;\n\n      location / {\n        proxy_read_timeout 300s;\n\n        proxy_set_header X-Remote-User $http_x_vouch_user;\n        proxy_set_header X-Remote-Group $__argocd_role;\n        proxy_set_header Host $FQDN;\n        proxy_set_header Authorization \"\";\n\n        proxy_pass http://argocd-server.argocd.svc.cluster.local./;\n      }\n    }"
+      ]
+    }
+  },
+  "metadata": {
+    "tags": [
+      "argo",
+      "graduated",
+      "app-definition",
+      "feature"
+    ],
+    "cncfProjects": [
+      "argo"
+    ],
+    "targetResourceKinds": [
+      "Role"
+    ],
+    "difficulty": "intermediate",
+    "issueTypes": [
+      "feature"
+    ],
+    "maturity": "graduated",
+    "sourceUrls": {
+      "issue": "https://github.com/argoproj/argo-cd/issues/8027",
+      "repo": "https://github.com/argoproj/argo-cd"
+    },
+    "reactions": 68,
+    "comments": 19,
+    "synthesizedBy": "copilot"
+  },
+  "prerequisites": {
+    "kubernetes": ">=1.24",
+    "tools": [
+      "kubectl"
+    ],
+    "description": "A running Kubernetes cluster with argo installed or the issue environment reproducible."
+  },
+  "security": {
+    "scannedAt": "2026-11-25T06:02:07.363Z",
+    "scannerVersion": "cncf-gen-3.0.0",
+    "sanitized": true,
+    "findings": []
+  }
+}
